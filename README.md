@@ -22,6 +22,16 @@ pnpm setup:browser
 pnpm dev
 ```
 
+### Easiest: Docker (Windows, macOS, Linux)
+
+With [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running — no Node, pnpm, Python or browser setup needed:
+
+```bash
+docker compose up --build
+```
+
+Open **http://localhost:5173/projects**. The first build downloads about 2 GB and takes a few minutes; later starts take seconds. Data (projects, exports, imported records, images, batches) is kept in the `studio-data` Docker volume. Stop with `Ctrl+C`; `docker compose down -v` also deletes the data. The port is bound to your computer only.
+
 ### Windows (PowerShell)
 
 1. If PowerShell says *“running scripts is disabled on this system”*, allow scripts for your user once: `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` (answer **Y**).
@@ -39,6 +49,12 @@ Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the 
 - **Customer picker** (top bar): search by name, persona, ID or language.
 - **Your own projects**: *Duplicate* any project in the Project Gallery to get an editable copy; copies can be renamed and deleted (the approved samples can only be restored).
 - **Your own records**: *Import records* (Project Gallery) accepts CSV or JSON. Every row is checked against the data contract and rejected rows say why; accepted rows get IDs `CARD-5001…` / `EOB-5001…` and appear in every view. Download the CSV template from the import dialog. **Use synthetic or anonymised data only** — records stay in the local `.data` folder. *Remove imported* deletes them.
+- **Search everything** with **Ctrl+K** (⌘K on Mac): views, components, rules, customers, projects and actions. Press **?** for keyboard shortcuts; the **?** button in the top bar re-runs the first-visit tour.
+- **Data fields** (Rules & Data → *Data fields*): see every standard field and where it is used, and add your own fields (text, choice, number, money, yes/no, date). Rules, text tokens and imports can then use them as `custom.<key>`. Fields are saved with the project and are undoable.
+- **Column matching on import**: CSV files can use any column names — each column is matched to a data field automatically (by name or label) and you can change or ignore any match before importing.
+- **Impact preview**: before a rule or text change is applied, the studio shows how many customers' documents change, what changes, and whether new blocking issues appear.
+- **Image library**: upload PNG/JPEG/WebP images once (they are downscaled in the browser to fit the 280 KB limit) and reuse them in any Image component. The chosen image is embedded in the document so exports stay self-contained. SVG is not accepted, for safety.
+- **Batch run** (Preview & Export → *Batch*): compose every customer (or a filtered selection) into one ZIP with PDFs and/or interactive HTML, a `manifest.json` and a `run-report.csv` (pages, timings, blocked and failed records). Records with blocking issues are skipped unless you ask for watermarked drafts.
 - The status bar always shows the same rule & binding check counts as **Validate & Compare** (or the full validation result once you have run it for the current scenario); click it to open Validate.
 
 ## Verify
