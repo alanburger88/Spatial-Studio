@@ -9,7 +9,7 @@ const row = (page: Page, part: string) => page.locator(`[data-testid=tr-row][dat
 
 async function spanishFor(page: Page, part: string, text = 'Texto en español') {
   const r = row(page, part);
-  const tokens = await r.locator('.tr-token').allTextContents();
+  const tokens = await r.locator('.tr-token').evaluateAll((els) => els.map((e) => e.getAttribute('data-token') ?? ''));
   await r.getByTestId('tr-draft-input').fill([text, ...tokens].join(' '));
   return r;
 }
@@ -18,28 +18,28 @@ test('S13 lists the missing mandatory es-US parts and what they affect', async (
   await open(page, 'aster-card-demo', 'content');
   await expect(page.getByTestId('translations-view')).toBeVisible();
   const summary = page.getByTestId('tr-summary');
-  await expect(summary).toContainText('es-US: 0 approved');
-  await expect(summary).toContainText(/\d+ mandatory missing/);
-  await expect(summary).toContainText(/affects \d+ synthetic es-US records/);
+  await expect(summary).toContainText(/Spanish \(US\): 0 of \d+ approved/);
+  await expect(summary).toContainText(/\d+ required still missing/);
+  await expect(summary).toContainText(/\d+ synthetic Spanish-speaking customers are blocked/);
   await page.getByTestId('tr-filter-mandatory').check();
   const mandatory = await page.getByTestId('tr-row').count();
   expect(mandatory).toBeGreaterThanOrEqual(3);
   for (const id of ['billing-summary', 'payment-due', 'sample-disclosure-set']) await expect(row(page, id)).toBeVisible();
   await expect(page.getByTestId('tr-status').first()).toContainText('Missing');
   // English source highlights data tokens
-  await expect(row(page, 'payment-due').locator('.tr-token')).toHaveText('{{card.minimumDueCents}}');
+  await expect(row(page, 'payment-due').locator('.tr-token')).toHaveAttribute('data-token', '{{card.minimumDueCents}}');
 });
 
 test('draft then approve one part; the summary updates', async ({ page }) => {
   await open(page, 'aster-card-demo', 'content');
   const before = await page.getByTestId('tr-summary').innerText();
   const r = await spanishFor(page, 'payment-due', 'Pago mínimo:');
-  await r.getByTestId('tr-save-draft').click();
+  await r.getByTestId('tr-draft-input').blur(); // drafts save when you leave the box
   await expect(r.getByTestId('tr-status')).toContainText('Draft');
   await expect(page.getByTestId('tr-summary')).toContainText('1 draft');
   await r.getByTestId('tr-approve').click();
   await expect(r.getByTestId('tr-status')).toContainText('Approved');
-  await expect(page.getByTestId('tr-summary')).toContainText('1 approved');
+  await expect(page.getByTestId('tr-summary')).toContainText(/Spanish \(US\): 1 of \d+ approved/);
   expect(await page.getByTestId('tr-summary').innerText()).not.toBe(before);
 });
 
@@ -62,8 +62,7 @@ test('approving every mandatory part clears REQUIRED_TRANSLATION_MISSING for Spa
   await page.getByTestId('tr-filter-mandatory').check();
   const ids = await page.getByTestId('tr-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-part')!));
   for (const id of ids) { const r = await spanishFor(page, id); await r.getByTestId('tr-approve').click(); await expect(r.getByTestId('tr-status')).toContainText('Approved'); }
-  await expect(page.getByTestId('tr-summary')).toContainText('0 mandatory missing');
-  await expect(page.getByTestId('tr-summary')).toContainText('All mandatory text is approved');
+  await expect(page.getByTestId('tr-summary')).toContainText('All required text is approved');
   // the API composes the Spanish document for the (unsaved) approved model instead of the seed's 422 REQUIRED_TRANSLATION_MISSING
   const project = await page.evaluate(() => (window as any).__iss.store.getState().project);
   const r = await request.post('http://127.0.0.1:3001/api/v1/compose/pdf', { data: { projectId: 'aster-card-demo', recordId: 'CARD-0001', overrides: { customer: { locale: 'es-US' } }, project } });
@@ -102,7 +101,7 @@ test('See it in context opens 2D Design with an es-US record and the part select
   await open(page, 'aster-card-demo', 'content');
   await row(page, 'billing-summary').getByTestId('tr-context').click();
   await expect(page).toHaveURL(/\/design$/);
-  await expect(page.getByTestId('dock-selected')).toHaveText('billing-summary');
+  await expect(page.getByTestId('dock-selected')).toHaveAttribute('data-node-id', 'billing-summary');
   const rec = await page.getByTestId('record-selector').getAttribute('data-value');
   const locale = await page.evaluate((id) => (window as any).__iss.store.getState().records.find((r: any) => r.recordId === id)?.customer.locale, rec);
   expect(locale).toBe('es-US');

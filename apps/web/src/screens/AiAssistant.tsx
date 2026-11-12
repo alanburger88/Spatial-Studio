@@ -230,7 +230,7 @@ export function AiAssistant() {
           <p className="ai-compose-note muted">Sending only asks the assistant; it never applies anything. Enter sends, Shift+Enter adds a line.</p>
         </div>
 
-        <aside className="ai-side">
+        <aside className="ai-side" data-side="right" data-side-title="Prompts &amp; provider">
           <div className="panel">
             <div className="panel-head">Provider</div>
             <div className="panel-body">

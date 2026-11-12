@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ROLES, ROLE_LABEL, ROLE_SUMMARY, type Project, type Role } from '@iss/model';
 import { api, type AuditEventDto, type AuditQuery, type SessionUser } from '../api/client';
 import { useCan, useStudio } from '../state/store';
 import { ErrorState, Proof, ScreenHeader } from '../ui/common';
 import { nodeTitle } from '../ui/plain';
-import { When, fmtAbs } from '../shell/History';
+import { fmtAbs } from '../shell/History';
 import './Activity.css';
 
 /* ------------------------------------------------------------------ plain sentences */
@@ -75,6 +75,47 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
   }
 }
 
+
+/* ------------------------------------------------------------------ grouping */
+
+type Entry = { kind: 'one'; e: AuditEventDto } | { kind: 'group'; key: string; label: string; items: AuditEventDto[] };
+const dayKey = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+const timeOf = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+function dayLabel(iso: string): string {
+  const d = new Date(iso); const now = new Date();
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (dayKey(iso) === dayKey(now.toISOString())) return 'Today';
+  if (dayKey(iso) === dayKey(y.toISOString())) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) });
+}
+/** "5:44–5:46 PM" (or a single time when all entries fall in the same minute). */
+function timeRange(items: AuditEventDto[]): string {
+  const a = timeOf(items[items.length - 1].at); const b = timeOf(items[0].at);
+  if (a === b) return a;
+  const [ta, ma] = [a.replace(/\s?[AP]M$/i, ''), a.match(/[AP]M$/i)?.[0]]; const mb = b.match(/[AP]M$/i)?.[0];
+  return ma && ma === mb ? `${ta}–${b}` : `${a}–${b}`;
+}
+const normalised = (e: AuditEventDto, project: Project | null) => auditSentence(e, project).replace(/ as v\d+/g, '').replace(/\bv\d+\b/g, 'v#');
+const groupLabel = (e: AuditEventDto, project: Project | null) => (e.action === 'project.restore' ? 'Restored a previous version' : normalised(e, project).replace(/\bv#/g, 'a version'));
+
+/** Consecutive entries by the same person, of the same kind, in the same project, on the same day collapse into one group. */
+function groupEvents(events: AuditEventDto[], project: Project | null): Array<{ day: string; iso: string; entries: Entry[] }> {
+  const days: Array<{ day: string; iso: string; entries: Entry[] }> = [];
+  for (const e of events) {
+    const k = dayKey(e.at);
+    let day = days[days.length - 1];
+    if (!day || day.day !== k) { day = { day: k, iso: e.at, entries: [] }; days.push(day); }
+    const last = day.entries[day.entries.length - 1];
+    const sig = (x: AuditEventDto) => `${x.user ?? ''}|${x.action}|${x.projectId ?? ''}|${normalised(x, project)}`;
+    const prev = last ? (last.kind === 'one' ? last.e : last.items[0]) : null;
+    if (last && prev && sig(prev) === sig(e)) {
+      if (last.kind === 'one') day.entries[day.entries.length - 1] = { kind: 'group', key: `g${last.e.id}`, label: groupLabel(e, project), items: [last.e, e] };
+      else last.items.push(e);
+    } else day.entries.push({ kind: 'one', e });
+  }
+  return days;
+}
+
 /* ------------------------------------------------------------------ screen */
 
 export function Activity({ global = false }: { global?: boolean }) {
@@ -111,6 +152,7 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
   const [next, setNext] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   const serverVersion = useStudio((s) => s.serverVersion);
   const titles = useMemo(() => new Map(projects.map((p) => [p.projectId, p.title])), [projects]);
 
@@ -130,6 +172,8 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
     setLoadingMore(true);
     try { const r = await api.audit(query(next)); setEvents((ev) => [...(ev ?? []), ...r.events]); setNext(r.nextBefore); } catch (e: any) { setError(e.message); } finally { setLoadingMore(false); }
   };
+  const days = useMemo(() => (events ? groupEvents(events, project) : []), [events, project]);
+  const cols = projectId ? 4 : 5;
   const filtered = !!(user || action || period !== 'all' || projectFilter);
 
   return (
@@ -172,18 +216,31 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
             <caption className="sr-only">Activity, newest first</caption>
             <thead><tr><th scope="col" className="c-when">When</th><th scope="col" className="c-who">Who</th><th scope="col">What happened</th>{!projectId && <th scope="col" className="c-proj">Project</th>}<th scope="col" className="c-proof"><span className="sr-only">Details</span></th></tr></thead>
             <tbody>
-              {events.map((e) => (
-                <tr key={e.id} data-testid="activity-row" data-action={e.action}>
-                  <td className="c-when"><When iso={e.at} /></td>
-                  <td className="c-who" title={e.user ?? undefined}>{e.userName ?? <span className="muted">Unknown</span>}</td>
-                  <td className="c-what">{auditSentence(e, project)}</td>
-                  {!projectId && <td className="c-proj">{!e.projectId ? <span className="muted">—</span> : titles.has(e.projectId) ? <Link to={`/studio/${e.projectId}/activity`} title={`${titles.get(e.projectId)} (${e.projectId})`}>{titles.get(e.projectId)}</Link> : <span className="muted" title="This project no longer exists">{e.projectId} (deleted)</span>}</td>}
-                  <td className="c-proof">
-                    <Proof label="Details">
-                      <span className="act-proof mono" title={JSON.stringify(e.detail ?? {}, null, 1)}><span className="act-code">#{e.id} · {e.action}{e.modelVersion !== null ? ` · v${e.modelVersion}` : ''}{e.user ? ` · ${e.user}` : ''} · {fmtAbs(e.at)}</span>{Object.keys(e.detail ?? {}).length ? JSON.stringify(e.detail) : ''}</span>
-                    </Proof>
-                  </td>
-                </tr>
+              {days.map((day) => (
+                <Fragment key={day.day}>
+                  <tr className="act-day"><th scope="colgroup" colSpan={cols}>{dayLabel(day.iso)}</th></tr>
+                  {day.entries.map((en) => {
+                    if (en.kind === 'one') return <EventRow key={en.e.id} e={en.e} project={project} projectId={projectId} titles={titles} />;
+                    const first = en.items[0];
+                    const isOpen = !!open[en.key];
+                    return (
+                      <Fragment key={en.key}>
+                        <tr data-testid="activity-row" data-action={first.action} data-count={en.items.length} className="act-group">
+                          <td className="c-when"><time title={`${fmtAbs(en.items[en.items.length - 1].at)} – ${fmtAbs(first.at)}`}>{timeRange(en.items)}</time></td>
+                          <td className="c-who" title={first.user ?? undefined}>{first.userName ?? <span className="muted">Unknown</span>}</td>
+                          <td className="c-what">
+                            <button type="button" className="act-toggle" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [en.key]: !o[en.key] }))} data-testid="activity-group-toggle">
+                              <span className="act-caret" aria-hidden="true">{isOpen ? '▾' : '▸'}</span> {en.label} <span className="chip count">× {en.items.length}</span>
+                            </button>
+                          </td>
+                          {!projectId && <ProjectCell e={first} titles={titles} />}
+                          <td className="c-proof" />
+                        </tr>
+                        {isOpen && en.items.map((e) => <EventRow key={e.id} e={e} project={project} projectId={projectId} titles={titles} child groupId={`act-${en.key}`} />)}
+                      </Fragment>
+                    );
+                  })}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -191,6 +248,27 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
         {events && next !== null && <div className="act-more"><button type="button" className="btn sm" onClick={more} disabled={loadingMore} data-testid="activity-load-more">{loadingMore ? 'Loading…' : 'Show older activity'}</button></div>}
       </div>
     </div>
+  );
+}
+
+
+function ProjectCell({ e, titles }: { e: AuditEventDto; titles: Map<string, string> }) {
+  return <td className="c-proj">{!e.projectId ? <span className="muted">—</span> : titles.has(e.projectId) ? <Link to={`/studio/${e.projectId}/activity`} title={`${titles.get(e.projectId)} (${e.projectId})`}>{titles.get(e.projectId)}</Link> : <span className="muted" title="This project no longer exists">{e.projectId} (deleted)</span>}</td>;
+}
+
+function EventRow({ e, project, projectId, titles, child, groupId }: { e: AuditEventDto; project: Project | null; projectId: string | null; titles: Map<string, string>; child?: boolean; groupId?: string }) {
+  return (
+    <tr id={groupId ? `${groupId}-${e.id}` : undefined} data-testid="activity-row" data-action={e.action} className={child ? 'act-child' : undefined}>
+      <td className="c-when"><time dateTime={e.at} title={fmtAbs(e.at)}>{timeOf(e.at)}</time></td>
+      <td className="c-who" title={e.user ?? undefined}>{e.userName ?? <span className="muted">Unknown</span>}</td>
+      <td className="c-what">{auditSentence(e, project)}</td>
+      {!projectId && <ProjectCell e={e} titles={titles} />}
+      <td className="c-proof">
+        <Proof label="Details">
+          <span className="act-proof mono" title={JSON.stringify(e.detail ?? {}, null, 1)}><span className="act-code">#{e.id} · {e.action}{e.modelVersion !== null ? ` · v${e.modelVersion}` : ''}{e.user ? ` · ${e.user}` : ''} · {fmtAbs(e.at)}</span>{Object.keys(e.detail ?? {}).length ? JSON.stringify(e.detail) : ''}</span>
+        </Proof>
+      </td>
+    </tr>
   );
 }
 

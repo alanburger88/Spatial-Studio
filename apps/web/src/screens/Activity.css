@@ -20,6 +20,12 @@
 .act-code { display: block; font-family: var(--iss-font-mono); font-size: 11px; color: var(--iss-text); }
 /* Technical view: keep rows compact — detail JSON clamps to two lines, full text in the tooltip. */
 :root[data-view='technical'] .act-table .proof.open .act-proof { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.act-day th { text-align: left; padding: 14px 12px 6px; font-size: 12.5px; font-weight: 700; color: var(--iss-text); background: var(--iss-surface); border-bottom: 1px solid var(--iss-row-border); }
+.act-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; font: inherit; color: var(--iss-text); cursor: pointer; text-align: left; }
+.act-toggle:hover .act-caret { color: var(--iss-accent-strong); }
+.act-caret { width: 12px; color: var(--iss-text-muted); }
+.act-child .c-what { padding-left: 34px; color: var(--iss-text-muted); }
+.act-child td { background: var(--iss-overlay-1); }
 .act-more { display: flex; justify-content: center; padding: 10px; }
 
 /* Technical view: the detail column shows its proof inline, so give it room. */

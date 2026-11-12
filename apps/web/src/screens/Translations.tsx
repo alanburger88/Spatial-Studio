@@ -1,8 +1,9 @@
-import { Fragment, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { checkTokens, toTranslationCsv, translationStatus, usageEntryFromResolution, type Locale, type TranslationRow, type TranslationUsageEntry } from '@iss/model';
 import { resolve } from '@iss/resolver';
 import { ScreenHeader, Loading, Empty, Tech } from '../ui/common';
+import { fieldLabel, localeLabel } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { useStudio } from '../state/store';
 import { api } from '../api/client';
@@ -16,10 +17,17 @@ const USED_LABEL: Record<string, string> = { variant: 'Variant text', disclosure
 
 const tok = (t: string) => `{{${t}}}`;
 
-/** English source with data tokens highlighted. */
+/** English source with data tokens shown as small chips: the field's label in Business view, the path in Technical view / tooltip. */
 function Highlighted({ text }: { text: string }) {
+  const project = useStudio((s) => s.project);
+  const technical = useStudio((s) => s.viewMode) === 'technical';
   const parts = text.split(/(\{\{\s*[\w.]+\s*\}\})/g);
-  return <>{parts.map((p, i) => (/^\{\{/.test(p) ? <mark className="tr-token" key={i}>{p}</mark> : <Fragment key={i}>{p}</Fragment>))}</>;
+  return <>{parts.map((p, i) => {
+    if (!/^\{\{/.test(p)) return <Fragment key={i}>{p}</Fragment>;
+    const path = p.replace(/[{}\s]/g, '');
+    const label = project ? fieldLabel(project, path) : path;
+    return <mark className="tr-token" key={i} data-token={p} title={technical ? `Shows the value of ${label}` : path}>{technical ? p : label}</mark>;
+  })}</>;
 }
 
 export function Translations() {
@@ -36,7 +44,11 @@ export function Translations() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [importMsg, setImportMsg] = useState<null | { drafts: number; skipped: number; rows: number; errors: Array<{ row: number; partId: string; message: string }>; fileName: string }>(null);
   const [busy, setBusy] = useState(false);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => () => { Object.values(timers.current).forEach(clearTimeout); }, []);
 
   // What the real resolver shows each synthetic record. Drafts and approvals never change selection, so only structure invalidates this.
   const usage = useMemo<TranslationUsageEntry[] | undefined>(() => {
@@ -63,16 +75,25 @@ export function Translations() {
   const clearEdit = (id: string) => setEdits((e) => { const n = { ...e }; delete n[id]; return n; });
   const setErr = (id: string, msg: string | null) => setErrors((e) => { const n = { ...e }; if (msg) n[id] = msg; else delete n[id]; return n; });
 
-  const saveDraft = (r: TranslationRow, quiet = false): boolean => {
-    const text = valueOf(r);
+  const stopTimer = (id: string) => { if (timers.current[id]) { clearTimeout(timers.current[id]); delete timers.current[id]; } };
+  const saveDraft = (r: TranslationRow, quiet = false, textOverride?: string): boolean => {
+    stopTimer(r.partId);
+    const text = textOverride ?? valueOf(r);
     const res = useStudio.getState().dispatch({ type: 'SET_TRANSLATION_DRAFT', partId: r.partId, locale: LOCALE, text: text.trim() ? text : null });
     if (!res.ok) { setErr(r.partId, res.message); return false; }
     if (!quiet) setErr(r.partId, null);
     clearEdit(r.partId);
+    if (text.trim()) setSaved((x) => ({ ...x, [r.partId]: true }));
     return true;
+  };
+  /** Autosave: when the box loses focus or typing pauses for ~1 s, store the text as a draft (same command as the old Save draft). */
+  const autosave = (r: TranslationRow, text: string) => {
+    if (text === (r.status.draftText ?? r.status.approvedText ?? '')) { stopTimer(r.partId); clearEdit(r.partId); return; }
+    saveDraft(r, false, text);
   };
   const approve = (r: TranslationRow) => {
     const st0 = useStudio.getState();
+    stopTimer(r.partId);
     if (dirty(r) && !saveDraft(r, true)) return;
     const res = st0.dispatch({ type: 'APPROVE_TRANSLATION', partId: r.partId, locale: LOCALE });
     if (!res.ok) { setErr(r.partId, res.message); return; }
@@ -80,7 +101,7 @@ export function Translations() {
   };
   const discard = (r: TranslationRow) => {
     if (r.status.draftText) useStudio.getState().dispatch({ type: 'SET_TRANSLATION_DRAFT', partId: r.partId, locale: LOCALE, text: null });
-    clearEdit(r.partId); setErr(r.partId, null);
+    stopTimer(r.partId); clearEdit(r.partId); setErr(r.partId, null); setSaved((x) => ({ ...x, [r.partId]: false }));
   };
   const insertTokens = (r: TranslationRow, missing: string[]) => {
     const cur = valueOf(r);
@@ -125,7 +146,9 @@ export function Translations() {
     navigate(`/studio/${projectId ?? project.projectId}/design`);
   };
 
-  const summaryTxt = `${LOCALE}: ${s.approved} approved · ${s.drafts} ${s.drafts === 1 ? 'draft' : 'drafts'} · ${s.missing} missing · ${s.mandatoryMissing} mandatory missing`;
+  const req = technical ? 'mandatory' : 'required';
+  const Req = technical ? 'Mandatory' : 'Required';
+  const pct = s.total ? Math.round((s.approved / s.total) * 100) : 0;
   const hasEs = records.some((r) => (r.customer as any)?.locale === LOCALE);
 
   return (
@@ -138,12 +161,17 @@ export function Translations() {
       <input ref={fileRef} type="file" accept=".csv,text/csv" hidden data-testid="tr-import-file" aria-label="Choose a translations CSV file" onChange={(e) => onFile(e.target.files?.[0])} />
       <div className="screen-body tr-body">
         <div className="tr-summary" data-testid="tr-summary" role="status">
-          <strong>{summaryTxt}</strong>
-          {s.usageKnown && s.mandatoryMissing > 0 && <span className={`tr-affects${s.affectedRecords ? ' bad' : ''}`}>{s.affectedRecords ? <>— affects {s.affectedRecords} synthetic {LOCALE} {s.affectedRecords === 1 ? 'record' : 'records'}</> : <>— affects no synthetic {LOCALE} records</>}</span>}
-          {s.mandatoryMissing === 0 && s.usageKnown && <span className="tr-affects ok">✓ All mandatory text is approved{hasEs ? ` for ${LOCALE} synthetic records` : ''}.</span>}
-          <span className="tr-actions-right">
-            <button className="btn sm" onClick={() => { setMandatoryOnly(true); setStatus('all'); }} aria-pressed={mandatoryOnly} hidden={!s.mandatoryMissing || mandatoryOnly}>Show mandatory only</button>
-          </span>
+          <div className="tr-summary-text">
+            <strong>{localeLabel(LOCALE)}{technical && <> <span className="chip code">{LOCALE}</span></>}: {s.approved} of {s.total} approved</strong>
+            {s.drafts > 0 && <span> · {s.drafts} {s.drafts === 1 ? 'draft' : 'drafts'} waiting for approval</span>}
+            {s.mandatoryMissing > 0 && <span> · {s.mandatoryMissing} {req} still missing</span>}
+            {s.usageKnown && s.mandatoryMissing > 0 && <span className={`tr-affects${s.affectedRecords ? ' bad' : ''}`}> · {s.affectedRecords ? <>{s.affectedRecords} synthetic Spanish-speaking {s.affectedRecords === 1 ? 'customer is' : 'customers are'} blocked until they are</> : <>no synthetic Spanish-speaking customers are affected</>}</span>}
+            {s.mandatoryMissing === 0 && s.usageKnown && <span className="tr-affects ok"> · ✓ All {req} text is approved{hasEs ? ' for synthetic Spanish-speaking customers' : ''}</span>}
+            <button className="btn sm tr-only-req" onClick={() => { setMandatoryOnly(true); setStatus('all'); }} aria-pressed={mandatoryOnly} hidden={!s.mandatoryMissing || mandatoryOnly}>Show {req} only</button>
+          </div>
+          <div className="tr-bar" role="progressbar" aria-label={`${localeLabel(LOCALE)} texts approved`} aria-valuemin={0} aria-valuemax={s.total} aria-valuenow={s.approved} aria-valuetext={`${s.approved} of ${s.total} approved`}>
+            <span className="tr-bar-fill" style={{ width: `${pct}%` }} />
+          </div>
         </div>
 
         {importMsg && (
@@ -163,7 +191,7 @@ export function Translations() {
               <button key={k} aria-pressed={status === k} onClick={() => setStatus(k)} data-testid={`tr-filter-${k}`}>{k === 'all' ? `All ${s.total}` : `${STATUS_LABEL[k]} ${k === 'missing' ? s.missing : k === 'draft' ? s.drafts : s.approved}`}</button>
             ))}
           </span>
-          <label className="tr-check"><input type="checkbox" checked={mandatoryOnly} onChange={(e) => setMandatoryOnly(e.target.checked)} data-testid="tr-filter-mandatory" /> Mandatory only</label>
+          <label className="tr-check"><input type="checkbox" checked={mandatoryOnly} onChange={(e) => setMandatoryOnly(e.target.checked)} data-testid="tr-filter-mandatory" /> {Req} only</label>
           <label className="tr-search"><span className="sr-only">Search texts</span><input className="input" type="search" placeholder="Search texts" value={q} onChange={(e) => setQ(e.target.value)} data-testid="tr-search" /></label>
           <span className="tr-io">
             <button className="btn sm" onClick={exportCsv} data-testid="tr-export"><Icon.download width={14} height={14} /> Export for translators (CSV)</button>
@@ -176,34 +204,41 @@ export function Translations() {
           <div className="tr-scroll">
             {rows.length === 0 ? <Empty title="No matching text" message="Change the filters to see more content parts." /> : (
               <table className="table tr-table" data-testid="tr-table">
-                <caption className="sr-only">Content parts with English source text, Spanish translation editor, status and actions</caption>
-                <thead><tr><th scope="col">English (source, read-only)</th><th scope="col">Spanish (es-US)</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+                <caption className="sr-only">Content parts with English source text, Spanish translation editor and status</caption>
+                <thead><tr><th scope="col">English (source, read-only)</th><th scope="col">{localeLabel(LOCALE)}{technical ? ` (${LOCALE})` : ''}</th><th scope="col">Status</th></tr></thead>
                 <tbody>
                   {rows.map((r) => {
                     const val = valueOf(r);
                     const tc = val.trim() ? checkTokens(r.sourceText, val) : { ok: true, missing: [] as string[], extra: [] as string[] };
                     const err = errors[r.partId];
                     const d = dirty(r);
-                    const canSave = d || (!r.status.draftText && !!val.trim());
+                    const active = focusId === r.partId || d || !!r.status.draftText || !!err;
                     const canApprove = !!val.trim() && (r.status.pendingDraft || d || r.status.status === 'draft');
                     return (
                       <tr key={r.partId} data-testid="tr-row" data-part={r.partId} data-status={r.status.status} data-mandatory={r.status.mandatory ? 'true' : 'false'}>
                         <td className="tr-src">
                           <div className="tr-title">
                             <strong title={r.title}>{r.title}</strong>
-                            {r.status.mandatory && <span className="chip error tr-mand" title={r.status.mandatoryReasons.join('; ')} data-testid="tr-mandatory">Mandatory</span>}
-                            <Tech><span className="chip mono" title="Content part id and version">{r.partId} · v{r.version}</span></Tech>
+                            {r.status.mandatory && <span className="chip error tr-mand" title={r.status.mandatoryReasons.join('; ')} data-testid="tr-mandatory">{Req}</span>}
+                            <Tech><span className="chip code" title="Content part id and version">{r.partId} · v{r.version}</span></Tech>
                           </div>
                           <p className="tr-en" lang="en-US"><Highlighted text={r.sourceText} /></p>
                           <div className="tr-meta">
                             <span>{USED_LABEL[r.usedAs[0]] ?? 'Document text'}</span>
                             {r.seenByRecords !== null && <span>Seen by {r.seenByRecords} synthetic {r.seenByRecords === 1 ? 'record' : 'records'}</span>}
-                            {r.status.affectedRecordIds.length > 0 && <span className="tr-warn">▲ Blocks {r.status.affectedRecordIds.length} synthetic {LOCALE} {r.status.affectedRecordIds.length === 1 ? 'record' : 'records'}</span>}
+                            {r.status.affectedRecordIds.length > 0 && <span className="tr-warn">▲ Blocks {r.status.affectedRecordIds.length} synthetic Spanish-speaking {r.status.affectedRecordIds.length === 1 ? 'customer' : 'customers'}</span>}
                           </div>
                         </td>
                         <td className="tr-edit">
-                          <textarea className="textarea tr-input" lang="es-US" rows={2} value={val} placeholder="Escribe la traducción aprobada…" aria-label={`Spanish translation of ${r.title}`} data-testid="tr-draft-input"
-                            onChange={(e) => { setEdits((x) => ({ ...x, [r.partId]: e.target.value })); setErr(r.partId, null); }} />
+                          <textarea className="textarea tr-input" lang="es-US" rows={2} value={val} placeholder="Escribe la traducción…" aria-label={`Spanish translation of ${r.title}`} data-testid="tr-draft-input"
+                            onFocus={() => setFocusId(r.partId)}
+                            onBlur={(e) => { setFocusId((f) => (f === r.partId ? null : f)); autosave(r, e.target.value); }}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setEdits((x) => ({ ...x, [r.partId]: v })); setErr(r.partId, null); setSaved((x) => ({ ...x, [r.partId]: false }));
+                              stopTimer(r.partId);
+                              timers.current[r.partId] = setTimeout(() => autosave(r, v), 1000);
+                            }} />
                           {!tc.ok && (
                             <div className="tr-tokenerr" role="alert" data-testid="tr-token-warning">
                               ▲ {tc.missing.length > 0 && <>Missing {tc.missing.map((t) => <code key={t}>{tok(t)}</code>)} </>}{tc.extra.length > 0 && <>Unexpected {tc.extra.map((t) => <code key={t}>{tok(t)}</code>)} </>}
@@ -215,13 +250,14 @@ export function Translations() {
                         <td className="tr-status-td">
                           <span className={`chip tr-status ${r.status.status === 'approved' ? 'accent' : r.status.status === 'draft' ? 'warning' : 'error'}`} data-testid="tr-status" data-status={r.status.status}><span aria-hidden="true">{STATUS_GLYPH[r.status.status]}</span> {STATUS_LABEL[r.status.status]}</span>
                           {r.status.status === 'approved' && r.status.pendingDraft && <span className="tr-pending">+ unapproved edit</span>}
-                          {d && <span className="tr-pending">unsaved</span>}
-                        </td>
-                        <td className="tr-actions">
-                          <button className="btn sm" onClick={() => saveDraft(r)} disabled={!canSave} data-testid="tr-save-draft">Save draft</button>
-                          <button className="btn sm primary" onClick={() => approve(r)} disabled={!canApprove} data-testid="tr-approve">Approve</button>
-                          <button className="btn sm ghost" onClick={() => discard(r)} disabled={!r.status.draftText && !d} data-testid="tr-discard">Discard draft</button>
-                          <button className="btn sm ghost" onClick={() => seeInContext(r)} disabled={!hasEs} data-testid="tr-context" title={hasEs ? 'Open 2D Design with a Spanish-language synthetic record' : 'No es-US synthetic record is available'}>See it in context <Icon.external width={12} height={12} /></button>
+                          <span className="tr-pending tr-saved" data-testid="tr-saved" aria-live="polite">{d ? 'Saving…' : saved[r.partId] && r.status.draftText ? 'Draft saved' : ''}</span>
+                          {active && (
+                            <span className="tr-actions">
+                              <button className="btn sm primary" onClick={() => approve(r)} disabled={!canApprove} data-testid="tr-approve">Approve</button>
+                              <button className="btn sm ghost" onClick={() => discard(r)} disabled={!r.status.draftText && !d} data-testid="tr-discard">Discard draft</button>
+                            </span>
+                          )}
+                          <button className="btn sm ghost tr-ctx" onClick={() => seeInContext(r)} disabled={!hasEs} data-testid="tr-context" title={hasEs ? 'Open 2D Design with a Spanish-language synthetic record' : 'No Spanish-language synthetic record is available'}>See in context <Icon.external width={12} height={12} /></button>
                         </td>
                       </tr>
                     );

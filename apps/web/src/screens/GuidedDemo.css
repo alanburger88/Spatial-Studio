@@ -20,3 +20,10 @@
 
 .demo-proof .proof { display: block; }
 .demo-check.ok, .demo-check.fail { }
+
+/* calm pass: chapters are divided rows, not bordered cards */
+.demo-steps { gap: 0; }
+.demo-step { border: 0; border-bottom: 1px solid var(--iss-row-border); border-radius: 0; background: transparent; padding: 10px 6px; }
+.demo-step:last-child { border-bottom: 0; }
+.demo-step.current { background: var(--iss-accent-soft); }
+.demo-step.fail { box-shadow: inset 3px 0 0 var(--iss-error); }

@@ -194,3 +194,18 @@
 .rd-row > aside[data-testid='rule-trace'] > .panel-head .sub { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .rd-row > aside[data-testid='rule-trace'] > .panel-head .rd-check { white-space: nowrap; }
 .rd-impact { flex: none; padding: 8px 14px; border-top: 1px solid var(--iss-border); background: var(--iss-surface); max-height: 40%; overflow: auto; }
+
+/* ---- calm pass (v0.4): rules and trace entries are divided rows, not bordered cards */
+.rd-tree { padding: 6px 0 10px; }
+.rd-tree .section-title, .rd-tree .rd-group-name, .rd-tree .rd-newrow { margin-left: 12px; margin-right: 12px; }
+.rd-rule { margin: 0; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--iss-row-border); border-radius: 0; background: transparent; }
+.rd-rule.selected { border-color: var(--iss-row-border); }
+.rd-rule-id, .rd-editor-panel .panel-head .rd-ruleid { font-family: var(--iss-font-mono); font-size: 11px; font-weight: 500; border-radius: 6px; padding: 1px 6px; }
+.rd-findings, .rd-trace-list { gap: 0; }
+.rd-trace-item { border: 0; border-bottom: 1px solid var(--iss-row-border); border-radius: 0; background: transparent; padding: 9px 2px; }
+.rd-trace-item:last-child { border-bottom: 0; }
+.rd-trace-item.m { box-shadow: inset 3px 0 0 var(--iss-accent); padding-left: 10px; background: var(--iss-accent-soft); }
+.rd-trace-item.o-tie { box-shadow: inset 3px 0 0 var(--iss-error); padding-left: 10px; }
+.rd-finding { border-width: 0 0 0 4px; border-radius: 6px; margin-bottom: 6px; }
+.rd-cond { border-radius: 8px; background: var(--iss-surface-sunken); border-color: transparent; }
+@media (max-width: 1100px) { .rd-row { grid-template-columns: minmax(0, 1fr); } }

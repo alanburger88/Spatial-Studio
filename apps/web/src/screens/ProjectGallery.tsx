@@ -4,7 +4,7 @@ import { buildContext, fieldsFor, getPath, parseCsv, projectFields, type Documen
 import { resolve, type Resolution } from '@iss/resolver';
 import { api, ApiFailure, type ImportResult, type ProjectSummary, type TemplateInfoDto } from '../api/client';
 import { useStudio } from '../state/store';
-import { Dialog, Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
+import { Biz, Dialog, Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { PagePreview } from '../doc/PagePreview';
 import './ProjectGallery.css';
@@ -26,6 +26,41 @@ function useMiniPreview(projectId: string, recordId: string, version: number) {
 function forgetContext(projectId: string) {
   try { localStorage.removeItem(`iss.ctx.${projectId}`); } catch { /* ignore */ }
   if (useStudio.getState().project?.projectId === projectId) useStudio.setState({ projectStatus: 'idle', project: null, past: [], future: [] });
+}
+
+/** Overflow ("…") menu: button + role=menu popup. Escape / outside click close it; arrow keys move between items. */
+function OverflowMenu({ id, label, children }: { id: string; label: string; children: (close: () => void) => React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const close = (refocus = false) => { setOpen(false); if (refocus) btn.current?.focus(); };
+  useEffect(() => {
+    if (!open) return;
+    const items = () => Array.from(wrap.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+    items()[0]?.focus();
+    const onDoc = (e: MouseEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close(true); return; }
+      const list = items(); const i = list.indexOf(document.activeElement as HTMLElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); list[(i + 1) % list.length]?.focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); list[(i - 1 + list.length) % list.length]?.focus(); }
+      else if (e.key === 'Home') { e.preventDefault(); list[0]?.focus(); }
+      else if (e.key === 'End') { e.preventDefault(); list[list.length - 1]?.focus(); }
+      else if (e.key === 'Tab') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey, true);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey, true); };
+  }, [open]);
+  return (
+    <div className="gal-menu" ref={wrap}>
+      <button type="button" ref={btn} className="btn icon" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? `menu-${id}` : undefined} aria-label={label} title="More actions" data-testid={`card-menu-${id}`}
+        onClick={() => setOpen((o) => !o)} onKeyDown={(e) => { if (e.key === 'ArrowDown' && !open) { e.preventDefault(); setOpen(true); } }}>
+        <span aria-hidden="true" className="gal-dots">…</span>
+      </button>
+      {open && <div id={`menu-${id}`} role="menu" aria-label={label} className="gal-menu-pop">{children(() => close(false))}</div>}
+    </div>
+  );
 }
 
 type CardDialog = 'restore' | 'duplicate' | 'rename' | 'delete' | null;
@@ -67,8 +102,8 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
         <div className="row wrap">
           <span className="chip accent">{DOC_LABEL[p.documentType]}</span>
           {p.sample
-            ? p.modified ? <span className="chip warning">Edited sample · v{p.modelVersion}</span> : <span className="chip">Approved sample · v{p.modelVersion}</span>
-            : <span className="chip info">Your project · v{p.modelVersion}</span>}
+            ? p.modified ? <span className="chip warning">Edited sample<Tech> · v{p.modelVersion}</Tech></span> : <span className="chip">Sample<Tech> · v{p.modelVersion}</Tech></span>
+            : <span className="chip info">Your project<Tech> · v{p.modelVersion}</Tech></span>}
         </div>
         <h2 id={`t-${p.projectId}`}>{p.sample ? p.issuer?.name ?? p.title : p.title}</h2>
         <p className="muted">{description}</p>
@@ -80,17 +115,21 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
         </dl>
         <div className="row wrap gal-actions">
           <Link className="btn primary" to={`/studio/${p.projectId}/design`} data-testid={`open-${p.projectId}`}><Icon.design /> Open</Link>
-          <button className="btn" onClick={() => openDialog('duplicate')} data-testid={`duplicate-${p.projectId}`}><Icon.copy /> Duplicate</button>
-          {!p.sample && <button className="btn" onClick={() => openDialog('rename')} data-testid={`rename-${p.projectId}`}>Rename</button>}
-          <a className="btn ghost" href={`/api/v1/projects/${p.projectId}/export`} download><Icon.download /> Export JSON</a>
-          {p.sample && <button className="btn ghost" onClick={() => openDialog('restore')} data-testid={`restore-${p.projectId}`}><Icon.reset /> Restore sample</button>}
-          {p.sample && <button className="btn ghost" onClick={() => navigate(`/studio/${p.projectId}/demo`)}><Icon.demo /> Guided demo</button>}
-          {!p.sample && <button className="btn ghost danger-text" onClick={() => openDialog('delete')} data-testid={`delete-${p.projectId}`}><Icon.trash /> Delete</button>}
+          <OverflowMenu id={p.projectId} label={`More actions for ${p.sample ? p.issuer?.name ?? p.title : p.title}`}>
+            {(close) => <>
+              <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); openDialog('duplicate'); }} data-testid={`duplicate-${p.projectId}`}><Icon.copy /> Duplicate</button>
+              {!p.sample && <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); openDialog('rename'); }} data-testid={`rename-${p.projectId}`}>Rename</button>}
+              <a role="menuitem" className="gal-item" href={`/api/v1/projects/${p.projectId}/export`} download onClick={close} data-testid={`export-${p.projectId}`}><Icon.download /> Export JSON</a>
+              {p.sample && <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); openDialog('restore'); }} data-testid={`restore-${p.projectId}`}><Icon.reset /> Restore sample</button>}
+              {p.sample && <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); navigate(`/studio/${p.projectId}/demo`); }} data-testid={`guided-demo-${p.projectId}`}><Icon.demo /> Guided demo</button>}
+              {!p.sample && <button role="menuitem" type="button" className="gal-item danger-text" onClick={() => { close(); openDialog('delete'); }} data-testid={`delete-${p.projectId}`}><Icon.trash /> Delete</button>}
+            </>}
+          </OverflowMenu>
         </div>
       </div>
       {dialog === 'restore' && (
         <Dialog title="Restore approved sample?" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn danger" onClick={restore} disabled={busy} data-testid="confirm-restore">Restore sample</button></>}>
-          <p>This replaces the saved model of <strong>{p.title}</strong> with the approved seeded fixture (a new model version is recorded) and clears issued journey snapshots for this project. Records are never modified.</p>
+          <p>This replaces the saved model of <strong>{p.title}</strong> with the approved seeded fixture and clears issued journey snapshots for this project. Records are never modified.</p>
           {err && <p className="callout error" role="alert">{err}</p>}
         </Dialog>
       )}
@@ -403,6 +442,11 @@ export function ProjectGallery() {
   };
   const ordered = useMemo(() => [...projects].sort((a, b) => (a.sample !== b.sample ? (a.sample ? -1 : 1) : a.sample ? (a.projectId === 'aster-card-demo' ? -1 : 1) : b.updatedAt.localeCompare(a.updatedAt))), [projects]);
   const titleOf = (id?: string) => projects.find((x) => x.projectId === id)?.title;
+  const navigate = useNavigate();
+  const tryCustomer = () => {
+    navigate('/studio/aster-card-demo/design');
+    window.setTimeout(() => document.querySelector<HTMLElement>('[data-testid=record-selector]')?.focus(), 500);
+  };
   const imported = (counts?.importedCard ?? 0) + (counts?.importedEob ?? 0);
   return (
     <section className="screen" data-testid="project-gallery">
@@ -410,7 +454,6 @@ export function ProjectGallery() {
         actions={<>
           <button className="btn primary" onClick={() => setCreating(true)} data-testid="new-project"><Icon.plus /> New project</button>
           <button className="btn" onClick={() => setImporting(true)} data-testid="import-records"><Icon.plus /> Import records</button>
-          <button className="btn" onClick={() => setConfirmAll(true)} data-testid="reset-demo"><Icon.reset /> Reset demo</button>
         </>} />
       <div className="screen-body gal-grid">
         <div className="gal-cards">
@@ -418,16 +461,18 @@ export function ProjectGallery() {
           {status === 'error' && <ErrorState title="Projects could not be loaded" message={error ?? ''} onRetry={() => useStudio.getState().loadProjects()} />}
           {status === 'ready' && !projects.length && <Empty title="No projects" message="The local store is empty. Restart the API to re-seed the approved samples." />}
           {ordered.map((p) => <ProjectCard key={p.projectId} p={p} hero={p.projectId === 'aster-card-demo'} sourceTitle={titleOf(p.derivedFrom?.projectId)} />)}
+          <div className="gal-foot">
+            <button type="button" className="btn ghost sm" onClick={() => setConfirmAll(true)} data-testid="reset-demo" title="Return both sample projects to their approved models (your own projects are kept)"><Icon.reset /> Restore both samples</button>
+          </div>
         </div>
-        <aside className="panel gal-side">
-          <div className="panel-head">About this studio</div>
+        <aside className="panel gal-side" data-side="right" data-side-title="Start here">
+          <div className="panel-head">Start here</div>
           <div className="panel-body">
-            <div className="gal-stats">
-              <div><strong>15</strong><span>component types</span></div>
-              <div><strong>20</strong><span>sample rules</span></div>
-              <div><strong>{counts ? counts.card + counts.eob : '…'}</strong><span>synthetic records</span></div>
-              <div><strong>12</strong><span>personas</span></div>
-            </div>
+            <ol className="gal-steps">
+              <li><span className="gal-step-n" aria-hidden="true">1</span><div><strong>Open a sample</strong><span className="muted">See the document Aster Card sends.</span> <Link to="/studio/aster-card-demo/design" data-testid="start-open-sample">Open Aster Card</Link></div></li>
+              <li><span className="gal-step-n" aria-hidden="true">2</span><div><strong>Switch the customer</strong><span className="muted">Use the customer picker in the top bar and watch the document change.</span> <button type="button" className="gal-link" onClick={tryCustomer} data-testid="start-switch-customer">Show me where</button></div></li>
+              <li><span className="gal-step-n" aria-hidden="true">3</span><div><strong>Check and export it</strong><span className="muted">Run the checks, compare outputs, then download a PDF.</span> <Link to="/studio/aster-card-demo/validate" data-testid="start-validate">Go to Validate &amp; Compare</Link></div></li>
+            </ol>
             <p className="muted gal-note" data-testid="synthetic-statement">All sample people, accounts, providers and organisations are fictional ({counts ? `${counts.card} card and ${counts.eob} EOB records` : '…'}, seed SPATIAL-STUDIO-DEMO-2026-11). Nothing here connects to production data.</p>
             <div className="section-title">Your records</div>
             <p className="muted gal-note">{imported ? <>{counts!.importedCard} card and {counts!.importedEob} EOB record{imported === 1 ? '' : 's'} imported. They appear in the customer picker and in every view.</> : 'Import your own scenario records (CSV or JSON) to test the design against them.'}</p>
@@ -435,25 +480,29 @@ export function ProjectGallery() {
               <button className="btn sm" onClick={() => setImporting(true)}><Icon.plus /> Import records</button>
               {imported > 0 && <button className="btn sm ghost" onClick={clearImported} data-testid="clear-imported"><Icon.trash /> Remove imported</button>}
             </div>
-            <div className="section-title">Real</div>
-            <ul className="gal-list">
-              <li>Deterministic rule engine with traceable decisions</li>
-              <li>Measured page composition → genuine PDF</li>
-              <li>Standalone interactive HTML (sort, filter, expand)</li>
-              <li>Spatial views of the same model</li>
-              <li>Write-once issued journey snapshots</li>
-            </ul>
-            <div className="section-title">Simulated</div>
-            <ul className="gal-list sim">
-              <li>AFP output (profile simulation — no AFP bytes)</li>
-              <li>Credit disclosures and EOB adjudication (illustrative)</li>
-              <li>“Reach” = counts of synthetic records</li>
-            </ul>
+            <details className="gal-real" data-testid="real-vs-simulated">
+              <summary>What is real and what is simulated</summary>
+              <div className="section-title">Real</div>
+              <ul className="gal-list">
+                <li>Deterministic rule engine with traceable decisions</li>
+                <li>Measured page composition → genuine PDF</li>
+                <li>Standalone interactive HTML (sort, filter, expand)</li>
+                <li>Spatial views of the same model</li>
+                <li>Write-once issued journey snapshots</li>
+              </ul>
+              <div className="section-title">Simulated</div>
+              <ul className="gal-list sim">
+                <li>AFP output (profile simulation — no AFP bytes)</li>
+                <li>Credit disclosures and EOB adjudication (illustrative)</li>
+                <li>“Reach” = counts of synthetic records</li>
+              </ul>
+            </details>
+            <p className="muted gal-stats-line">{counts ? `${counts.card + counts.eob} synthetic records` : '…'} · 12 personas · 15 component types · 20 sample rules</p>
           </div>
         </aside>
       </div>
       {confirmAll && (
-        <Dialog title="Reset the demo?" onClose={() => setConfirmAll(false)} footer={<><button className="btn" onClick={() => setConfirmAll(false)}>Cancel</button><button className="btn danger" onClick={resetAll} data-testid="confirm-reset-demo">Reset sample projects</button></>}>
+        <Dialog title="Restore both samples?" onClose={() => setConfirmAll(false)} footer={<><button className="btn" onClick={() => setConfirmAll(false)}>Cancel</button><button className="btn danger" onClick={resetAll} data-testid="confirm-reset-demo">Restore both samples</button></>}>
           <p>Both sample projects return to their approved models, issued snapshots are cleared and saved view context is forgotten. Your own projects and imported records are kept. Use this before a stakeholder run.</p>
         </Dialog>
       )}

@@ -4,10 +4,12 @@ import { ROLE_LABEL, type ProfileId } from '@iss/model';
 import { editBlockedReason, personaLabel, useIsDirty, useModelChecks, useResolution, useStudio } from '../state/store';
 import { RecordPicker, recordSummary } from './RecordPicker';
 import { BrandMark, Icon } from '../ui/icons';
-import { Biz, ErrorState, Loading, Tech, Toasts } from '../ui/common';
+import { Biz, ErrorState, Loading, Named, Tech, Toasts } from '../ui/common';
+import { nodeTitle } from '../ui/plain';
 import { DemoBanner } from '../screens/GuidedDemo';
 import { CommandPalette, useShellUi } from './CommandPalette';
-import { HelpMenu, MOD, ShortcutsSheet, Tour } from './Help';
+import { MOD, SettingsMenu, ShortcutsSheet, Tour } from './Help';
+import { DemoToolsButton, DemoToolsPanel } from './DemoTools';
 import { HistoryPanel, useDrawers } from './History';
 import { ReviewPanel, WorkflowChip } from './Review';
 import './shell-extras.css';
@@ -19,20 +21,29 @@ const ActivityIcon = (props: SVGProps<SVGSVGElement>) => (
 );
 
 export const SCREENS = [
-  { id: 'S01', path: '/projects', label: 'Project Gallery', icon: Icon.gallery },
-  { id: 'S02', path: 'design', label: '2D Design Studio', icon: Icon.design },
-  { id: 'S03', path: 'exploded', label: 'Exploded Document', icon: Icon.exploded },
-  { id: 'S04', path: 'cube', label: 'Document Cube', icon: Icon.cube },
-  { id: 'S05', path: 'landscape', label: 'Scenario Landscape', icon: Icon.landscape },
-  { id: 'S06', path: 'page-stack', label: 'Page Composition Stack', icon: Icon.stack },
-  { id: 'S07', path: 'rules-data', label: 'Rules & Data', icon: Icon.rules },
-  { id: 'S08', path: 'journey', label: 'Journey Simulator', icon: Icon.journey },
-  { id: 'S09', path: 'validate', label: 'Validate & Compare', icon: Icon.validate },
-  { id: 'S10', path: 'outputs', label: 'Preview & Export', icon: Icon.outputs },
-  { id: 'S11', path: 'demo', label: 'Guided Demo', icon: Icon.demo },
-  { id: 'S12', path: 'assistant', label: 'AI Assistant', icon: Icon.ai },
-  { id: 'S13', path: 'content', label: 'Content & Translations', icon: Icon.list },
-  { id: 'S14', path: 'activity', label: 'Activity', icon: ActivityIcon },
+  { id: 'S01', path: '/projects', label: 'Project Gallery', icon: Icon.gallery, group: 'home', hint: 'All projects and samples' },
+  { id: 'S02', path: 'design', label: '2D Design Studio', icon: Icon.design, group: 'build', hint: 'Lay out the document and edit its content' },
+  { id: 'S03', path: 'exploded', label: 'Exploded Document', icon: Icon.exploded, group: 'explore', hint: 'See every alternative message a component can show, and why' },
+  { id: 'S04', path: 'cube', label: 'Document Cube', icon: Icon.cube, group: 'explore', hint: 'Compare outcomes across customer types, outputs and journey stages' },
+  { id: 'S05', path: 'landscape', label: 'Scenario Landscape', icon: Icon.landscape, group: 'explore', hint: 'Which outcomes customers get, and where the problems are' },
+  { id: 'S06', path: 'page-stack', label: 'Page Composition Stack', icon: Icon.stack, group: 'explore', hint: 'How the content flows across printed pages' },
+  { id: 'S07', path: 'rules-data', label: 'Rules & Data', icon: Icon.rules, group: 'build', hint: 'Decide who sees what, and test it' },
+  { id: 'S08', path: 'journey', label: 'Journey Simulator', icon: Icon.journey, group: 'explore', hint: 'Step a customer through events over time' },
+  { id: 'S09', path: 'validate', label: 'Validate & Compare', icon: Icon.validate, group: 'check', hint: 'Check the document for problems before it goes out' },
+  { id: 'S10', path: 'outputs', label: 'Preview & Export', icon: Icon.outputs, group: 'check', hint: 'See and download the PDF, web page, email and SMS' },
+  { id: 'S11', path: 'demo', label: 'Guided Demo', icon: Icon.demo, group: 'help', hint: 'A narrated walkthrough of the studio' },
+  { id: 'S12', path: 'assistant', label: 'AI Assistant', icon: Icon.ai, group: 'help', hint: 'Ask questions and get proposed edits to approve' },
+  { id: 'S13', path: 'content', label: 'Content & Translations', icon: Icon.list, group: 'build', hint: 'Manage wording and approved translations' },
+  { id: 'S14', path: 'activity', label: 'Activity', icon: ActivityIcon, group: 'help', hint: 'Who changed what, and when' },
+] as const;
+
+/** Menu groups, in working order. Screen IDs and Alt+N shortcuts are unchanged; only the menu order is grouped. */
+export const NAV_GROUPS = [
+  { id: 'home', label: null, screens: ['S01'] },
+  { id: 'build', label: 'Build', screens: ['S02', 'S07', 'S13'] },
+  { id: 'explore', label: 'Explore', screens: ['S03', 'S04', 'S05', 'S06', 'S08'] },
+  { id: 'check', label: 'Check & publish', screens: ['S09', 'S10'] },
+  { id: 'help', label: 'Help & admin', screens: ['S11', 'S12', 'S14'] },
 ] as const;
 
 function isTyping(el: EventTarget | null) {
@@ -79,23 +90,6 @@ function Overlays() {
   return <><CommandPalette /><ShortcutsSheet /><Tour /></>;
 }
 
-function DisplayToggles() {
-  const viewMode = useStudio((s) => s.viewMode);
-  const theme = useStudio((s) => s.theme);
-  const { setViewMode, setTheme } = useStudio.getState();
-  return (
-    <div className="row display-toggles" style={{ gap: 6 }}>
-      <div className="seg" role="group" aria-label="Detail level">
-        <button type="button" aria-pressed={viewMode === 'business'} onClick={() => setViewMode('business')} data-testid="view-business" title="Plain-language view: engine internals collapse behind Proof">Business</button>
-        <button type="button" aria-pressed={viewMode === 'technical'} onClick={() => setViewMode('technical')} data-testid="view-technical" title="Show run IDs, hashes, raw rule expressions and JSON">Technical</button>
-      </div>
-      <button type="button" className="btn ghost icon" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'} title={theme === 'light' ? 'Dark theme' : 'Light theme'} data-testid="theme-toggle">
-        {theme === 'light' ? <Icon.moon /> : <Icon.sun />}
-      </button>
-    </div>
-  );
-}
-
 function TopBar() {
   const navigate = useNavigate();
   const projects = useStudio((s) => s.projects);
@@ -121,7 +115,7 @@ function TopBar() {
         <span className="brand-logo" aria-hidden="true" />
         <span className="brand-name">InfoSlips <span>Spatial Studio</span></span>
       </Link>
-      <span className="badge-synthetic" title="All customers, accounts, claims and organisations are fictional. AFP output is a simulation.">Synthetic data</span>
+      <span className="badge-synthetic" title="All customers, accounts, claims and organisations are fictional. AFP output is a simulation.">Synthetic<span className="badge-more"> data</span></span>
       {project && (
         <nav className="crumbs" aria-label="Breadcrumb">
           <Link to="/projects">Projects</Link><span aria-hidden="true">/</span>
@@ -135,10 +129,10 @@ function TopBar() {
       <div className="spacer" />
       {project && (
         <div className="topbar-group">
-          <RecordPicker records={docRecords} personas={personas} value={ctx.recordId} onChange={setRecord} />
+          <div className="ctx-field"><span className="ctx-lbl" id="ctx-lbl-customer">Previewing as</span><RecordPicker records={docRecords} personas={personas} value={ctx.recordId} onChange={setRecord} /></div>
           {hasOverrides && <span className="chip variant" title={JSON.stringify(ctx.overrides).slice(0, 300)}>Scenario overrides</span>}
           {ctx.journeyCursor !== null && <span className="chip info">Journey · event {ctx.journeyCursor + 1}</span>}
-          <label className="field-inline"><span className="lbl">Output</span>
+          <label className="ctx-field"><span className="ctx-lbl">Output</span>
             <select className="select" aria-label="Output profile" value={ctx.profileId} onChange={(e) => setProfile(e.target.value as ProfileId)} data-testid="select-profile">
               <option value="paged-pdf">PDF</option>
               <option value="html-responsive">Interactive HTML</option>
@@ -162,9 +156,8 @@ function TopBar() {
         <button type="button" className="btn ghost palette-btn" onClick={() => useShellUi.getState().setPalette(true)} aria-label="Search (Command palette)" aria-haspopup="dialog" title={`Search everything (${MOD}+K)`} data-testid="open-palette">
           <Icon.search /><span className="pal-btn-label">Search</span><kbd className="kbd">{MOD} K</kbd>
         </button>
-        <HelpMenu />
+        <SettingsMenu />
       </div>
-      <DisplayToggles />
       <UserChip />
     </header>
   );
@@ -210,16 +203,23 @@ function Nav() {
   const pid = project?.projectId ?? 'aster-card-demo';
   return (
     <nav className="nav" aria-label="Studio views">
-      {SCREENS.map((s, i) => {
-        const to = s.path.startsWith('/') ? s.path : `/studio/${pid}/${s.path}${s.path === 'exploded' ? `/${sel ?? project?.nodes.find((n) => n.type === 'variant-set')?.id ?? 'payment-guidance'}` : ''}`;
-        const Ico = s.icon;
-        const key = i >= 1 && i <= 9 ? ` (Alt+${i})` : '';
-        return (
-          <NavLink key={s.id} to={to} className={({ isActive }) => (isActive || (s.path === 'exploded' && location.pathname.includes('/exploded/')) ? 'active' : '')} title={`${s.label}${key}`} data-testid={`nav-${s.id}`}>
-            <Ico /><span>{s.label}</span>
-          </NavLink>
-        );
-      })}
+      {NAV_GROUPS.map((g) => (
+        <div className="nav-group" key={g.id} role="group" aria-label={g.label ?? 'Projects'}>
+          {g.label && <div className="nav-title" aria-hidden="true"><span>{g.label}</span></div>}
+          {g.screens.map((sid) => {
+            const i = SCREENS.findIndex((x) => x.id === sid);
+            const s = SCREENS[i];
+            const to = s.path.startsWith('/') ? s.path : `/studio/${pid}/${s.path}${s.path === 'exploded' ? `/${sel ?? project?.nodes.find((n) => n.type === 'variant-set')?.id ?? 'payment-guidance'}` : ''}`;
+            const Ico = s.icon;
+            const key = i >= 1 && i <= 9 ? ` (Alt+${i})` : '';
+            return (
+              <NavLink key={s.id} to={to} className={({ isActive }) => (isActive || (s.path === 'exploded' && location.pathname.includes('/exploded/')) ? 'active' : '')} title={`${s.label} — ${s.hint}${key}`} data-testid={`nav-${s.id}`}>
+                <Ico /><span>{s.label}</span>
+              </NavLink>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 }
@@ -243,10 +243,13 @@ function Dock() {
   const matched = res?.result.matchedRuleIds ?? [];
   return (
     <footer className="dock" aria-label="Scenario status">
-      <span>Selected <strong data-testid="dock-selected">{ctx.selectedNodeId ?? 'none'}</strong></span><span className="sep" />
+      <div className="dock-items">
+      <span>Selected <strong data-testid="dock-selected" data-node-id={ctx.selectedNodeId ?? ''}>{ctx.selectedNodeId ? <Named name={nodeTitle(project, ctx.selectedNodeId)} code={ctx.selectedNodeId} /> : 'none'}</strong></span><span className="sep" />
       <span>Customer <strong>{recLabel?.name ?? ctx.recordId}</strong>{recLabel?.tag ? ` · ${recLabel.tag}` : ''}<Tech> · <span className="mono">{ctx.recordId}</span>{rec?.personaId ? ` · ${personaLabel(personas, rec.personaId).split(' · ')[0]}` : ''}</Tech></span><span className="sep" />
       <Tech><span>Run <strong className="mono">{res?.runId ?? '—'}</strong></span><span className="sep" /></Tech>
       <span title={matched.join(' ')}>Rules applied <strong>{matched.length ? <><Tech>{matched.join(' ')}</Tech><Biz>{matched.length}</Biz></> : '—'}</strong></span><span className="sep" />
+      </div>
+      <span className="dock-end"><DemoToolsButton /></span>
       <Link to={`/studio/${project.projectId}/validate`} className={`dock-status ${blocking || errors ? 'sev blocking' : warnings ? 'sev warning' : 'sev ok'}`} data-testid="dock-status" title={`${scope} for this scenario — open Validate & Compare`}>
         {scope}: {blocking ? `${blocking} blocking` : errors ? `${errors} errors` : warnings ? `${warnings} warning${warnings === 1 ? '' : 's'}` : 'no issues'}
       </Link>
@@ -276,7 +279,8 @@ export function StudioShell({ children }: { children: ReactNode }) {
       <DemoBanner />
       <Toasts />
       <Overlays />
-      {ready && <><HistoryPanel /><ReviewPanel /></>}
+      {ready && <><HistoryPanel /><ReviewPanel /><DemoToolsPanel /></>}
+      <SmallScreenNotice />
     </div>
   );
 }
@@ -291,6 +295,29 @@ export function PlainShell({ children }: { children: ReactNode }) {
       <footer className="dock">InfoSlips Spatial Studio · local proof of concept</footer>
       <Toasts />
       <Overlays />
+      <SmallScreenNotice />
+    </div>
+  );
+}
+
+/** Below 900px the studio is not usable: say so plainly, and let the user carry on if they insist. */
+function SmallScreenNotice() {
+  const [small, setSmall] = useState(() => window.matchMedia('(max-width: 899px)').matches);
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 899px)');
+    const on = () => setSmall(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  if (!small || dismissed) return null;
+  return (
+    <div className="small-screen" role="alertdialog" aria-modal="true" aria-labelledby="small-screen-title" data-testid="small-screen-notice">
+      <div className="small-screen-card">
+        <h2 id="small-screen-title">This studio needs a wider window</h2>
+        <p>InfoSlips Spatial Studio is designed for laptop and desktop screens. Widen this window to at least 900 pixels, or open it on a larger screen.</p>
+        <button type="button" className="btn" onClick={() => setDismissed(true)} data-testid="small-screen-continue">Continue anyway</button>
+      </div>
     </div>
   );
 }

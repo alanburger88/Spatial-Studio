@@ -6,7 +6,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { deflateSync } from 'node:zlib';
-import { API, open, pickRecord, resetAll } from './helpers';
+import { API, cardAction, demoTool, open, pickRecord, resetAll, setView } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetAll(request);
@@ -17,14 +17,15 @@ test.beforeEach(async ({ request }) => {
 
 test('F01 Business view speaks plainly; Technical view shows engine internals; theme toggles', async ({ page }) => {
   await open(page, 'aster-card-demo', 'rules-data?rule=R04');
-  await page.getByTestId('view-business').click();
+  await setView(page, 'business');
   await expect(page.getByTestId('rule-summary')).toContainText('When Assistance requested is yes');
   await expect(page.getByTestId('rule-reads-as')).toHaveCount(0);
-  await page.getByTestId('view-technical').click();
+  await setView(page, 'technical');
   await expect(page.getByTestId('rule-reads-as')).toContainText('card.assistanceRequested = true');
   const theme = () => page.evaluate(() => document.documentElement.dataset.theme);
   const before = await theme();
-  await page.getByTestId('theme-toggle').click();
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId(before === 'dark' ? 'theme-light' : 'theme-dark').click();
   expect(await theme()).not.toBe(before);
   await page.reload();
   expect(await theme()).not.toBe(before);
@@ -46,19 +47,19 @@ test('F02 Ctrl+K finds a rule by ID and opens it; ? opens the shortcuts sheet', 
 test('F03 Duplicate, rename and delete a project from the gallery; samples cannot be deleted', async ({ page }) => {
   await page.goto('/projects');
   await expect(page.getByTestId('delete-aster-card-demo')).toHaveCount(0);
-  await page.getByTestId('duplicate-aster-card-demo').click();
+  await cardAction(page, 'duplicate', 'aster-card-demo');
   await page.getByTestId('project-title-input').fill('Spanish pilot');
   await page.getByTestId('confirm-title').click();
   const card = page.getByTestId('project-card-spanish-pilot');
   await expect(card).toContainText('Your project');
-  await page.getByTestId('rename-spanish-pilot').click();
+  await cardAction(page, 'rename', 'spanish-pilot');
   await page.getByTestId('project-title-input').fill('Spanish pilot v2');
   await page.getByTestId('confirm-title').click();
   await expect(card).toContainText('Spanish pilot v2');
   await page.getByTestId('open-spanish-pilot').click();
   await expect(page.getByTestId('design-canvas')).toBeVisible();
   await page.goto('/projects');
-  await page.getByTestId('delete-spanish-pilot').click();
+  await cardAction(page, 'delete', 'spanish-pilot');
   await page.getByTestId('confirm-delete').click();
   await expect(card).toHaveCount(0);
 });
@@ -152,7 +153,7 @@ test('F08 Image library: upload a PNG, use it for the issuer logo; the image is 
 
 test('F09 Status dock and Validate & Compare agree on blocking counts', async ({ page }) => {
   await open(page, 'aster-card-demo', 'validate');
-  await page.getByTestId('seed-d01').click();
+  await demoTool(page, 'seed-d01');
   const dock = page.getByTestId('dock-status');
   await expect(dock).toContainText(/2 blocking/);
   await page.getByTestId('run-validation').click();

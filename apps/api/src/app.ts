@@ -154,6 +154,11 @@ export async function buildApp(opts: AppOptions = {}) {
     if ((req.body as any)?.confirm !== true) throw new ApiError(400, 'CONFIRMATION_REQUIRED', 'Reset requires {"confirm": true}.');
     const seed = store.seedFor(req.params.projectId);
     if (!seed) throw new ApiError(400, 'NOT_A_SAMPLE', 'Only approved sample projects can be restored.');
+    // Restoring a sample that is already identical to the approved seed is a no-op: no new version, no audit noise.
+    if (projectContentDigest(current) === projectContentDigest(seed)) {
+      if ((req.body as any)?.clearSnapshots !== false) store.clearSnapshots(req.params.projectId);
+      return { project: current, reset: true, unchanged: true, seedDigest: projectContentDigest(seed) };
+    }
     const reset = store.putProject({ ...seed, modelVersion: current.modelVersion + 1 }, projectContentDigest(seed), { by: by(req), label: 'Restored approved sample' });
     if ((req.body as any)?.clearSnapshots !== false) store.clearSnapshots(req.params.projectId);
     audit(store, req, 'project.reset', { projectId: reset.projectId, modelVersion: reset.modelVersion, detail: { fromVersion: current.modelVersion, seedDigest: projectContentDigest(seed) } });

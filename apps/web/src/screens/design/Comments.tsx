@@ -33,6 +33,20 @@ function Composer({ placeholder, label, submitLabel, onSubmit, testIds = true, a
   );
 }
 
+/** Number of open (unresolved) comment threads on one component; refreshes after any comment change. */
+export function useOpenCommentCount(nodeId: string | undefined): number {
+  const projectId = useStudio((s) => s.project?.projectId);
+  const rev = useCommentsRev((s) => s.rev);
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!projectId || !nodeId) { setN(0); return; }
+    let live = true;
+    api.comments(projectId, { nodeId }).then((r) => { if (live) setN(r.comments.filter((c) => !c.parentId && !c.resolvedAt).length); }).catch(() => live && setN(0));
+    return () => { live = false; };
+  }, [projectId, nodeId, rev]);
+  return n;
+}
+
 /** Review comments pinned to one component: threads, replies, resolve/reopen, delete own. */
 export function CommentsTab({ nodeId }: { nodeId: string }) {
   const projectId = useStudio((s) => s.project?.projectId);

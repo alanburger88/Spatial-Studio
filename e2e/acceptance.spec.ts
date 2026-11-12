@@ -3,7 +3,7 @@
  * (contracts/ACCEPTANCE_MATRIX.json). Every test drives the real running application.
  */
 import { test, expect } from '@playwright/test';
-import { API, EXPECTED, dragAfter, node, open, pdfText, resetAll, state, pickRecord } from './helpers';
+import { API, EXPECTED, cardAction, demoTool, dragAfter, node, open, pdfText, resetAll, state, pickRecord } from './helpers';
 import type { Page } from '@playwright/test';
 
 async function layer(page: Page, id: string) {
@@ -27,7 +27,7 @@ test('AT-01 open Aster and reload: same node IDs, record, selection and profile 
   expect(after.digest).toBe(before.digest);
   await expect(page.getByTestId('record-selector')).toHaveAttribute('data-value', 'CARD-0002');
   expect(await page.getByTestId('select-profile').inputValue()).toBe('paged-afp-sim');
-  await expect(page.getByTestId('dock-selected')).toHaveText('billing-summary');
+  await expect(page.getByTestId('dock-selected')).toHaveAttribute('data-node-id', 'billing-summary');
 });
 
 test('AT-02 drag C02 Rich Text into the flow region; saved model contains a real editable node', async ({ page, request }) => {
@@ -160,7 +160,7 @@ test('AT-08 switch persona P01 → P04: assistance variant selected and trace ex
 test('AT-09 forced R03/R04 tie at equal priority is a blocking finding with no winner', async ({ page }) => {
   await open(page, 'aster-card-demo', 'rules-data');
   await pickRecord(page, 'CARD-0002');
-  await page.getByTestId('inject-d01').click();
+  await demoTool(page, 'seed-d01');
   await expect(page.getByTestId('trace-findings')).toContainText('EXCLUSIVE_PRIORITY_TIE');
   const sel = await page.evaluate(() => { const s = (window as any).__iss.store.getState(); return s.project.rules.find((r: any) => r.id === 'R03').priority; });
   expect(sel).toBe(400);
@@ -170,8 +170,8 @@ test('AT-09 forced R03/R04 tie at equal priority is a blocking finding with no w
 
 test('AT-10 removing the exclusive fallback with no rule match is a blocking no-match', async ({ page }) => {
   await open(page, 'aster-card-demo', 'rules-data');
-  await page.getByTestId('remove-fallback').click();
-  await page.getByTestId('no-match-scenario').click();
+  await demoTool(page, 'remove-fallback');
+  await demoTool(page, 'no-match-scenario');
   await expect(page.getByTestId('trace-findings')).toContainText('NO_VARIANT_MATCH');
 });
 
@@ -195,12 +195,12 @@ test('AT-12 select a variant in Exploded, return to Design: same semantic node s
   await open(page, 'aster-card-demo', 'design');
   await page.getByTestId('design-canvas').getByTestId('node-payment-guidance').click();
   await page.getByRole('button', { name: /explore variants/i }).click();
-  await expect(page.getByTestId('selected-node')).toHaveText(/payment-guidance/);
+  await expect(page.getByTestId('selected-node')).toHaveAttribute('data-node-id', 'payment-guidance');
   await page.getByTestId('panel-payment-reminder').click();
-  await expect(page.getByTestId('selected-variant')).toContainText('payment-reminder');
+  await expect(page.getByTestId('selected-variant')).toHaveAttribute('data-variant-id', 'payment-reminder');
   await page.getByTestId('collapse-exploded').click();
   await expect(page.getByTestId('design-canvas')).toBeVisible();
-  await expect(page.getByTestId('dock-selected')).toHaveText('payment-guidance');
+  await expect(page.getByTestId('dock-selected')).toHaveAttribute('data-node-id', 'payment-guidance');
   await expect(page.getByTestId('design-canvas').getByTestId('node-payment-guidance')).toHaveClass(/is-selected/);
 });
 
@@ -299,7 +299,7 @@ test('AT-20 es-US with missing required copy is a blocking error; no silent tran
   const body = await r.json();
   expect(body.error.issues.filter((i: any) => i.code === 'REQUIRED_TRANSLATION_MISSING').map((i: any) => i.nodeId).sort()).toEqual(['billing-summary', 'payment-due', 'payment-standard', 'sample-disclosure-set']);
   await open(page, 'aster-card-demo', 'validate');
-  await page.getByTestId('seed-d02').click();
+  await demoTool(page, 'seed-d02');
   await page.getByTestId('run-validation').click();
   await expect(page.getByTestId('validation-list')).toContainText('REQUIRED_TRANSLATION_MISSING', { timeout: 60000 });
 });
@@ -478,14 +478,14 @@ test('AT-33 keyboard: navigate node tree and spatial alternative without the 3D 
   await page.getByTestId('layer-doc-root').focus();
   for (let i = 0; i < 40 && !(await page.getByTestId('layer-payment-guidance').evaluate((e) => e === document.activeElement)); i++) await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('dock-selected')).toHaveText('payment-guidance');
+  await expect(page.getByTestId('dock-selected')).toHaveAttribute('data-node-id', 'payment-guidance');
   await page.getByTestId('explore-variants').focus();
   await page.keyboard.press('Enter');
   await page.getByTestId('flat-alternative').focus();
   await page.keyboard.press('Enter');
   await page.getByTestId('variant-item-payment-support-offer').focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('selected-variant')).toContainText('payment-support-offer');
+  await expect(page.getByTestId('selected-variant')).toHaveAttribute('data-variant-id', 'payment-support-offer');
   await expect(page.getByTestId('exploded-explanation')).toBeVisible();
 });
 
@@ -508,9 +508,9 @@ test('AT-35 reload after edit and save: edit persists; default fixture can be re
   await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
   expect((await node(page, 'greeting')).layout.paged.align).toBe('center');
   await page.goto('/projects');
-  await page.getByTestId('restore-aster-card-demo').click();
+  await cardAction(page, 'restore', 'aster-card-demo');
   await page.getByTestId('confirm-restore').click();
-  await expect(page.getByTestId('project-card-aster-card-demo')).toContainText('Approved sample');
+  await expect(page.getByTestId('project-card-aster-card-demo')).toContainText('Sample');
   const saved = await (await request.get(`${API}/projects/aster-card-demo`)).json();
   expect(saved.project.nodes.find((n: any) => n.id === 'greeting').layout.paged.align).toBe('left');
 });

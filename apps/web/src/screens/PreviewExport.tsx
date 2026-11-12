@@ -1,9 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { resolve } from '@iss/resolver';
+import { resolve, type SemanticManifest } from '@iss/resolver';
+import { compareManifests, type ExtractedManifest } from '@iss/renderers';
 import type { ProfileId } from '@iss/model';
 import { api, ApiFailure, type BatchDto, type BatchItemDto, type BinaryResult, type ScenarioRequest } from '../api/client';
 import { useStudio, useScenarioRequest, useIsDirty } from '../state/store';
-import { ScreenHeader, Empty, Proof, Tech } from '../ui/common';
+import { ScreenHeader, Empty, Proof, Tech, Named } from '../ui/common';
 import { Icon } from '../ui/icons';
 import './PreviewExport.css';
 
@@ -13,7 +14,7 @@ const DEVICES: Record<Device, { label: string; width: number }> = { desktop: { l
 const AFP_LABEL = 'AFP simulation only — no MO:DCA / AFP print stream generated';
 
 interface Issue { code?: string; severity?: string; message?: string; nodeId?: string }
-interface Job<T> { status: 'idle' | 'running' | 'done' | 'error'; result?: T; runId?: string; error?: { code: string; message: string; issues: Issue[] }; startedAt?: number }
+interface Job<T> { status: 'idle' | 'running' | 'done' | 'error'; result?: T; runId?: string; /** run id this job was requested for (stops auto-retry loops) */ forRun?: string; builtAt?: number; error?: { code: string; message: string; issues: Issue[] }; startedAt?: number }
 interface HtmlResult { bin: BinaryResult; text: string }
 interface Session {
   pdf: Job<BinaryResult>; html: Job<HtmlResult>; afp: Job<any>; parity: Job<any>;
@@ -67,6 +68,20 @@ function useElapsed(since?: number, active?: boolean) {
   return since && active ? ((Date.now() - since) / 1000).toFixed(1) : '0.0';
 }
 
+/** Re-render every 20 s so "Built 2 min ago" stays honest. */
+function useNow(): number {
+  const [n, setN] = useState(() => Date.now());
+  useEffect(() => { const h = setInterval(() => setN(Date.now()), 20000); return () => clearInterval(h); }, []);
+  return n;
+}
+function relMs(ms: number | undefined, now: number): string {
+  if (!ms) return 'just now';
+  const sec = Math.max(0, Math.round((now - ms) / 1000));
+  if (sec < 45) return 'just now';
+  if (sec < 3600) return `${Math.max(1, Math.round(sec / 60))} min ago`;
+  return `${Math.round(sec / 3600)} h ago`;
+}
+
 export function PreviewExport() {
   const project = useStudio((s) => s.project)!;
   const ctx = useStudio((s) => s.ctx);
@@ -81,6 +96,8 @@ export function PreviewExport() {
   const [historyErr, setHistoryErr] = useState<string | null>(null);
   const [histTick, setHistTick] = useState(0);
   const seq = useRef({ pdf: 0, html: 0, afp: 0, parity: 0 });
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
   useEffect(() => { setSession(cache.get(projectId) ?? emptySession()); }, [projectId]);
   const update = useCallback(<K extends keyof Session>(k: K, job: Session[K]) => {
@@ -96,80 +113,139 @@ export function PreviewExport() {
   const profileReq = (p?: ProfileId): ScenarioRequest | null => (baseReq ? { ...baseReq, ...(p ? { outputContext: { profileId: p } } : {}) } : null);
 
   /** Expected run id per output profile for the live (possibly unsaved) model and scenario. */
-  const expected = useMemo(() => {
+  const { expected, manifest } = useMemo(() => {
     const rec = records.find((r) => r.recordId === ctx.recordId);
     const out: Record<string, string | null> = { 'paged-pdf': null, 'html-responsive': null, 'paged-afp-sim': null };
-    if (!rec || rec.documentType !== project.documentType) return out;
+    let manifest: SemanticManifest | null = null;
+    if (!rec || rec.documentType !== project.documentType) return { expected: out, manifest };
     for (const p of Object.keys(out) as ProfileId[]) {
-      try { out[p] = resolve({ project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: p }).runId; } catch { out[p] = null; }
+      try { const r = resolve({ project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: p }); out[p] = r.runId; if (p === 'paged-pdf') manifest = r.semanticManifest; } catch { out[p] = null; }
     }
-    return out;
+    return { expected: out, manifest };
   }, [project, records, ctx.recordId, ctx.overrides, ctx.journeyCursor]);
+  const wantPdf = expected['paged-pdf'], wantHtml = expected['html-responsive'], wantAfp = expected['paged-afp-sim'];
+  const pairKey = wantPdf && wantHtml ? `${wantPdf}|${wantHtml}` : null;
 
-  /* ---------------- actions */
-  const runPdf = async (allowDraft = false) => {
-    const req = profileReq('paged-pdf'); if (!req) return;
-    const my = ++seq.current.pdf;
-    update('pdf', { ...session.pdf, status: 'running', startedAt: Date.now(), error: undefined });
+  /* ---------------- actions
+     The server stores artifacts by content hash (INSERT OR IGNORE), so rebuilding an unchanged run never adds a
+     history entry. The browser additionally keeps finished builds per project and only rebuilds when the run changes. */
+  /** PDF bytes are not reproducible (embedded timestamps), so every compose adds a history entry. Automatic builds
+   *  therefore reuse a clean artifact already stored for this exact run and only compose when none exists. */
+  const reusePdf = async (runId: string): Promise<BinaryResult | null> => {
     try {
-      const bin = await api.composePdf({ ...req, ...(allowDraft ? { allowDraft: true } : {}) });
+      const a = (await api.artifacts({ runId })).artifacts.find((x) => x.kind === 'pdf' && !x.meta?.draft);
+      if (!a) return null;
+      const r = await fetch(api.artifactUrl(a.artifactId));
+      if (!r.ok) return null;
+      const blob = await r.blob();
+      return { blob, url: URL.createObjectURL(blob), filename: a.filename, runId: a.runId, artifactId: a.artifactId, pageCount: a.pageCount ?? undefined, pdfPageCount: a.meta?.metrics?.pdfPageCount, contentDigest: a.meta?.contentDigest ?? '', sha256: a.sha256, draft: false };
+    } catch { return null; }
+  };
+  const runPdf = async (allowDraft = false, auto = false) => {
+    const req = profileReq('paged-pdf'); if (!req) return;
+    const my = ++seq.current.pdf; const forRun = wantPdf ?? undefined;
+    update('pdf', { ...sessionRef.current.pdf, status: 'running', forRun, startedAt: Date.now(), error: undefined });
+    try {
+      const reused = auto && !allowDraft && wantPdf ? await reusePdf(wantPdf) : null;
+      const bin = reused ?? await api.composePdf({ ...req, ...(allowDraft ? { allowDraft: true } : {}) });
       if (seq.current.pdf !== my) return;
-      update('pdf', { status: 'done', result: bin, runId: bin.runId });
-      setHistTick((t) => t + 1);
+      update('pdf', { status: 'done', result: bin, runId: bin.runId, forRun, builtAt: Date.now() });
+      if (!reused) setHistTick((t) => t + 1);
     } catch (e) {
       if (seq.current.pdf !== my) return;
-      update('pdf', { status: 'error', error: toError(e) });
+      update('pdf', { status: 'error', error: toError(e), forRun });
     }
   };
   const runHtml = async (allowDraft = false) => {
     const req = profileReq('html-responsive'); if (!req) return;
-    const my = ++seq.current.html;
-    update('html', { ...session.html, status: 'running', startedAt: Date.now(), error: undefined });
+    const my = ++seq.current.html; const forRun = wantHtml ?? undefined;
+    update('html', { ...sessionRef.current.html, status: 'running', forRun, startedAt: Date.now(), error: undefined });
     try {
       const bin = await api.composeHtml({ ...req, ...(allowDraft ? { allowDraft: true } : {}) });
       const text = await bin.blob.text();
       if (seq.current.html !== my) return;
-      update('html', { status: 'done', result: { bin, text }, runId: bin.runId });
+      update('html', { status: 'done', result: { bin, text }, runId: bin.runId, forRun, builtAt: Date.now() });
       setHistTick((t) => t + 1);
     } catch (e) {
       if (seq.current.html !== my) return;
-      update('html', { status: 'error', error: toError(e) });
+      update('html', { status: 'error', error: toError(e), forRun });
     }
   };
   const runAfp = async () => {
     const req = profileReq('paged-afp-sim'); if (!req) return;
-    const my = ++seq.current.afp;
-    update('afp', { ...session.afp, status: 'running', startedAt: Date.now(), error: undefined });
+    const my = ++seq.current.afp; const forRun = wantAfp ?? undefined;
+    update('afp', { ...sessionRef.current.afp, status: 'running', forRun, startedAt: Date.now(), error: undefined });
     try {
       const sim = await api.afpSim(req);
       if (seq.current.afp !== my) return;
-      update('afp', { status: 'done', result: sim, runId: sim.runId });
+      update('afp', { status: 'done', result: sim, runId: sim.runId, forRun, builtAt: Date.now() });
       setHistTick((t) => t + 1);
     } catch (e) {
       if (seq.current.afp !== my) return;
-      update('afp', { status: 'error', error: toError(e), result: session.afp.result });
+      update('afp', { status: 'error', error: toError(e), result: sessionRef.current.afp.result, forRun });
+    }
+  };
+  /** Automatic parity: compare the resolver manifest with the facts extracted from the stored PDF and HTML artifacts of
+   *  this run (same compareManifests the API uses). Falls back to the server check if those facts are unavailable. */
+  const runParityAuto = async () => {
+    const pdfJob = sessionRef.current.pdf.result, htmlJob = sessionRef.current.html.result;
+    if (!manifest || !wantPdf || !wantHtml || !pdfJob || !htmlJob) return runParity();
+    const my = ++seq.current.parity; const forRun = pairKey ?? undefined;
+    update('parity', { ...sessionRef.current.parity, status: 'running', forRun, startedAt: Date.now(), error: undefined });
+    try {
+      const [pl, hl] = await Promise.all([api.artifacts({ runId: wantPdf }), api.artifacts({ runId: wantHtml })]);
+      const pa = pl.artifacts.find((x) => x.artifactId === pdfJob.artifactId), ha = hl.artifacts.find((x) => x.artifactId === htmlJob.bin.artifactId);
+      if (my !== seq.current.parity) return;
+      if (!pa?.meta?.extracted || !ha?.meta?.extracted) { seq.current.parity--; return runParity(); }
+      const report = compareManifests(manifest, pa.meta.extracted as ExtractedManifest, ha.meta.extracted as ExtractedManifest);
+      update('parity', { status: 'done', result: { runId: wantPdf, draft: !!pa.meta.draft, report, pdf: { pageCount: pa.pageCount, pdfPageCount: pa.meta?.metrics?.pdfPageCount }, source: 'artifacts' }, runId: wantPdf, forRun, builtAt: Date.now() });
+    } catch (e) {
+      if (seq.current.parity !== my) return;
+      update('parity', { status: 'error', error: toError(e), forRun });
     }
   };
   const runParity = async () => {
     const req = profileReq(); if (!req) return;
-    const my = ++seq.current.parity;
-    update('parity', { ...session.parity, status: 'running', startedAt: Date.now(), error: undefined });
+    const my = ++seq.current.parity; const forRun = pairKey ?? undefined;
+    update('parity', { ...sessionRef.current.parity, status: 'running', forRun, startedAt: Date.now(), error: undefined });
     try {
       const r = await api.parity(req);
       if (seq.current.parity !== my) return;
-      update('parity', { status: 'done', result: r, runId: r.runId });
+      update('parity', { status: 'done', result: { ...r, source: 'server' }, runId: r.runId, forRun, builtAt: Date.now() });
       setHistTick((t) => t + 1);
     } catch (e) {
       if (seq.current.parity !== my) return;
-      update('parity', { status: 'error', error: toError(e), result: session.parity.result });
+      update('parity', { status: 'error', error: toError(e), result: sessionRef.current.parity.result, forRun });
     }
   };
-  const cancel = (k: keyof Session) => { seq.current[k]++; update(k, { ...session[k], status: session[k].result ? 'done' : 'idle' } as any); };
+  const cancel = (k: keyof Session) => { seq.current[k]++; const j = sessionRef.current[k]; update(k, { ...j, status: j.result ? 'done' : 'idle' } as any); };
 
+  /* ---------------- automatic builds: the open tab first, PDF and HTML always (the parity panel needs both) */
+  const latest = useRef({ runPdf, runHtml, runAfp, runParity, runParityAuto });
+  latest.current = { runPdf, runHtml, runAfp, runParity, runParityAuto };
+  useEffect(() => {
+    const need = (w: string | null, j: Job<any>) => !!w && j.forRun !== w;
+    const order: Array<'pdf' | 'html'> = tab === 'html' ? ['html', 'pdf'] : ['pdf', 'html'];
+    const items: Array<'pdf' | 'html' | 'afp'> = [
+      ...order.filter((k) => (k === 'pdf' ? need(wantPdf, session.pdf) : need(wantHtml, session.html))),
+      ...(tab === 'afp' && need(wantAfp, session.afp) ? ['afp' as const] : []),
+    ];
+    if (!items.length) return;
+    const t = setTimeout(() => { for (const k of items) { if (k === 'pdf') void latest.current.runPdf(false, true); else if (k === 'html') void latest.current.runHtml(); else void latest.current.runAfp(); } }, 300);
+    return () => clearTimeout(t);
+  }, [tab, projectId, wantPdf, wantHtml, wantAfp, session.pdf.forRun, session.html.forRun, session.afp.forRun]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const bothReady = session.pdf.status === 'done' && session.pdf.runId === wantPdf && session.html.status === 'done' && session.html.runId === wantHtml;
+  useEffect(() => {
+    if (!pairKey || !bothReady || session.parity.forRun === pairKey) return;
+    void latest.current.runParityAuto();
+  }, [pairKey, bothReady, session.parity.forRun]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const now = useNow();
   const stale = {
-    pdf: !!session.pdf.runId && !!expected['paged-pdf'] && session.pdf.runId !== expected['paged-pdf'],
-    html: !!session.html.runId && !!expected['html-responsive'] && session.html.runId !== expected['html-responsive'],
-    afp: !!session.afp.runId && !!expected['paged-afp-sim'] && session.afp.runId !== expected['paged-afp-sim'],
+    pdf: !!session.pdf.runId && !!wantPdf && session.pdf.runId !== wantPdf,
+    html: !!session.html.runId && !!wantHtml && session.html.runId !== wantHtml,
+    afp: !!session.afp.runId && !!wantAfp && session.afp.runId !== wantAfp,
   };
   const tabs: Array<{ id: Tab; label: string; chip?: ReactNode; stale: boolean }> = [
     { id: 'pdf', label: 'PDF (real)', stale: stale.pdf },
@@ -188,71 +264,78 @@ export function PreviewExport() {
   if (!baseReq) return <section className="screen" data-testid="outputs-view"><ScreenHeader id="S10" title="Preview & Export" subtitle="" /><Empty title="No scenario" message="No matching fixture for this project." /></section>;
 
   const isEob = project.documentType === 'eob';
+  const rec = records.find((r) => r.recordId === ctx.recordId);
+  const who = rec ? `${rec.customer.givenName} ${rec.customer.familyName}` : ctx.recordId;
+  const nameOfRecord = (id?: string) => { const r = records.find((x) => x.recordId === id); return r ? `${r.customer.givenName} ${r.customer.familyName}` : id ?? ''; };
+  const currentRuns = new Set([wantPdf, wantHtml, wantAfp].filter(Boolean) as string[]);
+  const parityWait = !bothReady && session.parity.status !== 'done'
+    ? (session.pdf.status === 'error' || session.html.status === 'error' ? 'blocked' : 'building') as 'blocked' | 'building'
+    : null;
   return (
     <section className="screen" data-testid="outputs-view">
       <ScreenHeader
         id="S10" title="Preview & Export"
-        subtitle="Real PDF and interactive HTML composed from the same resolved semantic tree; AFP is a feasibility simulation only."
-        badge={<span className="chip">{ctx.recordId}{ctx.journeyCursor != null ? ` · journey ${ctx.journeyCursor}` : ''}{Object.keys(ctx.overrides).length ? ' · overrides' : ''}</span>}
+        subtitle="Real PDF and interactive HTML composed from the same resolved semantic tree, built automatically for the current customer and scenario; AFP is a feasibility simulation only."
+        badge={<span className="chip" data-testid="outputs-scenario"><Named name={who} code={ctx.recordId} />{ctx.journeyCursor != null ? ` · journey step ${ctx.journeyCursor}` : ''}{Object.keys(ctx.overrides).length ? ' · scenario changes' : ''}</span>}
       />
       <div className="screen-body ox-body">
         <div className="panel ox-main">
           <div className="tabs ox-tabs" role="tablist" aria-label="Output type" onKeyDown={onTabKey}>
             {tabs.map((t) => (
               <button key={t.id} role="tab" id={`ox-tab-${t.id}`} aria-selected={tab === t.id} aria-controls={`ox-panel-${t.id}`} tabIndex={tab === t.id ? 0 : -1} onClick={() => setTab(t.id)} data-testid={`tab-${t.id}`}>
-                {t.label} {t.chip}{t.stale && <span className="chip warning" style={{ marginLeft: 6 }}>stale</span>}
+                {t.label} {t.chip}{t.stale && <span className="chip warning" style={{ marginLeft: 6 }}>out of date</span>}
               </button>
             ))}
           </div>
           <div className="ox-panel" key={tab} role="tabpanel" id={`ox-panel-${tab}`} aria-labelledby={`ox-tab-${tab}`}>
-            {tab === 'pdf' && <PdfTab job={session.pdf} stale={stale.pdf} onRun={runPdf} onCancel={() => cancel('pdf')} isEob={isEob} />}
-            {tab === 'html' && <HtmlTab job={session.html} stale={stale.html} onRun={runHtml} onCancel={() => cancel('html')} device={device} setDevice={setDevice} isEob={isEob} />}
+            {tab === 'pdf' && <PdfTab job={session.pdf} want={wantPdf} now={now} who={who} stale={stale.pdf} onRun={runPdf} onCancel={() => cancel('pdf')} isEob={isEob} />}
+            {tab === 'html' && <HtmlTab job={session.html} want={wantHtml} now={now} who={who} stale={stale.html} onRun={runHtml} onCancel={() => cancel('html')} device={device} setDevice={setDevice} isEob={isEob} />}
             {tab === 'email' && <EmailTab req={profileReq('html-responsive')!} isEob={isEob} />}
             {tab === 'sms' && <SmsTab req={profileReq('html-responsive')!} isEob={isEob} />}
-            {tab === 'afp' && <AfpTab job={session.afp} stale={stale.afp} onRun={runAfp} onCancel={() => cancel('afp')} />}
+            {tab === 'afp' && <AfpTab job={session.afp} want={wantAfp} now={now} who={who} stale={stale.afp} onRun={runAfp} onCancel={() => cancel('afp')} />}
             {tab === 'batch' && <BatchTab />}
           </div>
         </div>
 
-        <div className="ox-side">
-          <ParityPanel job={session.parity} onRun={runParity} />
+        <aside className="ox-side" data-side="right" data-side-title="Parity & history" aria-label="Parity and export history">
+          <ParityPanel job={session.parity} pairKey={pairKey} now={now} wait={parityWait} onRun={runParity} />
           <section className="panel ox-history" aria-label="Export history">
-            <div className="panel-head">Export history <span className="sub">{history ? `${history.length} artifacts` : ''}</span>
+            <div className="panel-head">Export history <span className="chip count">{history ? `${history.length}` : '…'}</span>
               <span className="right"><button className="btn sm ghost" onClick={() => setHistTick((t) => t + 1)} aria-label="Refresh export history"><Icon.reset /></button></span>
             </div>
-            <div className="panel-body ox-hist-body" data-testid="export-history">
+            <div className="panel-body flush ox-hist-body" data-testid="export-history">
               {historyErr ? <div className="callout error" style={{ margin: 10 }}>{historyErr}</div>
                 : !history ? <div className="empty" role="status"><span className="spinner" /></div>
-                : history.length === 0 ? <div className="empty"><strong>No exports yet</strong><span>Generate a PDF, HTML or AFP simulation report to start the history.</span></div>
+                : history.length === 0 ? <div className="empty"><strong>No exports yet</strong><span>Previews are saved here as they are built.</span></div>
                 : (
-                  <ul className="ox-hist-list">
-                    {history.map((a) => <HistoryRow key={a.artifactId} a={a} />)}
+                  <ul className="ox-hist-list list-rows">
+                    {history.map((a) => <HistoryRow key={a.artifactId} a={a} who={nameOfRecord(a.recordId)} current={currentRuns.has(a.runId)} />)}
                   </ul>
                 )}
             </div>
           </section>
-        </div>
+        </aside>
       </div>
     </section>
   );
 }
 
-function HistoryRow({ a }: { a: any }) {
+function HistoryRow({ a, who, current }: { a: any; who: string; current: boolean }) {
   const [copied, setCopied] = useState(false);
   const kindLabel = a.kind === 'afp-sim' ? 'AFP sim' : String(a.kind).toUpperCase();
   const copy = async () => { try { await navigator.clipboard.writeText(a.sha256); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch { /* clipboard unavailable */ } };
-  const detail = [a.recordId, a.kind === 'afp-sim' ? 'simulation report (JSON)' : a.pageCount != null ? `${a.pageCount} page${a.pageCount === 1 ? '' : 's'}` : a.size ? `${(a.size / 1024).toFixed(1)} KB` : ''].filter(Boolean).join(' · ');
+  const detail = [a.kind === 'afp-sim' ? 'simulation report' : a.pageCount != null ? `${a.pageCount} page${a.pageCount === 1 ? '' : 's'}` : a.size ? `${(a.size / 1024).toFixed(1)} KB` : ''].filter(Boolean).join(' · ');
   return (
-    <li className="ox-hist-row" data-testid="history-row">
+    <li className="ox-hist-row" data-testid="history-row" aria-current={current ? 'true' : undefined}>
       <span className={'chip ox-kind' + (a.kind === 'afp-sim' ? ' sim' : a.kind === 'pdf' ? ' accent' : ' info')}>{kindLabel}</span>
       <span className="ox-file">
-        <a href={api.artifactUrl(a.artifactId)} download={a.filename} title={`Download ${a.filename}`}><Icon.download /><span className="ox-fname">{a.filename}</span></a>
-        <small title={detail}>{detail}</small>
+        <a href={api.artifactUrl(a.artifactId)} download={a.filename} title={`Download ${a.filename}`}><Icon.download /><span className="ox-fname"><Named name={who} code={a.recordId} />{detail ? ` · ${detail}` : ''}</span></a>
+        <Tech><small title={a.filename}>{a.filename}</small></Tech>
       </span>
       <span className="ox-hist-meta">
-        <span className="ox-hash"><code title={a.sha256}>{short(a.sha256, 8)}</code>
-          <button className="btn sm ghost icon" onClick={copy} aria-label={`Copy SHA-256 of ${a.filename}`} title={copied ? 'Copied' : 'Copy SHA-256'}>{copied ? <Icon.validate /> : <Icon.copy />}</button></span>
-        <time dateTime={a.createdAt} title={fmtTime(a.createdAt)}>{relTime(a.createdAt)}</time>
+        <time dateTime={a.createdAt} title={fmtTime(a.createdAt)}>{current ? 'current run' : relTime(a.createdAt)}</time>
+        <Tech><span className="ox-hash"><span className="chip code" title={a.sha256}>{short(a.sha256, 8)}</span>
+          <button className="btn sm ghost icon" onClick={copy} aria-label={`Copy SHA-256 of ${a.filename}`} title={copied ? 'Copied' : 'Copy SHA-256'}>{copied ? <Icon.validate /> : <Icon.copy />}</button></span></Tech>
       </span>
     </li>
   );
@@ -260,12 +343,26 @@ function HistoryRow({ a }: { a: any }) {
 
 /* ------------------------------------------------------------ shared job UI */
 
-function JobBar({ job, label, onRun, onCancel, testId, runLabel, extra }: { job: Job<any>; label: string; onRun: () => void; onCancel: () => void; testId: string; runLabel: string; extra?: ReactNode }) {
+/** One-line freshness: "Built 2 min ago · up to date" / "Out of date — rebuilding…". */
+function Fresh({ job, want, now, testId }: { job: Job<any>; want: string | null; now: number; testId?: string }) {
+  const hasResult = !!job.result;
+  const current = !!want && job.runId === want;
+  let text: string; let old = false;
+  if (job.status === 'running') { text = hasResult && !current ? 'Out of date — rebuilding…' : hasResult ? 'Rebuilding…' : 'Building…'; old = hasResult && !current; }
+  else if (job.status === 'error') { text = hasResult && !current ? 'Out of date — build failed' : 'Build failed'; old = true; }
+  else if (hasResult && current) text = `Built ${relMs(job.builtAt, now)} · up to date`;
+  else if (hasResult) { text = 'Out of date — rebuilding…'; old = true; }
+  else text = 'Not built yet';
+  return <span className={'ox-fresh' + (old ? ' old' : '')} role="status" data-testid={old && testId ? testId : undefined}>{text}</span>;
+}
+
+function JobBar({ job, label, onRun, onCancel, testId, runLabel, extra, fresh }: { job: Job<any>; label: string; onRun: () => void; onCancel: () => void; testId: string; runLabel: string; extra?: ReactNode; fresh?: ReactNode }) {
   const running = job.status === 'running';
   const el = useElapsed(job.startedAt, running);
   return (
     <div className="ox-jobbar">
       <button className="btn primary" onClick={onRun} disabled={running} data-testid={testId}>{running ? <span className="spinner" /> : <Icon.outputs />} {runLabel}</button>
+      {fresh}
       {running && <><span className="chip info" role="status" aria-live="polite">Composing {label}… {el} s</span><button className="btn sm ghost" onClick={onCancel}>Cancel</button></>}
       {extra}
     </div>
@@ -293,25 +390,26 @@ function IssuesBlock({ job, onDraft, kind }: { job: Job<any>; onDraft?: () => vo
   );
 }
 
-function Pending({ what, stale }: { what: string; stale?: boolean }) {
+/** Progress placeholder while an automatic build is queued or running (never a "not composed" dead end). */
+function Pending({ what, who, job }: { what: string; who: string; job: Job<any> }) {
+  const cancelled = job.status === 'idle' && !!job.forRun;
   return (
-    <div className="ox-pending">
-      <div className="ox-pending-ico"><Icon.outputs /></div>
-      <strong>{stale ? 'Preview is stale' : 'Not composed yet'}</strong>
-      <span>{stale ? 'The model or scenario changed since this file was generated.' : `Generate the ${what} to see the real file for the current scenario.`}</span>
+    <div className="ox-pending" role="status" data-testid="ox-building">
+      {cancelled ? <Icon.outputs /> : <span className="spinner" />}
+      <strong>{cancelled ? `${what} build cancelled` : `Building the ${what} for ${who}…`}</strong>
+      <span>{cancelled ? 'Use the build button to try again.' : 'It appears here as soon as it is ready.'}</span>
     </div>
   );
 }
 
 /* ------------------------------------------------------------ PDF */
 
-function PdfTab({ job, stale, onRun, onCancel, isEob }: { job: Job<BinaryResult>; stale: boolean; onRun: (d?: boolean) => void; onCancel: () => void; isEob: boolean }) {
+function PdfTab({ job, want, now, who, stale, onRun, onCancel, isEob }: { job: Job<BinaryResult>; want: string | null; now: number; who: string; stale: boolean; onRun: (d?: boolean) => void; onCancel: () => void; isEob: boolean }) {
   const r = job.result;
   return (
     <>
-      <JobBar job={job} label="PDF" onRun={() => onRun(false)} onCancel={onCancel} testId="export-pdf" runLabel={r ? 'Regenerate PDF' : 'Generate PDF'}
+      <JobBar job={job} label="PDF" onRun={() => onRun(false)} onCancel={onCancel} testId="export-pdf" runLabel={r ? 'Rebuild PDF' : 'Build PDF'} fresh={<Fresh job={job} want={want} now={now} testId="stale-pdf" />}
         extra={r && <a className="btn" href={r.url} download={r.filename} data-testid="download-pdf"><Icon.download /> Download PDF</a>} />
-      {stale && r && <div className="callout warning ox-stale" data-testid="stale-pdf">Stale preview — the model or scenario changed since this PDF was exported. Regenerate to refresh.</div>}
       <IssuesBlock job={job} kind="PDF" onDraft={() => onRun(true)} />
       {r ? (
         <>
@@ -320,23 +418,23 @@ function PdfTab({ job, stale, onRun, onCancel, isEob }: { job: Job<BinaryResult>
             <span>Pages <strong data-testid="pdf-page-count">{r.pageCount ?? '—'}</strong> composed · <strong data-testid="pdf-verified-count">{r.pdfPageCount ?? '—'}</strong> verified</span>
             {isEob && <span className="muted">Carries “THIS IS NOT A BILL”.</span>}
             <Proof label="Proof">
-              <span className="ox-proof">Run <code>{r.runId}</code> · digest <code title={r.contentDigest}>{short(r.contentDigest, 16)}…</code> · SHA-256 <code title={r.sha256}>{short(r.sha256, 16)}…</code> · <code>{r.filename}</code></span>
+              <span className="ox-proof">Run <span className="chip code">{r.runId}</span> · digest <span className="chip code" title={r.contentDigest}>{short(r.contentDigest, 16)}…</span> · SHA-256 <span className="chip code" title={r.sha256}>{short(r.sha256, 16)}…</span> · <span className="chip code">{r.filename}</span></span>
             </Proof>
           </div>
           <div className={'ox-viewer' + (stale ? ' is-stale' : '')} data-testid="pdf-preview">
             <iframe src={r.url} title="Generated PDF preview" />
-            {stale && <div className="ox-stale-veil">STALE</div>}
+            {stale && <div className="ox-stale-veil">OUT OF DATE</div>}
           </div>
           <p className="muted ox-foot">If the embedded viewer is blocked by the browser, <a href={r.url} target="_blank" rel="noreferrer">open the PDF in a new tab</a>.</p>
         </>
-      ) : job.status !== 'running' && job.status !== 'error' ? <Pending what="PDF" /> : null}
+      ) : job.status !== 'error' ? <Pending what="PDF" who={who} job={job} /> : null}
     </>
   );
 }
 
 /* ------------------------------------------------------------ HTML */
 
-function HtmlTab({ job, stale, onRun, onCancel, device, setDevice, isEob }: { job: Job<HtmlResult>; stale: boolean; onRun: (d?: boolean) => void; onCancel: () => void; device: Device; setDevice: (d: Device) => void; isEob: boolean }) {
+function HtmlTab({ job, want, now, who, stale, onRun, onCancel, device, setDevice, isEob }: { job: Job<HtmlResult>; want: string | null; now: number; who: string; stale: boolean; onRun: (d?: boolean) => void; onCancel: () => void; device: Device; setDevice: (d: Device) => void; isEob: boolean }) {
   const r = job.result;
   const box = useRef<HTMLDivElement>(null);
   const [avail, setAvail] = useState(800);
@@ -350,14 +448,13 @@ function HtmlTab({ job, stale, onRun, onCancel, device, setDevice, isEob }: { jo
   const H = 640;
   return (
     <>
-      <JobBar job={job} label="HTML" onRun={() => onRun(false)} onCancel={onCancel} testId="export-html" runLabel={r ? 'Regenerate HTML' : 'Generate HTML'}
+      <JobBar job={job} label="HTML" onRun={() => onRun(false)} onCancel={onCancel} testId="export-html" runLabel={r ? 'Rebuild HTML' : 'Build HTML'} fresh={<Fresh job={job} want={want} now={now} testId="stale-html" />}
         extra={<>
           {r && <a className="btn" href={r.bin.url} download={r.bin.filename} data-testid="download-html"><Icon.download /> Download HTML</a>}
           <div className="segmented" role="group" aria-label="Device width">
             {(Object.keys(DEVICES) as Device[]).map((d) => <button key={d} aria-pressed={device === d} onClick={() => setDevice(d)} data-testid={`device-${d}`}>{DEVICES[d].label}</button>)}
           </div>
         </>} />
-      {stale && r && <div className="callout warning ox-stale" data-testid="stale-html">Stale preview — the model or scenario changed since this HTML was exported. Regenerate to refresh.</div>}
       <IssuesBlock job={job} kind="HTML" onDraft={() => onRun(true)} />
       {r ? (
         <>
@@ -366,7 +463,7 @@ function HtmlTab({ job, stale, onRun, onCancel, device, setDevice, isEob }: { jo
             <span>{(r.bin.blob.size / 1024).toFixed(1)} KB · shown at {w}px</span>
             <span className="muted">{isEob ? 'Carries “THIS IS NOT A BILL”. ' : ''}Sorting and filtering work in the file; totals never change.</span>
             <Proof label="Proof">
-              <span className="ox-proof">Run <code>{r.bin.runId}</code> · digest <code title={r.bin.contentDigest}>{short(r.bin.contentDigest, 16)}…</code> · SHA-256 <code title={r.bin.sha256}>{short(r.bin.sha256, 16)}…</code> · <code>{r.bin.filename}</code></span>
+              <span className="ox-proof">Run <span className="chip code">{r.bin.runId}</span> · digest <span className="chip code" title={r.bin.contentDigest}>{short(r.bin.contentDigest, 16)}…</span> · SHA-256 <span className="chip code" title={r.bin.sha256}>{short(r.bin.sha256, 16)}…</span> · <span className="chip code">{r.bin.filename}</span></span>
             </Proof>
           </div>
           <div className={'ox-viewer ox-html' + (stale ? ' is-stale' : '')} ref={box} style={{ height: H + 24 }} data-testid="html-preview">
@@ -374,10 +471,10 @@ function HtmlTab({ job, stale, onRun, onCancel, device, setDevice, isEob }: { jo
               <iframe title={`Interactive HTML preview at ${w}px`} sandbox="allow-scripts allow-popups" srcDoc={r.text}
                 style={{ width: w, height: H / scale, transform: `scale(${scale})`, transformOrigin: '0 0' }} data-testid="html-iframe" />
             </div>
-            {stale && <div className="ox-stale-veil">STALE</div>}
+            {stale && <div className="ox-stale-veil">OUT OF DATE</div>}
           </div>
         </>
-      ) : job.status !== 'running' && job.status !== 'error' ? <Pending what="interactive HTML" /> : null}
+      ) : job.status !== 'error' ? <Pending what="interactive HTML" who={who} job={job} /> : null}
     </>
   );
 }
@@ -483,7 +580,7 @@ function EmailTab({ req, isEob }: { req: ScenarioRequest; isEob: boolean }) {
           <Warnings items={data.warnings} testId="email-warning" />
           <div className="ox-strip">
             <span className="muted">{isEob ? 'Carries “THIS IS NOT A BILL”. ' : ''}Scripts, forms and external assets are never included; the preview is sandboxed.</span>
-            <Proof label="Proof"><span className="ox-proof">Run <code>{data.runId}</code> · artifact <code>{data.artifactId}</code> · SHA-256 <code title={data.sha256}>{short(data.sha256, 16)}…</code> · {data.locale}</span></Proof>
+            <Proof label="Proof"><span className="ox-proof">Run <span className="chip code">{data.runId}</span> · artifact <span className="chip code">{data.artifactId}</span> · SHA-256 <span className="chip code" title={data.sha256}>{short(data.sha256, 16)}…</span> · <span className="chip code">{data.locale}</span></span></Proof>
           </div>
         </>
       )}
@@ -522,7 +619,7 @@ function SmsTab({ req, isEob }: { req: ScenarioRequest; isEob: boolean }) {
               <ParityChips parity={data.parity} testId="sms-parity" />
               <Warnings items={data.warnings} testId="sms-warning" />
               {status === 'running' && <span className="chip info" role="status">Refreshing…</span>}
-              <Proof label="Proof"><span className="ox-proof">Run <code>{data.runId}</code> · {data.locale}</span></Proof>
+              <Proof label="Proof"><span className="ox-proof">Run <span className="chip code">{data.runId}</span> · <span className="chip code">{data.locale}</span></span></Proof>
             </div>
           </div>
         </>
@@ -533,7 +630,7 @@ function SmsTab({ req, isEob }: { req: ScenarioRequest; isEob: boolean }) {
 
 /* ------------------------------------------------------------ AFP simulation */
 
-function AfpTab({ job, stale, onRun, onCancel }: { job: Job<any>; stale: boolean; onRun: () => void; onCancel: () => void }) {
+function AfpTab({ job, want, now, who, stale, onRun, onCancel }: { job: Job<any>; want: string | null; now: number; who: string; stale: boolean; onRun: () => void; onCancel: () => void }) {
   const s = job.result;
   return (
     <>
@@ -541,33 +638,33 @@ function AfpTab({ job, stale, onRun, onCancel }: { job: Job<any>; stale: boolean
         <Icon.warning /> <strong>{AFP_LABEL}</strong>
         <span>Conceptual feasibility report derived from the real paged composition. No .afp file is produced or offered.</span>
       </div>
-      <JobBar job={job} label="AFP simulation" onRun={onRun} onCancel={onCancel} testId="view-afp-simulation" runLabel={s ? 'Refresh AFP simulation' : 'View AFP simulation'} />
-      {stale && s && <div className="callout warning ox-stale" data-testid="stale-afp">Stale — the model or scenario changed since this simulation was generated.</div>}
+      <JobBar job={job} label="AFP simulation" onRun={onRun} onCancel={onCancel} testId="view-afp-simulation" runLabel={s ? 'Refresh AFP simulation' : 'View AFP simulation'} fresh={<Fresh job={job} want={want} now={now} testId="stale-afp" />} />
       <IssuesBlock job={job} kind="AFP simulation" />
       {s ? (
         <div className="ox-afp">
           <div className="ox-afp-grid">
-            <section className="card ox-card"><h3>Media</h3>
+            <section className="ox-card"><h3>Media</h3>
               <dl className="kv"><dt>Paper</dt><dd>{s.media?.paper}</dd><dt>Size</dt><dd>{s.media?.widthPt} × {s.media?.heightPt} pt</dd><dt>Duplex</dt><dd>{String(s.media?.duplex)}</dd><dt>Margins (mm)</dt><dd>{(s.media?.marginsMm ?? []).join(' / ')}</dd><dt>Pages</dt><dd>{s.pageCount ?? '—'}</dd><dt>AFP bytes generated</dt><dd data-testid="afp-bytes">{s.afpBytesGenerated}</dd></dl>
             </section>
-            <section className="card ox-card"><h3>Form definition / page definition (concept)</h3>
-              <dl className="kv"><dt>FORMDEF</dt><dd className="mono">{s.formdef}</dd><dt>PAGEDEF</dt><dd className="mono">{s.pagedef}</dd><dt>Run ID</dt><dd className="mono">{s.runId}</dd></dl>
+            <section className="ox-card"><h3>Form definition / page definition (concept)</h3>
+              <dl className="kv"><dt>FORMDEF</dt><dd><span className="chip code">{s.formdef}</span></dd><dt>PAGEDEF</dt><dd><span className="chip code">{s.pagedef}</span></dd>{/* run id is shown in Technical view only */}</dl>
+              <Tech><dl className="kv"><dt>Run ID</dt><dd><span className="chip code">{s.runId}</span></dd></dl></Tech>
               <h4>Continuation regions</h4>
               {(s.continuationRegions ?? []).map((c: any, i: number) => <dl key={i} className="kv"><dt>{c.name}</dt><dd>first {c.firstPageTopPt} · others {c.otherPagesTopPt} · bottom {c.bottomPt} pt</dd></dl>)}
             </section>
-            <section className="card ox-card"><h3>Font map</h3>
+            <section className="ox-card"><h3>Font map</h3>
               {Object.keys(s.fontMap ?? {}).length === 0 ? <span className="muted">None defined.</span> : <dl className="kv">{Object.entries(s.fontMap).map(([k, v]) => <Fragment key={k}><dt>{k}</dt><dd className="mono">{String(v)}</dd></Fragment>)}</dl>}
               <h4>Overlays</h4>
               <div className="ox-chips">{(s.overlays ?? []).length ? s.overlays.map((o: string) => <span key={o} className="chip">{o}</span>) : <span className="muted">None.</span>}</div>
             </section>
-            <section className="card ox-card"><h3>Resource checklist</h3>
+            <section className="ox-card"><h3>Resource checklist</h3>
               <ul className="ox-check">
                 {(s.checklist ?? []).map((c: any, i: number) => <li key={i}><span className={'chip ' + (c.ok ? 'accent' : 'sim')}>{c.ok ? 'ok' : 'concept'}</span> {c.item}{c.note ? <small> — {c.note}</small> : null}</li>)}
                 {(s.resources ?? []).map((r: any) => <li key={r.name}><span className="chip sim">{r.status}</span> <span className="mono">{r.name}</span></li>)}
               </ul>
             </section>
           </div>
-          <section className="card ox-card"><h3>Page sequence</h3>
+          <section className="ox-card"><h3>Page sequence</h3>
             <table className="table ox-seq">
               <thead><tr><th>Sheet</th><th>Side</th><th>Page</th><th>Nodes</th><th>Continued tables</th></tr></thead>
               <tbody>{(s.pageSequence ?? []).map((p: any) => <tr key={p.page}><td>{p.sheet}</td><td>{p.side}</td><td>{p.page}</td><td>{(p.nodeIds ?? []).join(', ')}</td><td>{(p.continuedTables ?? []).join(', ') || '—'}</td></tr>)}</tbody>
@@ -575,18 +672,19 @@ function AfpTab({ job, stale, onRun, onCancel }: { job: Job<any>; stale: boolean
           </section>
           {(s.warnings ?? []).length > 0 && <div className="callout warning"><ul className="ox-warn">{s.warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}</ul></div>}
         </div>
-      ) : job.status !== 'running' && job.status !== 'error' ? <Pending what="AFP simulation report" /> : null}
+      ) : job.status !== 'error' ? <Pending what="AFP simulation report" who={who} job={job} /> : null}
     </>
   );
 }
 
 /* ------------------------------------------------------------ parity */
 
-function ParityPanel({ job, onRun }: { job: Job<any>; onRun: () => void }) {
+function ParityPanel({ job, pairKey, now, wait, onRun }: { job: Job<any>; pairKey: string | null; now: number; wait: 'building' | 'blocked' | null; onRun: () => void }) {
   const r = job.result;
   const running = job.status === 'running';
   const el = useElapsed(job.startedAt, running);
   const rep = r?.report;
+  const outdated = !!rep && !!pairKey && job.forRun !== pairKey;
   return (
     <section className="panel ox-parity" data-testid="semantic-parity" aria-label="Semantic parity">
       <div className="panel-head">Semantic parity
@@ -595,15 +693,22 @@ function ParityPanel({ job, onRun }: { job: Job<any>; onRun: () => void }) {
           <button className="btn sm primary" onClick={onRun} disabled={running} data-testid="run-parity">{running ? <><span className="spinner" /> {el} s</> : rep ? 'Re-run parity' : 'Run parity check'}</button>
         </span>
       </div>
-      <div className="panel-body" style={{ padding: rep ? 0 : 12 }}>
+      <div className="panel-body flush">
+        {rep && <div className={'ox-fresh ox-fresh-row' + (outdated || running ? ' old' : '')} role="status">{running ? 'Checking the PDF against the HTML…' : outdated ? 'Out of date — re-checking…' : `Checked ${relMs(job.builtAt, now)} · up to date`}{!running && !outdated && r.source === 'artifacts' ? ' · from the built PDF and HTML' : ''}</div>}
         <IssuesBlock job={job} kind="Parity" />
-        {!rep ? (job.status === 'error' ? null : <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>Compares money, selected variants, disclosures, table rows and totals, and identity between the real PDF and HTML of this run. Layout differences are expected and listed separately.</p>) : (
+        {!rep ? (job.status === 'error' ? null : (
+          <p className="ox-par-wait" role="status">
+            {running ? <><span className="spinner" /> Comparing money, variants, disclosures, tables and identity between the real PDF and HTML…</>
+              : wait === 'blocked' ? 'The PDF or HTML could not be built for this scenario, so there is nothing to compare yet. Fix the blocking problem shown in the preview, or build a watermarked draft.'
+              : <><span className="spinner" /> Waiting for the PDF and HTML to finish building, then the check runs automatically.</>}
+          </p>
+        )) : (
           <>
             <div className="ox-par-sum">
-              <span className="chip">{rep.checks.length} checks</span>
+              <span className="chip count">{rep.checks.length} checks</span>
               <span className="chip accent">{rep.checks.filter((c: any) => c.status === 'match').length} match</span>
-              <span className={'chip ' + (rep.checks.some((c: any) => c.status === 'mismatch') ? 'error' : '')}>{rep.checks.filter((c: any) => c.status === 'mismatch').length} mismatch</span>
-              <span className="chip">PDF {r.pdf?.pdfPageCount ?? r.pdf?.pageCount} pp</span>
+              <span className={'chip ' + (rep.checks.some((c: any) => c.status === 'mismatch') ? 'error' : 'count')}>{rep.checks.filter((c: any) => c.status === 'mismatch').length} mismatch</span>
+              <span className="chip count">PDF {r.pdf?.pdfPageCount ?? r.pdf?.pageCount} pp</span>
               {r.draft && <span className="chip error">draft run</span>}
             </div>
             <div className="ox-par-scroll">
@@ -658,7 +763,7 @@ export function ParityRow({ c }: { c: any }) {
 
 /* ======================================================================= Batch tab */
 
-const BLOCK_WORDS: Record<string, string> = {
+export const BLOCK_WORDS: Record<string, string> = {
   BALANCE_RECONCILIATION_FAILED: 'Balances do not add up', CLAIM_RECONCILIATION_FAILED: 'Claim amounts do not add up',
   INCONSISTENT_PAYMENT_STATE: 'Payment state is inconsistent', UNCONFIRMED_DEBT_LANGUAGE: 'Debt wording used without confirmed debt',
   UNCONFIRMED_MEMBER_LIABILITY: 'Member liability not confirmed', REQUIRED_NODE_MISSING: 'A required section is missing',
@@ -667,7 +772,7 @@ const BLOCK_WORDS: Record<string, string> = {
   INVALID_BINDING: 'A data field is invalid', IMAGE_ALT_MISSING: 'An image has no description', UNSAFE_URL: 'A link is not allowed',
   RECORD_TYPE_MISMATCH: 'Record does not fit this document', UNKNOWN_VARIANT: 'Unknown wording variant', UNKNOWN_SECTION: 'Unknown section',
 };
-const blockWord = (c: string) => BLOCK_WORDS[c] ?? c.toLowerCase().replace(/_/g, ' ');
+export const blockWord = (c: string) => BLOCK_WORDS[c] ?? c.toLowerCase().replace(/_/g, ' ');
 const STATUS_LABEL: Record<BatchItemDto['status'], string> = { pending: 'Waiting', ok: 'Done', draft: 'Draft', blocked: 'Blocked', failed: 'Failed' };
 const STATUS_CLASS: Record<BatchItemDto['status'], string> = { pending: '', ok: 'accent', draft: 'warning', blocked: 'error', failed: 'error' };
 const fmtMb = (n: number | null | undefined) => (n == null ? '—' : n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);

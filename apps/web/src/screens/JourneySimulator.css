@@ -82,3 +82,13 @@
 .jr-payload { grid-template-columns: 1fr auto 1fr auto; }
 .jr-check { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; }
 .jr-editor ul { margin: 0; padding-left: 18px; }
+
+/* narrow windows: the three working columns stack (the screen already scrolls vertically) */
+@media (max-width: 1100px) { .jr-grid { grid-template-columns: minmax(0, 1fr); } }
+/* calm pass: events are divided rows, not bordered cards */
+.jr-list { gap: 0; }
+.jr-list > li { border-bottom: 1px solid var(--iss-row-border); }
+.jr-list > li:last-child { border-bottom: 0; }
+.jr-row { border: 0; border-radius: 0; background: transparent; padding: 8px 8px; }
+.jr-row:hover { background: var(--iss-row-hover); }
+.jr-row.sel { background: var(--iss-accent-soft); box-shadow: inset 3px 0 0 var(--iss-accent); }

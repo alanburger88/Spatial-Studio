@@ -4,7 +4,8 @@ import { COMPONENT_CATALOG, CATALOG_BY_TYPE, defaultNode, dropRejection, newNode
 import { renderInteractiveHtml } from '@iss/renderers';
 import type { RNode, Resolution } from '@iss/resolver';
 import { useResolution, useStudio } from '../state/store';
-import { ScreenHeader, Tech } from '../ui/common';
+import { ScreenHeader, Tech, Named } from '../ui/common';
+import { nodeTitle } from '../ui/plain';
 import { C, Icon } from '../ui/icons';
 import { PagePreview, PT, PAGE_W_PT, PAGE_H_PT, type NodeInteraction } from '../doc/PagePreview';
 import { Inspector } from './design/Inspector';
@@ -21,6 +22,7 @@ let dragging: Drag | null = null;
 
 const LS_HIDDEN = 'iss.design.showHidden';
 const LS_HINT = 'iss.design.pullHintSeen';
+const LS_PALETTE = 'iss.paletteCollapsed';
 const lsGet = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } };
 
@@ -62,6 +64,7 @@ export function DesignStudio() {
   const [snap, setSnap] = useState(true);
   const [device, setDevice] = useState<1200 | 768 | 390>(1200);
   const [showHidden, setShowHidden] = useState(() => lsGet(LS_HIDDEN) === '1');
+  const [paletteCollapsed, setPaletteCollapsed] = useState(() => lsGet(LS_PALETTE) === '1');
   const [hintSeen, setHintSeen] = useState(() => lsGet(LS_HINT) === '1');
   const scrollRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 700, h: 600 });
@@ -77,12 +80,20 @@ export function DesignStudio() {
   // Fit: whole page when that stays readable (>= 60%), otherwise page width. Recomputed from the measured canvas.
   const availW = Math.max(200, box.w - 2 * SCROLL_PAD_X), availH = Math.max(200, box.h - 2 * SCROLL_PAD_Y);
   const fitW = availW / (PAGE_W_PT * PT), fitPage = availH / (PAGE_H_PT * PT);
-  const fit = Math.max(0.4, Math.min(1.15, fitPage >= 0.6 ? Math.min(fitW, fitPage) : fitW));
-  const fitsWholePage = fitPage >= 0.6 && fitPage <= fitW;
+  // With the component list collapsed the person wants the page larger: fit the width and scroll vertically.
+  const wholePage = !paletteCollapsed && fitPage >= 0.6;
+  const fit = Math.max(0.4, Math.min(1.15, wholePage ? Math.min(fitW, fitPage) : fitW));
+  const fitsWholePage = wholePage && fitPage <= fitW;
   const scale = zoom ?? fit;
   const selected = ctx.selectedNodeId;
   const map = useMemo(() => nodeMap(project), [project]);
   const selNode = selected ? map.get(selected) : undefined;
+  // Never open the inspector empty: show the most useful component (first variant/conditional section, else first block) without touching the shared selection.
+  const inspectNodeId = useMemo(() => {
+    if (selected && map.has(selected)) return selected;
+    const kids = (map.get(project.rootNodeId)?.children ?? []).map((id) => map.get(id)).filter((n): n is DocNode => !!n);
+    return (kids.find((n) => n.type === 'variant-set' || n.type === 'conditional-region') ?? kids[0])?.id ?? null;
+  }, [selected, map, project.rootNodeId]);
   const isHtml = ctx.profileId === 'html-responsive';
 
   useEffect(() => { if (reject) { const t = setTimeout(() => setReject(null), 4500); return () => clearTimeout(t); } }, [reject]);
@@ -248,6 +259,7 @@ export function DesignStudio() {
   let hiddenCount = 0;
   const countHidden = (n: RNode, parentVisible: boolean) => { if (!n.visible && parentVisible) hiddenCount++; n.children.forEach((c) => countHidden(c, n.visible)); };
   countHidden(res.root, true);
+  const togglePalette = () => { const v = !paletteCollapsed; setPaletteCollapsed(v); lsSet(LS_PALETTE, v ? '1' : '0'); };
   const toggleHidden = () => { const v = !showHidden; setShowHidden(v); lsSet(LS_HIDDEN, v ? '1' : '0'); };
   const dismissHint = () => { setHintSeen(true); lsSet(LS_HINT, '1'); };
   const goExplode = () => { dismissHint(); navigate(`/studio/${project.projectId}/exploded/${selNode!.id}`); };
@@ -257,23 +269,27 @@ export function DesignStudio() {
       <ScreenHeader id="S02" title="2D Design Studio" subtitle="Edit accurate page geometry and responsive profiles on one semantic component tree. Every edit is a typed, undoable model command. Select a variant or conditional section and use its pull handle, or Explore variants, to open the Exploded view."
         actions={<button className="btn primary" disabled={!canExplode} onClick={goExplode} data-testid="explore-variants" title={canExplode ? 'Open the selected section in the Exploded view' : 'Select a variant set or conditional section first'}><Icon.exploded /> Explore variants</button>}
       />
-      <div className="screen-body workbench">
-        <aside className="panel" aria-label="Components and layers">
-          <div className="tabs" role="tablist">
-            <button role="tab" aria-selected={leftTab === 'palette'} onClick={() => setLeftTab('palette')}>Components</button>
-            <button role="tab" aria-selected={leftTab === 'layers'} onClick={() => setLeftTab('layers')}>Layers</button>
+      <div className={`screen-body workbench${paletteCollapsed ? ' no-left' : ''}`}>
+        {!paletteCollapsed && (
+        <aside className="panel ds-left" aria-label="Components and layers" data-side="left" data-side-title="Components">
+          <div className="ds-left-head">
+            <div className="tabs" role="tablist">
+              <button role="tab" aria-selected={leftTab === 'palette'} onClick={() => setLeftTab('palette')}>Components</button>
+              <button role="tab" aria-selected={leftTab === 'layers'} onClick={() => setLeftTab('layers')}>Layers</button>
+            </div>
+            <button className="btn sm ghost icon ds-collapse" onClick={togglePalette} aria-expanded={true} aria-label="Collapse component list" title="Collapse the component list to give the page more room" data-testid="toggle-palette"><Icon.chevron width={14} height={14} style={{ transform: 'rotate(180deg)' }} /></button>
           </div>
           {leftTab === 'palette' ? (
             <div className="panel-body" data-testid="component-palette">
-              <input className="input" placeholder={`Search ${COMPONENT_CATALOG.length} components…`} value={paletteQuery} onChange={(e) => setPaletteQuery(e.target.value)} aria-label="Search components" style={{ width: '100%', marginBottom: 8 }} />
-              <ul className="palette" aria-label="Component palette (drag onto the page, or press Insert)">
+              <input className="input ds-search" placeholder={`Search ${COMPONENT_CATALOG.length} components…`} value={paletteQuery} onChange={(e) => setPaletteQuery(e.target.value)} aria-label="Search components" />
+              <ul className="palette list-rows" aria-label="Component palette (drag onto the page, or press Insert)">
                 {palette.map((c) => {
                   const Ico = C[c.type];
                   return (
                     <li key={c.type}>
                       <div className="palette-item" draggable onDragStart={(e) => { dragging = { kind: 'component', type: c.type }; e.dataTransfer.setData('application/x-iss-component', c.type); e.dataTransfer.effectAllowed = 'copy'; }} onDragEnd={() => { dragging = null; setMark(null); }} data-testid={`palette-${c.type}`} title={`${c.description} (${c.code}${c.deep ? ', deep' : ''})`}>
-                        <span className="palette-icon"><Ico width={15} height={15} /></span>
-                        <span className="palette-label grow">{c.label}<Tech><span className="palette-code">{c.code}{c.deep ? ' · deep' : ''}</span></Tech></span>
+                        <span className="palette-icon"><Ico width={14} height={14} /></span>
+                        <span className="palette-label grow">{c.label}<Tech><span className="palette-code">{c.code}</span></Tech></span>
                         <button className="btn sm ghost icon" onClick={() => insertViaKeyboard(c.type)} aria-label={`Insert ${c.label}`} title={`Insert ${c.label} after the selection`} data-testid={`insert-${c.type}`}><Icon.plus width={14} height={14} /></button>
                       </div>
                     </li>
@@ -281,34 +297,41 @@ export function DesignStudio() {
                 })}
                 {!palette.length && <li className="muted" style={{ fontSize: 12 }}>No component matches “{paletteQuery}”.</li>}
               </ul>
-              <p className="muted palette-note">Drag onto the page, or use + to insert after the selection. Invalid targets explain why and leave the model unchanged.</p>
+              <p className="muted palette-note">Drag onto the page, or use + to insert after the selection.</p>
             </div>
           ) : (
-            <div className="panel-body" data-testid="layers-tree"><LayersTree project={project} res={res} selected={selected} onSelect={(id) => select(id)} /></div>
+            <div className="panel-body flush" data-testid="layers-tree"><LayersTree project={project} res={res} selected={selected} onSelect={(id) => select(id)} /></div>
           )}
         </aside>
+        )}
 
         <div className="design-stage">
-          <div className="ds-toolbar">
-            <span className="chip" title={isHtml ? 'Interactive HTML profile' : 'US Letter portrait · paged profile · page 1 of the composed document'}>{isHtml ? 'Interactive HTML' : 'Page 1 · Letter'}</span>
-            <span className="chip mono" title={zoom === null ? (fitsWholePage ? 'Fit: whole page' : 'Fit: page width') : 'Manual zoom'}>{Math.round(scale * 100)}%</span>
+          <div className="ds-toolbar" role="toolbar" aria-label="Canvas">
+            {paletteCollapsed && <button className="btn sm" onClick={togglePalette} aria-expanded={false} aria-label="Expand component list" title="Show the component list" data-testid="toggle-palette"><Icon.chevron width={14} height={14} /> Components</button>}
+            <span className="chip count" title={isHtml ? 'Interactive HTML profile' : 'US Letter portrait · paged profile · page 1 of the composed document'}>{isHtml ? 'Interactive HTML' : 'Page 1 · Letter'}</span>
             {!isHtml && <>
-              <button className="btn sm icon" aria-label="Zoom out" onClick={() => setZoom(Math.max(0.4, scale - 0.1))}>−</button>
-              <button className="btn sm icon" aria-label="Zoom in" onClick={() => setZoom(Math.min(1.6, scale + 0.1))}>+</button>
-              <button className="btn sm" aria-pressed={zoom === null} onClick={() => setZoom(null)} title="Fit the page to the canvas">Fit</button>
-              <button className="btn sm" aria-pressed={grid} onClick={() => setGrid(!grid)}>Grid</button>
-              <button className="btn sm" aria-pressed={snap} onClick={() => setSnap(!snap)} title="Snap moves and resizes to 2 pt">Snap</button>
-              <button className="btn sm" aria-pressed={showHidden} onClick={toggleHidden} data-testid="toggle-hidden-sections" aria-label="Show hidden sections" title={`Show hidden sections as ghosts in the page (${hiddenCount} hidden for this customer). Off: shown as ⊘ margin markers.`}>⊘ Hidden{hiddenCount ? ` · ${hiddenCount}` : ''}</button>
+              <div className="segmented ds-group" role="group" aria-label="Zoom">
+                <button aria-label="Zoom out" onClick={() => setZoom(Math.max(0.4, scale - 0.1))}>−</button>
+                <span className="ds-zoom" data-testid="zoom-value" title={zoom === null ? (fitsWholePage ? 'Fit: whole page' : 'Fit: page width') : 'Manual zoom'} aria-live="polite">{Math.round(scale * 100)}%</span>
+                <button aria-label="Zoom in" onClick={() => setZoom(Math.min(1.6, scale + 0.1))}>+</button>
+                <button aria-pressed={zoom === null} onClick={() => setZoom(null)} title="Fit the page to the canvas">Fit</button>
+              </div>
+              <div className="segmented ds-group" role="group" aria-label="Canvas options">
+                <button aria-pressed={grid} onClick={() => setGrid(!grid)}>Grid</button>
+                <button aria-pressed={snap} onClick={() => setSnap(!snap)} title="Snap moves and resizes to 2 pt">Snap</button>
+                <button aria-pressed={showHidden} onClick={toggleHidden} data-testid="toggle-hidden-sections" aria-label="Show hidden sections" title={`Show hidden sections as ghosts in the page (${hiddenCount} hidden for this customer). Off: shown as ⊘ margin markers.`}>⊘ Hidden{hiddenCount ? ` · ${hiddenCount}` : ''}</button>
+              </div>
             </>}
             {isHtml && <div className="segmented" role="group" aria-label="Device width">{([1200, 768, 390] as const).map((w) => <button key={w} aria-pressed={device === w} onClick={() => setDevice(w)}>{w === 1200 ? 'Desktop' : w === 768 ? 'Tablet' : 'Mobile'}</button>)}</div>}
-            <button className="btn sm" onClick={() => setStylesOpen(true)} data-testid="open-styles" title="Text styles and brand kit">Styles & brand</button>
-            <span style={{ flex: 1 }} />
+            <span style={{ flex: 1, order: 7 }} />
+            {canExplode && !hintSeen && <span className="ds-break" />}
             {canExplode && !hintSeen && (
               <span className="chip variant ds-hint" role="status">
-                Pull handle on {nodeTitleOf(selNode!)} opens the Exploded view
+                Pull handle on <Named name={nodeTitle(project, selNode!.id)} code={selNode!.id} /> opens the Exploded view
                 <button className="ds-hint-x" aria-label="Dismiss hint" onClick={dismissHint}>✕</button>
               </span>
             )}
+            <button className="btn sm" onClick={() => setStylesOpen(true)} data-testid="open-styles" title="Text styles and brand kit">Styles & brand</button>
           </div>
           <div className="design-scroll" ref={scrollRef} data-testid="design-canvas" tabIndex={0} onKeyDown={onCanvasKey} aria-label="Page canvas. Arrow keys move fixed anchors (Shift = 10 pt), Alt+arrows reorder flow components, Delete removes, Enter edits text." onClick={() => { setEditingId(null); }}>
             {isHtml ? <HtmlProfileCanvas res={res} project={project} width={device} selected={selected} onSelect={(id) => select(id)} />
@@ -317,13 +340,12 @@ export function DesignStudio() {
         </div>
 
         {stylesOpen && <StylesBrandDialog onClose={() => setStylesOpen(false)} />}
-        <Inspector project={project} res={res} nodeId={selected} onEditText={(id) => { select(id); setEditingId(id); }} />
+        <Inspector project={project} res={res} nodeId={inspectNodeId} onEditText={(id) => { select(id); setEditingId(id); }} />
       </div>
     </section>
   );
 }
 
-const nodeTitleOf = (n: DocNode) => n.name ?? n.id;
 
 function LayersTree({ project, res, selected, onSelect }: { project: Project; res: Resolution; selected: string | null; onSelect: (id: string) => void }) {
   const map = nodeMap(project);
@@ -337,10 +359,10 @@ function LayersTree({ project, res, selected, onSelect }: { project: Project; re
         <button className={`layer${selected === id ? ' active' : ''}${visible.get(id) === false ? ' hidden-node' : ''}`} style={{ paddingLeft: 8 + depth * 14 }} onClick={() => onSelect(id)} data-testid={`layer-${id}`}
           onKeyDown={(e) => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const all = Array.from(document.querySelectorAll<HTMLButtonElement>('.layer')); const i = all.indexOf(e.currentTarget); all[i + (e.key === 'ArrowDown' ? 1 : -1)]?.focus(); } }}>
           <Ico width={15} height={15} />
-          <span className="grow layer-name">{n.name ?? n.id}</span>
-          {n.layout?.paged?.mode === 'fixed' && <span className="layer-tag">fixed</span>}
-          {(n.type === 'variant-set' || n.type === 'conditional-region') && <span className="layer-count">{n.variantIds?.length ?? 0}</span>}
-          {visible.get(id) === false && <span className="layer-tag" title="Hidden for this customer: no rule or condition shows it">hidden</span>}
+          <span className="grow layer-name" title={n.id}><Named name={n.name ?? nodeTitle(project, n.id)} code={n.id} /></span>
+          {n.layout?.paged?.mode === 'fixed' && <span className="chip">fixed</span>}
+          {(n.type === 'variant-set' || n.type === 'conditional-region') && <span className="chip count">{n.variantIds?.length ?? 0}</span>}
+          {visible.get(id) === false && <span className="chip" title="Hidden for this customer: no rule or condition shows it">hidden</span>}
         </button>
         {n.children?.length ? <ul role="group">{n.children.map((c) => render(c, depth + 1))}</ul> : null}
       </li>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStudio } from '../state/store';
 import { Icon } from './icons';
 
@@ -19,9 +19,67 @@ export function ScreenHeader(props: { id: string; title: string; subtitle: strin
       <div className="actions">
         {props.badge}
         {props.actions}
+        <SideToggles />
       </div>
     </header>
   );
+}
+
+/**
+ * Narrow windows (≤ 1100px): side panels marked `data-side="left|right"` + `data-side-title` become slide-out
+ * drawers (see app.css). This renders one toggle per panel found in the current screen. Wide windows render nothing.
+ */
+export function SideToggles() {
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1100px)').matches);
+  const [panels, setPanels] = useState<Array<{ title: string; side: string }>>([]);
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1100px)');
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  const sides = () => Array.from(document.querySelectorAll<HTMLElement>('#main [data-side]'));
+  useEffect(() => {
+    if (!narrow) { sides().forEach((el) => el.removeAttribute('data-side-open')); setOpen(null); setPanels([]); return; }
+    const scan = () => {
+      const next = sides().map((el) => ({ title: el.dataset.sideTitle ?? 'Panel', side: el.dataset.side ?? 'right' }));
+      setPanels((cur) => (JSON.stringify(cur) === JSON.stringify(next) ? cur : next));
+    };
+    scan();
+    const mo = new MutationObserver(scan);
+    const main = document.getElementById('main');
+    if (main) mo.observe(main, { childList: true, subtree: true });
+    return () => mo.disconnect();
+  }, [narrow]);
+  useEffect(() => {
+    if (!narrow) return;
+    sides().forEach((el) => { if (el.dataset.sideTitle === open) el.setAttribute('data-side-open', ''); else el.removeAttribute('data-side-open'); });
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); };
+    const onDown = (e: MouseEvent) => { const t = e.target as HTMLElement; if (!t.closest('[data-side-open]') && !t.closest('.side-toggles') && !t.closest('.dialog-backdrop')) setOpen(null); };
+    window.addEventListener('keydown', onKey); document.addEventListener('mousedown', onDown);
+    return () => { window.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onDown); };
+  }, [open, narrow, panels]);
+  if (!narrow || panels.length === 0) return null;
+  return (
+    <div className="side-toggles" role="group" aria-label="Side panels">
+      {panels.map((p) => (
+        <button key={p.title} type="button" className="btn sm" aria-pressed={open === p.title} aria-expanded={open === p.title} onClick={() => setOpen(open === p.title ? null : p.title)} data-testid={`side-toggle-${p.side}`}>{p.title}</button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A thing with a readable name and a technical code (component ID, field path, record ID, locale).
+ * Business view shows the name with the code on hover; Technical view shows both.
+ */
+export function Named({ name, code, strong }: { name: ReactNode; code: string; strong?: boolean }) {
+  const mode = useStudio((s) => s.viewMode);
+  const label = strong ? <strong>{name}</strong> : name;
+  if (mode === 'technical') return <span className="named">{label} <span className="chip code">{code}</span></span>;
+  return <span className="named" title={code}>{label}</span>;
 }
 
 /** Renders children only in Technical view (engine internals: run IDs, hashes, raw expressions). */

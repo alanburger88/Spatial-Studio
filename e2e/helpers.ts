@@ -43,6 +43,26 @@ export async function dragAfter(page: Page, sourceTestId: string, targetTestId: 
   await page.getByTestId(sourceTestId).dragTo(target, { targetPosition: { x: Math.min(40, box.width / 2), y: where === 'after' ? box.height - 2 : box.height / 2 } });
 }
 
+/** Click a control inside the status-bar "Demo tools" panel (deliberate defects), opening the panel first if needed. */
+export async function demoTool(page: Page, testId: string) {
+  if (!(await page.getByTestId('demo-tools').isVisible())) await page.getByTestId('open-demo-tools').click();
+  await page.getByTestId(testId).click();
+}
+
+/** Switch Business/Technical detail level from the top-bar settings menu. */
+export async function setView(page: Page, mode: 'business' | 'technical') {
+  if (!(await page.getByTestId('settings-menu').isVisible())) await page.getByTestId('open-settings').click();
+  await page.getByTestId(`view-${mode}`).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('settings-menu')).toHaveCount(0);
+}
+
+/** Open a project card's "…" menu in the gallery and click one of its items. */
+export async function cardAction(page: Page, action: string, projectId: string) {
+  await page.getByTestId(`card-menu-${projectId}`).click();
+  await page.getByTestId(`${action}-${projectId}`).click();
+}
+
 /** Choose a synthetic customer through the searchable top-bar record picker. */
 export async function pickRecord(page: Page, recordId: string) {
   await page.getByTestId('record-selector').click();

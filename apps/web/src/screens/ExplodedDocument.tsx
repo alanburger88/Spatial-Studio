@@ -272,7 +272,7 @@ export function ExplodedDocument() {
         </>}
       />
       <div className="screen-body workbench ex-bench">
-        <aside className="panel ex-legend" aria-label="Alternatives">
+        <aside className="panel ex-legend" aria-label="Alternatives" data-side="left" data-side-title="Alternatives">
           <div className="panel-head">Alternatives <span className="sub">{n} outcome{n === 1 ? '' : 's'}</span></div>
           <div className="panel-body">
             <ol className="ex-list" data-testid="variant-list" aria-label={`Alternatives of ${name}`}>
@@ -301,7 +301,7 @@ export function ExplodedDocument() {
             </ul>
             <div className="section-title">Scenario</div>
             <dl className="kv ex-kv">
-              <dt>Record</dt><dd className="mono">{res.recordId}</dd>
+              <dt>Customer</dt><dd title={res.recordId}>{`${(res.effectiveRecord as any).customer?.givenName ?? ''} ${(res.effectiveRecord as any).customer?.familyName ?? ''}`.trim() || res.recordId}{tech && <> <span className="chip code">{res.recordId}</span></>}</dd>
               <dt>Persona</dt><dd>{personaLabel(personas, (res.effectiveRecord as any).personaId)}</dd>
               <dt>Journey</dt><dd>{ctx.journeyCursor === null ? 'Baseline' : project.journey.events[ctx.journeyCursor]?.label}</dd>
             </dl>
@@ -380,19 +380,19 @@ export function ExplodedDocument() {
           )}
         </div>
 
-        <aside className="panel ex-insp" aria-label="Exploded inspector">
+        <aside className="panel ex-insp" aria-label="Exploded inspector" data-side="right" data-side-title="Selection">
           <div className="panel-head">Selection</div>
           <div className="panel-body">
             <div className="field"><span className="label">Component</span>
-              <div className="ex-selected" data-testid="selected-node">
+              <div className="ex-selected" data-testid="selected-node" data-node-id={node.id} title={tech ? undefined : node.id}>
                 <span className="ex-sel-name">{name}</span>
-                <span className="ex-sel-id mono" title={node.id}>{node.id}</span>
+                {tech && <span className="ex-sel-id chip code" title={node.id}>{node.id}</span>}
                 <span className="ex-sel-type">{tech ? (node.type === 'variant-set' ? 'C11 Variant Set' : 'C10 Conditional Region') : (node.type === 'variant-set' ? 'Variant set' : 'Conditional region')}</span>
               </div>
             </div>
             <div className="field"><span className="label">Inspecting alternative</span>
-              <div className="ex-selected variant" data-testid="selected-variant">
-                {active ? <><span className="ex-sel-name">{active.title}</span><span className="ex-sel-id mono" title={active.id}>{active.id}</span></> : '—'}
+              <div className="ex-selected variant" data-testid="selected-variant" data-variant-id={active?.id ?? ''}>
+                {active ? <><span className="ex-sel-name" title={tech ? undefined : active.id}>{active.title}</span>{tech && <span className="ex-sel-id chip code" title={active.id}>{active.id}</span>}</> : '—'}
               </div>
             </div>
             {unresolved && <div className="callout error" role="alert"><strong>Unresolved.</strong> {res.findings.find((f) => f.nodeId === node.id && f.severity === 'blocking')?.message}</div>}

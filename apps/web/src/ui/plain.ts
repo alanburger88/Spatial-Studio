@@ -69,3 +69,10 @@ export function ruleTitle(project: Project, rule: Rule): string {
   const a = actionSentence(project, rule);
   return a.charAt(0).toUpperCase() + a.slice(1);
 }
+
+/** Readable language name for a locale code: "Spanish (US)". */
+export function localeLabel(locale: string | null | undefined): string {
+  if (!locale) return 'None';
+  const known: Record<string, string> = { 'en-US': 'English (US)', 'es-US': 'Spanish (US)' };
+  return known[locale] ?? locale;
+}

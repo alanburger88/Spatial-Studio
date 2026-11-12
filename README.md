@@ -44,12 +44,12 @@ Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the 
 
 ## Using the studio
 
-- **Business / Technical** (top bar): Business view speaks in plain language — rules read as sentences, and run IDs, hashes and raw expressions sit behind *Proof* disclosures. Technical view shows every engine detail inline.
-- **Light / dark theme** (top bar moon/sun). Light is the default; spatial viewports stay dark in both.
+- **Business / Technical** (top bar → settings menu): Business view speaks in plain language — rules read as sentences, and run IDs, hashes and raw expressions sit behind *Proof* disclosures. Technical view shows every engine detail inline.
+- **Light / dark theme** (top bar → settings menu). Light is the default; spatial viewports stay dark in both.
 - **Customer picker** (top bar): search by name, persona, ID or language.
 - **Your own projects**: *Duplicate* any project in the Project Gallery to get an editable copy; copies can be renamed and deleted (the approved samples can only be restored).
 - **Your own records**: *Import records* (Project Gallery) accepts CSV or JSON. Every row is checked against the data contract and rejected rows say why; accepted rows get IDs `CARD-5001…` / `EOB-5001…` and appear in every view. Download the CSV template from the import dialog. **Use synthetic or anonymised data only** — records stay in the local `.data` folder. *Remove imported* deletes them.
-- **Search everything** with **Ctrl+K** (⌘K on Mac): views, components, rules, customers, projects and actions. Press **?** for keyboard shortcuts; the **?** button in the top bar re-runs the first-visit tour.
+- **Search everything** with **Ctrl+K** (⌘K on Mac): views, components, rules, customers, projects and actions. Press **?** for keyboard shortcuts; the settings menu in the top bar re-runs the first-visit tour.
 - **Data fields** (Rules & Data → *Data fields*): see every standard field and where it is used, and add your own fields (text, choice, number, money, yes/no, date). Rules, text tokens and imports can then use them as `custom.<key>`. Fields are saved with the project and are undoable.
 - **Column matching on import**: CSV files can use any column names — each column is matched to a data field automatically (by name or label) and you can change or ignore any match before importing.
 - **Impact preview**: before a rule or text change is applied, the studio shows how many customers' documents change, what changes, and whether new blocking issues appear.
@@ -64,6 +64,12 @@ Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the 
 - **Email and SMS** (Preview & Export): email-safe HTML (600 px, inline styles, plain-text part, subject and preheader) and SMS with GSM-7/UCS-2 and segment counting — both from the same resolved document, with parity checks.
 - **Scenario Landscape** has a *Flat | 2.5D* switch; 2.5D shows clusters on a tilted plane with height = rule complexity or exception count.
 - The status bar always shows the same rule & binding check counts as **Validate & Compare** (or the full validation result once you have run it for the current scenario); click it to open Validate.
+- **Menu grouped by job**: Build (design, rules, content), Explore (the spatial views and journey), Check & publish (validate, preview/export), Help & admin. Hover a menu item for a one-line description.
+- **Top bar**: *Previewing as* chooses the synthetic customer, *Output* the channel; *Saved · vN* opens version history. View, theme, tour and shortcuts live in the settings menu (sliders icon).
+- **Checks run by themselves**: Validate & Compare and Preview & Export build their results when opened and again when the document or customer changes, and say whether what you see is up to date. Automatic previews reuse an existing export instead of adding to the export history.
+- **Detail panels are never empty**: the Cube, Landscape, Page Stack, Validate and the Design inspector open with the most relevant item already selected.
+- **Demo tools** (status bar): deliberate defects for demonstrations (rule tie, missing Spanish wording, table overflow, unconfirmed liability, no matching message) live in one panel, closed by default and opened automatically during the Guided Demo.
+- **Narrow windows**: between 900 and 1100 px side panels become slide-out drawers (buttons appear in the screen header); below 900 px the studio asks for a wider window.
 
 ## Verify
 

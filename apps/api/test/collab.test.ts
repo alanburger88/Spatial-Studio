@@ -63,9 +63,16 @@ describe('collaboration (auth off: local admin)', () => {
   });
 
   it('reset, duplicate and rename each store a labelled version', async () => {
+    // make the sample differ from its seed first: restoring an unchanged sample is a no-op
+    const cur = (await inj('GET', '/api/v1/projects/aster-card-demo')).json().project;
+    await save({ ...cur, title: 'Edited before restore', modelVersion: cur.modelVersion + 1 });
     const reset = (await inj('POST', '/api/v1/projects/aster-card-demo/reset', { confirm: true })).json();
     let v = (await inj('GET', '/api/v1/projects/aster-card-demo/versions')).json().versions;
     expect(v[0]).toMatchObject({ modelVersion: reset.project.modelVersion, label: 'Restored approved sample' });
+    const again = (await inj('POST', '/api/v1/projects/aster-card-demo/reset', { confirm: true })).json();
+    expect(again).toMatchObject({ reset: true, unchanged: true });
+    expect(again.project.modelVersion).toBe(reset.project.modelVersion);
+    expect((await inj('GET', '/api/v1/projects/aster-card-demo/versions')).json().versions).toHaveLength(v.length);
     const dup = (await inj('POST', '/api/v1/projects/harborcare-demo/duplicate', { title: 'Harbor copy' })).json().project;
     v = (await inj('GET', `/api/v1/projects/${dup.projectId}/versions`)).json().versions;
     expect(v).toHaveLength(1);

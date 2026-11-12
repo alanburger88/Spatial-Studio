@@ -61,27 +61,30 @@ export function ShortcutsSheet() {
   );
 }
 
-/** The “?” help button + menu in the top bar. */
-export function HelpMenu() {
+/** Settings menu in the top bar: detail level, theme, tour, shortcuts and help in one place. */
+export function SettingsMenu() {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const { pathname } = useLocation();
   const [hasAbout, setHasAbout] = useState(false);
+  const viewMode = useStudio((s) => s.viewMode);
+  const theme = useStudio((s) => s.theme);
+  const { setViewMode, setTheme } = useStudio.getState();
+  useEffect(() => { setOpen(false); }, [pathname]);
   useEffect(() => {
     if (!open) return;
     setHasAbout(!!document.querySelector('.screen-about > summary'));
-    wrap.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus();
+    wrap.current?.querySelector<HTMLElement>('[aria-pressed=true], [role=menuitem]')?.focus();
     const down = (e: MouseEvent) => { if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false); };
     document.addEventListener('mousedown', down);
     return () => document.removeEventListener('mousedown', down);
-  }, [open, pathname]);
+  }, [open]);
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); btn.current?.focus(); return; }
-    if (e.key === 'Tab') { setOpen(false); return; }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     e.preventDefault();
-    const items = Array.from(wrap.current?.querySelectorAll<HTMLButtonElement>('[role=menuitem]:not(:disabled)') ?? []);
+    const items = Array.from(wrap.current?.querySelectorAll<HTMLButtonElement>('.settings-menu button:not(:disabled)') ?? []);
     const i = items.indexOf(document.activeElement as HTMLButtonElement);
     items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
   };
@@ -94,28 +97,44 @@ export function HelpMenu() {
   };
   return (
     <div className="help-wrap" ref={wrap} onKeyDown={onKey}>
-      <button ref={btn} type="button" className="btn ghost icon help-btn" aria-label="Help" aria-haspopup="menu" aria-expanded={open} title="Help, tour and shortcuts" data-testid="open-help" onClick={() => setOpen((o) => !o)}>?</button>
+      <button ref={btn} type="button" className="btn ghost icon" aria-label="Settings and help" aria-haspopup="true" aria-expanded={open} title="Settings and help" data-testid="open-settings" data-view={viewMode} onClick={() => setOpen((o) => !o)}><SettingsIcon /></button>
       {open && (
-        <div className="help-menu" role="menu" aria-label="Help" data-testid="help-menu">
+        <div className="help-menu settings-menu" role="group" aria-label="Settings and help" data-testid="settings-menu">
+          <div className="set-row">
+            <span className="set-lbl" id="set-view">Detail</span>
+            <div className="seg" role="group" aria-labelledby="set-view">
+              <button type="button" aria-pressed={viewMode === 'business'} onClick={() => setViewMode('business')} data-testid="view-business" title="Plain language; technical proof is tucked away">Business</button>
+              <button type="button" aria-pressed={viewMode === 'technical'} onClick={() => setViewMode('technical')} data-testid="view-technical" title="Show IDs, hashes and raw rule expressions">Technical</button>
+            </div>
+          </div>
+          <p className="set-note">{viewMode === 'business' ? 'Plain language. Codes and proof are one click away.' : 'Shows IDs, hashes and raw rule expressions.'}</p>
+          <div className="set-row">
+            <span className="set-lbl" id="set-theme">Theme</span>
+            <div className="seg" role="group" aria-labelledby="set-theme">
+              <button type="button" aria-pressed={theme === 'light'} onClick={() => setTheme('light')} data-testid="theme-light">Light</button>
+              <button type="button" aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')} data-testid="theme-dark">Dark</button>
+            </div>
+          </div>
+          <div className="set-sep" role="separator" />
           <button type="button" role="menuitem" onClick={pick(() => useShellUi.getState().setTour(true))}>Take the tour</button>
           <button type="button" role="menuitem" onClick={pick(() => useShellUi.getState().setShortcuts(true))}>Keyboard shortcuts <kbd className="kbd">?</kbd></button>
-          <button type="button" role="menuitem" disabled={!hasAbout} onClick={pick(about)}>About this view</button>
-          <div className="help-note" role="note">
-            <strong>Business vs Technical view</strong>
-            <p>Business view uses plain language and tucks run IDs, hashes and raw rule expressions behind “Proof”. Technical view shows them inline. Nothing is removed — only collapsed.</p>
-          </div>
+          <button type="button" role="menuitem" disabled={!hasAbout} onClick={pick(about)}>About this screen</button>
         </div>
       )}
     </div>
   );
 }
 
+const SettingsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>
+);
+
 interface Step { title: string; text: string; selector: string; closest?: string }
 const STEPS: Step[] = [
   { title: 'Pick a customer', text: 'Every view shows the document for this customer. Switch customers to see rules change the content.', selector: '[data-testid=record-selector]' },
   { title: 'Choose the output', text: 'Preview the same model as PDF, interactive HTML or a simulated AFP stream.', selector: '[data-testid=select-profile]' },
-  { title: 'Business or Technical', text: 'Business view speaks plainly; Technical adds run IDs, hashes and raw expressions.', selector: '[data-testid=view-business]', closest: '.seg' },
-  { title: 'Move between views', text: 'The navigation lists the twelve views, from design to validation and export. Alt+1…9 jumps directly.', selector: 'nav.nav' },
+  { title: 'Settings', text: 'Switch between Business view (plain language) and Technical view (IDs, hashes, raw expressions), change the theme, or reopen this tour.', selector: '[data-testid=open-settings]' },
+  { title: 'Move between views', text: 'The menu is grouped by job: build the document, explore how it behaves, then check and publish it.', selector: 'nav.nav' },
   { title: 'About this view', text: 'The ⓘ button next to each title explains what the view is for.', selector: '.screen-about > summary' },
   { title: 'Search everything', text: `Press ${MOD}+K to jump to any view, component, rule, customer or action.`, selector: '[data-testid=open-palette]' },
 ];

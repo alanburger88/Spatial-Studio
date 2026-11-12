@@ -48,7 +48,7 @@ export function GuidedDemo() {
             </ol>
           </div>
         </div>
-        <aside className="panel">
+        <aside className="panel" data-side="right" data-side-title="Presenter notes">
           <div className="panel-head">Presenter notes</div>
           <div className="panel-body">
             <div className="kv">

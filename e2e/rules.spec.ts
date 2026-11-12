@@ -1,6 +1,6 @@
 /** Rules & Data: decision-table view (gap/overlap analysis) and pinned regression tests. */
 import { test, expect } from '@playwright/test';
-import { open, pickRecord, resetAll } from './helpers';
+import { demoTool, open, pickRecord, resetAll } from './helpers';
 
 test.beforeEach(async ({ request }) => { await resetAll(request); });
 
@@ -19,7 +19,7 @@ test('decision table lists Payment guidance rules in priority order and flags an
 
   // inject D01 from the defect strip, come back to the table
   await page.getByTestId('rules-view-editor').click();
-  await page.getByTestId('inject-d01').click();
+  await demoTool(page, 'seed-d01');
   await page.getByTestId('rules-view-table').click();
   await expect(page.getByTestId('dt-overlap')).toBeVisible();
   await expect(page.getByTestId('dt-overlap')).toContainText('R03');

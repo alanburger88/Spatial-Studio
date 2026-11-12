@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { buildLandscape, dimensionValue, journeyStates, OUTPUT_PROFILES, primaryVariantSet, type DimensionId, type LandscapeCluster } from '@iss/scenarios';
 import { ScreenHeader, Loading, Empty, Tech } from '../ui/common';
+import { recordSummary } from '../shell/RecordPicker';
 import { Icon } from '../ui/icons';
 import { nodeTitle, ruleTitle as plainRuleTitle } from '../ui/plain';
 import { useStudio, useScenarioEngine } from '../state/store';
@@ -33,6 +34,8 @@ export function ScenarioLandscape() {
   const project = useStudio((s) => s.project);
   const profileId = useStudio((s) => s.ctx.profileId);
   const technical = useStudio((s) => s.viewMode) === 'technical';
+  const records = useStudio((s) => s.records);
+  const personas = useStudio((s) => s.personas);
   const engine = useScenarioEngine();
 
   const [includeJourney, setIncludeJourney] = useState(false);
@@ -82,7 +85,6 @@ export function ScenarioLandscape() {
   const all = landscape.clusters;
   const hasDefects = (c: LandscapeCluster) => c.blockingScenarios + c.warningScenarios > 0;
   const visible = defectsOnly ? all.filter(hasDefects) : all;
-  const selected = all.find((c) => c.clusterId === selectedId) ?? null;
   const sum = all.reduce((s, c) => s + c.count, 0);
   const reconciled = landscape.reconciles && sum === landscape.evaluated;
   const maxCount = Math.max(1, ...visible.map((c) => c.count));
@@ -100,6 +102,19 @@ export function ScenarioLandscape() {
 
   const groupOf = (c: LandscapeCluster) => (pvs ? c.signature.variants[pvs] ?? 'unresolved' : 'all');
   const groups = [...new Set(visible.map(groupOf))].map((g) => ({ id: g, name: pvs ? (technical ? g : variantName(g)) : 'All clusters', items: visible.filter((c) => groupOf(c) === g) }));
+  // Default selection (local state): first cluster with blocking findings, else the largest. Re-evaluated whenever the selection leaves the visible set.
+  const ordered = groups.flatMap((g) => g.items);
+  const defaultCluster = ordered.find((c) => c.blockingScenarios > 0) ?? [...ordered].sort((a, b) => b.count - a.count)[0] ?? null;
+  const selected = visible.find((c) => c.clusterId === selectedId) ?? defaultCluster;
+  const selId = selected?.clusterId ?? null;
+  const recLabel = (id: string) => { const r = records.find((x) => x.recordId === id); return r ? recordSummary(r, personas) : null; };
+  /** Rules cell: Business shows the first rule's plain title + number chip + "+N more"; Technical keeps compact number chips. */
+  const rulesCell = (ids: string[]) => {
+    if (ids.length === 0) return <span className="muted">None</span>;
+    const full = ids.map((r) => `${ruleTitleOf(r)} (${r})`).join('\n');
+    if (technical) return <span title={full}>{ids.slice(0, 4).map((r) => <span className="chip code" key={r} title={ruleTitleOf(r)}>{r}</span>)}{ids.length > 4 && <span className="muted"> +{ids.length - 4}</span>}</span>;
+    return <span className="ls-rule1" title={full}><span>{ruleTitleOf(ids[0])}</span> <span className="chip code">{ids[0]}</span>{ids.length > 1 && <span className="muted"> +{ids.length - 1} more</span>}</span>;
+  };
   const ruleTitleOf = (id: string) => { const r = project.rules.find((x) => x.id === id); return r ? plainRuleTitle(project, r) : id; };
 
   const adoptScenario = (c: LandscapeCluster) => {
@@ -175,7 +190,7 @@ export function ScenarioLandscape() {
             const D = diam25(c), H = stalk(c), B = Math.max(28, Math.min(44, D * 0.55));
             const cyBase = HEAD_H + ri * ROW_H + ROW_H - 14;
             const cx = sx(GUTTER + ci * colW + colW / 2, cyBase) - 2;
-            const sel = selectedId === c.clusterId;
+            const sel = selId === c.clusterId;
             return (
               <div key={c.clusterId} className={`ls25-node sev-${c.severity}${sel ? ' selected' : ''}`} style={{ left: cx, top: cyBase }}>
                 <span className="ls25-platform" style={{ width: D, height: D * 0.4 }} aria-hidden="true" />
@@ -280,7 +295,7 @@ export function ScenarioLandscape() {
                     </header>
                     <div className="ls-bubbles">
                       {g.items.map((c) => {
-                        const d = diam(c), sel = selectedId === c.clusterId;
+                        const d = diam(c), sel = selId === c.clusterId;
                         return (
                           <div className="ls-bubble-cell" key={c.clusterId} style={{ width: Math.max(d, 84) }}>
                             <button
@@ -334,15 +349,15 @@ export function ScenarioLandscape() {
                   <tbody key={g.id}>
                     <tr className="ls-group"><th colSpan={6} scope="colgroup"><span className={technical ? 'mono' : ''}>{g.name}</span><span className="muted"> · {g.items.length} {g.items.length === 1 ? 'cluster' : 'clusters'} · {g.items.reduce((s, c) => s + c.count, 0)} scenarios</span></th></tr>
                     {g.items.map((c) => (
-                      <tr key={c.clusterId} className={selectedId === c.clusterId ? 'selected' : ''} onClick={() => setSelectedId(c.clusterId)} data-testid="landscape-row">
+                      <tr key={c.clusterId} className={selId === c.clusterId ? 'selected' : ''} onClick={() => setSelectedId(c.clusterId)} data-testid="landscape-row">
                         <td className="ls-name-td">
-                          <button className="rowlink ls-rowlink" onClick={(e) => { e.stopPropagation(); setSelectedId(c.clusterId); }} aria-pressed={selectedId === c.clusterId} title={labelOf(c)}>{labelOf(c)}</button>
+                          <button className="rowlink ls-rowlink" onClick={(e) => { e.stopPropagation(); setSelectedId(c.clusterId); }} aria-pressed={selId === c.clusterId} title={labelOf(c)}>{labelOf(c)}</button>
                           <span className="ls-sig">{c.signature.journey} · {outputOf(c.signature.output)}</span>
                         </td>
                         <td className="num"><strong>{c.count}</strong></td>
                         <td className="num">{pct(c.count, landscape.universeSize)}</td>
                         <td><span className={`ls-sev ${c.severity}`}><span aria-hidden="true">{SEV_ICON[c.severity]}</span> {SEV_TEXT[c.severity]}{hasDefects(c) ? ` (${c.blockingScenarios + c.warningScenarios})` : ''}</span></td>
-                        <td className="ls-rules">{c.contributingRuleIds.slice(0, 4).map((r) => <span className="chip variant" key={r} title={ruleTitleOf(r)}>{r}</span>)}{c.contributingRuleIds.length > 4 && <span className="muted"> +{c.contributingRuleIds.length - 4}</span>}</td>
+                        <td className="ls-rules">{rulesCell(c.contributingRuleIds)}</td>
                         <td><button className="btn sm" onClick={(e) => { e.stopPropagation(); openScenario(c); }} aria-label={`Open scenario for ${labelOf(c)}`} data-testid="landscape-open-row">Open</button></td>
                       </tr>
                     ))}
@@ -355,11 +370,11 @@ export function ScenarioLandscape() {
         </div>
 
         {/* ------------------------------------------------------------ inspector */}
-        <aside className="panel ls-inspector" aria-label="Selected cluster" data-testid="landscape-inspector">
+        <aside className="panel ls-inspector" aria-label="Selected cluster" data-testid="landscape-inspector" data-side="right" data-side-title="Outcome">
           <div className="panel-head">Selected outcome</div>
           <div className="panel-body">
             {!selected ? (
-              <Empty title="Select a cluster" message="Choose a bubble or a table row to see the exact count, contributing rules, representative fixtures and issues." />
+              <Empty title="No clusters to show" message="No scenario cluster matches the current filters." />
             ) : (
               <div className="ls-insp">
                 <h2 className="ls-insp-title">{labelOf(selected)}</h2>
@@ -377,28 +392,28 @@ export function ScenarioLandscape() {
                 </dl>
 
                 <div className="section-title">Signature</div>
-                <ul className="ls-plain">
-                  {Object.entries(selected.signature.variants).map(([k, v]) => <li key={k}><span className="muted">{technical ? <span className="mono">{k}</span> : 'Variant'}</span> <span className="chip variant" title={v ?? undefined}>{technical ? v ?? 'unresolved' : variantName(v)}</span></li>)}
-                  {selected.signature.sections.length > 0 && <li><span className="muted">Sections</span> {selected.signature.sections.map((x) => <span className="chip" key={x}>{technical ? x : nodeTitle(project, x)}</span>)}</li>}
+                <ul className="list-rows ls-plain">
+                  {Object.entries(selected.signature.variants).map(([k, v]) => <li key={k}><span className="muted">{technical ? <span className="mono">{k}</span> : 'Variant'}</span> <span title={v ?? undefined}>{technical ? v ?? 'unresolved' : variantName(v)}</span></li>)}
+                  {selected.signature.sections.length > 0 && <li><span className="muted">Sections</span> {selected.signature.sections.map((x) => <span key={x} title={x}>{technical ? x : nodeTitle(project, x)}</span>)}</li>}
                   <li><span className="muted">Journey</span> {selected.signature.journey}</li>
                   <li><span className="muted">Output</span> {outputOf(selected.signature.output)}{selected.signature.output === 'paged-afp-sim' && <> <span className="chip sim">SIMULATION ONLY</span></>}</li>
                 </ul>
 
                 <div className="section-title">Contributing rules</div>
                 {selected.contributingRuleIds.length === 0 ? <p className="muted">None matched</p> : (
-                  <ul className="ls-rulelist">{selected.contributingRuleIds.map((r) => <li key={r}><span title={ruleTitleOf(r)}>{ruleTitleOf(r)}</span><span className="chip variant ls-tag">{r}</span></li>)}</ul>
+                  <ul className="list-rows ls-rulelist">{selected.contributingRuleIds.map((r) => <li key={r}><span>{ruleTitleOf(r)}</span><span className="chip code">{r}</span></li>)}</ul>
                 )}
 
                 <div className="section-title">Representative customers</div>
-                <div className="ls-chipwrap">
-                  {selected.recordIds.slice(0, 6).map((id) => <span className="chip mono" key={id}>{id}</span>)}
-                  {selected.recordIds.length > 6 && <span className="muted">+{selected.recordIds.length - 6} more</span>}
-                </div>
-                <p className="ls-hint">Representative scenario: <span className="mono">{selected.representative.recordId}</span></p>
+                <ul className="list-rows ls-plain">
+                  {selected.recordIds.slice(0, 6).map((id) => { const s = recLabel(id); return <li key={id}><span title={id}>{s ? s.name : id}{s?.tag && <span className="muted"> · {s.tag}</span>}</span>{(technical || !s) && <span className="chip code">{id}</span>}</li>; })}
+                  {selected.recordIds.length > 6 && <li className="muted">+{selected.recordIds.length - 6} more</li>}
+                </ul>
+                <p className="ls-hint">Representative scenario: {(() => { const id = selected.representative.recordId; const s = recLabel(id); return technical || !s ? <span className="chip code">{id}</span> : <span title={id}>{s.name}</span>; })()}</p>
 
                 <div className="section-title">Issues</div>
                 {Object.keys(selected.findingCodes).length === 0 ? <p className="muted">No blocking or warning findings.</p> : (
-                  <ul className="ls-plain">{Object.entries(selected.findingCodes).sort((a, b) => b[1] - a[1]).map(([code, n]) => <li key={code}><span className={technical ? 'mono' : ''} title={code}>{technical ? code : humanCode(code)}</span> <span className="muted">×{n}</span></li>)}</ul>
+                  <ul className="list-rows ls-plain">{Object.entries(selected.findingCodes).sort((a, b) => b[1] - a[1]).map(([code, n]) => <li key={code}><span className={technical ? 'mono' : ''} title={code}>{technical ? code : humanCode(code)}</span> <span className="muted">×{n}</span></li>)}</ul>
                 )}
 
                 <Tech>

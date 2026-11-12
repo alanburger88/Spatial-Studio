@@ -5,8 +5,8 @@ import { explainNode, resolve } from '@iss/resolver';
 import { replayJourney, type JourneySnapshot } from '@iss/scenarios';
 import { renderInteractiveHtml } from '@iss/renderers';
 import { api } from '../api/client';
-import { Biz, Dialog, Empty, ErrorState, Loading, Proof, ScreenHeader, Tech } from '../ui/common';
-import { nodeTitle, ruleTitle } from '../ui/plain';
+import { Biz, Dialog, Empty, ErrorState, Loading, Named, Proof, ScreenHeader, Tech } from '../ui/common';
+import { fieldLabel, nodeTitle, ruleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { useRecord, useResolution, useStudio } from '../state/store';
 import './JourneySimulator.css';
@@ -398,7 +398,7 @@ export function JourneySimulator() {
               <div className="jr-add">
                 <label htmlFor="jr-add-type" className="sr-only">Event type to add</label>
                 <select id="jr-add-type" className="select" value={addType} onChange={(e) => setAddType(e.target.value)} data-testid="add-event-type">
-                  {Object.keys(TEMPLATES[project.documentType] ?? {}).map((t) => <option key={t}>{t}</option>)}
+                  {Object.entries(TEMPLATES[project.documentType] ?? {}).map(([t, def]) => <option key={t} value={t}>{biz ? (def as { label?: string }).label ?? t : t}</option>)}
                 </select>
                 <button className="btn" onClick={() => setEditor({ mode: 'add', type: addType })} data-testid="add-event"><Icon.plus /> Add event</button>
               </div>
@@ -444,11 +444,11 @@ export function JourneySimulator() {
 
               <div className="section-title">Prior state → resulting state</div>
               <table className="table jr-state" aria-label="State transition">
-                <thead><tr><th>State path</th><th>{idx === 0 ? 'Prior' : `Prior (${prior?.cursor === null ? 'Baseline' : `Day ${prior?.day}`})`}</th><th>Resulting</th></tr></thead>
+                <thead><tr><th>{biz ? 'Field' : 'State path'}</th><th>{idx === 0 ? 'Prior' : `Prior (${prior?.cursor === null ? 'Baseline' : `Day ${prior?.day}`})`}</th><th>Resulting</th></tr></thead>
                 <tbody>
                   {statePaths.map((p) => {
                     const a = prior?.state[p]; const b = sel.state[p]; const ch = idx > 0 && a !== b;
-                    return <tr key={p} className={ch ? 'selected' : ''}><td className="mono">{p}</td><td>{idx === 0 ? '—' : fmt(a)}</td><td><strong>{fmt(b)}</strong> {ch && <span className="chip accent">changed</span>}</td></tr>;
+                    return <tr key={p} className={ch ? 'selected' : ''}><td><Named name={fieldLabel(project, p)} code={p} /></td><td>{idx === 0 ? '—' : fmt(a)}</td><td><strong>{fmt(b)}</strong> {ch && <span className="chip accent">changed</span>}</td></tr>;
                   })}
                 </tbody>
               </table>

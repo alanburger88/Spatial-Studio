@@ -537,7 +537,6 @@ export function RulesData() {
                 </button>
               ))}
             </div>
-            <FixtureStrip project={project} />
           </div>
           <div className="rd-drawer" hidden={!dock}>
             <div id="rd-dock-scenario" role="tabpanel" aria-labelledby="rd-dock-tab-scenario" hidden={dock !== 'scenario'}><RecordEditor project={project} fields={fields} fieldMap={fieldMap} /></div>
@@ -589,7 +588,7 @@ function RuleTree({ project, ruleTrace, selectedId, newId, onSelect }: { project
     );
   };
   return (
-    <aside className="panel" aria-label="Rule tree" data-testid="rule-tree">
+    <aside className="panel" aria-label="Rule tree" data-testid="rule-tree" data-side="left" data-side-title="Rules">
       <div className="panel-head"><Icon.rules /> Rules <span className="sub">{project.rules.length} rules</span></div>
       <div className="panel-body rd-tree" ref={listRef} onKeyDown={onKey}>
         {newId && <div className="rd-newrow"><span className="mono">{newId}</span> <span className="chip warning">draft</span></div>}
@@ -837,7 +836,7 @@ function TracePanel({ project, res, onSelectRule, fieldMap }: { project: Project
   const ruleOf = (id: string) => project.rules.find((r) => r.id === id);
   const matchedCount = res.trace.filter((t) => t.matched).length;
   return (
-    <aside className="panel" data-testid="rule-trace" aria-label="Decision trace">
+    <aside className="panel" data-testid="rule-trace" aria-label="Decision trace" data-side="right" data-side-title="Decision trace">
       <div className="panel-head"><Icon.list /> Decision trace <Tech><span className="sub mono">{res.recordId}</span></Tech>
         <div className="right"><label className="rd-check"><input type="checkbox" checked={matchedOnly} onChange={(e) => setMatchedOnly(e.target.checked)} /> matched only</label></div></div>
       <div className="panel-body rd-trace">
@@ -898,35 +897,6 @@ function FindingRow({ f, onSelectRule }: { f: Finding; onSelectRule: (id: string
       {f.suggestion && <div className="muted">Suggestion: {f.suggestion}</div>}
       {ids.length > 0 && <div className="row wrap">{ids.map((id) => <button key={id} className="chip rd-chipbtn" onClick={() => onSelectRule(id)}>{id}</button>)}</div>}
     </li>
-  );
-}
-
-/* -------------------------------------------------------- defect fixtures (O-demo) */
-
-function FixtureStrip({ project }: { project: Project }) {
-  const setRecord = useStudio((s) => s.setRecord);
-  const patchOverrides = useStudio((s) => s.patchOverrides);
-  const isCard = project.documentType === 'credit-statement';
-  const r3 = project.rules.find((r) => r.id === 'R03');
-  const d01On = !!r3 && r3.priority === 400;
-  const fbRemoved = project.nodes.find((n) => n.id === 'payment-guidance')?.fallbackVariantId === undefined;
-  const why = isCard ? undefined : 'Credit-statement project only (R03/R04 and payment-guidance exist only in the Aster Card sample).';
-  return (
-    <div className="rd-fixtures" role="group" aria-label="Deliberate defect fixtures" data-testid="defect-fixtures" title={why ?? 'These deliberately break the model so the validators can be shown finding real defects. Every action is undoable from the top bar.'}>
-      <span className="rd-fix-label"><Icon.warning /> Defect fixtures <span className="chip warning">demo only</span></span>
-      <span className="rd-fix-group">
-        <span className="rd-fix-name" title="Sets R03 to missedPayments ≥ 2 at priority 400, equal to R04, so a customer with 2 missed payments and an assistance request matches two exclusive rules.">Priority tie{d01On && <span className="rd-ok"> · active</span>}</span>
-        <button className="btn danger sm" disabled={!isCard || d01On} onClick={() => injectD01()} data-testid="inject-d01" title="Inject D01: R03/R04 priority tie">Inject D01</button>
-        <button className="btn sm" disabled={!isCard || !d01On} onClick={() => restoreR03()}>Restore R03</button>
-        <button className="btn sm ghost" disabled={!isCard} onClick={() => setRecord('CARD-0002')}>Use CARD-0002</button>
-      </span>
-      <span className="rd-fix-group">
-        <span className="rd-fix-name" title="Removes the explicit fallback of payment-guidance. Then load a scenario where no rule matches.">No fallback{fbRemoved && isCard && <span className="rd-ok"> · removed</span>}</span>
-        <button className="btn danger sm" disabled={!isCard || fbRemoved} onClick={() => removeFallback()} data-testid="remove-fallback">Remove fallback</button>
-        <button className="btn sm" disabled={!isCard || !fbRemoved} onClick={() => restoreFallback()}>Restore fallback</button>
-        <button className="btn sm ghost" disabled={!isCard} onClick={() => patchOverrides({ card: { paymentStatus: 'overdue', missedPayments: 0 } })} data-testid="no-match-scenario" title="Scenario override (not a model edit): paymentStatus=overdue, missedPayments=0">No-match scenario</button>
-      </span>
-    </div>
   );
 }
 

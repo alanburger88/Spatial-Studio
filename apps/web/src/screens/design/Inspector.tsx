@@ -4,13 +4,13 @@ import { CATALOG_BY_TYPE, projectFields, getPath, nodeMap, requiredNodeIds, appl
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
 import { useScenarioEngine, useStudio } from '../../state/store';
 import { Icon } from '../../ui/icons';
-import { Tech, Biz } from '../../ui/common';
-import { predicateSentence } from '../../ui/plain';
+import { Tech, Biz, Named } from '../../ui/common';
+import { predicateSentence, nodeTitle, localeLabel } from '../../ui/plain';
 import { insertToken } from './RichTextEditor';
 import { ImpactPreview, ReachLine } from '../../ui/ImpactPreview';
 import { AssetLibraryDialog, type PickedAsset } from './AssetLibrary';
 import { StylesBrandDialog } from './StylesBrand';
-import { CommentsTab } from './Comments';
+import { CommentsTab, useOpenCommentCount } from './Comments';
 
 /** Single-condition editor with a live before-you-save impact preview. */
 function ConditionEditor({ project, initial, command, onDone, label }: { project: Project; initial: Predicate | null | undefined; command: (when: Predicate | null) => Command; onDone: () => void; label: string }) {
@@ -59,10 +59,11 @@ function ConditionEditor({ project, initial, command, onDone, label }: { project
 }
 
 
-type Tab = 'content' | 'data' | 'rules' | 'layout' | 'a11y' | 'impact' | 'comments';
-const TAB_TITLES: Partial<Record<Tab, string>> = { a11y: 'Accessibility' };
-const TAB_TESTID: Partial<Record<Tab, string>> = { comments: 'inspector-tab-comments' };
-const TABS: Array<[Tab, string]> = [['content', 'Content'], ['data', 'Data'], ['rules', 'Rules'], ['layout', 'Layout'], ['a11y', 'A11y'], ['impact', 'Impact'], ['comments', 'Comments']];
+type Tab = 'content' | 'data' | 'layout' | 'review';
+/** Old per-tab test IDs are kept: insp-tab-data now opens "Data & rules"; the old Comments tab ID opens "Review". */
+const TABS: Array<[Tab, string, string]> = [['content', 'Content', 'insp-tab-content'], ['data', 'Data & rules', 'insp-tab-data'], ['layout', 'Layout', 'insp-tab-layout'], ['review', 'Review', 'inspector-tab-comments']];
+/** Last-used tab survives selection changes and leaving/re-entering the screen (session only). */
+let lastTab: Tab = 'content';
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return <div className="field"><label>{label}{children}</label>{hint && <span className="hint">{hint}</span>}</div>;
@@ -81,20 +82,24 @@ function CommitInput({ value, onCommit, type = 'text', ariaLabel, testId }: { va
 }
 
 export function Inspector({ project, res, nodeId, onEditText }: { project: Project; res: Resolution; nodeId: string | null; onEditText: (id: string) => void }) {
-  const [tab, setTab] = useState<Tab>('content');
+  const [tab, setTabState] = useState<Tab>(lastTab);
+  const setTab = (t: Tab) => { lastTab = t; setTabState(t); };
   const node = nodeId ? nodeMap(project).get(nodeId) : undefined;
   const rnode = nodeId ? indexTree(res.root).get(nodeId) : undefined;
+  const openComments = useOpenCommentCount(node?.id);
+  const a11yIssues = node ? res.findings.filter((f) => f.nodeId === node.id && f.source === 'accessibility').length : 0;
+  const reviewCount = openComments + a11yIssues;
   return (
-    <aside className="panel insp" aria-label="Component inspector" data-testid="component-inspector">
-      <div className="panel-head">Inspector {node && <span className="sub"><Tech>{CATALOG_BY_TYPE[node.type].code} · </Tech>{CATALOG_BY_TYPE[node.type].label}</span>}</div>
+    <aside className="panel insp" aria-label="Component inspector" data-testid="component-inspector" data-side="right" data-side-title="Inspector">
+      <div className="panel-head">Inspector {node && <span className="sub">{CATALOG_BY_TYPE[node.type].label}</span>}</div>
       {!node || !rnode ? (
         <div className="panel-body"><div className="empty"><strong>No component selected</strong><span>Select a component on the page or in Layers. Use the palette to insert one.</span></div></div>
       ) : (
         <>
           <div className="insp-id">
-            <div className="insp-name">{node.name ?? node.id}</div>
+            <div className="insp-name"><Named name={node.name ?? nodeTitle(project, node.id)} code={node.id} /></div>
             <div className="row wrap" style={{ gap: 6 }}>
-              <span className="chip accent mono" data-testid="inspector-node-id" title={node.id}>{node.id}</span>
+              <Tech><span className="chip code" data-testid="inspector-node-id" title={node.id}>{node.id}</span><span className="chip code" title="Component code">{CATALOG_BY_TYPE[node.type].code}</span></Tech>
               {rnode.required && <span className="chip">Required</span>}
               {node.locked && <span className="chip warning"><Icon.lock width={12} height={12} /> Locked</span>}
               {node.layout?.paged?.mode === 'fixed' ? <span className="chip info">Fixed anchor</span> : <span className="chip">Flow</span>}
@@ -102,16 +107,28 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
             {!rnode.visible && <div className="callout warning" style={{ marginTop: 8 }} data-testid="not-rendered"><strong>Not rendered in this scenario.</strong> {rnode.hiddenReason}</div>}
           </div>
           <div className="tabs insp-tabs" role="tablist" aria-label="Inspector sections">
-            {TABS.map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} aria-label={TAB_TITLES[id]} title={TAB_TITLES[id]} onClick={() => setTab(id)} data-testid={TAB_TESTID[id] ?? `insp-tab-${id}`}>{label}</button>)}
+            {TABS.map(([id, label, tid]) => (
+              <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} data-testid={tid}>
+                {label}{id === 'review' && reviewCount > 0 && <span className="chip count insp-badge" aria-label={`${reviewCount} open ${reviewCount === 1 ? 'item' : 'items'}`}>{reviewCount}</span>}
+              </button>
+            ))}
           </div>
           <div className="panel-body" role="tabpanel">
             {tab === 'content' && <ContentTab node={node} project={project} res={res} onEditText={onEditText} />}
-            {tab === 'data' && <DataTab node={node} project={project} res={res} />}
-            {tab === 'rules' && <RulesTab node={node} project={project} res={res} />}
+            {tab === 'data' && (
+              <>
+                <section className="insp-sec"><h3 className="insp-h">Data</h3><DataTab node={node} project={project} res={res} /></section>
+                <section className="insp-sec"><h3 className="insp-h">Rules</h3><RulesTab node={node} project={project} res={res} /></section>
+              </>
+            )}
             {tab === 'layout' && <LayoutTab node={node} project={project} />}
-            {tab === 'a11y' && <A11yTab node={node} res={res} />}
-            {tab === 'impact' && <ImpactTab node={node} />}
-            {tab === 'comments' && <CommentsTab nodeId={node.id} />}
+            {tab === 'review' && (
+              <>
+                <section className="insp-sec"><h3 className="insp-h">Comments</h3><CommentsTab nodeId={node.id} /></section>
+                <section className="insp-sec"><h3 className="insp-h">Impact</h3><ImpactTab node={node} /></section>
+                <section className="insp-sec"><h3 className="insp-h">Accessibility</h3><A11yTab node={node} res={res} /></section>
+              </>
+            )}
           </div>
         </>
       )}
@@ -316,14 +333,14 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
       {node.type === 'conditional-region' && (
         <Field label="Policy"><select className="select" value={node.policy ?? 'exclusive'} onChange={(e) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: { policy: e.target.value as any } })}><option value="exclusive">exclusive (first match)</option><option value="additive">additive (all matches)</option></select></Field>
       )}
-      <ul className="variant-list">
+      <ul className="variant-list list-rows">
         {(node.variantIds ?? []).map((vid) => {
           const p = parts.get(vid);
           const rv = rnode?.variants?.items.find((v) => v.id === vid);
           return (
-            <li key={vid} className={rv?.selected ? 'active' : ''} data-testid={`variant-${vid}`}>
+            <li key={vid} className={rv?.selected ? 'selected' : ''} data-testid={`variant-${vid}`}>
               <div className="row"><strong className="grow">{p?.title ?? vid}</strong>{rv?.selected && <span className="chip accent">Selected</span>}{node.fallbackVariantId === vid && <span className="chip">Fallback</span>}</div>
-              <Tech><div className="mono muted">{vid} · v{p?.version ?? '?'} · rules: {rv?.candidateRuleIds.join(', ') || (node.variantConditions?.[vid] ? describePredicate(node.variantConditions[vid]) : node.ruleDriven ? 'shown by additive rule' : '—')}</div></Tech>
+              <Tech><div className="code-line">{vid} · v{p?.version ?? '?'} · rules: {rv?.candidateRuleIds.join(', ') || (node.variantConditions?.[vid] ? describePredicate(node.variantConditions[vid]) : node.ruleDriven ? 'shown by additive rule' : '—')}</div></Tech>
               <Biz><div className="variant-when muted">{variantWhen(project, node, vid, rv?.candidateRuleIds ?? [])}</div></Biz>
               {editing === vid ? (
                 <div style={{ marginTop: 6 }}>
@@ -374,7 +391,7 @@ function DisclosureEditor({ node, project }: { node: DocNode; project: Project }
     <div>
       <div className="callout accent"><strong>Protected disclosure.</strong> Approved text v{part?.version} · {node.required ? 'mandatory (obligation rule)' : 'optional'} · jurisdiction {node.jurisdiction?.join(', ') || '—'}. It can be repositioned but not deleted or made optional.</div>
       <div className="section-title">Approved text</div>
-      {Object.entries(part?.approvedLocales ?? {}).map(([loc, t]) => <div key={loc} className="card" style={{ marginBottom: 6 }}><span className="chip">{loc}</span> <span style={{ fontSize: 12.5 }}>{t}</span></div>)}
+      {Object.entries(part?.approvedLocales ?? {}).map(([loc, t]) => <div key={loc} className="insp-locale"><span className="chip" title={loc}>{localeLabel(loc)}</span> <span style={{ fontSize: 12.5 }}>{t}</span></div>)}
       {!advanced ? <button className="btn sm" onClick={() => setAdvanced(true)}>Advanced: new approved version…</button> : (
         <div className="card">
           <Field label="New approved en-US text"><textarea className="textarea" value={text} onChange={(e) => setText(e.target.value)} /></Field>
@@ -457,16 +474,18 @@ function RulesTab({ node, project, res }: { node: DocNode; project: Project; res
       {editVis && <ConditionEditor project={project} label="Visibility condition" initial={node.visibleWhen} command={(when) => ({ type: 'UPDATE_NODE', nodeId: node.id, patch: { visibleWhen: when ?? undefined } })} onDone={() => setEditVis(false)} />}
       <div className="section-title">Rules targeting this component</div>
       {!related.length && <p className="muted">No rules target this component.</p>}
+      <div className="list-rows insp-rows">
       {related.map((r) => {
         const t = traceBy.get(r.id);
         return (
-          <div key={r.id} className="card" style={{ marginBottom: 6 }}>
+          <div key={r.id}>
             <div className="row"><strong>{r.id}</strong><span className="chip">{r.mode} · p{r.priority}</span>{t && <span className={`chip ${t.outcome === 'selected' || t.outcome === 'applied' || t.outcome === 'required' ? 'accent' : t.outcome === 'tie' ? 'error' : ''}`}>{t.outcome}</span>}<Link className="btn sm ghost" style={{ marginLeft: 'auto' }} to={`/studio/${project.projectId}/rules-data?rule=${r.id}`}>Open</Link></div>
             <div className="mono muted" style={{ marginTop: 4 }}>IF {describePredicate(r.when)}</div>
             {t && <div className="mono" style={{ fontSize: 11 }}>inputs: {JSON.stringify(t.predicateInputs)}</div>}
           </div>
         );
       })}
+      </div>
       {node.variantConditions && Object.keys(node.variantConditions).length > 0 && <>
         <div className="section-title">Inline conditions</div>
         {Object.entries(node.variantConditions).map(([v, p]) => <div key={v} className="mono" style={{ fontSize: 12 }}>{v}: {describePredicate(p)}</div>)}

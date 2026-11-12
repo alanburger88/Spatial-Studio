@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { resolve } from '@iss/resolver';
 import { api, ApiFailure, type ComposedPages } from '../api/client';
 import { useStudio, useScenarioRequest, personaLabel } from '../state/store';
+import { recordSummary } from '../shell/RecordPicker';
 import { ScreenHeader, Loading, ErrorState, Empty, Tech, Proof } from '../ui/common';
 import { nodeTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
@@ -126,7 +127,8 @@ function useComposition(req: any | null): Comp {
 
 /* ------------------------------------------------------------ 2.5D stack */
 
-function Stack({ comp, layout, separation, selected, onSelect, onDiag, focusNode }: {
+function Stack({ comp, layout, separation, selected, onSelect, onDiag, focusNode, nm }: {
+  nm: (id: string) => string;
   comp: ComposedPages; layout: Layout; separation: number; selected: number | null;
   onSelect: (n: number) => void; onDiag: (d: Diag) => void; focusNode: string | null;
 }) {
@@ -167,7 +169,7 @@ function Stack({ comp, layout, separation, selected, onSelect, onDiag, focusNode
                 <div className="ps-card-diags">
                   {diags.slice(0, 2).map((d, k) => (
                     <button key={k} className={'ps-marker ' + sevClass(d)} onClick={() => onDiag(d)} title={d.message}>
-                      <Icon.warning /> <span>{d.code}{d.nodeId ? ` · ${d.nodeId}` : ''}</span>
+                      <Icon.warning /> <span>{d.code}{d.nodeId ? ` · ${nm(d.nodeId)}` : ''}</span>
                     </button>
                   ))}
                 </div>
@@ -180,7 +182,7 @@ function Stack({ comp, layout, separation, selected, onSelect, onDiag, focusNode
         <div className="ps-diag-strip" aria-label="Page diagnostics">
           {comp.diagnostics.map((d, k) => (
             <button key={k} className={'ps-marker ' + sevClass(d)} onClick={() => onDiag(d)} title={d.message}>
-              <Icon.warning /> <span>{d.page ? `Page ${d.page} · ` : ''}{d.code}{d.nodeId ? ` · ${d.nodeId}` : ''}{d.rowsClipped ? ` · ${d.rowsClipped} rows clipped` : ''}</span>
+              <Icon.warning /> <span>{d.page ? `Page ${d.page} · ` : ''}{d.code}{d.nodeId ? ` · ${nm(d.nodeId)}` : ''}{d.rowsClipped ? ` · ${d.rowsClipped} rows clipped` : ''}</span>
             </button>
           ))}
         </div>
@@ -210,6 +212,8 @@ export function PageStack() {
   const [layout, setLayout] = useState<Layout>('stack');
   const [separation, setSeparation] = useState(55);
   const [selected, setSelected] = useState<number | null>(null);
+  /** Page shown in the inspector. Defaults to page 1 so the inspector is never empty; independent of the full-size preview (`selected`). */
+  const [inspected, setInspected] = useState<number>(1);
   const [viewSide, setViewSide] = useState<'A' | 'B'>('A');
   const [cmpCursor, setCmpCursor] = useState<number | null | undefined>(undefined);
   const [cmpRecord, setCmpRecord] = useState<string>('');
@@ -254,6 +258,9 @@ export function PageStack() {
 
   useEffect(() => { setFocusDiag(null); }, [comp?.runId, viewSide]);
   useEffect(() => { if (selected && comp && selected > comp.pageCount) setSelected(null); }, [comp, selected]);
+  useEffect(() => { if (comp && comp.pageCount > 0 && inspected > comp.pageCount) setInspected(1); }, [comp, inspected]);
+  const openPage = (n: number) => { setSelected(n); setInspected(n); };
+  const curPage = comp && comp.pageCount > 0 ? Math.min(Math.max(1, selected ?? inspected), comp.pageCount) : null;
 
   const toggleStress = () => {
     if (stress) {
@@ -272,9 +279,11 @@ export function PageStack() {
   const onDiag = (d: Diag) => { setFocusDiag(d); if (d.nodeId) select(d.nodeId); };
   const selNode = ctx.selectedNodeId;
 
+  const srcName = (id: string) => { if (!biz) return id; const r = records.find((x) => x.recordId === id); return r ? recordSummary(r, personas).name : id; };
+  const srcIds = (c: ComposedPages) => (c === A.data ? ctx.recordId : (mode === 'persona' ? effCmpRecord : ctx.recordId));
   const scenarioLabel = (c: ComposedPages) => {
     const isA = c === A.data;
-    const parts = [isA ? ctx.recordId : (mode === 'persona' ? effCmpRecord : ctx.recordId)];
+    const parts = [srcName(isA ? ctx.recordId : (mode === 'persona' ? effCmpRecord : ctx.recordId))];
     if (isA) { if (ctx.journeyCursor != null) parts.push(`journey cursor ${ctx.journeyCursor}`); if (stress) parts.push('stress 250 rows'); else if (Object.keys(ctx.overrides).length) parts.push('overrides'); }
     else if (mode === 'time') parts.push(effCmpCursor == null ? 'baseline (no journey events)' : `journey cursor ${effCmpCursor}`);
     else if (mode === 'persona' && stress) parts.push('stress 250 rows');
@@ -289,7 +298,7 @@ export function PageStack() {
     : A.loading ? 'Composing…' : '—';
 
   const diagList = comp?.diagnostics ?? [];
-  const selPage: PageInfo | null = comp && selected ? comp.pages[selected - 1] ?? null : null;
+  const selPage: PageInfo | null = comp && curPage ? comp.pages[curPage - 1] ?? null : null;
 
   return (
     <section className="screen" data-testid="page-stack-view">
@@ -301,7 +310,7 @@ export function PageStack() {
       />
       <div className="screen-body ps-body">
         {/* ---------------- controls */}
-        <aside className="panel ps-controls" aria-label="Composition controls">
+        <aside className="panel ps-controls" aria-label="Composition controls" data-side="left" data-side-title="Compare">
           <div className="panel-head">Compare</div>
           <div className="panel-body">
             <div className="segmented ps-seg" role="group" aria-label="Compare mode">
@@ -323,7 +332,7 @@ export function PageStack() {
               <div className="field" style={{ marginTop: 10 }}>
                 <label htmlFor="ps-rec">Compare current record with</label>
                 <select id="ps-rec" className="select" value={effCmpRecord} onChange={(e) => setCmpRecord(e.target.value)}>
-                  {otherRecords.map((r) => <option key={r.recordId} value={r.recordId}>{r.recordId} · {personaLabel(personas, r.personaId)}</option>)}
+                  {otherRecords.map((r) => <option key={r.recordId} value={r.recordId}>{biz ? recordSummary(r, personas).name : r.recordId} · {personaLabel(personas, r.personaId)}</option>)}
                 </select>
               </div>
             )}
@@ -399,19 +408,19 @@ export function PageStack() {
                     <PageFrame css={comp.snapshot.css} html={comp.snapshot.pages[selected - 1]} scale={1} highlight={selNode} onNode={(id) => select(id)} label={`Composed page ${selected}, full size`} />
                     {comp.diagnostics.filter((d) => d.page === selected).map((d, k) => (
                       <button key={k} className={'ps-marker big ' + sevClass(d)} style={{ top: 10 + k * 40 }} onClick={() => onDiag(d)}>
-                        <Icon.warning /> <span>{d.code}{d.nodeId ? ` · ${d.nodeId}` : ''}{d.rowsClipped ? ` · ${d.rowsClipped} rows clipped` : ''}</span>
+                        <Icon.warning /> <span>{d.code}{d.nodeId ? ` · ${nm(d.nodeId)}` : ''}{d.rowsClipped ? ` · ${d.rowsClipped} rows clipped` : ''}</span>
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
             ) : (
-              <Stack comp={comp} layout={layout} separation={separation} selected={selected} onSelect={setSelected} onDiag={onDiag} focusNode={selNode} />
+              <Stack comp={comp} layout={layout} separation={separation} selected={curPage} onSelect={openPage} onDiag={onDiag} focusNode={selNode} nm={nm} />
             )}
 
             {focusDiag && (
               <div className={'callout ' + sevClass(focusDiag) + ' ps-focus'} role="alert">
-                <div><strong>{focusDiag.code}</strong>{focusDiag.page ? ` · page ${focusDiag.page}` : ''}{focusDiag.nodeId ? ` · node ${focusDiag.nodeId}` : ''}<br />{focusDiag.message}</div>
+                <div><strong>{focusDiag.code}</strong>{focusDiag.page ? ` · page ${focusDiag.page}` : ''}{focusDiag.nodeId ? ` · node ${nm(focusDiag.nodeId)}` : ''}<br />{focusDiag.message}</div>
                 <div className="row" style={{ gap: 6 }}>
                   <button className="btn sm" onClick={() => { if (focusDiag.nodeId) select(focusDiag.nodeId); navigate(`/studio/${project.projectId}/design`); }} data-testid="open-flow-constraint">Open flow constraint in designer</button>
                   <button className="btn sm ghost" onClick={() => setFocusDiag(null)} aria-label="Dismiss"><Icon.close /></button>
@@ -424,53 +433,53 @@ export function PageStack() {
         </div>
 
         {/* ---------------- inspector + flat list */}
-        <aside className="panel ps-side" aria-label="Page inspector and list">
+        <aside className="panel ps-side" aria-label="Page inspector and list" data-side="right" data-side-title="Pages">
           <div className="panel-head">Page inspector</div>
           <div className="ps-inspector" data-testid="page-inspector">
             {!comp ? <span className="muted">No composition yet.</span> : (
               <>
                 <dl className="kv">
-                  <dt>Page</dt><dd>{selected ? `${selected} of ${comp.pageCount}` : `none selected (${comp.pageCount} total)`}</dd>
-                  <dt>Source scenario</dt><dd>{scenarioLabel(comp)}</dd>
+                  <dt>Page</dt><dd>{curPage ? `${curPage} of ${comp.pageCount}` : `none (${comp.pageCount} total)`}</dd>
+                  <dt>Source scenario</dt><dd title={biz ? srcIds(comp) : undefined}>{scenarioLabel(comp)}</dd>
                   <dt>Transactions</dt><dd>{comp.transactionCount ?? '—'}</dd>
                   <dt>Diagnostics</dt><dd>{diagList.length}</dd>
                 </dl>
                 <Proof label="Run details"><dl className="kv"><dt>Run ID</dt><dd className="mono">{comp.runId}</dd><dt>Composer</dt><dd>{comp.engine} · {comp.durationMs} ms</dd></dl></Proof>
                 {selPage ? (
                   <>
-                    <div className="section-title">{biz ? 'On page' : 'Nodes on page'} {selected}</div>
+                    <div className="section-title">{biz ? 'On page' : 'Nodes on page'} {curPage}</div>
                     <div className="ps-chips">
                       {selPage.nodeIds.map((id) => <button key={id} className={'chip' + (selNode === id ? ' accent' : '')} onClick={() => select(id)} title={id}>{nm(id)}</button>)}
                       {selPage.fixedNodeIds.map((id) => <button key={id} className="chip" onClick={() => select(id)} title={`${id} · fixed (repeating) region`}>{nm(id)} · fixed</button>)}
                     </div>
                     <div className="section-title">Continued components</div>
                     {Object.entries(selPage.tables).length === 0 ? <span className="muted">No tables on this page.</span> : (
-                      <ul className="ps-plain">
+                      <ul className="list-rows ps-plain">
                         {Object.entries(selPage.tables).map(([id, t]) => (
-                          <li key={id}><button className="rowlink-btn" onClick={() => select(id)} title={id}>{nm(id)}</button>: {rowRange(comp, selected!, id)}{t.continued ? ' · continued' : ''}{t.headerRepeated ? ' · heading repeated' : ''}<Tech> ({t.firstRowId ?? '—'} → {t.lastRowId ?? '—'})</Tech></li>
+                          <li key={id}><button className="rowlink-btn" onClick={() => select(id)} title={id}>{nm(id)}</button>: {rowRange(comp, curPage!, id)}{t.continued ? ' · continued' : ''}{t.headerRepeated ? ' · heading repeated' : ''}<Tech> ({t.firstRowId ?? '—'} → {t.lastRowId ?? '—'})</Tech></li>
                         ))}
                       </ul>
                     )}
                     <div className="section-title">Flow region</div>
                     <dl className="kv"><dt>Top / bottom</dt><dd>{selPage.flowTopPt}–{selPage.flowBottomPt} pt</dd><dt>Used</dt><dd>{selPage.usedPt} pt</dd></dl>
-                    {diagList.filter((d) => d.page === selected).map((d, k) => (
+                    {diagList.filter((d) => d.page === curPage).map((d, k) => (
                       <div key={k} className={'callout ' + sevClass(d)} style={{ marginTop: 8 }}><strong>{d.code}</strong> — {d.message}</div>
                     ))}
                   </>
-                ) : <p className="muted" style={{ fontSize: 12.5 }}>Select a page in the stack or the list to inspect its nodes, continuation and diagnostics.</p>}
+                ) : <p className="muted" style={{ fontSize: 12.5 }}>This composition has no pages.</p>}
               </>
             )}
           </div>
 
           <div className="panel-head" style={{ borderTop: '1px solid var(--iss-border)' }}>Pages <span className="sub">accessible list</span></div>
-          <div className="panel-body ps-list-wrap">
+          <div className="panel-body flush ps-list-wrap">
             {!comp ? <span className="muted">—</span> : (
-              <ol className="ps-list" data-testid="page-flat-list">
+              <ol className="list-rows ps-list" data-testid="page-flat-list">
                 {comp.pages.map((p) => {
                   const dg = diagList.filter((d) => d.page === p.index);
                   return (
-                    <li key={p.index} className={selected === p.index ? 'sel' : ''}>
-                      <button className="ps-list-main" onClick={() => setSelected(p.index)} aria-current={selected === p.index}>
+                    <li key={p.index} className={curPage === p.index ? 'selected' : ''}>
+                      <button className="ps-list-main" onClick={() => openPage(p.index)} aria-current={curPage === p.index}>
                         <strong>Page {p.index}</strong>
                         <span className="ps-nodes" title={p.nodeIds.join(', ')}>{p.nodeIds.map(nm).join(', ') || '—'}</span>
                         {Object.entries(p.tables).map(([id, t]) => (
@@ -483,7 +492,7 @@ export function PageStack() {
                       </button>
                       {dg.map((d, k) => (
                         <button key={k} className={'ps-diag-line ' + sevClass(d)} onClick={() => onDiag(d)}>
-                          <Icon.warning /> <span><strong>{d.code}</strong>{d.nodeId ? ` · ${d.nodeId}` : ''}{d.rowsClipped ? ` · ${d.rowsClipped} rows clipped` : ''}</span>
+                          <Icon.warning /> <span><strong>{d.code}</strong>{d.nodeId ? <> · {biz ? `${nm(d.nodeId)} ` : ''}<span className="chip code">{d.nodeId}</span></> : null}{d.rowsClipped ? ` · ${d.rowsClipped} rows clipped` : ''}</span>
                         </button>
                       ))}
                     </li>

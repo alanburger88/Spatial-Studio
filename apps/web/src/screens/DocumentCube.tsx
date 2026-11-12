@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { buildCube, dimensionValue, DIMENSIONS, journeyStates, MAX_CATEGORIES_PER_AXIS, OUTPUT_PROFILES, type CubeCell, type CubeResult, type DimensionId } from '@iss/scenarios';
 import { ScreenHeader, Loading, ErrorState, Empty, Tech } from '../ui/common';
+import { recordSummary } from '../shell/RecordPicker';
 import { nodeTitle, ruleTitle as plainRuleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { useStudio, useScenarioEngine } from '../state/store';
@@ -93,9 +94,19 @@ export function DocumentCube() {
   }, [engine, project, validDims, cubeAxes]);
 
   const cellsByKey = useMemo(() => new Map((cube?.cells ?? []).map((c) => [cellKey(c), c])), [cube]);
-  const selectedCell: CubeCell | null = selected ? cellsByKey.get(selected) ?? null : null;
+  const ctxRecordId = useStudio((s) => s.ctx.recordId);
+  // Default selection (local state only): the intersection holding the customer chosen in the top bar, else the most populated one.
+  const defaultKey = useMemo(() => {
+    const cells = (cube?.cells ?? []).filter((c) => c.count > 0);
+    if (cells.length === 0) return null;
+    const best = (list: CubeCell[]) => [...list].sort((a, b) => b.count - a.count || cellKey(a).localeCompare(cellKey(b)))[0];
+    const mine = cells.filter((c) => c.recordIds.includes(ctxRecordId));
+    const exact = mine.filter((c) => c.scenarios.some((sc) => sc.recordId === ctxRecordId && sc.profileId === profileId && sc.journeyCursor === journeyCursor));
+    return cellKey(best(exact.length ? exact : mine.length ? mine : cells));
+  }, [cube, ctxRecordId, profileId, journeyCursor]);
+  const effectiveKey = selected && cellsByKey.has(selected) ? selected : defaultKey;
+  const selectedCell: CubeCell | null = effectiveKey ? cellsByKey.get(effectiveKey) ?? null : null;
 
-  useEffect(() => { if (selected && !cellsByKey.has(selected)) setSelected(null); }, [selected, cellsByKey]);
   useEffect(() => { if (zSlice && cube && !cube.axes[2].categories.some((c) => c.key === zSlice)) setZSlice(null); }, [zSlice, cube]);
 
   const outcomeIndex = useMemo(() => {
@@ -115,7 +126,7 @@ export function DocumentCube() {
     if (o === 'n/a') return 'n/a';
     return project ? nodeTitle(project, o) : o;
   };
-  const activeY = cube && cube.axes[1].categories.some((k) => k.key === yKey) ? yKey! : cube?.axes[1].categories[0]?.key ?? '';
+  const activeY = cube && cube.axes[1].categories.some((k) => k.key === yKey) ? yKey! : (selectedCell?.y ?? cube?.axes[1].categories[0]?.key ?? '');
 
   if (!project || !engine) return <section className="screen" data-testid="cube-view"><Loading label="Preparing scenario engine…" /></section>;
 
@@ -240,14 +251,14 @@ export function DocumentCube() {
           {cube && cube.errors.length === 0 && cube.universeSize === 0 && <div className="cube-msg"><Empty title="No matching fixture" message="The active filters leave no seeded records. Clear a filter to repopulate the cube." /></div>}
 
           {cube && cube.errors.length === 0 && cube.universeSize > 0 && view === 'grid' && (
-            <CubeMatrix cube={cube} activeY={activeY} onY={setYKey} selected={selected} onSelect={(k) => setSelected(k)} outcomeStyle={outcomeStyle} outcomeName={outcomeName} />
+            <CubeMatrix cube={cube} activeY={activeY} onY={setYKey} selected={effectiveKey} onSelect={(k) => setSelected(k)} outcomeStyle={outcomeStyle} outcomeName={outcomeName} />
           )}
 
           {cube && cube.errors.length === 0 && cube.universeSize > 0 && view === '3d' && (
             <>
               <div className="stage cube-stage" aria-label="Document cube, three-dimensional view">
                 <div className="stage-grid" />
-                <CubeScene cube={cube} yaw={yaw} tilt={tilt} zSlice={zSlice} hideFront={hideFront} selected={selected} onSelect={setSelected} outcomeStyle={outcomeStyle} />
+                <CubeScene cube={cube} yaw={yaw} tilt={tilt} zSlice={zSlice} hideFront={hideFront} selected={effectiveKey} onSelect={setSelected} outcomeStyle={outcomeStyle} />
               </div>
               <div className="cube-controls" role="group" aria-label="Cube view controls">
                 <label className="cube-slider">Yaw<input type="range" min={-55} max={55} value={yaw} onChange={(e) => setYaw(+e.target.value)} aria-label="Rotate cube left or right" data-testid="cube-yaw" /><output>{yaw}°</output></label>
@@ -290,8 +301,8 @@ export function DocumentCube() {
                     const key = cellKey(c);
                     const st = outcomeStyle(c.dominantOutcome);
                     return (
-                      <tr key={key} className={selected === key ? 'selected' : c.count === 0 ? 'cube-row-empty' : ''} onClick={() => { setSelected(key); setYKey(c.y); }} data-testid="cube-row">
-                        <td title={labelOf(0, c.x)}>{labelOf(0, c.x)}</td><td title={labelOf(1, c.y)}>{labelOf(1, c.y)}</td><td title={labelOf(2, c.z)}>{labelOf(2, c.z)}</td>
+                      <tr key={key} className={effectiveKey === key ? 'selected' : c.count === 0 ? 'cube-row-empty' : ''} onClick={() => { setSelected(key); setYKey(c.y); }} data-testid="cube-row">
+                        <td className="cube-wrap" title={labelOf(0, c.x)}>{labelOf(0, c.x)}</td><td className="cube-wrap" title={labelOf(1, c.y)}>{labelOf(1, c.y)}</td><td className="cube-wrap" title={labelOf(2, c.z)}>{labelOf(2, c.z)}</td>
                         <td className="num"><strong>{c.count}</strong></td>
                         <td>{c.count === 0 ? <span className="muted">No matching fixture</span> : <span className="cube-outcome-cell"><span className="cube-mark sm" style={{ ['--mk' as string]: st.color }}>{st.letter}</span><span className={viewMode === 'technical' ? 'mono' : ''}>{outcomeName(c.dominantOutcome)}</span>{c.simulationOnly && <span className="chip sim">SIMULATION ONLY</span>}</span>}</td>
                         <td>{c.blocking > 0 && <span className="chip error">■ {c.blocking} blocking</span>} {c.warnings > 0 && <span className="chip warning">▲ {c.warnings} warning</span>}{issuesOf(c) === 0 && <span className="muted">{c.count ? 'None' : '—'}</span>}</td>
@@ -307,11 +318,11 @@ export function DocumentCube() {
         </div>
 
         {/* ---------------------------------------------------------------- inspector */}
-        <aside className="panel cube-inspector" aria-label="Selected intersection" data-testid="cube-inspector">
+        <aside className="panel cube-inspector" aria-label="Selected intersection" data-testid="cube-inspector" data-side="right" data-side-title="Intersection">
           <div className="panel-head">Selected intersection</div>
           <div className="panel-body">
             {!selectedCell || !cube ? (
-              <Empty title="Select a cell" message="Choose a cell in the grid, the 3D cube or a table row to see its matching fixtures, outcomes, rules and issues." />
+              <Empty title="No populated intersections" message="No seeded record resolves under the current axes and filters." />
             ) : (
               <Inspector cell={selectedCell} cube={cube} engineProject={project} engine={engine} outcomeStyle={outcomeStyle} outcomeName={outcomeName} onOpen={openScenario} />
             )}
@@ -425,7 +436,7 @@ function CubeMatrix(props: { cube: CubeResult; activeY: string; onY: (k: string)
           </button>
         ))}
       </div>
-      <div className="cube-matrix" role="grid" aria-label={`${ax.label} by ${az.label} for ${labelFor(ay, activeY)}`} style={{ gridTemplateColumns: `minmax(110px, 0.9fr) repeat(${Math.max(1, az.categories.length)}, minmax(0, 1fr))` }}>
+      <div className="cube-matrix" role="grid" aria-label={`${ax.label} by ${az.label} for ${labelFor(ay, activeY)}`} style={{ gridTemplateColumns: `minmax(120px, max-content) repeat(${Math.max(1, az.categories.length)}, minmax(66px, 1fr))` }}>
         <div className="cube-mx-corner" role="presentation"><span><span className="cube-axis-dot ax-x" />{ax.label} ↓</span><span><span className="cube-axis-dot ax-z" />{az.label} →</span></div>
         {az.categories.map((z) => <div key={z.key} className="cube-mx-zh" role="columnheader" title={z.label}>{pc(z.label)}</div>)}
         {ax.categories.map((x) => (
@@ -447,10 +458,11 @@ function CubeMatrix(props: { cube: CubeResult; activeY: string; onY: (k: string)
                     data-cell={key.split(SEP).join('|')}
                     onClick={() => onSelect(key)}
                   >
-                    {c.count === 0 ? <span className="cube-mx-none">'no matching fixture</span> : (
+                    {c.count === 0 ? <span className="cube-mx-none" aria-hidden="true">·<span className="sr-only">No matching fixture</span></span> : (
                       <>
-                        <span className="cube-mx-top"><strong className="cube-mx-n">{c.count}</strong>{c.blocking > 0 && <span className="cube-badge" aria-hidden="true">!</span>}</span>
-                        <span className="cube-mx-oc"><span className="cube-mark sm">{st.letter}</span><span className="cube-mx-name">{outcomeName(c.dominantOutcome)}</span></span>
+                        <strong className="cube-mx-n">{c.count}</strong>
+                        <span className="cube-mark sm" aria-hidden="true">{st.letter}</span>
+                        {c.blocking > 0 && <span className="cube-badge" aria-hidden="true">!</span>}
                       </>
                     )}
                   </button>
@@ -469,6 +481,8 @@ function CubeMatrix(props: { cube: CubeResult; activeY: string; onY: (k: string)
 function Inspector(props: { cell: CubeCell; cube: CubeResult; engineProject: NonNullable<ReturnType<typeof useStudio.getState>['project']>; engine: NonNullable<ReturnType<typeof useScenarioEngine>>; outcomeStyle: OutcomeStyleFn; outcomeName: (o: string | null) => string; onOpen: (c: CubeCell, then: 'design' | 'exploded' | 'outputs', recordId?: string) => void }) {
   const { cell, cube, engineProject, engine, outcomeStyle, outcomeName, onOpen } = props;
   const technical = useStudio((s) => s.viewMode) === 'technical';
+  const records = useStudio((s) => s.records);
+  const personas = useStudio((s) => s.personas);
   const labels = cube.axes.map((a, i) => ({ axis: AXIS_NAMES[i], dim: a.label, label: labelFor(a, [cell.x, cell.y, cell.z][i]) }));
   const detail = useMemo(() => {
     const rules = new Map<string, number>();
@@ -481,7 +495,9 @@ function Inspector(props: { cell: CubeCell; cube: CubeResult; engineProject: Non
     return { rules: [...rules.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])), issues: [...issues.entries()].sort((a, b) => b[1].n - a[1].n) };
   }, [cell, engine]);
   const ruleTitle = (id: string) => { const r = engineProject.rules.find((x) => x.id === id); return r ? plainRuleTitle(engineProject, r) : ''; };
-  const rep = cell.representative;
+  const rec = cell.representative;
+  const recName = (id: string) => { const r = records.find((x) => x.recordId === id); return r ? recordSummary(r, personas) : null; };
+  const repName = rec ? recName(rec.recordId) : null;
 
   return (
     <div className="cube-insp" data-testid="cube-selected-cell">
@@ -490,7 +506,7 @@ function Inspector(props: { cell: CubeCell; cube: CubeResult; engineProject: Non
       </dl>
       <div className="cube-insp-count">
         <span className="cube-insp-num" data-testid="cube-cell-count">{cell.count}</span>
-        <span>matching {cell.count === 1 ? 'scenario' : 'scenarios'}<br /><span className="muted">{cell.recordIds.length} distinct seeded {cell.recordIds.length === 1 ? 'record' : 'records'}</span></span>
+        <span>matching synthetic {cell.count === 1 ? 'scenario' : 'scenarios'}<br /><span className="muted">{cell.recordIds.length} distinct seeded {cell.recordIds.length === 1 ? 'record' : 'records'}</span></span>
         {cell.simulationOnly && <span className="chip sim" data-testid="cube-sim-only">SIMULATION ONLY</span>}
       </div>
 
@@ -499,37 +515,42 @@ function Inspector(props: { cell: CubeCell; cube: CubeResult; engineProject: Non
       ) : (
         <>
           <div className="section-title">Outcome breakdown</div>
-          <ul className="cube-bars">
+          <ul className="list-rows cube-bars">
             {Object.entries(cell.outcomes).sort((a, b) => b[1] - a[1]).map(([o, n]) => { const st = outcomeStyle(o); return (
               <li key={o}><span className="cube-mark sm" style={{ ['--mk' as string]: st.color }}>{st.letter}</span><span className={`cube-bar-name${technical ? ' mono' : ''}`} title={outcomeName(o)}>{outcomeName(o)}</span><span className="cube-bar-track"><span style={{ width: `${(n / cell.count) * 100}%`, background: st.color }} /></span><strong>{n}</strong></li>
             ); })}
           </ul>
 
-          <div className="section-title">Fixtures ({cell.recordIds.length})</div>
-          <div className="cube-chips">
-            {cell.recordIds.slice(0, 40).map((id) => <button key={id} className="chip cube-chip" onClick={() => onOpen(cell, 'design', id)} title={`Open ${id} in the design studio`}>{id}</button>)}
+          <div className="section-title">Fixtures <span className="chip count">{cell.recordIds.length}</span></div>
+          <div className="list-rows cube-fixtures">
+            {cell.recordIds.slice(0, 40).map((id) => { const s = recName(id); return (
+              <button key={id} type="button" onClick={() => onOpen(cell, 'design', id)} title={`Open ${s ? s.name : id} (${id}) in the design studio`}>
+                <span className="cube-fx-name">{s ? s.name : id}{s?.tag && <span className="muted"> · {s.tag}</span>}</span>
+                {(technical || !s) && <span className="chip code">{id}</span>}
+              </button>
+            ); })}
             {cell.recordIds.length > 40 && <span className="muted">+{cell.recordIds.length - 40} more</span>}
           </div>
 
           <div className="section-title">Notable rules</div>
           {detail.rules.length === 0 ? <p className="muted">No rules matched.</p> : (
-            <ul className="cube-list rules">{detail.rules.slice(0, 6).map(([id, n]) => <li key={id}><span className="cube-list-t cube-rule-t" title={ruleTitle(id)}>{ruleTitle(id) || id}</span><span className="chip variant cube-tag">{id}</span><span className="muted">{n}/{cell.scenarios.length}</span></li>)}</ul>
+            <ul className="list-rows cube-list rules">{detail.rules.slice(0, 6).map(([id, n]) => <li key={id}><span className="cube-rule-t" title={ruleTitle(id)}>{ruleTitle(id) || id}</span><span className="chip code">{id}</span><span className="muted">{n}/{cell.scenarios.length}</span></li>)}</ul>
           )}
 
           <div className="section-title">Issues</div>
           {detail.issues.length === 0 ? <p className="muted">No blocking or warning findings.</p> : (
-            <ul className="cube-list">{detail.issues.map(([code, v]) => <li key={code}><span className={`chip ${v.sev === 'blocking' ? 'error' : 'warning'}`}>{v.sev === 'blocking' ? '■' : '▲'} {v.sev}</span><span className={`cube-list-t${technical ? ' mono' : ''}`} title={code}>{technical ? code : humanCode(code)}</span><span className="muted">×{v.n}</span></li>)}</ul>
+            <ul className="list-rows cube-list">{detail.issues.map(([code, v]) => <li key={code}><span className={`chip ${v.sev === 'blocking' ? 'error' : 'warning'}`}>{v.sev === 'blocking' ? '■' : '▲'} {v.sev}</span><span className={`cube-list-t${technical ? ' mono' : ''}`} title={code}>{technical ? code : humanCode(code)}</span><span className="muted">×{v.n}</span></li>)}</ul>
           )}
         </>
       )}
 
       <div className="cube-actions">
-        <button className="btn primary" disabled={!rep} onClick={() => onOpen(cell, 'design')} data-testid="cube-open-rep">Open representative scenario</button>
+        <button className="btn primary" disabled={!rec} onClick={() => onOpen(cell, 'design')} data-testid="cube-open-rep">Open representative scenario</button>
         <div className="row">
-          <button className="btn" disabled={!rep || !cube.primaryVariantSet} onClick={() => onOpen(cell, 'exploded')} data-testid="cube-open-exploded">Open in Exploded</button>
-          <button className="btn" disabled={!rep} onClick={() => onOpen(cell, 'outputs')} data-testid="cube-open-output">{cell.simulationOnly ? 'Open output (simulation)' : 'Open output'}</button>
+          <button className="btn" disabled={!rec || !cube.primaryVariantSet} onClick={() => onOpen(cell, 'exploded')} data-testid="cube-open-exploded">Open in Exploded</button>
+          <button className="btn" disabled={!rec} onClick={() => onOpen(cell, 'outputs')} data-testid="cube-open-output">{cell.simulationOnly ? 'Open output (simulation)' : 'Open output'}</button>
         </div>
-        {rep && <p className="cube-rep-note">Representative: <span className="mono">{rep.recordId}</span> · {outputLabel(rep.profileId)}{rep.journeyCursor === null ? ' · baseline' : ` · journey event ${rep.journeyCursor + 1}`}</p>}
+        {rec && <p className="cube-rep-note">Representative: {technical || !repName ? <span className="chip code">{rec.recordId}</span> : <span title={rec.recordId}>{repName.name}</span>} · {outputLabel(rec.profileId)}{rec.journeyCursor === null ? ' · baseline' : ` · journey event ${rec.journeyCursor + 1}`}</p>}
         {cell.simulationOnly && <p className="cube-rep-note">AFP is a simulation for review only; no AFP file is offered for download.</p>}
       </div>
     </div>
