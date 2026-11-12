@@ -264,7 +264,7 @@ export function ScenarioLandscape() {
                   </span>
                 </span>
               )}
-              <span className="right ls-sevkeys" aria-label="Severity colour key">
+              <span className="right ls-sevkeys" aria-label="Severity colour key" hidden={view === '2.5d'}>
                 <span className="ls-sevkey ok">✓ none</span><span className="ls-sevkey warning">▲ warning</span><span className="ls-sevkey blocking">■ blocking</span>
               </span>
             </div>

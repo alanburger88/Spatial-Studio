@@ -19,7 +19,7 @@
 .tr-table { table-layout: fixed; width: 100%; }
 .tr-table thead th { position: sticky; top: 0; z-index: 2; background: var(--iss-surface); }
 .tr-table th:nth-child(1) { width: 35%; } .tr-table th:nth-child(2) { width: 34%; } .tr-table th:nth-child(3) { width: 10%; } .tr-table th:nth-child(4) { width: 21%; }
-.tr-table td { vertical-align: top; padding: 8px 10px; white-space: normal; }
+.tr-table td { vertical-align: top; padding: 6px 10px; white-space: normal; }
 .tr-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
 .tr-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .tr-mand { font-size: 10.5px; padding: 0 7px; }
@@ -28,7 +28,7 @@
 .tr-token { background: var(--iss-info-soft); color: var(--iss-info-fg); border: 1px solid var(--iss-info-line); border-radius: 4px; padding: 0 3px; font-family: var(--iss-font-mono); font-size: 11.5px; }
 .tr-meta { display: flex; gap: 4px 12px; flex-wrap: wrap; font-size: 11px; color: var(--iss-text-muted); }
 .tr-warn { color: var(--iss-error-fg); font-weight: 700; }
-.tr-input { min-height: 56px; font-size: 13px; line-height: 1.4; }
+.tr-table .tr-input { min-height: 48px; padding-top: 6px; padding-bottom: 6px; font-size: 13px; line-height: 1.4; }
 .tr-tokenerr, .tr-error { margin-top: 5px; font-size: 12px; line-height: 1.5; }
 .tr-tokenerr { color: var(--iss-warning-fg); }
 .tr-error { color: var(--iss-error-fg); font-weight: 600; }

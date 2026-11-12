@@ -6,6 +6,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import { z } from 'zod';
 import { canonicalJson, customFieldDefs, fieldsFor, projectFields, projectContentDigest, validateRule, csvToRecords, prepareImport, IMPORT_LIMIT, SCHEMA_VERSION, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
+import { diffProjects, checkTestCase, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_MAX, WORKFLOW_ACTIONS, WORKFLOW_LABEL, WORKFLOW_TRANSITIONS, ACTION_LABEL, type TestCaseResult, type WorkflowAction } from '@iss/model';
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
 import { renderPagedDocument, renderInteractiveHtml, compareManifests, afpSimulation, AFP_SIMULATION_LABEL, PAGED_RENDERER_VERSION, HTML_RENDERER_VERSION } from '@iss/renderers';
@@ -19,6 +20,7 @@ import { registerChannelRoutes } from './routes/channels';
 import { registerTranslationRoutes } from './routes/translations';
 import type { RouteDeps } from './routes/deps';
 import { handleMessage, providerConfig, providerStatus, type Proposal } from './assistant';
+import { registerAuth, audit } from './auth';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -49,7 +51,7 @@ function checkDraftProject(p: any, projectId: string): Project {
   return p as Project;
 }
 
-export interface AppOptions { dataDir?: string; logger?: boolean }
+export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides env AUTH=on (tests). */ auth?: boolean }
 
 export async function buildApp(opts: AppOptions = {}) {
   const store = new Store(opts.dataDir ?? process.env.DATA_DIR ?? path.resolve(here, '../../../.data'));
@@ -67,6 +69,11 @@ export async function buildApp(opts: AppOptions = {}) {
     req.log.error({ correlationId, code: err.code, message: String(err.message).slice(0, 300) });
     return reply.status(500).send({ error: { code: 'INTERNAL', message: 'Unexpected server error (details logged without content bodies).', correlationId } });
   });
+
+  /* Accounts, sessions, role checks and the audit trail (auth is off unless AUTH=on; see auth.ts). */
+  const authEnabled = opts.auth ?? process.env.AUTH === 'on';
+  registerAuth(app, { store, ApiError, enabled: authEnabled });
+  const by = (req: FastifyRequest) => (req.user ? { id: req.user.id, name: req.user.name } : null);
 
   const projectOr404 = (id: string) => { const p = store.getProject(id); if (!p) throw new ApiError(404, 'NOT_FOUND', `Unknown project ${id}.`); return p; };
   /** Seeded synthetic fixtures plus any records the user imported locally. */
@@ -134,17 +141,22 @@ export async function buildApp(opts: AppOptions = {}) {
     if (expected !== current.modelVersion) throw new ApiError(409, 'VERSION_CONFLICT', `Project is at version ${current.modelVersion}; you edited version ${expected}.`, { currentVersion: current.modelVersion });
     const incoming = checkDraftProject((req.body as any)?.project ?? req.body, req.params.projectId);
     if (incoming.modelVersion <= current.modelVersion && projectContentDigest(incoming) !== projectContentDigest(current)) incoming.modelVersion = current.modelVersion + 1;
-    const saved = store.putProject(incoming);
+    const wasState = store.getWorkflow(current.projectId).state;
+    const saved = store.putProject(incoming, undefined, { by: by(req) });
+    const changes = diffProjects(current, saved).summary.counts;
+    const workflow = store.getWorkflow(saved.projectId);
+    audit(store, req, 'project.save', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { fromVersion: current.modelVersion, toVersion: saved.modelVersion, contentDigest: projectContentDigest(saved), changes, ...(workflow.state !== wasState ? { workflow: { from: wasState, to: workflow.state } } : {}) } });
     reply.header('ETag', `"${saved.modelVersion}"`);
-    return { project: saved, saved: true, contentDigest: projectContentDigest(saved) };
+    return { project: saved, saved: true, contentDigest: projectContentDigest(saved), workflow: { state: workflow.state, previous: wasState } };
   });
   app.post<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/reset', async (req) => {
     const current = projectOr404(req.params.projectId);
     if ((req.body as any)?.confirm !== true) throw new ApiError(400, 'CONFIRMATION_REQUIRED', 'Reset requires {"confirm": true}.');
     const seed = store.seedFor(req.params.projectId);
     if (!seed) throw new ApiError(400, 'NOT_A_SAMPLE', 'Only approved sample projects can be restored.');
-    const reset = store.putProject({ ...seed, modelVersion: current.modelVersion + 1 }, projectContentDigest(seed));
+    const reset = store.putProject({ ...seed, modelVersion: current.modelVersion + 1 }, projectContentDigest(seed), { by: by(req), label: 'Restored approved sample' });
     if ((req.body as any)?.clearSnapshots !== false) store.clearSnapshots(req.params.projectId);
+    audit(store, req, 'project.reset', { projectId: reset.projectId, modelVersion: reset.modelVersion, detail: { fromVersion: current.modelVersion, seedDigest: projectContentDigest(seed) } });
     return { project: reset, reset: true, seedDigest: projectContentDigest(seed) };
   });
   const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'project';
@@ -156,20 +168,24 @@ export async function buildApp(opts: AppOptions = {}) {
     for (let i = 2; store.getProject(id); i++) id = `${slug(title).slice(0, 36)}-${i}`;
     const { lastSavedAt: _l, ...rest } = src as Project & { lastSavedAt?: string };
     const copy = { ...rest, projectId: id, title, modelVersion: 1, derivedFrom: { projectId: src.projectId, modelVersion: src.modelVersion } } as Project;
-    const saved = store.putProject(copy, projectContentDigest(copy));
+    const saved = store.putProject(copy, projectContentDigest(copy), { by: by(req), label: `Duplicated from “${src.title}” v${src.modelVersion}` });
+    audit(store, req, 'project.duplicate', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { from: src.projectId, fromVersion: src.modelVersion, title } });
     reply.status(201);
     return { project: saved, duplicatedFrom: src.projectId };
   });
   app.patch<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId', async (req) => {
     const current = projectOr404(req.params.projectId);
     const title = cleanTitle((req.body as any)?.title);
-    const saved = store.putProject({ ...current, title, modelVersion: current.modelVersion + 1 });
+    const saved = store.putProject({ ...current, title, modelVersion: current.modelVersion + 1 }, undefined, { by: by(req), label: `Renamed to “${title}”` });
+    audit(store, req, 'project.rename', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { from: current.title, to: title } });
     return { project: saved, renamed: true };
   });
   app.delete<{ Params: { projectId: string } }>('/api/v1/projects/:projectId', async (req) => {
     projectOr404(req.params.projectId);
     if (store.isSample(req.params.projectId)) throw new ApiError(400, 'SAMPLE_PROJECT', 'Approved sample projects cannot be deleted; use Restore approved sample instead.');
+    const gone = projectOr404(req.params.projectId);
     store.deleteProject(req.params.projectId);
+    audit(store, req, 'project.delete', { projectId: gone.projectId, modelVersion: gone.modelVersion, detail: { title: gone.title } });
     return { deleted: true, projectId: req.params.projectId };
   });
 
@@ -178,6 +194,166 @@ export async function buildApp(opts: AppOptions = {}) {
   registerTemplateRoutes(app, deps);
   registerChannelRoutes(app, deps);
   registerTranslationRoutes(app, deps);
+
+  /* ------------------------------------------------ version history, review workflow, comments, audit */
+
+  const versionNum = (v: string) => { const n = Number(v); if (!Number.isInteger(n) || n < 1) throw new ApiError(400, 'INVALID_VERSION', `Not a version number: ${v}.`); return n; };
+  const versionOr404 = (projectId: string, v: string) => { const n = versionNum(v); const found = store.getVersion(projectId, n); if (!found) throw new ApiError(404, 'NOT_FOUND', `Version ${n} of ${projectId} is not in the history.`); return { n, ...found }; };
+
+  app.get<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/versions', async (req) => {
+    const p = projectOr404(req.params.projectId);
+    const events = store.workflowHistory(p.projectId);
+    const versions = store.listVersions(p.projectId).map((v) => ({ ...v, current: v.modelVersion === p.modelVersion, workflow: events.filter((e) => e.modelVersion === v.modelVersion).map((e) => ({ action: e.action, from: e.from, to: e.to, user: e.user, at: e.at })) }));
+    return { projectId: p.projectId, currentVersion: p.modelVersion, versions };
+  });
+  app.get<{ Params: { projectId: string; version: string } }>('/api/v1/projects/:projectId/versions/:version', async (req) => {
+    projectOr404(req.params.projectId);
+    const v = versionOr404(req.params.projectId, req.params.version);
+    return { modelVersion: v.n, contentDigest: v.contentDigest, savedAt: v.savedAt, savedBy: v.savedBy, label: v.label, project: v.project };
+  });
+  app.get<{ Params: { projectId: string; a: string; b: string } }>('/api/v1/projects/:projectId/versions/:a/diff/:b', async (req) => {
+    projectOr404(req.params.projectId);
+    const a = versionOr404(req.params.projectId, req.params.a);
+    const b = versionOr404(req.params.projectId, req.params.b);
+    const meta = (v: typeof a) => ({ modelVersion: v.n, contentDigest: v.contentDigest, savedAt: v.savedAt, savedBy: v.savedBy, label: v.label, title: v.project.title });
+    return { from: meta(a), to: meta(b), diff: diffProjects(a.project, b.project) };
+  });
+  app.post<{ Params: { projectId: string; version: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/versions/:version/restore', async (req) => {
+    const current = projectOr404(req.params.projectId);
+    if ((req.body as any)?.confirm !== true) throw new ApiError(400, 'CONFIRMATION_REQUIRED', 'Restore requires {"confirm": true}.');
+    const ifMatch = req.headers['if-match'];
+    const expected = Number(String(ifMatch ?? '').replace(/"/g, ''));
+    if (!ifMatch || !Number.isInteger(expected)) throw new ApiError(428, 'PRECONDITION_REQUIRED', 'Restore requires If-Match with the project model version you loaded.');
+    if (expected !== current.modelVersion) throw new ApiError(409, 'VERSION_CONFLICT', `Project is at version ${current.modelVersion}; you loaded version ${expected}.`, { currentVersion: current.modelVersion });
+    const v = versionOr404(current.projectId, req.params.version);
+    if (v.n === current.modelVersion) throw new ApiError(400, 'ALREADY_CURRENT', `Version ${v.n} is already the current version.`);
+    const { lastSavedAt: _l, ...content } = v.project as Project & { lastSavedAt?: string };
+    const restored = checkDraftProject({ ...content, projectId: current.projectId, modelVersion: current.modelVersion + 1 }, current.projectId);
+    const saved = store.putProject(restored, undefined, { by: by(req), label: `Restored v${v.n}` });
+    audit(store, req, 'project.restore', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { restoredVersion: v.n, fromVersion: current.modelVersion, contentDigest: projectContentDigest(saved) } });
+    return { project: saved, restored: true, restoredVersion: v.n, contentDigest: projectContentDigest(saved), workflow: { state: store.getWorkflow(saved.projectId).state } };
+  });
+
+  /** Everything that must be true before the saved model can be approved: no blocking issue for any seeded or imported record, every pinned test passing. */
+  function approvalReadiness(project: Project) {
+    const records = allRecords().filter((r) => r.documentType === project.documentType);
+    const groups = new Map<string, { code: string; severity: string; nodeId: string | null; locale: string | null; message: string; source: string; recordIds: string[] }>();
+    const add = (f: { code: string; severity: string; nodeId?: string; locale?: string; message: string; source: string }, recordId: string | null) => {
+      const key = `${f.code}|${f.nodeId ?? ''}|${f.locale ?? ''}|${recordId === null ? f.message : ''}`;
+      const g = groups.get(key) ?? { code: f.code, severity: f.severity, nodeId: f.nodeId ?? null, locale: f.locale ?? null, message: f.message, source: f.source, recordIds: [] };
+      if (recordId && !g.recordIds.includes(recordId)) g.recordIds.push(recordId);
+      groups.set(key, g);
+    };
+    for (const record of records) for (const f of resolve({ project, record }).findings) if (f.severity === 'blocking') add(f, record.recordId);
+    for (const f of [...staticRuleAnalysis(project, allRecords()), ...bindingAnalysis(project)]) if (f.severity === 'blocking') add(f, null);
+    const tests: Array<TestCaseResult & { error?: string }> = (project.testCases ?? []).map((tc) => {
+      const record = allRecords().find((r) => r.recordId === tc.recordId);
+      if (!record || record.documentType !== project.documentType) return { id: tc.id, name: tc.name, recordId: tc.recordId, passed: false, failures: [], error: `Record ${tc.recordId} is not available.` };
+      const res = resolve({ project, record, overrides: tc.overrides ?? {}, journeyCursor: tc.journeyCursor ?? null });
+      return checkTestCase(tc, { selectedVariants: res.result.selectedVariants, visibleNodeIds: res.semanticManifest.visibleNodeIds, locale: res.locale, blockingCount: blocking(res).length });
+    });
+    const issues = [...groups.values()];
+    const failedTests = tests.filter((t) => !t.passed);
+    return { ready: issues.length === 0 && failedTests.length === 0, modelVersion: project.modelVersion, recordsChecked: records.length, blocking: issues, tests, testsRun: tests.length, testsFailed: failedTests.length };
+  }
+
+  function workflowView(project: Project, req: FastifyRequest, withChecks: boolean) {
+    const wf = store.getWorkflow(project.projectId);
+    const readiness = withChecks ? approvalReadiness(project) : null;
+    const role = req.user?.role ?? null;
+    const actions = WORKFLOW_ACTIONS.map((action) => {
+      const t = WORKFLOW_TRANSITIONS[action];
+      const stateProblem = transitionProblem(wf.state, action);
+      const roleProblem = roleCan(role, t.permission) ? null : `Your role (${role ?? 'none'}) cannot ${ACTION_LABEL[action].toLowerCase()}.`;
+      const checkProblem = action === 'approve' && readiness && !readiness.ready ? 'Approval is blocked until every blocking issue is fixed and every test passes.' : null;
+      return { action, label: ACTION_LABEL[action], to: t.to, available: !stateProblem, allowed: !stateProblem && !roleProblem && !checkProblem, reason: stateProblem ?? roleProblem ?? checkProblem };
+    }).filter((a) => a.available);
+    return { projectId: project.projectId, modelVersion: project.modelVersion, state: wf.state, label: WORKFLOW_LABEL[wf.state], stateVersion: wf.modelVersion, updatedAt: wf.updatedAt, updatedBy: wf.updatedBy, actions, history: store.workflowHistory(project.projectId, 100), readiness };
+  }
+
+  app.get<{ Params: { projectId: string }; Querystring: { checks?: string } }>('/api/v1/projects/:projectId/workflow', async (req) => {
+    const p = projectOr404(req.params.projectId);
+    return workflowView(p, req, req.query.checks !== '0');
+  });
+  app.post<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/workflow', async (req) => {
+    const p = projectOr404(req.params.projectId);
+    const action = String((req.body as any)?.action ?? '') as WorkflowAction;
+    const t = WORKFLOW_TRANSITIONS[action];
+    if (!t) throw new ApiError(400, 'INVALID_ACTION', `action must be one of ${WORKFLOW_ACTIONS.join(', ')}.`);
+    const rawComment = (req.body as any)?.comment;
+    const comment = rawComment === undefined || rawComment === null ? '' : sanitizeCommentBody(rawComment);
+    if (comment.length > COMMENT_MAX) throw new ApiError(400, 'COMMENT_TOO_LONG', `Comments are limited to ${COMMENT_MAX} characters.`);
+    if (!roleCan(req.user?.role, t.permission)) throw new ApiError(403, 'FORBIDDEN', req.user?.role === 'reviewer' && action !== 'request_changes' ? 'Reviewers can comment and request changes, but not approve, publish or submit.' : `Your role cannot ${ACTION_LABEL[action].toLowerCase()}.`, { role: req.user?.role, needs: t.permission });
+    const wf = store.getWorkflow(p.projectId);
+    const problem = transitionProblem(wf.state, action);
+    if (problem) throw new ApiError(409, 'INVALID_TRANSITION', problem, { state: wf.state });
+    if (action === 'approve') {
+      const readiness = approvalReadiness(p);
+      if (!readiness.ready) throw new ApiError(422, 'APPROVAL_BLOCKED', `Cannot approve: ${readiness.blocking.length} blocking issue${readiness.blocking.length === 1 ? '' : 's'} and ${readiness.testsFailed} failing test${readiness.testsFailed === 1 ? '' : 's'} in the saved model (v${p.modelVersion}).`, { readiness });
+    }
+    if (action === 'request_changes' && !comment) throw new ApiError(400, 'COMMENT_REQUIRED', 'Say what needs to change.');
+    const { from, to } = store.setWorkflow(p.projectId, action, t.to, p.modelVersion, projectContentDigest(p), by(req), comment || null);
+    audit(store, req, `workflow.${action}`, { projectId: p.projectId, modelVersion: p.modelVersion, detail: { from, to, withComment: !!comment } });
+    return workflowView(p, req, false);
+  });
+
+  /* Comments pinned to components (plain text only). */
+  const commentOr404 = (projectId: string, id: string) => { const c = store.getComment(id); if (!c || c.projectId !== projectId) throw new ApiError(404, 'NOT_FOUND', 'Unknown comment.'); return c; };
+  app.get<{ Params: { projectId: string }; Querystring: { nodeId?: string; status?: string } }>('/api/v1/projects/:projectId/comments', async (req) => {
+    const p = projectOr404(req.params.projectId);
+    const all = store.listComments(p.projectId, req.query.nodeId || undefined);
+    const roots = all.filter((c) => !c.parentId);
+    const status = req.query.status ?? 'all';
+    const keep = new Set(roots.filter((r) => status === 'all' || (status === 'open' ? !r.resolvedAt : !!r.resolvedAt)).map((r) => r.id));
+    const comments = all.filter((c) => keep.has(c.parentId ?? c.id)).map((c) => ({ ...c, mine: c.author === req.user?.id }));
+    return { comments, counts: { open: roots.filter((r) => !r.resolvedAt).length, resolved: roots.filter((r) => !!r.resolvedAt).length } };
+  });
+  app.post<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/comments', async (req, reply) => {
+    const p = projectOr404(req.params.projectId);
+    const b = (req.body ?? {}) as { nodeId?: unknown; body?: unknown; parentId?: unknown };
+    const body = sanitizeCommentBody(b.body);
+    if (!body) throw new ApiError(400, 'EMPTY_COMMENT', 'Write a comment first.');
+    if (body.length > COMMENT_MAX) throw new ApiError(400, 'COMMENT_TOO_LONG', `Comments are limited to ${COMMENT_MAX} characters.`);
+    let nodeId = typeof b.nodeId === 'string' ? b.nodeId : '';
+    let parentId: string | null = null;
+    if (b.parentId !== undefined && b.parentId !== null) {
+      const parent = commentOr404(p.projectId, String(b.parentId));
+      parentId = parent.parentId ?? parent.id;
+      nodeId = parent.nodeId;
+    } else if (!p.nodes.some((n) => n.id === nodeId)) throw new ApiError(400, 'UNKNOWN_NODE', `No component ${nodeId || '(none)'} in ${p.projectId}.`);
+    const c = store.addComment({ id: `cmt-${randomUUID().slice(0, 12)}`, projectId: p.projectId, nodeId, parentId, body, author: req.user?.id ?? 'unknown', authorName: req.user?.name ?? 'Unknown', modelVersion: p.modelVersion });
+    audit(store, req, parentId ? 'comment.reply' : 'comment.create', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { commentId: c.id, nodeId, parentId, length: body.length } });
+    reply.status(201);
+    return { comment: { ...c, mine: true } };
+  });
+  app.post<{ Params: { projectId: string; commentId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/comments/:commentId/resolve', async (req) => {
+    const p = projectOr404(req.params.projectId);
+    const c = commentOr404(p.projectId, req.params.commentId);
+    const root = c.parentId ? commentOr404(p.projectId, c.parentId) : c;
+    const resolved = (req.body as any)?.resolved !== false;
+    const out = store.setCommentResolved(root.id, resolved, req.user?.name ?? null);
+    audit(store, req, resolved ? 'comment.resolve' : 'comment.reopen', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { commentId: root.id, nodeId: root.nodeId } });
+    return { comment: { ...out, mine: out.author === req.user?.id } };
+  });
+  app.delete<{ Params: { projectId: string; commentId: string } }>('/api/v1/projects/:projectId/comments/:commentId', async (req) => {
+    const p = projectOr404(req.params.projectId);
+    const c = commentOr404(p.projectId, req.params.commentId);
+    if (c.author !== req.user?.id && req.user?.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'You can only delete your own comments.');
+    const removed = store.deleteComment(c.id);
+    audit(store, req, 'comment.delete', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { commentId: c.id, nodeId: c.nodeId, removed } });
+    return { deleted: true, removed };
+  });
+
+  /* Audit log: who did what, when (no content bodies). */
+  app.get<{ Querystring: { projectId?: string; user?: string; action?: string; since?: string; before?: string; limit?: string } }>('/api/v1/audit', async (req) => {
+    const q = req.query;
+    const limit = Math.min(Math.max(Number(q.limit ?? 100) || 100, 1), 500);
+    if (q.since && Number.isNaN(Date.parse(q.since))) throw new ApiError(400, 'INVALID_REQUEST', 'since must be an ISO date.');
+    const events = store.listAudit({ projectId: q.projectId || undefined, user: q.user || undefined, action: q.action || undefined, since: q.since ? new Date(q.since).toISOString() : undefined, before: q.before ? Number(q.before) : undefined, limit: limit + 1 });
+    const more = events.length > limit;
+    const page = events.slice(0, limit);
+    return { events: page, nextBefore: more ? page[page.length - 1].id : null, actors: store.auditActors(), authEnabled };
+  });
 
   /* Image asset library: PNG/JPEG/WebP only (checked by magic bytes), ≤ 280 KB so the data URI stays within the renderer's embed limit. */
   const ASSET_MAX = 280 * 1024;
@@ -213,6 +389,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const name = String(b.name ?? 'image').replace(/[^\w .()-]/g, '').slice(0, 80) || 'image';
     const [w, h] = dims(bytes, mime);
     const asset = store.addAsset(name, mime, bytes, w, h);
+    audit(store, req, 'asset.upload', { detail: { assetId: asset.assetId, name, mime, size: bytes.length, duplicate: asset.duplicate } });
     reply.status(asset.duplicate ? 200 : 201);
     return { asset, dataUri: `data:${mime};base64,${bytes.toString('base64')}` };
   });
@@ -231,8 +408,9 @@ export async function buildApp(opts: AppOptions = {}) {
     return reply.send(bytes);
   });
   app.delete<{ Params: { assetId: string } }>('/api/v1/assets/:assetId', async (req) => {
-    assetOr404(req.params.assetId);
+    const gone = assetOr404(req.params.assetId);
     store.deleteAsset(req.params.assetId);
+    audit(store, req, 'asset.delete', { detail: { assetId: gone.assetId, name: gone.name } });
     return { deleted: true, note: 'Documents that already use this image keep their embedded copy.' };
   });
 
@@ -255,13 +433,14 @@ export async function buildApp(opts: AppOptions = {}) {
     if (!outputs.length) throw new ApiError(400, 'INVALID_REQUEST', 'outputs must include pdf and/or html (AFP is simulation-only).');
     if (batches.list().some((j) => j.status === 'running')) throw new ApiError(409, 'BATCH_RUNNING', 'Another batch is still running; wait for it or cancel it.');
     const job = batches.start(project, records, outputs, !!b.includeBlocked);
+    audit(store, req, 'batch.start', { projectId: project.projectId, modelVersion: project.modelVersion, detail: { batchId: job.batchId, records: records.length, outputs, includeBlocked: !!b.includeBlocked, unsavedModel: !!b.project } });
     reply.status(202);
     return { batch: job };
   });
   app.get('/api/v1/batches', async () => ({ batches: batches.list().map(({ items, ...j }) => j) }));
   const batchOr404 = (id: string) => { const j = batches.get(id); if (!j) throw new ApiError(404, 'NOT_FOUND', `Unknown batch ${id}.`); return j; };
   app.get<{ Params: { batchId: string } }>('/api/v1/batches/:batchId', async (req) => ({ batch: batchOr404(req.params.batchId) }));
-  app.post<{ Params: { batchId: string } }>('/api/v1/batches/:batchId/cancel', async (req) => { batchOr404(req.params.batchId); return { batch: batches.cancel(req.params.batchId) }; });
+  app.post<{ Params: { batchId: string } }>('/api/v1/batches/:batchId/cancel', async (req) => { const j = batchOr404(req.params.batchId); audit(store, req, 'batch.cancel', { projectId: j.projectId, modelVersion: j.modelVersion, detail: { batchId: j.batchId } }); return { batch: batches.cancel(req.params.batchId) }; });
   app.get<{ Params: { batchId: string } }>('/api/v1/batches/:batchId/zip', async (req, reply) => {
     const j = batchOr404(req.params.batchId);
     const zip = batches.readZip(j.batchId);
@@ -295,9 +474,15 @@ export async function buildApp(opts: AppOptions = {}) {
     const rows = prepareImport(items, documentType, store.nextImportNumber(documentType), extra);
     const ok = rows.filter((r) => r.record).map((r) => r.record!);
     if (!b.dryRun && ok.length) store.addImportedRecords(ok);
+    if (b.dryRun) req.audited = true;
+    else audit(store, req, 'records.import', { projectId: target?.projectId ?? null, detail: { documentType, format: b.format === 'csv' ? 'csv' : 'json', imported: ok.length, rejected: rows.length - ok.length, recordIds: ok.slice(0, 20).map((r) => r.recordId) } });
     return { documentType, dryRun: !!b.dryRun, imported: ok.map((r) => ({ recordId: r.recordId, sourceId: r.sourceId ?? null, name: `${r.customer.givenName} ${r.customer.familyName}` })), rejected: rows.filter((r) => !r.record).map(({ row, sourceId, errors }) => ({ row, sourceId, errors })), total: items.length };
   });
-  app.delete<{ Querystring: { documentType?: string } }>('/api/v1/records/imported', async (req) => ({ removed: store.clearImportedRecords(req.query.documentType) }));
+  app.delete<{ Querystring: { documentType?: string } }>('/api/v1/records/imported', async (req) => {
+    const removed = store.clearImportedRecords(req.query.documentType);
+    audit(store, req, 'records.clear', { detail: { documentType: req.query.documentType ?? 'all', removed } });
+    return { removed };
+  });
 
   app.get<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/schemas', async (req) => {
     const p = projectOr404(req.params.projectId);
@@ -428,7 +613,7 @@ export async function buildApp(opts: AppOptions = {}) {
     return { snapshots: snaps, issued, preview, policy: project.journey.snapshotPolicy };
   });
   app.get<{ Querystring: { projectId: string; recordId?: string } }>('/api/v1/snapshots', async (req) => ({ snapshots: store.listSnapshots(req.query.projectId, req.query.recordId) }));
-  app.post('/api/v1/snapshots/reset', async (req) => { const b = req.body as any; if (b?.confirm !== true) throw new ApiError(400, 'CONFIRMATION_REQUIRED', 'Requires {"confirm": true}.'); store.clearSnapshots(String(b.projectId)); return { cleared: true }; });
+  app.post('/api/v1/snapshots/reset', async (req) => { const b = req.body as any; if (b?.confirm !== true) throw new ApiError(400, 'CONFIRMATION_REQUIRED', 'Requires {"confirm": true}.'); store.clearSnapshots(String(b.projectId)); audit(store, req, 'snapshots.reset', { projectId: String(b.projectId) }); return { cleared: true }; });
 
   app.post('/api/v1/scenarios/generate', async (req) => {
     const b = req.body as any;
