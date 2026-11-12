@@ -1,6 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
+import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
+// Loaded via require so test bundlers that do not know the newer node:sqlite builtin leave it alone.
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
 import { projectContentDigest, sha256Hex, type Project } from '@iss/model';
 import { seedProjects } from '@iss/model/fixtures';
 
@@ -9,7 +12,7 @@ import { seedProjects } from '@iss/model/fixtures';
  * PostgreSQL implementation can replace it later. Artifacts are stored on disk by content hash.
  */
 export class Store {
-  db: DatabaseSync;
+  db: DatabaseSyncT;
   artifactDir: string;
   constructor(dataDir: string) {
     mkdirSync(dataDir, { recursive: true });

@@ -3,184 +3,336 @@
   "updatedBy": "implementation-agent",
   "tests": {
     "AT-01": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-02.png"
+      ],
+      "notes": "Browser: record, profile, selection and node IDs/digest identical after reload."
     },
     "AT-02": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-02.png"
+      ],
+      "notes": "HTML5 drag of C02 from palette after greeting \u2192 INSERT_NODE (v+1); edited in TipTap; saved via PUT; API returns node with content."
     },
     "AT-03": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-02.png"
+      ],
+      "notes": "C06 inserted, set fixed, keyboard nudge (1/10 pt), corner-handle resize, align centre; undo/redo verified; HTML profile geometry untouched. Unit test covers per-profile persistence."
     },
     "AT-04": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-02.png"
+      ],
+      "notes": "Drag onto protected disclosure shows reason inline + toast; model digest and version unchanged. Unit test asserts rejection."
     },
     "AT-05": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-02.png"
+      ],
+      "notes": "Token picker inserts allowlisted {{customer.givenName}}; renders \"Jordan\"; Data tab lineage cites customer.givenName."
     },
     "AT-06": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-09.png"
+      ],
+      "notes": "Unknown {{customer.secretScore}} in header text \u2192 INVALID_BINDING in inspector and in /validate bindings suite."
     },
     "AT-07": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-03.png"
+      ],
+      "notes": "Three variants (two with typed inline conditions) added to a new C10; editor lists 3; Exploded shows 3 panels. Unit test verifies inline-condition resolution."
     },
     "AT-08": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-03.png",
+        "reports/evidence/manifests/card-assistance.json"
+      ],
+      "notes": "CARD-0001\u2192CARD-0002: R04 selected; explanation cites card.assistanceRequested = true. Matches oracle golden card-assistance."
     },
     "AT-09": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-09.png"
+      ],
+      "notes": "D01 rule patch via editor: EXCLUSIVE_PRIORITY_TIE (R03,R04) blocking; selected variant null; Exploded shows Unresolved. Golden card-tie-defect matches."
     },
     "AT-10": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-07.png"
+      ],
+      "notes": "Fallback removed + no matching rule \u2192 NO_VARIANT_MATCH blocking (UI + unit test)."
     },
     "AT-11": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/manifests/card-standard.json"
+      ],
+      "notes": "Chart kind bar\u2192donut changes model digest but resolved money map and content digest are identical (browser + unit test)."
     },
     "AT-12": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-03.png"
+      ],
+      "notes": "Explore variants \u2192 select payment-reminder panel \u2192 Collapse: design canvas shows payment-guidance still selected."
     },
     "AT-13": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-03.png"
+      ],
+      "notes": "prefers-reduced-motion context: 3 expand/collapse cycles, model digest unchanged; flat alternative lists 5 variant cards."
     },
     "AT-14": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-04.png"
+      ],
+      "notes": "Cube axes persona \u00d7 language \u00d7 journey via selects; flat table shows es-US and Day 30 labels; store axes updated. Unit test: 350 scenarios, duplicate axis rejected."
     },
     "AT-15": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-04.png"
+      ],
+      "notes": "Empty intersection selected \u2192 \"No matching fixture\"; open-representative disabled; no fabricated output."
     },
     "AT-16": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-05.png"
+      ],
+      "notes": "70 evaluated / 70 planned; \u03a3 clusters = 70 reconciles; synthetic label visible. Unit test checks both projects and 350 with journey states."
     },
     "AT-17": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-05.png"
+      ],
+      "notes": "Show defects only reduces to clusters with recorded findings (each row shows blocking/warning)."
     },
     "AT-18": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/exports/card-250-rows.pdf",
+        "reports/evidence/manifests/card-250-rows.json"
+      ],
+      "notes": "Real composer: 8 measured pages = 8 PDF page objects; STRESS-0001..0250 all present in PDF text; \"(continued)\" heading repeated on pages 2\u20138; $508.00 total."
     },
     "AT-19": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-06.png"
+      ],
+      "notes": "flowContinuation=false with 250 rows \u2192 FLOW_OVERFLOW_NO_CONTINUATION (page 1, 245 rows clipped) from the browser paginator; node id shown."
     },
     "AT-20": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-09.png"
+      ],
+      "notes": "es-US: PDF export 422 with REQUIRED_TRANSLATION_MISSING for billing-summary, payment-due, payment-standard, sample-disclosure-set (matches golden); Validate shows it. No machine translation."
     },
     "AT-21": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-08.png"
+      ],
+      "notes": "Day 30 \u2192 payment-reminder; issued Day-1 snapshot sha256 unchanged (server write-once store, verified)."
     },
     "AT-22": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-08.png"
+      ],
+      "notes": "Day 45 \u2192 payment-assistance-requested; explanation cites R04 and the assistance.requested event."
     },
     "AT-23": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-08.png"
+      ],
+      "notes": "Event reordered via SET_JOURNEY; replay shows precondition skip; two server replays produce identical digests."
     },
     "AT-24": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/exports/card-standard.pdf",
+        "reports/evidence/manifests/card-standard.json"
+      ],
+      "notes": "%PDF-, 2 pages (artifact pageCount matches), text contains 1842, $1,248.00, Jordan Mercer (pdfjs extraction)."
     },
     "AT-25": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/exports/card-assistance.html"
+      ],
+      "notes": "Exported standalone HTML: sort changes order, filter shows \"N of 45\", details expands; tfoot total 46000 cents unchanged."
     },
     "AT-26": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/manifests/card-standard.json",
+        "reports/evidence/manifests/eob-covered.json",
+        "reports/evidence/screens/screen-10.png"
+      ],
+      "notes": "Parity manifests extracted from real PDF DOM and HTML DOM: 9/9 checks match for card and EOB; allowed differences documented."
     },
     "AT-27": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/manifests/card-standard.json",
+        "reports/evidence/screens/screen-10.png"
+      ],
+      "notes": "compose/afp-sim returns JSON simulationOnly:true, afpBytesGenerated 0; UI label \"AFP simulation only \u2014 no MO:DCA / AFP print stream generated\"; no .afp link."
     },
     "AT-28": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/exports/eob-covered.pdf",
+        "reports/evidence/manifests/eob-covered.json"
+      ],
+      "notes": "EOB-0001 facts reconcile (400 = 150 + 250; 250 = 200 + 50); PDF text contains THIS IS NOT A BILL and all amounts."
     },
     "AT-29": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/exports/eob-under-review.pdf",
+        "reports/evidence/manifests/eob-under-review.json"
+      ],
+      "notes": "Golden eob-unconfirmed-liability diagnostics match; compose blocked 422; author-inserted \"Amount you owe\" metric \u2192 UNCONFIRMED_DEBT_LANGUAGE blocking; member liability rendered \"Not determined \u2014 under review\"."
     },
     "AT-30": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-12.png"
+      ],
+      "notes": "Assistant select_scenario CARD-0002 validated and applied; explanation evidence from resolver trace cites R04."
     },
     "AT-31": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-12.png"
+      ],
+      "notes": "Proposal R04 priority 420 declined: model digest and version unchanged (UI proof + API decision recorded, re-decision 409)."
     },
     "AT-32": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-12.png"
+      ],
+      "notes": "Forced offline: \"Guided Assistant (offline)\" badge; scripted grammar produced typed overrides; engine preview shows payment-assistance-requested. Live provider path NOT exercised (no key configured)."
     },
     "AT-33": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-03.png"
+      ],
+      "notes": "Keyboard only: layers tree arrows + Enter select payment-guidance; Explore variants; flat alternative; variant chosen via Enter; explanation visible."
     },
     "AT-34": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-09.png"
+      ],
+      "notes": "Validate runs axe-core on exported HTML + model checks; findings carry node ids; note states not WCAG certification. Exported HTML currently axe-clean except heading-order warnings in some scenarios."
     },
     "AT-35": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-01.png"
+      ],
+      "notes": "Edit saved, reload persists (align centre); Restore approved sample returns seed (align left)."
     },
     "AT-36": {
-      "status": "NOT_RUN",
-      "evidence": [],
-      "notes": ""
+      "status": "PASS",
+      "evidence": [
+        "reports/evidence/e2e-results.json",
+        "reports/evidence/logs/verify-all.txt",
+        "reports/evidence/screens/screen-11.png"
+      ],
+      "notes": "Guided demo run twice end-to-end: 12/12 checkpoints each, identical checkpoint digests; reset returns clean state (no overrides, baseline cursor, seed model)."
     }
   }
 }

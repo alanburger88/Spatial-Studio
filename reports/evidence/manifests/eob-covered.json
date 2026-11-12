@@ -1,0 +1,457 @@
+{
+  "name": "eob-covered",
+  "projectId": "harborcare-demo",
+  "recordId": "EOB-0001",
+  "runId": "run-3abdbacfe5e7c0c0",
+  "contentDigest": "d4bf3615d766de77f9d311e2fdb6625e1cdfe4461b995e31f929fe29524db5aa",
+  "rulesDigest": "9084048d24809ad9f65eb94d2a5db0269f1c9bb1b000ea3db90f2c73f172e5f4",
+  "modelVersion": 97,
+  "engine": "iss-resolver/1.0.0",
+  "result": {
+    "recordId": "EOB-0001",
+    "documentType": "eob",
+    "selectedVariants": {
+      "eob-claim-message": "eob-covered"
+    },
+    "matchedRuleIds": [
+      "R13",
+      "R18",
+      "R20"
+    ],
+    "additiveRuleIds": [
+      "R18"
+    ],
+    "requiredNodes": [
+      "claim-identifiers",
+      "not-a-bill-banner",
+      "totals-and-terms"
+    ],
+    "diagnostics": [],
+    "documentFacts": {
+      "claimId": "HC-10428",
+      "billedCents": 40000,
+      "allowedCents": 25000,
+      "planPaidCents": 20000,
+      "patientResponsibilityCents": 5000,
+      "liabilityConfirmed": true,
+      "notABill": true
+    },
+    "resultDigest": "2b6505afb78c64afe99c85c3dbd1ea2b63b704d58288680ec65930ab60115d3c"
+  },
+  "trace": [
+    {
+      "ruleId": "R13",
+      "matched": true,
+      "outcome": "selected",
+      "inputs": {
+        "claim.status": "processed-covered"
+      }
+    },
+    {
+      "ruleId": "R14",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "claim.status": "processed-covered"
+      }
+    },
+    {
+      "ruleId": "R15",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "claim.status": "processed-covered"
+      }
+    },
+    {
+      "ruleId": "R16",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "claim.network": "in-network"
+      }
+    },
+    {
+      "ruleId": "R17",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "claim.deductibleAppliedCents": 0
+      }
+    },
+    {
+      "ruleId": "R18",
+      "matched": true,
+      "outcome": "applied",
+      "inputs": {
+        "claim.patientResponsibilityCents": 5000,
+        "claim.liabilityConfirmed": true
+      }
+    },
+    {
+      "ruleId": "R19",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "claims.count": 1
+      }
+    },
+    {
+      "ruleId": "R20",
+      "matched": true,
+      "outcome": "required",
+      "inputs": {
+        "documentType": "eob"
+      }
+    }
+  ],
+  "semanticManifest": {
+    "schema": "semantic-manifest/1",
+    "producer": "resolver",
+    "projectId": "harborcare-demo",
+    "modelVersion": 97,
+    "recordId": "EOB-0001",
+    "documentType": "eob",
+    "locale": "en-US",
+    "selectedVariants": {
+      "eob-claim-message": "eob-covered"
+    },
+    "requiredNodeIds": [
+      "claim-identifiers",
+      "not-a-bill-banner",
+      "totals-and-terms"
+    ],
+    "visibleNodeIds": [
+      "allowed-amount",
+      "appeal-action",
+      "billed-amount",
+      "claim-chart",
+      "claim-glossary",
+      "claim-identifiers",
+      "claim-table",
+      "customer-address",
+      "document-header",
+      "eob-claim-message",
+      "issuer-logo",
+      "member-responsibility",
+      "member-responsibility-summary",
+      "not-a-bill-banner",
+      "page-footer",
+      "plan-paid",
+      "running-header",
+      "statement-title",
+      "totals-and-terms"
+    ],
+    "money": {
+      "billed-amount": 40000,
+      "allowed-amount": 25000,
+      "plan-paid": 20000,
+      "member-responsibility": 5000
+    },
+    "guardedLiabilityNodeIds": [],
+    "disclosures": [
+      {
+        "nodeId": "not-a-bill-banner",
+        "contentPartId": "not-a-bill-banner",
+        "version": 1,
+        "contentHash": "daa533bc07d72052"
+      },
+      {
+        "nodeId": "totals-and-terms",
+        "contentPartId": "totals-and-terms",
+        "version": 1,
+        "contentHash": "6f8283f52fab6af7"
+      }
+    ],
+    "identity": {
+      "name": "Morgan Lee",
+      "memberId": "HC-MBR-8000"
+    },
+    "tableRows": {
+      "claim-table": 1
+    },
+    "tableTotalsCents": {
+      "claim-table": 40000
+    },
+    "actions": [
+      {
+        "nodeId": "appeal-action",
+        "url": "https://example.com/harborcare/claims"
+      }
+    ],
+    "facts": {
+      "claimId": "HC-10428",
+      "billedCents": 40000,
+      "allowedCents": 25000,
+      "planPaidCents": 20000,
+      "patientResponsibilityCents": 5000,
+      "liabilityConfirmed": true,
+      "notABill": true
+    }
+  },
+  "composition": {
+    "engine": "iss-paged-composer/1",
+    "pageCount": 2,
+    "pdfPageCount": 2,
+    "pages": [
+      {
+        "index": 1,
+        "nodeIds": [
+          "not-a-bill-banner",
+          "claim-identifiers",
+          "claim-facts",
+          "eob-claim-message",
+          "member-responsibility-summary",
+          "claim-chart",
+          "claim-table",
+          "claim-glossary",
+          "appeal-action"
+        ],
+        "fixedNodeIds": [
+          "issuer-logo",
+          "document-header",
+          "statement-title",
+          "customer-address",
+          "header-rule",
+          "page-footer"
+        ],
+        "tables": {
+          "claim-table": {
+            "rows": 1,
+            "firstRowId": "HC-10428",
+            "lastRowId": "HC-10428",
+            "continued": false,
+            "headerRepeated": false
+          }
+        },
+        "flowTopPt": 184,
+        "flowBottomPt": 738,
+        "usedPt": 551.3
+      },
+      {
+        "index": 2,
+        "nodeIds": [
+          "totals-and-terms"
+        ],
+        "fixedNodeIds": [
+          "running-header",
+          "page-footer"
+        ],
+        "tables": {},
+        "flowTopPt": 84,
+        "flowBottomPt": 738,
+        "usedPt": 28.5
+      }
+    ],
+    "diagnostics": [],
+    "durationMs": 5
+  },
+  "pdf": {
+    "file": "exports/eob-covered.pdf",
+    "sha256": "4cc784de106a4bf91a568a40e2a87e47738a5b0641431c90da071fb5358faa16",
+    "pageCount": 2,
+    "artifactId": "art-pdf-4cc784de106a4bf9",
+    "wallMs": 139
+  },
+  "html": {
+    "file": "exports/eob-covered.html",
+    "sha256": "2d6ebdefe17708af1ad0d4a49f98bca707376ba1eedc268e98e7d3f5e4c3ab35"
+  },
+  "parity": {
+    "ok": true,
+    "checks": [
+      {
+        "id": "selected-variants",
+        "label": "Selected variants",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "eob-claim-message": "eob-covered"
+        },
+        "pdf": {
+          "eob-claim-message": "eob-covered"
+        },
+        "html": {
+          "eob-claim-message": "eob-covered"
+        }
+      },
+      {
+        "id": "money",
+        "label": "Monetary values (integer cents) by node",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "billed-amount": 40000,
+          "allowed-amount": 25000,
+          "plan-paid": 20000,
+          "member-responsibility": 5000
+        },
+        "pdf": {
+          "billed-amount": 40000,
+          "allowed-amount": 25000,
+          "plan-paid": 20000,
+          "member-responsibility": 5000
+        },
+        "html": {
+          "billed-amount": 40000,
+          "allowed-amount": 25000,
+          "plan-paid": 20000,
+          "member-responsibility": 5000
+        }
+      },
+      {
+        "id": "member-liability",
+        "label": "Guarded (unconfirmed) member liability",
+        "status": "match",
+        "blocking": true,
+        "expected": [],
+        "pdf": [],
+        "html": []
+      },
+      {
+        "id": "disclosures",
+        "label": "Mandatory disclosures (id, version, content hash)",
+        "status": "match",
+        "blocking": true,
+        "expected": [
+          {
+            "nodeId": "not-a-bill-banner",
+            "contentPartId": "not-a-bill-banner",
+            "version": 1,
+            "contentHash": "daa533bc07d72052"
+          },
+          {
+            "nodeId": "totals-and-terms",
+            "contentPartId": "totals-and-terms",
+            "version": 1,
+            "contentHash": "6f8283f52fab6af7"
+          }
+        ],
+        "pdf": [
+          {
+            "nodeId": "not-a-bill-banner",
+            "contentPartId": "not-a-bill-banner",
+            "version": 1,
+            "contentHash": "daa533bc07d72052"
+          },
+          {
+            "nodeId": "totals-and-terms",
+            "contentPartId": "totals-and-terms",
+            "version": 1,
+            "contentHash": "6f8283f52fab6af7"
+          }
+        ],
+        "html": [
+          {
+            "nodeId": "not-a-bill-banner",
+            "contentPartId": "not-a-bill-banner",
+            "version": 1,
+            "contentHash": "daa533bc07d72052"
+          },
+          {
+            "nodeId": "totals-and-terms",
+            "contentPartId": "totals-and-terms",
+            "version": 1,
+            "contentHash": "6f8283f52fab6af7"
+          }
+        ]
+      },
+      {
+        "id": "required-nodes",
+        "label": "Required semantic nodes present",
+        "status": "match",
+        "blocking": true,
+        "expected": [
+          "claim-identifiers",
+          "not-a-bill-banner",
+          "totals-and-terms"
+        ],
+        "pdf": [
+          "claim-identifiers",
+          "not-a-bill-banner",
+          "totals-and-terms"
+        ],
+        "html": [
+          "claim-identifiers",
+          "not-a-bill-banner",
+          "totals-and-terms"
+        ]
+      },
+      {
+        "id": "table-rows",
+        "label": "Table row counts",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "claim-table": 1
+        },
+        "pdf": {
+          "claim-table": 1
+        },
+        "html": {
+          "claim-table": 1
+        }
+      },
+      {
+        "id": "table-totals",
+        "label": "Table totals (cents)",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "claim-table": 40000
+        },
+        "pdf": {
+          "claim-table": 40000
+        },
+        "html": {
+          "claim-table": 40000
+        }
+      },
+      {
+        "id": "identity",
+        "label": "Customer identity",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "name": "Morgan Lee",
+          "memberId": "HC-MBR-8000"
+        },
+        "pdf": {
+          "name": "Morgan Lee",
+          "memberId": "HC-MBR-8000"
+        },
+        "html": {
+          "name": "Morgan Lee",
+          "memberId": "HC-MBR-8000"
+        }
+      },
+      {
+        "id": "actions",
+        "label": "Action destinations",
+        "status": "match",
+        "blocking": false,
+        "expected": [
+          "https://example.com/harborcare/claims"
+        ],
+        "pdf": [
+          "https://example.com/harborcare/claims"
+        ],
+        "html": [
+          "https://example.com/harborcare/claims"
+        ],
+        "note": "HTML renders an active link; PDF prints the URL/QR fallback."
+      }
+    ],
+    "allowedDifferences": [
+      "HTML profile omits presentation-only nodes: running-header",
+      "Page geometry, page count and pagination differ by design (paged vs responsive).",
+      "HTML adds sorting, filtering, expandable explanations and chart tooltips; PDF shows explanations expanded."
+    ]
+  },
+  "afpSimulation": {
+    "simulationOnly": true,
+    "afpBytesGenerated": 0,
+    "label": "AFP simulation only — no MO:DCA / AFP print stream generated",
+    "pageCount": 2
+  }
+}

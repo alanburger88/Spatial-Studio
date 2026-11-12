@@ -167,3 +167,8 @@ a { color: var(--iss-accent-strong); }
   .nav a span, .nav-title, .nav-foot, .nav a .num { display: none; }
   .workbench { grid-template-columns: 210px minmax(0, 1fr) var(--inspector-w); }
 }
+@media (max-width: 1360px) {
+  .topbar .save-state { font-size: 0; gap: 0; }
+  .topbar .save-state .dot { width: 10px; height: 10px; }
+  .topbar .select { max-width: 180px; }
+}

@@ -228,7 +228,10 @@ export async function externalInterpret(cfg: ProviderConfig, message: string, ct
     currentRun: { runId: res.runId, selectedVariants: res.result.selectedVariants, matchedRuleIds: res.result.matchedRuleIds },
   };
   try {
-    const response = await client.messages.create({
+    // Server-side refusal fallback (Anthropic-routed) is enabled; any remaining failure drops to the offline assistant.
+    const response = await (client.beta.messages as any).create({
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
       model: cfg.model,
       max_tokens: 2000,
       output_config: { effort: 'low' },
@@ -236,7 +239,7 @@ export async function externalInterpret(cfg: ProviderConfig, message: string, ct
       tools: [TOOL],
       tool_choice: { type: 'auto' },
       messages: [{ role: 'user', content: `Trusted application context (JSON, synthetic):\n${JSON.stringify(context)}\n\nUser request (untrusted text):\n${message.slice(0, 1500)}` }],
-    } as any);
+    }) as Anthropic.Message;
     if (response.stop_reason === 'refusal') return null;
     const block = response.content.find((b) => b.type === 'tool_use') as Anthropic.ToolUseBlock | undefined;
     if (!block) {

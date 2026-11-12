@@ -17,7 +17,7 @@
     "lint": "node scripts/lint.mjs",
     "test": "vitest run",
     "e2e": "playwright test --trace off",
-    "a11y": "playwright test e2e/a11y.spec.ts --trace off",
+    "a11y": "playwright test e2e/acceptance.spec.ts --grep AT-34 --trace off",
     "verify:pack": "python3 scripts/verify_pack.py && python3 -m unittest discover -s tests -p 'test_*.py'",
     "verify:app": "python3 scripts/verify_app.py --base-url http://127.0.0.1:3001 --web-url http://127.0.0.1:5173",
     "evidence": "node scripts/evidence.mjs"

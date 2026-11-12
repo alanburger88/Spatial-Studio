@@ -1,0 +1,62 @@
+[
+  {
+    "name": "card-standard",
+    "recordId": "CARD-0001",
+    "selected": {
+      "payment-guidance": "payment-standard"
+    },
+    "rules": "R01 R12",
+    "pages": 2,
+    "pdfPages": 2,
+    "parity": true,
+    "pdfMs": 184
+  },
+  {
+    "name": "card-assistance",
+    "recordId": "CARD-0002",
+    "selected": {
+      "payment-guidance": "payment-assistance-requested"
+    },
+    "rules": "R04 R06 R10 R12",
+    "pages": 3,
+    "pdfPages": 3,
+    "parity": true,
+    "pdfMs": 180
+  },
+  {
+    "name": "card-250-rows",
+    "recordId": "CARD-0001",
+    "selected": {
+      "payment-guidance": "payment-standard"
+    },
+    "rules": "R01 R10 R12",
+    "pages": 8,
+    "pdfPages": 8,
+    "parity": true,
+    "pdfMs": 369
+  },
+  {
+    "name": "eob-covered",
+    "recordId": "EOB-0001",
+    "selected": {
+      "eob-claim-message": "eob-covered"
+    },
+    "rules": "R13 R18 R20",
+    "pages": 2,
+    "pdfPages": 2,
+    "parity": true,
+    "pdfMs": 139
+  },
+  {
+    "name": "eob-under-review",
+    "recordId": "EOB-0002",
+    "selected": {
+      "eob-claim-message": "eob-review-needed"
+    },
+    "rules": "R14 R20",
+    "pages": 1,
+    "pdfPages": 1,
+    "parity": true,
+    "pdfMs": 126
+  }
+]

@@ -1,0 +1,150 @@
+test_250_rows_preserve_purchase_sum (test_oracle.OracleTests.test_250_rows_preserve_purchase_sum) ... ok
+test_all_twelve_named_goldens_are_stable (test_oracle.OracleTests.test_all_twelve_named_goldens_are_stable) ... ok
+test_eob_unconfirmed_patient_liability_blocked (test_oracle.OracleTests.test_eob_unconfirmed_patient_liability_blocked) ... ok
+test_exclusive_selection_by_priority (test_oracle.OracleTests.test_exclusive_selection_by_priority) ... ok
+test_golden_digest_recomputes (test_oracle.OracleTests.test_golden_digest_recomputes) ... ok
+test_missing_translation_is_blocking (test_oracle.OracleTests.test_missing_translation_is_blocking) ... ok
+test_reference_resolver_does_not_mutate_record (test_oracle.OracleTests.test_reference_resolver_does_not_mutate_record) ... ok
+test_all_36_acceptances_are_unique (test_pack_contract.PackContractTests.test_all_36_acceptances_are_unique) ... ok
+test_all_screen_routes_and_test_ids (test_pack_contract.PackContractTests.test_all_screen_routes_and_test_ids) ... ok
+test_fixture_counts_and_ids (test_pack_contract.PackContractTests.test_fixture_counts_and_ids) ... ok
+test_project_refs_and_component_catalog (test_pack_contract.PackContractTests.test_project_refs_and_component_catalog) ... ok
+test_rule_ast_and_target_integrity (test_pack_contract.PackContractTests.test_rule_ast_and_target_integrity) ... ok
+test_synthetic_financial_reconciliation (test_pack_contract.PackContractTests.test_synthetic_financial_reconciliation) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.033s
+
+OK
+PACK VALIDATION: PASS — inputs, test oracle, contracts and reference assets only. APP NOT YET VERIFIED.
+PASS actual API health
+PASS two seeded projects
+PASS resolver card-standard
+PASS resolver card-assistance
+PASS resolver eob-covered
+PASS resolver eob-under-review
+PASS resolver card-missed-first
+PASS resolver card-assistance-requested
+PASS resolver card-arrangement-approved
+PASS resolver card-spanish-missing-mandatory-translation
+PASS resolver card-inconsistent-payment-state
+PASS resolver eob-unconfirmed-liability
+PASS resolver card-250-rows
+PASS pdf real binary/text export
+PASS html real binary/text export
+PASS 250-row actual PDF continuation
+PASS AFP explicitly simulation only
+PASS actual web frontend reachable
+APP VERIFICATION: 18 pass, 0 fail. This is smoke verification, not the complete acceptance suite.
+
+> infoslips-spatial-studio@0.1.0 lint /home/user/Spatial-Studio
+> node scripts/lint.mjs
+
+✓ typecheck
+✓ guardrails (59 files)
+
+> infoslips-spatial-studio@0.1.0 typecheck /home/user/Spatial-Studio
+> tsc -p tsconfig.json --noEmit
+
+
+> infoslips-spatial-studio@0.1.0 test /home/user/Spatial-Studio
+> vitest run
+
+
+ RUN  v2.1.8 /home/user/Spatial-Studio
+
+ ✓ packages/model/test/commands.test.ts (7 tests) 55ms
+ ✓ packages/renderers/test/renderers.test.ts (5 tests) 71ms
+(node:20271) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ packages/resolver/test/golden.test.ts (13 tests) 92ms
+ ✓ apps/api/test/api.test.ts (7 tests) 552ms
+   ✓ API contract > assistant: allowlist, offline grammar, proposals never mutate, decline recorded 320ms
+ ✓ packages/scenarios/test/scenarios.test.ts (8 tests) 2210ms
+   ✓ scenario intelligence > cube intersections come from resolution; empty intersections are honest (AT-14/AT-15) 1519ms
+   ✓ scenario intelligence > landscape cluster sizes reconcile to the evaluated universe (AT-16) and defects are real (AT-17) 630ms
+
+ Test Files  5 passed (5)
+      Tests  40 passed (40)
+   Start at  12:43:25
+   Duration  3.21s (transform 912ms, setup 0ms, collect 3.12s, tests 2.98s, environment 1ms, prepare 415ms)
+
+
+> infoslips-spatial-studio@0.1.0 e2e /home/user/Spatial-Studio
+> playwright test --trace off
+
+
+Running 49 tests using 1 worker
+
+  ✓   1 e2e/acceptance.spec.ts:17:1 › AT-01 open Aster and reload: same node IDs, record, selection and profile persist (1.4s)
+  ✓   2 e2e/acceptance.spec.ts:33:1 › AT-02 drag C02 Rich Text into the flow region; saved model contains a real editable node (1.5s)
+  ✓   3 e2e/acceptance.spec.ts:58:1 › AT-03 resize, align and nudge a C06 Bound Field; undo/redo restores geometry (1.6s)
+  ✓   4 e2e/acceptance.spec.ts:89:1 › AT-04 dropping into a protected disclosure is blocked with a reason; model unchanged (1.1s)
+  ✓   5 e2e/acceptance.spec.ts:100:1 › AT-05 insert {{customer.givenName}} token: fixture value renders with correct lineage (1.3s)
+  ✓   6 e2e/acceptance.spec.ts:116:1 › AT-06 unknown token path is caught by binding validation (1.1s)
+  ✓   7 e2e/acceptance.spec.ts:129:1 › AT-07 create 3 variants for a Conditional Region; all appear in editor and Exploded view (5.4s)
+  ✓   8 e2e/acceptance.spec.ts:151:1 › AT-08 switch persona P01 → P04: assistance variant selected and trace explains why (1.3s)
+  ✓   9 e2e/acceptance.spec.ts:160:1 › AT-09 forced R03/R04 tie at equal priority is a blocking finding with no winner (1.6s)
+  ✓  10 e2e/acceptance.spec.ts:171:1 › AT-10 removing the exclusive fallback with no rule match is a blocking no-match (938ms)
+  ✓  11 e2e/acceptance.spec.ts:178:1 › AT-11 unrelated chart style change leaves financial digest values unchanged (1.1s)
+  ✓  12 e2e/acceptance.spec.ts:194:1 › AT-12 select a variant in Exploded, return to Design: same semantic node selected (3.3s)
+  ✓  13 e2e/acceptance.spec.ts:207:1 › AT-13 repeated expand/collapse under reduced motion: no lost edits, flat alternative works (3.0s)
+  ✓  14 e2e/acceptance.spec.ts:228:1 › AT-14 Cube persona × language × journey recomputes intersections, labels and filters (5.2s)
+  ✓  15 e2e/acceptance.spec.ts:238:1 › AT-15 Cube empty intersection shows an honest "No matching fixture" state (5.3s)
+  ✓  16 e2e/acceptance.spec.ts:247:1 › AT-16 Landscape cluster counts reconcile with seeded records; synthetic label visible (1.1s)
+  ✓  17 e2e/acceptance.spec.ts:255:1 › AT-17 Landscape "show defects only" contains only scenarios with recorded findings (1.2s)
+  ✓  18 e2e/acceptance.spec.ts:267:1 › AT-18 250-row card scenario: real continuation pages with repeated headings (3.2s)
+  ✓  19 e2e/acceptance.spec.ts:286:1 › AT-19 disabling continuation on an overflowing region yields a real overflow finding (2.5s)
+  ✓  20 e2e/acceptance.spec.ts:296:1 › AT-20 es-US with missing required copy is a blocking error; no silent translation (1.7s)
+  ✓  21 e2e/acceptance.spec.ts:307:1 › AT-21/AT-22 Day 30 then Day 45 events: future previews change; Day 1 issued snapshot unchanged (1.8s)
+  ✓  22 e2e/acceptance.spec.ts:325:1 › AT-23 reorder and replay an event: new deterministic snapshot sequence matches evaluated state (1.0s)
+  ✓  23 e2e/acceptance.spec.ts:339:1 › AT-24 PDF from CARD-0001: valid PDF, account suffix, $1,248 total, pages recorded (196ms)
+  ✓  24 e2e/acceptance.spec.ts:354:1 › AT-25 interactive HTML from the same run: sort, filter, expand; totals preserved (543ms)
+  ✓  25 e2e/acceptance.spec.ts:377:1 › AT-26 PDF/HTML semantic manifests: disclosures and amounts match; differences documented (1.6s)
+  ✓  26 e2e/acceptance.spec.ts:389:1 › AT-27 AFP simulation: no AFP binary; explicit simulation warning visible (1.1s)
+  ✓  27 e2e/acceptance.spec.ts:403:1 › AT-28 EOB-0001: billed/allowed/plan/member reconcile; NOT A BILL visible (885ms)
+  ✓  28 e2e/acceptance.spec.ts:415:1 › AT-29 EOB-0002 with "$300 owed" and unconfirmed liability is blocked by domain validation (912ms)
+  ✓  29 e2e/acceptance.spec.ts:436:1 › AT-30 ask AI to select the assistance persona: validated tool call; trace from engine (818ms)
+  ✓  30 e2e/acceptance.spec.ts:449:1 › AT-31 AI proposes a rule change; declining leaves the approved model version unchanged (1.1s)
+  ✓  31 e2e/acceptance.spec.ts:462:1 › AT-32 provider disconnected: labelled offline fallback still performs scenario/trace actions (864ms)
+  ✓  32 e2e/acceptance.spec.ts:475:1 › AT-33 keyboard: navigate node tree and spatial alternative without the 3D camera (1.5s)
+  ✓  33 e2e/acceptance.spec.ts:492:1 › AT-34 automated accessibility checks: results with source nodes; no certification claim (1.6s)
+  ✓  34 e2e/acceptance.spec.ts:500:1 › AT-35 reload after edit and save: edit persists; default fixture can be restored (2.0s)
+  ✓  35 e2e/acceptance.spec.ts:518:1 › AT-36 Guided demo start → finish → reset twice: no stale state, deterministic replay (24.7s)
+  ✓  36 tests/e2e/critical_path.spec.ts:5:1 › Aster loads real editable model, save and spatial continuity (2.3s)
+  ✓  37 tests/e2e/critical_path.spec.ts:15:1 › Real PDF export produces document bytes (161ms)
+  ✓  38 tests/e2e/screen_routes.spec.ts:9:3 › screen S01: Project Gallery (752ms)
+  ✓  39 tests/e2e/screen_routes.spec.ts:9:3 › screen S02: 2D Design Studio (767ms)
+  ✓  40 tests/e2e/screen_routes.spec.ts:9:3 › screen S03: Exploded Document (1.2s)
+  ✓  41 tests/e2e/screen_routes.spec.ts:9:3 › screen S04: Document Cube (5.0s)
+  ✓  42 tests/e2e/screen_routes.spec.ts:9:3 › screen S05: Scenario Landscape (1.1s)
+  ✓  43 tests/e2e/screen_routes.spec.ts:9:3 › screen S06: Page Composition Stack (683ms)
+  ✓  44 tests/e2e/screen_routes.spec.ts:9:3 › screen S07: Rules & Data (767ms)
+  ✓  45 tests/e2e/screen_routes.spec.ts:9:3 › screen S08: Journey Simulator (707ms)
+  ✓  46 tests/e2e/screen_routes.spec.ts:9:3 › screen S09: Validate & Compare (613ms)
+  ✓  47 tests/e2e/screen_routes.spec.ts:9:3 › screen S10: Preview & Export (589ms)
+  ✓  48 tests/e2e/screen_routes.spec.ts:9:3 › screen S11: Guided Demo (613ms)
+  ✓  49 tests/e2e/screen_routes.spec.ts:9:3 › screen S12: AI Assistant (623ms)
+
+  49 passed (1.7m)
+
+> infoslips-spatial-studio@0.1.0 build /home/user/Spatial-Studio
+> pnpm --filter @iss/web build
+
+
+> @iss/web@0.1.0 build /home/user/Spatial-Studio/apps/web
+> vite build
+
+vite v6.0.5 building for production...
+transforming...
+✓ 203 modules transformed.
+[plugin:vite:reporter] [plugin vite:reporter] 
+(!) /home/user/Spatial-Studio/packages/scenarios/src/index.ts is dynamically imported by /home/user/Spatial-Studio/apps/web/src/demo/demo.ts but also statically imported by /home/user/Spatial-Studio/apps/web/src/demo/demo.ts, /home/user/Spatial-Studio/apps/web/src/screens/DocumentCube.tsx, /home/user/Spatial-Studio/apps/web/src/screens/JourneySimulator.tsx, /home/user/Spatial-Studio/apps/web/src/screens/RulesData.tsx, /home/user/Spatial-Studio/apps/web/src/screens/ScenarioLandscape.tsx, /home/user/Spatial-Studio/apps/web/src/state/store.ts, dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.91 kB │ gzip:   0.52 kB
+dist/assets/index-WjEyd0_D.css   90.75 kB │ gzip:  17.88 kB
+dist/assets/index-0rWiEL88.js   972.70 kB │ gzip: 302.54 kB │ map: 3,454.52 kB
+✓ built in 4.40s
+EXIT 0

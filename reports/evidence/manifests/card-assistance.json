@@ -1,0 +1,517 @@
+{
+  "name": "card-assistance",
+  "projectId": "aster-card-demo",
+  "recordId": "CARD-0002",
+  "runId": "run-1c6bebd19f27efdc",
+  "contentDigest": "900bb19ead0672b799c6c6da09b758aba066dadc60e4ea9c2d473cefafb446c4",
+  "rulesDigest": "66a1591e0926e1f990ad80dce344c39ed395d153b02c22a300f1774cddafa393",
+  "modelVersion": 117,
+  "engine": "iss-resolver/1.0.0",
+  "result": {
+    "recordId": "CARD-0002",
+    "documentType": "credit-statement",
+    "selectedVariants": {
+      "payment-guidance": "payment-assistance-requested"
+    },
+    "matchedRuleIds": [
+      "R04",
+      "R06",
+      "R10",
+      "R12"
+    ],
+    "additiveRuleIds": [
+      "R06",
+      "R10"
+    ],
+    "requiredNodes": [
+      "billing-summary",
+      "payment-due",
+      "sample-disclosure-set"
+    ],
+    "diagnostics": [],
+    "documentFacts": {
+      "newBalanceCents": 246000,
+      "minimumDueCents": 9400,
+      "transactionCount": 45
+    },
+    "resultDigest": "4096c2e2c42f179774ced19132af351b3b64818a3e6f57153f9f7bcfb696f3ed"
+  },
+  "trace": [
+    {
+      "ruleId": "R01",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.paymentStatus": "overdue"
+      }
+    },
+    {
+      "ruleId": "R02",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.missedPayments": 2
+      }
+    },
+    {
+      "ruleId": "R03",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.missedPayments": 2,
+        "card.assistanceRequested": true
+      }
+    },
+    {
+      "ruleId": "R04",
+      "matched": true,
+      "outcome": "selected",
+      "inputs": {
+        "card.assistanceRequested": true
+      }
+    },
+    {
+      "ruleId": "R05",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.arrangementStatus": "none"
+      }
+    },
+    {
+      "ruleId": "R06",
+      "matched": true,
+      "outcome": "applied",
+      "inputs": {
+        "card.tier": "premium"
+      }
+    },
+    {
+      "ruleId": "R07",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "customer.locale": "en-US"
+      }
+    },
+    {
+      "ruleId": "R08",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.channelPreference": "email"
+      }
+    },
+    {
+      "ruleId": "R09",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.channelPreference": "email"
+      }
+    },
+    {
+      "ruleId": "R10",
+      "matched": true,
+      "outcome": "applied",
+      "inputs": {
+        "card.transactions.count": 45
+      }
+    },
+    {
+      "ruleId": "R11",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.rewardsBalance": 0
+      }
+    },
+    {
+      "ruleId": "R12",
+      "matched": true,
+      "outcome": "required",
+      "inputs": {
+        "documentType": "credit-statement"
+      }
+    },
+    {
+      "ruleId": "high-volume-note:high-volume-help",
+      "matched": true,
+      "outcome": "selected",
+      "inputs": {
+        "card.transactions.count": 45
+      }
+    }
+  ],
+  "semanticManifest": {
+    "schema": "semantic-manifest/1",
+    "producer": "resolver",
+    "projectId": "aster-card-demo",
+    "modelVersion": 117,
+    "recordId": "CARD-0002",
+    "documentType": "credit-statement",
+    "locale": "en-US",
+    "selectedVariants": {
+      "payment-guidance": "payment-assistance-requested"
+    },
+    "requiredNodeIds": [
+      "billing-summary",
+      "payment-due",
+      "sample-disclosure-set"
+    ],
+    "visibleNodeIds": [
+      "available-credit",
+      "billing-summary",
+      "customer-address",
+      "document-header",
+      "fees-interest",
+      "greeting",
+      "high-volume-note",
+      "interest-explainer",
+      "issuer-logo",
+      "page-footer",
+      "payment-action",
+      "payment-due",
+      "payment-due-date",
+      "payment-guidance",
+      "payment-qr",
+      "payments-credits",
+      "previous-balance",
+      "purchases-total",
+      "relationship-manager",
+      "running-header",
+      "sample-disclosure-set",
+      "spend-chart",
+      "statement-title",
+      "transaction-table"
+    ],
+    "money": {
+      "billing-summary": 246000,
+      "payment-due": 9400,
+      "available-credit": 554000,
+      "previous-balance": 220000,
+      "purchases-total": 46000,
+      "payments-credits": 20000,
+      "fees-interest": 0
+    },
+    "guardedLiabilityNodeIds": [],
+    "disclosures": [
+      {
+        "nodeId": "sample-disclosure-set",
+        "contentPartId": "sample-disclosure-set",
+        "version": 1,
+        "contentHash": "91249b11f4427414"
+      }
+    ],
+    "identity": {
+      "name": "Taylor Rivers",
+      "account": "•••• 9027",
+      "statementDate": "2026-11-01"
+    },
+    "tableRows": {
+      "transaction-table": 45
+    },
+    "tableTotalsCents": {
+      "transaction-table": 46000
+    },
+    "actions": [
+      {
+        "nodeId": "payment-action",
+        "url": "https://example.com/aster/payments"
+      }
+    ],
+    "facts": {
+      "newBalanceCents": 246000,
+      "minimumDueCents": 9400,
+      "transactionCount": 45
+    }
+  },
+  "composition": {
+    "engine": "iss-paged-composer/1",
+    "pageCount": 3,
+    "pdfPageCount": 3,
+    "pages": [
+      {
+        "index": 1,
+        "nodeIds": [
+          "greeting",
+          "account-summary",
+          "balance-breakdown",
+          "payment-guidance",
+          "relationship-manager",
+          "high-volume-note",
+          "payment-actions",
+          "spend-chart",
+          "transaction-table"
+        ],
+        "fixedNodeIds": [
+          "issuer-logo",
+          "document-header",
+          "statement-title",
+          "customer-address",
+          "header-rule",
+          "page-footer"
+        ],
+        "tables": {
+          "transaction-table": {
+            "rows": 1,
+            "firstRowId": "T-002-0001",
+            "lastRowId": "T-002-0001",
+            "continued": false,
+            "headerRepeated": false
+          }
+        },
+        "flowTopPt": 184,
+        "flowBottomPt": 738,
+        "usedPt": 540
+      },
+      {
+        "index": 2,
+        "nodeIds": [
+          "transaction-table"
+        ],
+        "fixedNodeIds": [
+          "running-header",
+          "page-footer"
+        ],
+        "tables": {
+          "transaction-table": {
+            "rows": 37,
+            "firstRowId": "T-002-0002",
+            "lastRowId": "T-002-0038",
+            "continued": true,
+            "headerRepeated": true
+          }
+        },
+        "flowTopPt": 84,
+        "flowBottomPt": 738,
+        "usedPt": 639
+      },
+      {
+        "index": 3,
+        "nodeIds": [
+          "transaction-table",
+          "interest-explainer",
+          "sample-disclosure-set"
+        ],
+        "fixedNodeIds": [
+          "running-header",
+          "page-footer"
+        ],
+        "tables": {
+          "transaction-table": {
+            "rows": 7,
+            "firstRowId": "T-002-0039",
+            "lastRowId": "T-002-0045",
+            "continued": true,
+            "headerRepeated": true
+          }
+        },
+        "flowTopPt": 84,
+        "flowBottomPt": 738,
+        "usedPt": 285
+      }
+    ],
+    "diagnostics": [],
+    "durationMs": 14
+  },
+  "pdf": {
+    "file": "exports/card-assistance.pdf",
+    "sha256": "8c8e9b7be4946575cc1a88d3397299bc9d8e4305f82424e677f701505708376d",
+    "pageCount": 3,
+    "artifactId": "art-pdf-8c8e9b7be4946575",
+    "wallMs": 180
+  },
+  "html": {
+    "file": "exports/card-assistance.html",
+    "sha256": "60644be7e6e5097df9031de50adc037e5568b15518828dc738c3c6d46e12e103"
+  },
+  "parity": {
+    "ok": true,
+    "checks": [
+      {
+        "id": "selected-variants",
+        "label": "Selected variants",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "payment-guidance": "payment-assistance-requested"
+        },
+        "pdf": {
+          "payment-guidance": "payment-assistance-requested"
+        },
+        "html": {
+          "payment-guidance": "payment-assistance-requested"
+        }
+      },
+      {
+        "id": "money",
+        "label": "Monetary values (integer cents) by node",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "billing-summary": 246000,
+          "payment-due": 9400,
+          "available-credit": 554000,
+          "previous-balance": 220000,
+          "purchases-total": 46000,
+          "payments-credits": 20000,
+          "fees-interest": 0
+        },
+        "pdf": {
+          "billing-summary": 246000,
+          "payment-due": 9400,
+          "available-credit": 554000,
+          "previous-balance": 220000,
+          "purchases-total": 46000,
+          "payments-credits": 20000,
+          "fees-interest": 0
+        },
+        "html": {
+          "billing-summary": 246000,
+          "payment-due": 9400,
+          "available-credit": 554000,
+          "previous-balance": 220000,
+          "purchases-total": 46000,
+          "payments-credits": 20000,
+          "fees-interest": 0
+        }
+      },
+      {
+        "id": "member-liability",
+        "label": "Guarded (unconfirmed) member liability",
+        "status": "match",
+        "blocking": true,
+        "expected": [],
+        "pdf": [],
+        "html": []
+      },
+      {
+        "id": "disclosures",
+        "label": "Mandatory disclosures (id, version, content hash)",
+        "status": "match",
+        "blocking": true,
+        "expected": [
+          {
+            "nodeId": "sample-disclosure-set",
+            "contentPartId": "sample-disclosure-set",
+            "version": 1,
+            "contentHash": "91249b11f4427414"
+          }
+        ],
+        "pdf": [
+          {
+            "nodeId": "sample-disclosure-set",
+            "contentPartId": "sample-disclosure-set",
+            "version": 1,
+            "contentHash": "91249b11f4427414"
+          }
+        ],
+        "html": [
+          {
+            "nodeId": "sample-disclosure-set",
+            "contentPartId": "sample-disclosure-set",
+            "version": 1,
+            "contentHash": "91249b11f4427414"
+          }
+        ]
+      },
+      {
+        "id": "required-nodes",
+        "label": "Required semantic nodes present",
+        "status": "match",
+        "blocking": true,
+        "expected": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "pdf": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "html": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ]
+      },
+      {
+        "id": "table-rows",
+        "label": "Table row counts",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "transaction-table": 45
+        },
+        "pdf": {
+          "transaction-table": 45
+        },
+        "html": {
+          "transaction-table": 45
+        }
+      },
+      {
+        "id": "table-totals",
+        "label": "Table totals (cents)",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "transaction-table": 46000
+        },
+        "pdf": {
+          "transaction-table": 46000
+        },
+        "html": {
+          "transaction-table": 46000
+        }
+      },
+      {
+        "id": "identity",
+        "label": "Customer identity",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "name": "Taylor Rivers",
+          "account": "•••• 9027"
+        },
+        "pdf": {
+          "name": "Taylor Rivers",
+          "account": "•••• 9027"
+        },
+        "html": {
+          "name": "Taylor Rivers",
+          "account": "•••• 9027"
+        }
+      },
+      {
+        "id": "actions",
+        "label": "Action destinations",
+        "status": "match",
+        "blocking": false,
+        "expected": [
+          "https://example.com/aster/payments"
+        ],
+        "pdf": [
+          "https://example.com/aster/payments"
+        ],
+        "html": [
+          "https://example.com/aster/payments"
+        ],
+        "note": "HTML renders an active link; PDF prints the URL/QR fallback."
+      }
+    ],
+    "allowedDifferences": [
+      "HTML profile omits presentation-only nodes: payment-qr, running-header",
+      "Page geometry, page count and pagination differ by design (paged vs responsive).",
+      "HTML adds sorting, filtering, expandable explanations and chart tooltips; PDF shows explanations expanded."
+    ]
+  },
+  "afpSimulation": {
+    "simulationOnly": true,
+    "afpBytesGenerated": 0,
+    "label": "AFP simulation only — no MO:DCA / AFP print stream generated",
+    "pageCount": 3
+  }
+}

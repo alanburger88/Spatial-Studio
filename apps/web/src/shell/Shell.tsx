@@ -96,8 +96,8 @@ function TopBar() {
             <button className="btn icon" onClick={redo} disabled={!future} aria-label={`Redo (${future} available)`} title="Redo (Ctrl+Y)" data-testid="redo"><Icon.redo /></button>
             <button className={`btn${dirty ? ' primary' : ''}`} onClick={() => save()} disabled={saving} data-testid="save-project" title="Save (Ctrl+S)"><Icon.save /> {saving ? 'Saving…' : 'Save'}</button>
           </div>
-          <span className={`save-state${dirty ? ' dirty' : ''}`} data-testid="save-state" aria-live="polite"><span className="dot" />{dirty ? 'Unsaved changes' : 'Saved'} · v{project.modelVersion}</span>
-          <Link className="btn ghost" to={`/studio/${project.projectId}/demo`}><Icon.demo /> Demo</Link>
+          <span className={`save-state${dirty ? ' dirty' : ''}`} data-testid="save-state" aria-live="polite" title={dirty ? 'Unsaved changes' : 'Saved'}><span className="dot" />{dirty ? 'Unsaved changes' : 'Saved'} · v{project.modelVersion}</span>
+          <Link className="btn ghost icon" to={`/studio/${project.projectId}/demo`} aria-label="Guided demo" title="Guided demo"><Icon.demo /></Link>
         </div>
       )}
     </header>
