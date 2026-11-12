@@ -65,6 +65,60 @@ export function qrSvg(url: string, sizePt = 72): string {
   return `<svg class="iss-qr" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dim} ${dim}" width="${sizePt}pt" height="${sizePt}pt" role="img" aria-label="QR code for ${esc(url)}" shape-rendering="crispEdges"><rect width="${dim}" height="${dim}" fill="#fff"/><path d="${cells.join('')}" fill="#0F172A"/></svg>`;
 }
 
+/* ------------------------------------------------------ styles and brand (A4) */
+
+const styleIdCache = new WeakMap<Project, Map<string, string>>();
+function styleIdOf(project: Project, nodeId: string): string | undefined {
+  if (!project.styles?.length) return undefined;
+  let m = styleIdCache.get(project);
+  if (!m) {
+    const known = new Set(project.styles.map((s) => s.id));
+    m = new Map();
+    for (const nd of project.nodes) if (nd.styleId && known.has(nd.styleId) && /^[a-z][a-z0-9-]*$/.test(nd.styleId)) m.set(nd.id, nd.styleId);
+    styleIdCache.set(project, m);
+  }
+  return m.get(nodeId);
+}
+
+export const BRAND_FONTS: Record<string, string> = {
+  Arial: `Arial, "Liberation Sans", Helvetica, sans-serif`,
+  Georgia: `Georgia, "Liberation Serif", "Times New Roman", serif`,
+  Verdana: `Verdana, "DejaVu Sans", Geneva, sans-serif`,
+  'Trebuchet MS': `"Trebuchet MS", "DejaVu Sans", Verdana, sans-serif`,
+};
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
+
+/** CSS generated from project.styles (`.iss-st-<id>`) and project.brand (`--iss-brand-*`). Empty when neither is set. */
+export function projectStyleCss(project?: Project): string {
+  if (!project) return '';
+  let css = '';
+  const b = project.brand;
+  if (b && HEX6.test(b.primary) && HEX6.test(b.accent)) {
+    const text = b.text && HEX6.test(b.text) ? b.text : undefined;
+    const font = b.fontFamily && BRAND_FONTS[b.fontFamily] ? BRAND_FONTS[b.fontFamily] : undefined;
+    css += `:root{--iss-brand-primary:${b.primary};--iss-brand-accent:${b.accent};${text ? `--iss-brand-text:${text};--ink:${text};--body:${text};` : ''}${font ? `--iss-brand-font:${font};` : ''}--accent:${b.primary};--brand:${b.accent}}\n`;
+    css += `.iss-head{border-top-color:var(--brand)}.iss-hf--page-footer{border-top-color:var(--brand)}.iss-shell a:not(.iss-button){color:var(--accent)}\n`;
+    if (font || text) css += `.page,.pv-page,.iss-shell{${font ? 'font-family:var(--iss-brand-font);' : ''}${text ? 'color:var(--iss-brand-text);' : ''}}\n`;
+  }
+  for (const st of project.styles ?? []) {
+    if (!/^[a-z][a-z0-9-]*$/.test(st.id)) continue;
+    const c = `.iss-st-${st.id}.iss-st-${st.id}`;
+    const d: string[] = [];
+    if (st.fontSizePt !== undefined) d.push(`font-size:${Number(st.fontSizePt)}pt`);
+    if (st.fontWeight !== undefined) d.push(`font-weight:${Number(st.fontWeight)}`);
+    if (st.italic) d.push('font-style:italic');
+    if (st.color && HEX6.test(st.color)) d.push(`color:${st.color}`);
+    if (st.lineHeight !== undefined) d.push(`line-height:${Number(st.lineHeight)}`);
+    if (st.uppercase) d.push('text-transform:uppercase');
+    if (d.length) css += `${c},${c} *{${d.join(';')}}\n`;
+    const sp: string[] = [];
+    if (st.kind === 'paragraph' && st.spaceBeforePt !== undefined) sp.push(`margin-top:${Number(st.spaceBeforePt)}pt`);
+    if (st.kind === 'paragraph' && st.spaceAfterPt !== undefined) sp.push(`margin-bottom:${Number(st.spaceAfterPt)}pt`);
+    if (sp.length) css += `${c}{${sp.join(';')}}\n`;
+  }
+  return css;
+}
+
 const CHART_COLORS = ['#277656', '#4EAF60', '#80D100', '#1D5941', '#94A3B8', '#DBE64C'];
 
 export function chartSvg(node: RNode, interactive: boolean): string {
@@ -99,6 +153,14 @@ export interface RenderMode {
 
 /** Common semantic markup for one node (without the outer flow/fixed positioning wrapper). */
 export function nodeInnerHtml(n: RNode, mode: RenderMode, renderChild: (c: RNode) => string): string {
+  const html = nodeInnerHtmlBase(n, mode, renderChild);
+  const sid = styleIdOf(mode.project, n.id);
+  if (!sid) return html;
+  // Text style (A4): add the generated class to the node's root element.
+  return html.replace(/^<([a-z0-9]+) class="/, `<$1 class="iss-st-${sid} `);
+}
+
+function nodeInnerHtmlBase(n: RNode, mode: RenderMode, renderChild: (c: RNode) => string): string {
   const accent = mode.project.issuer?.accent ?? '#277656';
   switch (n.type) {
     case 'container': {
@@ -148,8 +210,11 @@ export function nodeInnerHtml(n: RNode, mode: RenderMode, renderChild: (c: RNode
     case 'chart':
       return `<figure class="iss-figure"><figcaption class="iss-chart-title">${esc(n.chart!.title)}</figcaption>${chartSvg(n, mode.target === 'html')}<p class="iss-sr">${esc(n.chart!.summary)}</p></figure>`;
     case 'image': {
-      const src = imageSrc(n.image!.src, accent);
-      return src ? `<img class="iss-img" src="${src}" alt="${esc(n.image!.alt)}" style="object-fit:${esc(n.image!.fit)}"/>` : `<div class="iss-img-missing">Image unavailable</div>`;
+      const brand = mode.project.brand;
+      const useBrandLogo = !!brand?.logoDataUri && n.image!.src.startsWith('asset:');
+      const src = imageSrc(useBrandLogo ? brand!.logoDataUri! : n.image!.src, accent);
+      const alt = useBrandLogo ? (brand!.logoAlt ?? n.image!.alt) : n.image!.alt;
+      return src ? `<img class="iss-img" src="${src}" alt="${esc(alt)}" style="object-fit:${esc(n.image!.fit)}"/>` : `<div class="iss-img-missing">Image unavailable</div>`;
     }
     case 'shape': {
       const s = n.shape!;

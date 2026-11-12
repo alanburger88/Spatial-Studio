@@ -9,6 +9,7 @@ import { C, Icon } from '../ui/icons';
 import { PagePreview, PT, PAGE_W_PT, PAGE_H_PT, type NodeInteraction } from '../doc/PagePreview';
 import { Inspector } from './design/Inspector';
 import { RichTextEditor } from './design/RichTextEditor';
+import { StylesBrandDialog } from './design/StylesBrand';
 import './DesignStudio.css';
 
 const SCROLL_PAD_X = 20, SCROLL_PAD_Y = 16;
@@ -56,6 +57,7 @@ export function DesignStudio() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [transient, setTransient] = useState<NodeInteraction['transient']>({});
   const [zoom, setZoom] = useState<number | null>(null);
+  const [stylesOpen, setStylesOpen] = useState(false);
   const [grid, setGrid] = useState(false);
   const [snap, setSnap] = useState(true);
   const [device, setDevice] = useState<1200 | 768 | 390>(1200);
@@ -299,6 +301,7 @@ export function DesignStudio() {
               <button className="btn sm" aria-pressed={showHidden} onClick={toggleHidden} data-testid="toggle-hidden-sections" aria-label="Show hidden sections" title={`Show hidden sections as ghosts in the page (${hiddenCount} hidden for this customer). Off: shown as ⊘ margin markers.`}>⊘ Hidden{hiddenCount ? ` · ${hiddenCount}` : ''}</button>
             </>}
             {isHtml && <div className="segmented" role="group" aria-label="Device width">{([1200, 768, 390] as const).map((w) => <button key={w} aria-pressed={device === w} onClick={() => setDevice(w)}>{w === 1200 ? 'Desktop' : w === 768 ? 'Tablet' : 'Mobile'}</button>)}</div>}
+            <button className="btn sm" onClick={() => setStylesOpen(true)} data-testid="open-styles" title="Text styles and brand kit">Styles & brand</button>
             <span style={{ flex: 1 }} />
             {canExplode && !hintSeen && (
               <span className="chip variant ds-hint" role="status">
@@ -313,6 +316,7 @@ export function DesignStudio() {
           </div>
         </div>
 
+        {stylesOpen && <StylesBrandDialog onClose={() => setStylesOpen(false)} />}
         <Inspector project={project} res={res} nodeId={selected} onEditText={(id) => { select(id); setEditingId(id); }} />
       </div>
     </section>

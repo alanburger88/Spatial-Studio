@@ -4,3 +4,5 @@ export * from './responsive';
 export * from './paginator-source';
 export * from './parity';
 export * from './afp';
+export * from './email';
+export * from './sms';

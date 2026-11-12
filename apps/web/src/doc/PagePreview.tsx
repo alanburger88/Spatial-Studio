@@ -205,7 +205,7 @@ export function PagePreview({ res, project, scale, ia, showGuides = true, showGr
   const left = Math.round(((profile?.pageMarginsMm?.[3] ?? 14) * 72) / 25.4);
   const width = PAGE_W_PT - left * 2;
   const mode: RenderMode = useMemo(() => ({ target: 'paged', project }), [project]);
-  const css = useMemo(() => documentCss(project.issuer?.accent ?? '#277656'), [project.issuer?.accent]);
+  const css = useMemo(() => documentCss(project.issuer?.accent ?? '#277656', project), [project]);
   const fixed = res.root.children.filter((n) => n.layout?.paged?.mode === 'fixed' && (n.layout.paged.pages ?? 'first') !== 'following');
   const flowNodes = res.root.children.filter((n) => n.layout?.paged?.mode !== 'fixed');
   const toPt = (e: DragEvent<HTMLDivElement>) => {

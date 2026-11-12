@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { buildLandscape, dimensionValue, journeyStates, OUTPUT_PROFILES, primaryVariantSet, type DimensionId, type LandscapeCluster } from '@iss/scenarios';
 import { ScreenHeader, Loading, Empty, Tech } from '../ui/common';
@@ -10,6 +10,19 @@ import './ScenarioLandscape.css';
 const SEV_ICON = { ok: '✓', warning: '▲', blocking: '■' } as const;
 const SEV_TEXT = { ok: 'No findings', warning: 'Warnings', blocking: 'Blocking' } as const;
 const MAX_D = 96, MIN_D = 40;
+
+type View = 'flat' | '2.5d';
+type Metric = 'ruleComplexity' | 'exceptionCount';
+const VIEW_KEY = 'iss.landscapeView';
+const readView = (): View => { try { return localStorage.getItem(VIEW_KEY) === '2.5d' ? '2.5d' : 'flat'; } catch { return 'flat'; } };
+/** Mean page count would require composing every scenario's PDF, so it is deliberately not offered. */
+const METRIC_LABEL: Record<Metric, string> = { ruleComplexity: 'Rule complexity', exceptionCount: 'Exception count' };
+const METRIC_HELP: Record<Metric, string> = {
+  ruleComplexity: 'distinct rules matched by the cluster’s synthetic scenarios',
+  exceptionCount: 'warning and blocking findings across the cluster’s synthetic scenarios',
+};
+/** 2.5D geometry (px). Oblique projection: things further back (higher on screen) shift right by SKEW per px. */
+const GUTTER = 132, HEAD_H = 40, ROW_H = 106, SKEW = 0.18, MIN_COL_W = 96, STALK_MAX = 32;
 
 const pct = (n: number, d: number) => (d ? `${((n / d) * 100).toFixed(n / d < 0.1 ? 1 : 0)}%` : '0%');
 const humanCode = (c: string) => { const t = c.replace(/[-_.]+/g, ' ').toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
@@ -28,6 +41,18 @@ export function ScenarioLandscape() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
+  const [view, setViewState] = useState<View>(readView);
+  const [metric, setMetric] = useState<Metric>('ruleComplexity');
+  const [planeEl, setPlaneEl] = useState<HTMLDivElement | null>(null);
+  const [planeW, setPlaneW] = useState(900);
+  const setView = (v: View) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* storage unavailable */ } };
+  useEffect(() => {
+    if (!planeEl) return;
+    const measure = () => setPlaneW(planeEl.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure); ro.observe(planeEl);
+    return () => ro.disconnect();
+  }, [planeEl]);
   const [tip, setTip] = useState<{ x: number; y: number; below: boolean } | null>(null);
 
   const facetDims = useMemo<Array<{ dim: DimensionId; label: string }>>(() => {
@@ -100,6 +125,84 @@ export function ScenarioLandscape() {
 
   const setFilter = (dim: DimensionId, v: string) => { setFilters((f) => { const n = { ...f }; if (v) n[dim] = v; else delete n[dim]; return n; }); setSelectedId(null); };
 
+  /* ------------------------------------------------------------ 2.5D plane */
+  const metricVal = (c: LandscapeCluster) => c.metrics[metric];
+  const maxMetric = Math.max(0, ...visible.map(metricVal));
+  const colIds = groups.map((g) => g.id);
+  const secKey = (c: LandscapeCluster) => JSON.stringify([Object.entries(c.signature.variants).filter(([k]) => k !== pvs).map(([, v]) => v ?? 'unresolved'), c.signature.sections, includeJourney ? c.signature.journey : '']);
+  const secLabel = (c: LandscapeCluster) => {
+    const bits = [
+      ...Object.entries(c.signature.variants).filter(([k]) => k !== pvs).map(([k, v]) => (technical ? `${k}: ${v ?? 'unresolved'}` : variantName(v))),
+      ...c.signature.sections.map((x) => (technical ? x : nodeTitle(project, x))),
+      ...(includeJourney ? [c.signature.journey] : []),
+    ];
+    return bits.length ? bits.join(' + ') : 'Standard';
+  };
+  const rowDefs = [...new Map(visible.map((c) => [secKey(c), secLabel(c)])).entries()].sort((a, b) => a[1].localeCompare(b[1], undefined, { numeric: true }));
+  const nCols = Math.max(1, colIds.length), nRows = Math.max(1, rowDefs.length);
+  const planeH = HEAD_H + nRows * ROW_H + 10;
+  const rightPad = Math.round(planeH * SKEW);
+  const colW = Math.max(MIN_COL_W, (planeW - GUTTER - rightPad - 12) / nCols);
+  const innerW = GUTTER + nCols * colW + rightPad + 12;
+  /** Oblique projection x shift for a screen y. */
+  const sx = (x: number, y: number) => x + (planeH - y) * SKEW;
+  const maxD25 = Math.min(colW * 0.8, 88);
+  const diam25 = (c: LandscapeCluster) => Math.max(34, maxD25 * Math.sqrt(c.count / maxCount));
+  const stalk = (c: LandscapeCluster) => 6 + (maxMetric ? (metricVal(c) / maxMetric) * STALK_MAX : 0);
+  const plane25 = (
+    <div className="stage ls25-stage" aria-label="Scenario landscape, 2.5D view">
+      <div className="ls25-legend" data-testid="landscape-legend">
+        <div className="ls25-leg" title="Platform and bubble size grow with the number of synthetic scenarios in the cluster."><strong>Size</strong> platform and bubble = synthetic scenarios (largest {maxCount})</div>
+        <div className="ls25-leg" data-testid="landscape-height-legend" title="Mean page count is not offered: it would require composing every scenario’s PDF."><strong>Height</strong> {METRIC_LABEL[metric].toLowerCase()}: {METRIC_HELP[metric]}, 0 to {maxMetric}</div>
+        <div className="ls25-leg"><strong>Severity</strong> <span className="ls-sevkey ok">✓ none</span><span className="ls-sevkey warning">▲ warning</span><span className="ls-sevkey blocking">■ blocking</span></div>
+        <div className="ls25-leg muted">Columns = {pvs ? (technical ? pvs : 'primary variant') : 'all clusters'}; rows = other variants, sections{includeJourney ? ' and journey state' : ''}.</div>
+      </div>
+      <div className="ls25-scroll" ref={setPlaneEl}>
+        <div className="ls25-plane" data-testid="landscape-plane" role="group" aria-label="Scenario clusters on a tilted plane: columns are the primary variant, rows the secondary signature" style={{ width: innerW, height: planeH }}>
+          <div className="ls25-floor" style={{ left: GUTTER, top: HEAD_H, width: nCols * colW, height: nRows * ROW_H, transform: `skewX(${-Math.atan(SKEW) * 180 / Math.PI}deg)`, transformOrigin: '0 100%' }}>
+            {rowDefs.flatMap((_, r) => colIds.map((_c, ci) => <span key={`${r}-${ci}`} className="ls25-tile" style={{ left: ci * colW, top: r * ROW_H, width: colW, height: ROW_H }} />))}
+          </div>
+          {groups.map((g, ci) => (
+            <div key={g.id} className={`ls25-colhead${technical ? ' mono' : ''}`} style={{ left: sx(GUTTER + ci * colW, HEAD_H - 2), width: colW }} title={`${g.name} · ${g.items.reduce((a, c) => a + c.count, 0)} synthetic scenarios`}>
+              <strong>{g.name}</strong><span>{g.items.reduce((a, c) => a + c.count, 0)} synthetic</span>
+            </div>
+          ))}
+          {rowDefs.map(([k, label], r) => (
+            <div key={k} className="ls25-rowhead" style={{ top: HEAD_H + r * ROW_H, height: ROW_H, width: GUTTER - 10 }} title={label}><span>{label}</span></div>
+          ))}
+          {visible.map((c) => {
+            const ci = Math.max(0, colIds.indexOf(groupOf(c))), ri = Math.max(0, rowDefs.findIndex(([k]) => k === secKey(c)));
+            const D = diam25(c), H = stalk(c), B = Math.max(28, Math.min(44, D * 0.55));
+            const cyBase = HEAD_H + ri * ROW_H + ROW_H - 14;
+            const cx = sx(GUTTER + ci * colW + colW / 2, cyBase) - 2;
+            const sel = selectedId === c.clusterId;
+            return (
+              <div key={c.clusterId} className={`ls25-node sev-${c.severity}${sel ? ' selected' : ''}`} style={{ left: cx, top: cyBase }}>
+                <span className="ls25-platform" style={{ width: D, height: D * 0.4 }} aria-hidden="true" />
+                <span className="ls25-stalk" style={{ height: H }} aria-hidden="true" />
+                <button
+                  className="ls25-bubble"
+                  style={{ width: B, height: B, bottom: H }}
+                  data-testid="landscape-cluster"
+                  data-cluster={c.clusterId}
+                  aria-pressed={sel}
+                  aria-label={`${labelOf(c)}: ${c.count} synthetic scenarios, ${pct(c.count, landscape.universeSize)} of universe, ${SEV_TEXT[c.severity]}, ${METRIC_LABEL[metric]} ${metricVal(c)}`}
+                  onClick={() => setSelectedId(c.clusterId)}
+                  onMouseEnter={(ev) => showTip(c, ev.currentTarget)} onMouseLeave={hideTip}
+                  onFocus={(ev) => showTip(c, ev.currentTarget)} onBlur={hideTip}
+                >
+                  <span className="ls25-n" style={{ fontSize: Math.max(13, Math.min(20, B * 0.4)) }}>{c.count}</span>
+                  <span className="ls-sevicon" aria-hidden="true">{SEV_ICON[c.severity]}</span>
+                </button>
+                <span className="ls25-mval" style={{ bottom: H + B / 2 - 7, marginLeft: B / 2 + 5 }} aria-hidden="true" title={`${METRIC_LABEL[metric]} ${metricVal(c)}`}>↑{metricVal(c)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <section className="screen" data-testid="landscape-view">
       <ScreenHeader
@@ -133,6 +236,12 @@ export function ScenarioLandscape() {
             </span>
             <Tech><span className="ls-basis" data-testid="landscape-count-basis" title={landscape.countBasis}>{landscape.countBasis}</span></Tech>
             <span className="ls-status-actions">
+            <span className="ls-viewsw"><span className="ls-viewsw-l" id="ls-view-label">View</span>
+              <span className="segmented" role="group" aria-labelledby="ls-view-label">
+                <button aria-pressed={view === 'flat'} onClick={() => setView('flat')} data-testid="landscape-view-flat">Flat</button>
+                <button aria-pressed={view === '2.5d'} onClick={() => setView('2.5d')} data-testid="landscape-view-25d">2.5D</button>
+              </span>
+            </span>
             <label className="ls-toggle" title={includeJourney ? `Adds ${journeyN - 1} generated journey positions per record (${journeyN} states × seeded records); these are generated combinations, not extra fixtures.` : 'Off: one baseline scenario per seeded record.'}>
               <input type="checkbox" checked={includeJourney} onChange={(e) => { setIncludeJourney(e.target.checked); setSelectedId(null); }} data-testid="landscape-include-journey" />
               <span>Include journey states</span>
@@ -146,14 +255,22 @@ export function ScenarioLandscape() {
           <div className="panel ls-chart-panel" ref={chartRef}>
             <div className="panel-head">
               <span>Clusters by {pvs ? (technical ? pvs : 'selected variant') : 'outcome'}</span>
-              <span className="sub" data-testid="landscape-legend">Bubble size = scenarios (largest {maxCount})</span>
+              {view === 'flat' && <span className="sub" data-testid="landscape-legend">Bubble size = synthetic scenarios (largest {maxCount})</span>}
+              {view === '2.5d' && (
+                <span className="ls-metric">
+                  <span className="ls-viewsw-l" id="ls-metric-label">Height</span>
+                  <span className="segmented" role="group" aria-labelledby="ls-metric-label" title="Mean page count is not offered: it would require composing every scenario’s PDF.">
+                    {(Object.keys(METRIC_LABEL) as Metric[]).map((m) => <button key={m} aria-pressed={metric === m} onClick={() => setMetric(m)} data-testid={`landscape-metric-${m}`}>{METRIC_LABEL[m]}</button>)}
+                  </span>
+                </span>
+              )}
               <span className="right ls-sevkeys" aria-label="Severity colour key">
                 <span className="ls-sevkey ok">✓ none</span><span className="ls-sevkey warning">▲ warning</span><span className="ls-sevkey blocking">■ blocking</span>
               </span>
             </div>
             {visible.length === 0 ? (
               <div className="ls-empty"><Empty title={defectsOnly ? 'No clusters with recorded findings' : 'No matching fixture'} message={defectsOnly ? 'Every cluster in the current selection resolves without warnings or blocking findings.' : 'The active filters leave no scenarios. Clear a filter to repopulate the landscape.'} /></div>
-            ) : (
+            ) : view === '2.5d' ? plane25 : (
               <div className="ls-chart" data-testid="landscape-chart" role="group" aria-label="Scenario clusters grouped by primary variant">
                 {groups.map((g) => (
                   <section className="ls-group-card" key={g.id} aria-label={g.name} style={{ flex: `${g.items.length} 1 ${Math.max(190, g.items.length * 86)}px` }}>
@@ -196,7 +313,7 @@ export function ScenarioLandscape() {
                   <dt>Scenarios</dt><dd>{hovered.count} ({pct(hovered.count, landscape.universeSize)})</dd>
                   <dt>Severity</dt><dd>{SEV_ICON[hovered.severity]} {SEV_TEXT[hovered.severity]}</dd>
                   <dt>Blocking / warning</dt><dd>{hovered.blockingScenarios} / {hovered.warningScenarios}</dd>
-                  <dt>Rules matched</dt><dd>{hovered.metrics.ruleComplexity}</dd>
+                  <dt>{view === '2.5d' ? METRIC_LABEL[metric] : 'Rules matched'}</dt><dd>{view === '2.5d' ? metricVal(hovered) : hovered.metrics.ruleComplexity}</dd>
                 </dl>
               </div>
             )}
@@ -286,7 +403,7 @@ export function ScenarioLandscape() {
 
                 <Tech>
                   <div className="section-title">Positioning</div>
-                  <p className="ls-hint" data-testid="landscape-positioning" style={{ marginTop: 0 }}>{landscape.positioning} This cluster: column {selected.position.col + 1}, row {selected.position.row + 1}.</p>
+                  <p className="ls-hint" data-testid="landscape-positioning" style={{ marginTop: 0 }}>{view === '2.5d' ? 'In 2.5D: column = selected primary variant (variant-set order), row = secondary signature (other variants + visible sections' + (includeJourney ? ' + journey state' : '') + ', sorted by name); platform and bubble size = synthetic scenario count; stalk height = the chosen metric.' : landscape.positioning} This cluster: column {selected.position.col + 1}, flat row {selected.position.row + 1}.</p>
                 </Tech>
 
                 <div className="ls-actions">

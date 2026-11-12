@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { buildContext, fieldsFor, getPath, parseCsv, projectFields, type DocumentType, type FieldDef, type Project, type SyntheticRecord } from '@iss/model';
 import { resolve, type Resolution } from '@iss/resolver';
-import { api, ApiFailure, type ImportResult, type ProjectSummary } from '../api/client';
+import { api, ApiFailure, type ImportResult, type ProjectSummary, type TemplateInfoDto } from '../api/client';
 import { useStudio } from '../state/store';
 import { Dialog, Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
@@ -294,6 +294,81 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
   );
 }
 
+/* ------------------------------------------------------------ new project */
+
+function TemplateThumb({ templateId, documentType }: { templateId: string; documentType?: DocumentType }) {
+  const [state, setState] = useState<{ res: Resolution; project: Project } | null>(null);
+  useEffect(() => {
+    let live = true;
+    setState(null);
+    api.templateProject(templateId, templateId === 'blank-letter' ? documentType : undefined)
+      .then(async ({ project }) => {
+        const { record } = await fetch(`/api/v1/records/${project.documentType === 'eob' ? 'EOB-0001' : 'CARD-0001'}`).then((r) => r.json());
+        if (live) setState({ project, res: resolve({ project, record: record as SyntheticRecord }) });
+      })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [templateId, documentType]);
+  return state ? <PagePreview res={state.res} project={state.project} scale={0.2} showGuides={false} ia={{ selectedId: null }} /> : <div className="gal-paper-skel np-skel"><span className="spinner" /></div>;
+}
+
+function NewProjectDialog({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate();
+  const [templates, setTemplates] = useState<TemplateInfoDto[] | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [sel, setSel] = useState<string>('blank-letter');
+  const [title, setTitle] = useState('');
+  const [letterData, setLetterData] = useState<DocumentType>('credit-statement');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { api.templates().then((r) => setTemplates(r.templates)).catch((e) => setLoadErr(e instanceof ApiFailure ? e.message : String(e.message ?? e))); }, []);
+  const chosen = templates?.find((t) => t.id === sel);
+  const create = async () => {
+    if (!chosen || title.trim().length < 2) return;
+    setBusy(true); setErr(null);
+    try {
+      const { project } = await api.createProject({ templateId: chosen.id, title: title.trim(), ...(chosen.id === 'blank-letter' ? { documentType: letterData } : {}) });
+      await useStudio.getState().loadProjects();
+      useStudio.getState().toast({ kind: 'success', title: 'Project created', message: `“${project.title}” is ready to design.` });
+      onClose();
+      navigate(`/studio/${project.projectId}/design`);
+    } catch (e) { setErr(e instanceof ApiFailure ? e.message : String((e as Error).message ?? e)); setBusy(false); }
+  };
+  return (
+    <Dialog title="New project" onClose={onClose} labelledBy="new-project-title"
+      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={create} disabled={busy || !chosen || title.trim().length < 2} data-testid="create-project">Create project</button></>}>
+      <form className="np-root" onSubmit={(e) => { e.preventDefault(); void create(); }}>
+        {loadErr && <p className="callout error" role="alert">{loadErr}</p>}
+        {!templates && !loadErr && <Loading label="Loading templates…" />}
+        <div className="np-cards" role="radiogroup" aria-label="Template">
+          {templates?.map((t) => (
+            <button type="button" key={t.id} role="radio" aria-checked={sel === t.id} className={`np-card${sel === t.id ? ' on' : ''}`} onClick={() => setSel(t.id)} data-testid={`template-${t.id}`}>
+              <span className="np-thumb" aria-hidden="true"><TemplateThumb templateId={t.id} documentType={letterData} /></span>
+              <span className="np-name">{t.title}</span>
+              <span className="chip accent">{DOC_LABEL[t.id === 'blank-letter' ? letterData : t.documentType]}</span>
+              <span className="muted np-desc">{t.description}</span>
+            </button>
+          ))}
+        </div>
+        {sel === 'blank-letter' && (
+          <div className="field">
+            <label htmlFor="np-data">Sample data for the letter</label>
+            <select id="np-data" className="select" value={letterData} onChange={(e) => setLetterData(e.target.value as DocumentType)} data-testid="blank-letter-data">
+              <option value="credit-statement">Credit-card statement data</option>
+              <option value="eob">Healthcare EOB data</option>
+            </select>
+          </div>
+        )}
+        <div className="field">
+          <label htmlFor="np-title">Project name</label>
+          <input id="np-title" className="input" value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Welcome letter" data-testid="new-project-title" />
+        </div>
+        {err && <p className="callout error" role="alert">{err}</p>}
+      </form>
+    </Dialog>
+  );
+}
+
 export function ProjectGallery() {
   const projects = useStudio((s) => s.projects);
   const status = useStudio((s) => s.projectsStatus);
@@ -301,6 +376,7 @@ export function ProjectGallery() {
   const [counts, setCounts] = useState<{ card: number; eob: number; importedCard: number; importedEob: number } | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     fetch('/api/v1/records').then((r) => r.json()).then((b) => {
@@ -332,6 +408,7 @@ export function ProjectGallery() {
     <section className="screen" data-testid="project-gallery">
       <ScreenHeader id="S01" title="Project Gallery" subtitle="Design in 2D. Understand in 2.5D. Simulate across personas and time. Compose into faithful paged and interactive outputs."
         actions={<>
+          <button className="btn primary" onClick={() => setCreating(true)} data-testid="new-project"><Icon.plus /> New project</button>
           <button className="btn" onClick={() => setImporting(true)} data-testid="import-records"><Icon.plus /> Import records</button>
           <button className="btn" onClick={() => setConfirmAll(true)} data-testid="reset-demo"><Icon.reset /> Reset demo</button>
         </>} />
@@ -380,6 +457,7 @@ export function ProjectGallery() {
           <p>Both sample projects return to their approved models, issued snapshots are cleared and saved view context is forgotten. Your own projects and imported records are kept. Use this before a stakeholder run.</p>
         </Dialog>
       )}
+      {creating && <NewProjectDialog onClose={() => setCreating(false)} />}
       {importing && <ImportDialog onClose={() => setImporting(false)} onDone={recordsChanged} />}
     </section>
   );

@@ -27,6 +27,8 @@ export interface ProjectSummary {
   sample: boolean; derivedFrom: { projectId: string; modelVersion: number } | null;
 }
 
+export interface TemplateInfoDto { id: string; title: string; documentType: 'credit-statement' | 'eob'; description: string }
+
 export interface ImportResult {
   documentType: 'credit-statement' | 'eob'; dryRun: boolean; total: number;
   imported: Array<{ recordId: string; sourceId: string | null; name: string }>;
@@ -43,6 +45,8 @@ export interface ScenarioRequest {
   project?: Project;
   allowDraft?: boolean;
 }
+
+export interface ChannelParity { parity: { ok: boolean; checks: Array<{ id: string; label: string; status: 'match' | 'mismatch' | 'not-applicable'; blocking: boolean; expected?: unknown; email?: unknown; sms?: unknown; note?: string }> } }
 
 export interface BinaryResult {
   blob: Blob;
@@ -105,15 +109,22 @@ export const api = {
   resetProject: (id: string) => json<{ project: Project; reset: boolean; seedDigest: string }>(`/api/v1/projects/${id}/reset`, { method: 'POST', body: JSON.stringify({ confirm: true }) }),
   duplicateProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}/duplicate`, { method: 'POST', body: JSON.stringify({ title }) }),
   renameProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) }),
+  templates: () => json<{ templates: TemplateInfoDto[] }>('/api/v1/templates'),
+  templateProject: (templateId: string, documentType?: string) => json<{ template: TemplateInfoDto; project: Project }>(`/api/v1/templates/${templateId}/project${documentType ? `?documentType=${documentType}` : ''}`),
+  createProject: (body: { templateId: string; title: string; documentType?: string }) => json<{ project: Project; createdFrom: string }>('/api/v1/projects', { method: 'POST', body: JSON.stringify(body) }),
   deleteProject: (id: string) => json<{ deleted: boolean }>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
   importRecords: (body: { documentType: string; format: 'json' | 'csv'; data: string; dryRun?: boolean; projectId?: string }) => json<ImportResult>('/api/v1/records/import', { method: 'POST', body: JSON.stringify(body) }),
   clearImportedRecords: (documentType?: string) => json<{ removed: number }>(`/api/v1/records/imported${documentType ? `?documentType=${documentType}` : ''}`, { method: 'DELETE' }),
+  translationsCsvUrl: (id: string, locale: string) => `/api/v1/projects/${id}/translations.csv?locale=${encodeURIComponent(locale)}`,
+  importTranslations: (id: string, body: { locale: string; csv: string; project?: Project }) => json<{ locale: string; drafts: Array<{ partId: string; text: string }>; errors: Array<{ row: number; partId: string; code: string; message: string }>; skipped: number; rows: number }>(`/api/v1/projects/${id}/translations/import`, { method: 'POST', body: JSON.stringify(body) }),
   schemas: (id: string) => json<{ fields: any[]; dimensions: any[]; edgeCasePresets: Array<{ id: string; label: string; description: string }> }>(`/api/v1/projects/${id}/schemas`),
   records: (documentType: string) => json<{ records: SyntheticRecord[]; seed: string }>(`/api/v1/records?documentType=${documentType}&full=1`),
   personas: () => json<{ personas: Persona[] }>('/api/v1/personas'),
   resolve: (req: ScenarioRequest) => json<any>('/api/v1/resolve', { method: 'POST', body: JSON.stringify(req) }),
   composePdf: (req: ScenarioRequest) => binary('/api/v1/compose/pdf', req),
   composeHtml: (req: ScenarioRequest) => binary('/api/v1/compose/html', req),
+  composeEmail: (req: ScenarioRequest) => json<ChannelParity & { runId: string; recordId: string; locale: string; subject: string; preheader: string; html: string; text: string; warnings: string[]; artifactId: string; sha256: string; filename: string }>('/api/v1/compose/email', { method: 'POST', body: JSON.stringify(req) }),
+  composeSms: (req: ScenarioRequest) => json<ChannelParity & { runId: string; recordId: string; locale: string; text: string; encoding: 'GSM-7' | 'UCS-2'; length: number; segments: number; perSegment: number; nonGsm: Array<{ char: string; index: number; codePoint: string }>; warnings: string[] }>('/api/v1/compose/sms', { method: 'POST', body: JSON.stringify(req) }),
   composePages: (req: ScenarioRequest & { verifyPdf?: boolean }) => json<ComposedPages>('/api/v1/compose/pages', { method: 'POST', body: JSON.stringify(req) }),
   afpSim: (req: ScenarioRequest) => json<any>('/api/v1/compose/afp-sim', { method: 'POST', body: JSON.stringify(req) }),
   parity: (req: ScenarioRequest) => json<any>('/api/v1/parity', { method: 'POST', body: JSON.stringify(req) }),

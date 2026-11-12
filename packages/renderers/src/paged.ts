@@ -1,11 +1,11 @@
 import type { Project, ProfileId } from '@iss/model';
 import type { RNode, Resolution } from '@iss/resolver';
-import { DOC_FONT, esc, nodeDataAttrs, nodeInnerHtml, type RenderMode } from './html-common';
+import { DOC_FONT, esc, projectStyleCss, nodeDataAttrs, nodeInnerHtml, type RenderMode } from './html-common';
 import { PAGINATOR_JS } from './paginator-source';
 
 export const PAGED_RENDERER_VERSION = 'iss-paged-renderer/1.0.0';
 
-export function documentCss(accent: string): string {
+export function documentCss(accent: string, project?: Project): string {
   return `
 :root{--ink:#0F172A;--body:#334155;--muted:#4B5A6E;--rule:#E2E8F0;--tint:#F1F5F9;--accent:${accent};--brand:#4EAF60;--lime:#DBE64C}
 .iss-rich h1,.iss-rich h2{font-size:15pt;font-weight:800;color:var(--ink);margin:0 0 3pt;letter-spacing:-.01em}
@@ -65,10 +65,10 @@ h2.iss-variant-title,.iss-variant-title{font-size:10.5pt;font-weight:700;color:v
 .iss-table tfoot th,.iss-table tfoot td{font-weight:800;color:var(--ink);border-top:1pt solid var(--ink);background:#fff}
 .iss-table td.guarded{color:#92400e;font-style:italic}
 .iss-empty td{text-align:center;color:var(--muted);padding:8pt}
-`;
+${projectStyleCss(project)}`;
 }
 
-function pagedCss(accent: string): string {
+function pagedCss(accent: string, project?: Project): string {
   return `@page{size:8.5in 11in;margin:0}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:#e5e7eb}
@@ -84,7 +84,7 @@ body{font-family:${DOC_FONT};font-feature-settings:'calt' 0,'tnum' 0,'liga' 0,'c
 .iss-overflow-marker{position:absolute;left:40pt;right:40pt;bottom:50pt;background:#fee2e2;border:1pt solid #dc2626;color:#991b1b;font-weight:700;font-size:8.5pt;padding:4pt 6pt;border-radius:3pt}
 .iss-watermark{position:absolute;left:0;right:0;top:46%;text-align:center;transform:rotate(-24deg);font-size:34pt;font-weight:900;color:rgba(220,38,38,.13);letter-spacing:.06em;pointer-events:none}
 #iss-source{position:absolute;left:-20000px;top:0}
-${documentCss(accent)}`;
+${documentCss(accent, project)}`;
 }
 
 function isHeadingOnly(n: RNode): boolean {
@@ -143,7 +143,7 @@ export function renderPagedDocument(res: Resolution, project: Project, opts: Pag
 <head><meta charset="utf-8"/><title>${esc(title)}</title>
 <meta name="generator" content="InfoSlips Spatial Studio ${PAGED_RENDERER_VERSION}"/>
 <meta name="description" content="Synthetic demonstration document. Run ${esc(res.runId)}; content digest ${esc(res.contentDigest)}."/>
-<style>${pagedCss(accent)}</style></head>
+<style>${pagedCss(accent, project)}</style></head>
 <body>
 <div id="iss-pages" role="document" aria-label="${esc(title)}"></div>
 <div id="iss-source" style="width:${widthPt}pt">${fixedParts.join('\n')}${flowParts.join('\n')}</div>

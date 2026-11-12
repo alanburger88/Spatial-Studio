@@ -9,6 +9,8 @@ import { predicateSentence } from '../../ui/plain';
 import { insertToken } from './RichTextEditor';
 import { ImpactPreview, ReachLine } from '../../ui/ImpactPreview';
 import { AssetLibraryDialog, type PickedAsset } from './AssetLibrary';
+import { StylesBrandDialog } from './StylesBrand';
+import { CommentsTab } from './Comments';
 
 /** Single-condition editor with a live before-you-save impact preview. */
 function ConditionEditor({ project, initial, command, onDone, label }: { project: Project; initial: Predicate | null | undefined; command: (when: Predicate | null) => Command; onDone: () => void; label: string }) {
@@ -57,9 +59,10 @@ function ConditionEditor({ project, initial, command, onDone, label }: { project
 }
 
 
-type Tab = 'content' | 'data' | 'rules' | 'layout' | 'a11y' | 'impact';
+type Tab = 'content' | 'data' | 'rules' | 'layout' | 'a11y' | 'impact' | 'comments';
 const TAB_TITLES: Partial<Record<Tab, string>> = { a11y: 'Accessibility' };
-const TABS: Array<[Tab, string]> = [['content', 'Content'], ['data', 'Data'], ['rules', 'Rules'], ['layout', 'Layout'], ['a11y', 'A11y'], ['impact', 'Impact']];
+const TAB_TESTID: Partial<Record<Tab, string>> = { comments: 'inspector-tab-comments' };
+const TABS: Array<[Tab, string]> = [['content', 'Content'], ['data', 'Data'], ['rules', 'Rules'], ['layout', 'Layout'], ['a11y', 'A11y'], ['impact', 'Impact'], ['comments', 'Comments']];
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return <div className="field"><label>{label}{children}</label>{hint && <span className="hint">{hint}</span>}</div>;
@@ -99,7 +102,7 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
             {!rnode.visible && <div className="callout warning" style={{ marginTop: 8 }} data-testid="not-rendered"><strong>Not rendered in this scenario.</strong> {rnode.hiddenReason}</div>}
           </div>
           <div className="tabs insp-tabs" role="tablist" aria-label="Inspector sections">
-            {TABS.map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} aria-label={TAB_TITLES[id]} title={TAB_TITLES[id]} onClick={() => setTab(id)} data-testid={`insp-tab-${id}`}>{label}</button>)}
+            {TABS.map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} aria-label={TAB_TITLES[id]} title={TAB_TITLES[id]} onClick={() => setTab(id)} data-testid={TAB_TESTID[id] ?? `insp-tab-${id}`}>{label}</button>)}
           </div>
           <div className="panel-body" role="tabpanel">
             {tab === 'content' && <ContentTab node={node} project={project} res={res} onEditText={onEditText} />}
@@ -108,6 +111,7 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
             {tab === 'layout' && <LayoutTab node={node} project={project} />}
             {tab === 'a11y' && <A11yTab node={node} res={res} />}
             {tab === 'impact' && <ImpactTab node={node} />}
+            {tab === 'comments' && <CommentsTab nodeId={node.id} />}
           </div>
         </>
       )}
@@ -116,6 +120,28 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
 }
 
 /* ------------------------------------------------------------------ content */
+
+const TEXT_STYLE_TYPES: DocNode['type'][] = ['rich-text', 'bound-field', 'summary-metric', 'disclosure', 'expandable-explanation'];
+
+/** Applies a named text style (A4) to the component; the command validates that the style exists. */
+function TextStyleSelect({ node, project }: { node: DocNode; project: Project }) {
+  const dispatch = useStudio((s) => s.dispatch);
+  const [open, setOpen] = useState(false);
+  const styles = project.styles ?? [];
+  return (
+    <div className="field">
+      <label>Text style
+        <select className="select" value={node.styleId ?? ''} onChange={(e) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: { styleId: e.target.value || undefined } as any })} data-testid="text-style-select">
+          <option value="">None</option>
+          {styles.map((st) => <option key={st.id} value={st.id}>{st.name} ({st.kind})</option>)}
+          {node.styleId && !styles.some((st) => st.id === node.styleId) && <option value={node.styleId}>{node.styleId} (missing)</option>}
+        </select>
+      </label>
+      <button type="button" className="btn ghost sm" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(true)} data-testid="inspector-open-styles">Manage styles & brand…</button>
+      {open && <StylesBrandDialog onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
 
 function ContentTab({ node, project, res, onEditText }: { node: DocNode; project: Project; res: Resolution; onEditText: (id: string) => void }) {
   const dispatch = useStudio((s) => s.dispatch);
@@ -133,6 +159,7 @@ function ContentTab({ node, project, res, onEditText }: { node: DocNode; project
   return (
     <div>
       <Field label="Name"><CommitInput value={node.name} onCommit={(v) => upd({ name: v })} ariaLabel="Component name" /></Field>
+      {TEXT_STYLE_TYPES.includes(node.type) && <TextStyleSelect node={node} project={project} />}
       {node.type === 'rich-text' && (
         <>
           <button className="btn primary" onClick={() => onEditText(node.id)} data-testid="edit-rich-text"><Icon.design /> Edit text in place</button>

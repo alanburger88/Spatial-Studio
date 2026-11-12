@@ -38,3 +38,15 @@
 .imp-map .select { width: 100%; min-height: 28px; font-size: 12.5px; }
 .imp-sample { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dialog:has(.imp) { width: min(760px, calc(100vw - 32px)); }
+.dialog:has(.np-root) { width: min(820px, calc(100vw - 32px)); }
+.np-root { display: flex; flex-direction: column; gap: 12px; }
+.np-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.np-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; padding: 10px; border: 1px solid var(--iss-border); border-radius: 12px; background: var(--iss-surface); color: var(--iss-text); cursor: pointer; font: inherit; }
+.np-card:hover { background: var(--iss-row-hover); }
+.np-card.on { border-color: var(--iss-accent); box-shadow: 0 0 0 2px var(--iss-accent-soft); }
+.np-thumb { width: 100%; height: 150px; overflow: hidden; border-radius: 8px; background: var(--iss-surface-sunken); border: 1px solid var(--iss-border); display: flex; justify-content: center; padding-top: 8px; pointer-events: none; }
+.np-thumb .pv-wrap { box-shadow: var(--iss-shadow-paper); }
+.np-skel { width: 100px; height: 130px; }
+.np-name { font-weight: 800; font-size: 14px; }
+.np-desc { font-size: 12px; line-height: 1.4; }
+@media (max-width: 760px) { .np-cards { grid-template-columns: 1fr; } }

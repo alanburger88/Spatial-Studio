@@ -7,7 +7,7 @@ import { ScreenHeader, Empty, Proof, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
 import './PreviewExport.css';
 
-type Tab = 'pdf' | 'html' | 'afp' | 'batch';
+type Tab = 'pdf' | 'html' | 'email' | 'sms' | 'afp' | 'batch';
 type Device = 'desktop' | 'tablet' | 'mobile';
 const DEVICES: Record<Device, { label: string; width: number }> = { desktop: { label: 'Desktop 1200', width: 1200 }, tablet: { label: 'Tablet 768', width: 768 }, mobile: { label: 'Mobile 390', width: 390 } };
 const AFP_LABEL = 'AFP simulation only — no MO:DCA / AFP print stream generated';
@@ -174,6 +174,8 @@ export function PreviewExport() {
   const tabs: Array<{ id: Tab; label: string; chip?: ReactNode; stale: boolean }> = [
     { id: 'pdf', label: 'PDF (real)', stale: stale.pdf },
     { id: 'html', label: 'HTML (real)', stale: stale.html },
+    { id: 'email', label: 'Email', stale: false },
+    { id: 'sms', label: 'SMS', stale: false },
     { id: 'afp', label: 'AFP (simulated)', stale: stale.afp, chip: <span className="chip sim">SIMULATION</span> },
     { id: 'batch', label: 'Batch', stale: false },
   ];
@@ -205,6 +207,8 @@ export function PreviewExport() {
           <div className="ox-panel" key={tab} role="tabpanel" id={`ox-panel-${tab}`} aria-labelledby={`ox-tab-${tab}`}>
             {tab === 'pdf' && <PdfTab job={session.pdf} stale={stale.pdf} onRun={runPdf} onCancel={() => cancel('pdf')} isEob={isEob} />}
             {tab === 'html' && <HtmlTab job={session.html} stale={stale.html} onRun={runHtml} onCancel={() => cancel('html')} device={device} setDevice={setDevice} isEob={isEob} />}
+            {tab === 'email' && <EmailTab req={profileReq('html-responsive')!} isEob={isEob} />}
+            {tab === 'sms' && <SmsTab req={profileReq('html-responsive')!} isEob={isEob} />}
             {tab === 'afp' && <AfpTab job={session.afp} stale={stale.afp} onRun={runAfp} onCancel={() => cancel('afp')} />}
             {tab === 'batch' && <BatchTab />}
           </div>
@@ -375,6 +379,155 @@ function HtmlTab({ job, stale, onRun, onCancel, device, setDevice, isEob }: { jo
         </>
       ) : job.status !== 'running' && job.status !== 'error' ? <Pending what="interactive HTML" /> : null}
     </>
+  );
+}
+
+/* ------------------------------------------------------------ Email & SMS channels */
+
+type EmailDto = Awaited<ReturnType<typeof api.composeEmail>>;
+type SmsDto = Awaited<ReturnType<typeof api.composeSms>>;
+type ParityDto = EmailDto['parity'];
+
+/** Composes a channel for the live (possibly unsaved) model; recomposes when the model or scenario changes. */
+function useChannel<T>(call: (req: ScenarioRequest) => Promise<T>, req: ScenarioRequest) {
+  const [state, setState] = useState<{ status: 'running' | 'done' | 'error'; data?: T; error?: { code: string; message: string; issues: Issue[] } }>({ status: 'running' });
+  const [draft, setDraft] = useState(false);
+  const key = JSON.stringify(req) + (draft ? '#draft' : '');
+  const latest = useRef(0);
+  useEffect(() => {
+    const my = ++latest.current;
+    setState((s) => ({ ...s, status: 'running', error: undefined }));
+    const t = setTimeout(() => {
+      call(draft ? { ...req, allowDraft: true } : req).then(
+        (data) => { if (latest.current === my) setState({ status: 'done', data }); },
+        (e) => { if (latest.current === my) setState({ status: 'error', error: toError(e) }); },
+      );
+    }, 200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return { ...state, draft, setDraft };
+}
+
+function ChannelIssues({ error, onDraft }: { error?: { code: string; message: string; issues: Issue[] }; onDraft: () => void }) {
+  if (!error) return null;
+  const blocked = error.code === 'BLOCKING_DIAGNOSTICS';
+  return (
+    <div className="callout error ox-issues" role="alert" data-testid={blocked ? 'blocking-issues' : 'compose-error'}>
+      <strong>{blocked ? 'Channel export blocked' : 'Channel composition failed'} <span className="mono">({error.code})</span></strong>
+      <span>{error.message}</span>
+      {error.issues.length > 0 && <ul>{error.issues.map((i, k) => <li key={k}><span className="sev">{i.severity ?? 'issue'}</span> <strong>{i.code}</strong>{i.nodeId ? ` · ${i.nodeId}` : ''} — {i.message}</li>)}</ul>}
+      {blocked && <div className="row" style={{ gap: 8 }}><button className="btn sm danger" onClick={onDraft}>Compose draft anyway</button></div>}
+    </div>
+  );
+}
+
+function ParityChips({ parity, testId }: { parity: ParityDto; testId: string }) {
+  const shown = parity.checks.filter((c) => c.status !== 'not-applicable');
+  return (
+    <div className="ch-parity" data-testid={testId} role="group" aria-label="Parity with the semantic manifest">
+      <span className={'chip ' + (parity.ok ? 'accent' : 'error')} data-testid={`${testId}-overall`}>{parity.ok ? 'Parity: matches manifest' : 'Parity: MISMATCH'}</span>
+      {shown.map((c) => (
+        <span key={c.id} className={'chip ' + (c.status === 'match' ? 'info' : 'error')} title={c.label + (c.status === 'mismatch' ? ` — ${JSON.stringify(c.email ?? c.sms ?? '')}` : '')}>
+          {c.status === 'match' ? '✓' : '✗'} {c.label.split(' (')[0]}
+        </span>
+      ))}
+      {parity.checks.length > shown.length && <span className="muted ch-na">{parity.checks.length - shown.length} not applicable to this document</span>}
+    </div>
+  );
+}
+
+function Warnings({ items, testId }: { items: string[]; testId: string }) {
+  if (!items.length) return null;
+  return (
+    <ul className="ch-warnings" aria-label="Channel warnings">
+      {items.map((w, i) => <li key={i} className="callout warning" data-testid={testId}><span className="sev">warning</span> {w}</li>)}
+    </ul>
+  );
+}
+
+const CH_WIDTH = { desktop: 600, mobile: 360 } as const;
+
+function EmailTab({ req, isEob }: { req: ScenarioRequest; isEob: boolean }) {
+  const { status, data, error, setDraft } = useChannel(api.composeEmail, req);
+  const [view, setView] = useState<'desktop' | 'mobile'>('desktop');
+  const [plain, setPlain] = useState(false);
+  const blobUrl = useMemo(() => (data ? URL.createObjectURL(new Blob([data.html], { type: 'text/html;charset=utf-8' })) : null), [data]);
+  useEffect(() => () => { if (blobUrl) URL.revokeObjectURL(blobUrl); }, [blobUrl]);
+  const w = CH_WIDTH[view];
+  return (
+    <div className="ch" data-testid="email-tab">
+      <ChannelIssues error={error} onDraft={() => setDraft(true)} />
+      {status === 'running' && !data && <div className="empty" role="status"><span className="spinner" /> Composing email…</div>}
+      {data && (
+        <>
+          <dl className="ch-head">
+            <dt>Subject</dt><dd data-testid="email-subject">{data.subject}</dd>
+            <dt>Preheader</dt><dd data-testid="email-preheader" className="muted">{data.preheader}</dd>
+          </dl>
+          <div className="ox-jobbar">
+            <div className="segmented" role="group" aria-label="Email preview width">
+              <button aria-pressed={view === 'desktop'} onClick={() => setView('desktop')} data-testid="email-view-desktop">Desktop 600</button>
+              <button aria-pressed={view === 'mobile'} onClick={() => setView('mobile')} data-testid="email-view-mobile">Mobile 360</button>
+            </div>
+            <button className="btn" aria-pressed={plain} onClick={() => setPlain((p) => !p)} data-testid="email-text-toggle">{plain ? 'Show HTML' : 'Plain text'}</button>
+            {blobUrl && <a className="btn" href={blobUrl} download={data.filename} data-testid="email-download"><Icon.download /> Download .html</a>}
+            {status === 'running' && <span className="chip info" role="status">Refreshing…</span>}
+          </div>
+          <ParityChips parity={data.parity} testId="email-parity" />
+          <div className="ox-viewer ox-html ch-stage" data-testid="email-preview">
+            {plain
+              ? <pre className="ch-plain" data-testid="email-text" tabIndex={0} aria-label="Plain-text alternative">{data.text}</pre>
+              : <iframe title={`Email preview at ${w}px`} sandbox="" srcDoc={data.html} style={{ width: w }} data-testid="email-iframe" />}
+          </div>
+          <Warnings items={data.warnings} testId="email-warning" />
+          <div className="ox-strip">
+            <span className="muted">{isEob ? 'Carries “THIS IS NOT A BILL”. ' : ''}Scripts, forms and external assets are never included; the preview is sandboxed.</span>
+            <Proof label="Proof"><span className="ox-proof">Run <code>{data.runId}</code> · artifact <code>{data.artifactId}</code> · SHA-256 <code title={data.sha256}>{short(data.sha256, 16)}…</code> · {data.locale}</span></Proof>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SmsTab({ req, isEob }: { req: ScenarioRequest; isEob: boolean }) {
+  const { status, data, error, setDraft } = useChannel(api.composeSms, req);
+  const pieces = useMemo(() => {
+    if (!data) return [];
+    const bad = new Map(data.nonGsm.map((n) => [n.index, n]));
+    const out: Array<{ t: string; bad?: { char: string; codePoint: string } }> = [];
+    let i = 0;
+    for (const ch of data.text) { const b = bad.get(i); out.push(b ? { t: ch, bad: b } : { t: ch }); i += ch.length; }
+    return out;
+  }, [data]);
+  const limit = data ? (data.segments <= 1 ? data.perSegment : data.perSegment * data.segments) : 160;
+  return (
+    <div className="ch" data-testid="sms-tab">
+      <ChannelIssues error={error} onDraft={() => setDraft(true)} />
+      {status === 'running' && !data && <div className="empty" role="status"><span className="spinner" /> Composing SMS…</div>}
+      {data && (
+        <>
+          <div className="ch-sms-wrap">
+            <div className="ch-phone" role="img" aria-label="Phone preview of the SMS">
+              <div className="ch-phone-bar">Text message · now</div>
+              <p className="ch-bubble" data-testid="sms-text" aria-label="SMS text">
+                {pieces.map((p, i) => p.bad ? <mark key={i} className="ch-nongsm" title={`Non-GSM character ${p.bad.codePoint}`} data-testid="sms-nongsm">{p.t}</mark> : <span key={i}>{p.t}</span>)}
+              </p>
+            </div>
+            <div className="ch-sms-side">
+              <p className="ch-counter" data-testid="sms-counter" aria-live="polite">{data.length} / {limit} · {data.segments} segment{data.segments === 1 ? '' : 's'} · {data.encoding}</p>
+              <p className="muted ch-fine">{data.encoding === 'GSM-7' ? 'GSM-7: 160 characters in one segment, 153 per segment when concatenated.' : 'UCS-2: 70 characters in one segment, 67 per segment when concatenated.'} {isEob ? 'This message does not imply a bill.' : ''}</p>
+              {data.nonGsm.length > 0 && <p className="ch-fine">Non-GSM: {[...new Set(data.nonGsm.map((n) => `${n.char} ${n.codePoint}`))].join(', ')}</p>}
+              <ParityChips parity={data.parity} testId="sms-parity" />
+              <Warnings items={data.warnings} testId="sms-warning" />
+              {status === 'running' && <span className="chip info" role="status">Refreshing…</span>}
+              <Proof label="Proof"><span className="ox-proof">Run <code>{data.runId}</code> · {data.locale}</span></Proof>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

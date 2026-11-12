@@ -13,6 +13,8 @@ import { ImpactPreview } from '../ui/ImpactPreview';
 import { DataFieldsDialog } from './data/DataFields';
 import { useStudio, useResolution, useRecord } from '../state/store';
 import { api } from '../api/client';
+import { DecisionTable } from './rules/DecisionTable';
+import { DraftTestImpact, TestsPanel, TestsSummary } from './rules/TestCases';
 import './RulesData.css';
 
 /* ------------------------------------------------------------------ helpers */
@@ -264,6 +266,7 @@ export function RulesData() {
   const [testResult, setTestResult] = useState<TestOutcome | null>(null);
   const [dock, setDock] = useState<DockTab | null>(null);
   const [showFields, setShowFields] = useState(false);
+  const [view, setView] = useState<'editor' | 'table' | 'tests'>('editor');
   const [toggleNote, setToggleNote] = useState<{ before: Project; after: Project; ruleId: string; verb: string } | null>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const openDock = (t: DockTab) => { setDock(t); setTimeout(() => dockRef.current?.scrollIntoView({ block: 'nearest', behavior: useStudio.getState().reducedMotion ? 'auto' : 'smooth' }), 30); };
@@ -284,13 +287,14 @@ export function RulesData() {
   const isDirty = isNew || (!!draft && !!stored && JSON.stringify(draft) !== baseRef.current);
   const confirmDiscard = () => !isDirty || window.confirm('Discard the unsaved rule draft? The model has not been changed.');
   const selectRule = (id: string) => {
-    if (id === ruleId && !isNew) return;
-    if (!confirmDiscard()) return;
+    if (id === ruleId && !isNew) return true;
+    if (!confirmDiscard()) return false;
     setIsNew(false);
     baseRef.current = '';
     setDraft(null);
     setTestResult(null);
     setParams({ rule: id }, { replace: true });
+    return true;
   };
   const addRule = () => {
     if (!project || !confirmDiscard()) return;
@@ -398,7 +402,13 @@ export function RulesData() {
   const header = (
     <ScreenHeader id="S07" title="Rules & Data"
       subtitle="Edit the declarative rules behind each document outcome, test them against every record, and inspect the exact inputs behind the current scenario."
+      badge={<TestsSummary project={project} onOpen={() => setView('tests')} />}
       actions={<>
+        <div className="segmented" role="group" aria-label="Rules view" data-testid="rules-view-switch">
+          {([['editor', 'Editor'], ['table', 'Table'], ['tests', 'Tests']] as const).map(([v, label]) => (
+            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} data-testid={`rules-view-${v}`}>{label}</button>
+          ))}
+        </div>
         <button className="btn" onClick={() => setShowFields(true)} data-testid="open-data-fields"><Icon.list /> Data fields</button>
         <button className="btn" onClick={() => openDock('scenario')}><Icon.list /> Scenario data</button>
         <button className="btn primary" onClick={addRule} data-testid="add-rule"><Icon.plus /> Add rule</button>
@@ -409,7 +419,9 @@ export function RulesData() {
     <section className="screen" data-testid="rules-data-view">
       {header}
       <div className="screen-body rd-body">
-        <div className="rd-row rd-row1">
+        {view === 'table' && <DecisionTable project={project} records={records} onOpenRule={(id) => { if (selectRule(id)) setView('editor'); }} />}
+        {view === 'tests' && <TestsPanel project={project} />}
+        <div className="rd-row rd-row1" hidden={view !== 'editor'}>
           <RuleTree project={project} ruleTrace={ruleTrace} selectedId={isNew ? draft?.id ?? '' : ruleId} newId={isNew ? draft?.id : undefined} onSelect={selectRule} />
 
           <div className="panel rd-editor-panel" data-testid="rule-editor" aria-label="Rule editor">
@@ -505,6 +517,7 @@ export function RulesData() {
                   <button className="btn" onClick={runTest} disabled={allErrors.length > 0} data-testid="test-rule"><Icon.target /> Test this rule</button>
                   <button className="btn ghost" onClick={cancelDraft} disabled={!isDirty}>{isNew ? 'Discard draft' : 'Revert draft'}</button>
                   {!isNew && stored && stored.mode !== 'obligation' && <button className="btn ghost danger" onClick={deleteRule}><Icon.trash /> Delete</button>}
+                  <DraftTestImpact before={project} after={draftProject} />
                   {!canApply && <span className="rd-actions-hint">{allErrors.length ? 'Fix the issues above to apply.' : 'No changes to apply.'}</span>}
                 </div>
               </>

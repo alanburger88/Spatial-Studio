@@ -14,7 +14,7 @@
 .palette-label { line-height: 1.2; font-weight: 600; font-size: 12.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-code { display: block; line-height: 1.1; margin-top: 1px; font-size: 10.5px; font-weight: 500; color: var(--iss-text-faint); }
 .palette-note { font-size: 11.5px; margin: 10px 0 0; }
-.tabs.insp-tabs { gap: 0; overflow-x: auto; scrollbar-width: none; }
+.tabs.insp-tabs { gap: 0; flex-wrap: wrap; overflow: visible; }
 .tabs.insp-tabs button { padding: 6px 4px; flex: 1 1 auto; font-size: 11.5px; text-align: center; }
 .variant-when { font-size: 12px; margin-top: 3px; }
 .layers, .layers ul { list-style: none; margin: 0; padding: 0; }
@@ -63,3 +63,4 @@
 .rte-content { outline: none; padding: 3pt 4pt; min-height: 18pt; font-family: Arial, "Liberation Sans", sans-serif; font-size: 9.5pt; color: var(--iss-paper-ink); }
 .rte-content p { margin: 0 0 3pt; } .rte-content h2 { font-size: 15pt; margin: 0 0 3pt; color: var(--iss-paper-ink); } .rte-content h3 { font-size: 11.5pt; margin: 0 0 3pt; }
 .rte-token { background: color-mix(in srgb, var(--iss-green-medium) 14%, var(--iss-paper)); color: var(--iss-green-dark); border: 1px solid color-mix(in srgb, var(--iss-green-medium) 45%, transparent); border-radius: 4px; padding: 0 3px; font-family: var(--iss-font-mono); font-size: 8pt; }
+
