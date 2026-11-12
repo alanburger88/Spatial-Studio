@@ -4,9 +4,7 @@
       "/opt/node22/bin/node",
       "/home/user/Spatial-Studio/node_modules/playwright/cli.js",
       "test",
-      "e2e/acceptance.spec.ts",
-      "--grep",
-      "AT-16|AT-20",
+      "e2e/content.spec.ts",
       "--trace",
       "off"
     ],
@@ -71,13 +69,13 @@
   },
   "suites": [
     {
-      "title": "e2e/acceptance.spec.ts",
-      "file": "e2e/acceptance.spec.ts",
+      "title": "e2e/content.spec.ts",
+      "file": "e2e/content.spec.ts",
       "column": 0,
       "line": 0,
       "specs": [
         {
-          "title": "AT-16 Landscape cluster counts reconcile with seeded records; synthetic label visible",
+          "title": "S13 lists the missing mandatory es-US parts and what they affect",
           "ok": true,
           "tags": [],
           "tests": [
@@ -92,12 +90,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1882,
+                  "duration": 1524,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T17:16:24.402Z",
+                  "startTime": "2026-11-12T17:18:04.322Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -105,13 +103,13 @@
               "status": "expected"
             }
           ],
-          "id": "c2aef79390210f75b232-d21f04f0324fe2eda589",
-          "file": "e2e/acceptance.spec.ts",
-          "line": 247,
+          "id": "db07e3da79c001cf67c2-82f36b5d542c9a9e5931",
+          "file": "e2e/content.spec.ts",
+          "line": 17,
           "column": 1
         },
         {
-          "title": "AT-20 es-US with missing required copy is a blocking error; no silent translation",
+          "title": "draft then approve one part; the summary updates",
           "ok": true,
           "tags": [],
           "tests": [
@@ -126,12 +124,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2321,
+                  "duration": 1751,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T17:16:26.463Z",
+                  "startTime": "2026-11-12T17:18:06.002Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -139,9 +137,213 @@
               "status": "expected"
             }
           ],
-          "id": "c2aef79390210f75b232-36b8caa790137843b54a",
-          "file": "e2e/acceptance.spec.ts",
-          "line": 296,
+          "id": "db07e3da79c001cf67c2-796ec9600c81e5a170d1",
+          "file": "e2e/content.spec.ts",
+          "line": 33,
+          "column": 1
+        },
+        {
+          "title": "token mismatch blocks approval with an inline message and offers the missing token",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1748,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-12T17:18:07.783Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "db07e3da79c001cf67c2-8eef83a93bbd67920355",
+          "file": "e2e/content.spec.ts",
+          "line": 46,
+          "column": 1
+        },
+        {
+          "title": "approving every mandatory part clears REQUIRED_TRANSLATION_MISSING for Spanish customers",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1874,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-12T17:18:09.548Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "db07e3da79c001cf67c2-3978343885d5bb99360b",
+          "file": "e2e/content.spec.ts",
+          "line": 60,
+          "column": 1
+        },
+        {
+          "title": "CSV export downloads and import creates drafts (never approvals) with a result summary",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1404,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-12T17:18:11.438Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "db07e3da79c001cf67c2-ad9933ca22e894f75769",
+          "file": "e2e/content.spec.ts",
+          "line": 73,
+          "column": 1
+        },
+        {
+          "title": "API: translations.csv and import return real data",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 183,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-12T17:18:12.854Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "db07e3da79c001cf67c2-109a4278ff412ea46a4d",
+          "file": "e2e/content.spec.ts",
+          "line": 90,
+          "column": 1
+        },
+        {
+          "title": "See it in context opens 2D Design with an es-US record and the part selected",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1379,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-12T17:18:13.055Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "db07e3da79c001cf67c2-7058c1a7e8050642df0e",
+          "file": "e2e/content.spec.ts",
+          "line": 101,
+          "column": 1
+        },
+        {
+          "title": "Landscape 2.5D: switch view, change metric, legend changes, click a cluster opens the inspector",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2427,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-12T17:18:14.447Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "db07e3da79c001cf67c2-46818991143f8dce6f9a",
+          "file": "e2e/content.spec.ts",
+          "line": 111,
           "column": 1
         }
       ]
@@ -149,9 +351,9 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-11-12T17:16:23.788Z",
-    "duration": 5062.938999999999,
-    "expected": 2,
+    "startTime": "2026-11-12T17:18:03.492Z",
+    "duration": 13479.326,
+    "expected": 8,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0

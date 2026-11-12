@@ -30,7 +30,7 @@ test('S13 lists the missing mandatory es-US parts and what they affect', async (
   await expect(row(page, 'payment-due').locator('.tr-token')).toHaveText('{{card.minimumDueCents}}');
 });
 
-test('draft then approve one part; undo is available; mandatory-missing count drops', async ({ page }) => {
+test('draft then approve one part; the summary updates', async ({ page }) => {
   await open(page, 'aster-card-demo', 'content');
   const before = await page.getByTestId('tr-summary').innerText();
   const r = await spanishFor(page, 'payment-due', 'Pago mínimo:');
@@ -57,18 +57,17 @@ test('token mismatch blocks approval with an inline message and offers the missi
   await expect(r.getByTestId('tr-status')).toContainText('Approved');
 });
 
-test('approving every mandatory part clears REQUIRED_TRANSLATION_MISSING for Spanish customers', async ({ page }) => {
+test('approving every mandatory part clears REQUIRED_TRANSLATION_MISSING for Spanish customers', async ({ page, request }) => {
   await open(page, 'aster-card-demo', 'content');
   await page.getByTestId('tr-filter-mandatory').check();
   const ids = await page.getByTestId('tr-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-part')!));
   for (const id of ids) { const r = await spanishFor(page, id); await r.getByTestId('tr-approve').click(); await expect(r.getByTestId('tr-status')).toContainText('Approved'); }
   await expect(page.getByTestId('tr-summary')).toContainText('0 mandatory missing');
-  // the same pure resolver the validator uses: no es-US record is blocked by a missing mandatory translation any more
-  const blocked = await page.evaluate(async () => {
-    const st = (window as any).__iss?.store.getState();
-    return st ? st.project.contentParts.filter((c: any) => c.approvedLocales['es-US']).length : -1;
-  });
-  expect(blocked).toBeGreaterThanOrEqual(ids.length);
+  await expect(page.getByTestId('tr-summary')).toContainText('All mandatory text is approved');
+  // the API composes the Spanish document for the (unsaved) approved model instead of the seed's 422 REQUIRED_TRANSLATION_MISSING
+  const project = await page.evaluate(() => (window as any).__iss.store.getState().project);
+  const r = await request.post('http://127.0.0.1:3001/api/v1/compose/pdf', { data: { projectId: 'aster-card-demo', recordId: 'CARD-0001', overrides: { customer: { locale: 'es-US' } }, project } });
+  expect(r.status()).toBe(200);
 });
 
 test('CSV export downloads and import creates drafts (never approvals) with a result summary', async ({ page }) => {

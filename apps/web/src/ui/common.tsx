@@ -69,6 +69,8 @@ export function Empty({ title, message, children }: { title: string; message?: s
   return <div className="empty"><strong>{title}</strong>{message && <span>{message}</span>}{children}</div>;
 }
 
+const dialogStack: object[] = [];
+
 export function Dialog({ title, onClose, children, footer, labelledBy = 'dialog-title' }: { title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; labelledBy?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const opener = useRef<Element | null>(null);
@@ -76,9 +78,12 @@ export function Dialog({ title, onClose, children, footer, labelledBy = 'dialog-
     opener.current = document.activeElement;
     const el = ref.current;
     el?.querySelector<HTMLElement>('button, [href], input, select, textarea')?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    // Only the top-most open dialog reacts to Escape (nested dialogs, e.g. the image library over Styles & brand).
+    const token = {};
+    dialogStack.push(token);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && dialogStack[dialogStack.length - 1] === token) { e.stopPropagation(); onClose(); } };
     window.addEventListener('keydown', onKey);
-    return () => { window.removeEventListener('keydown', onKey); (opener.current as HTMLElement | null)?.focus?.(); };
+    return () => { window.removeEventListener('keydown', onKey); const i = dialogStack.indexOf(token); if (i >= 0) dialogStack.splice(i, 1); (opener.current as HTMLElement | null)?.focus?.(); };
   }, [onClose]);
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
