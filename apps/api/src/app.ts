@@ -157,6 +157,7 @@ export async function buildApp(opts: AppOptions = {}) {
     // Restoring a sample that is already identical to the approved seed is a no-op: no new version, no audit noise.
     if (projectContentDigest(current) === projectContentDigest(seed)) {
       if ((req.body as any)?.clearSnapshots !== false) store.clearSnapshots(req.params.projectId);
+      req.audited = true;
       return { project: current, reset: true, unchanged: true, seedDigest: projectContentDigest(seed) };
     }
     const reset = store.putProject({ ...seed, modelVersion: current.modelVersion + 1 }, projectContentDigest(seed), { by: by(req), label: 'Restored approved sample' });

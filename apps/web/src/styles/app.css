@@ -280,8 +280,9 @@ a { color: var(--iss-accent-strong); }
 .dock-btn:hover, .dock-btn[aria-expanded='true'] { background: var(--iss-surface-hover); color: var(--iss-text); }
 .dock-btn:focus-visible { box-shadow: var(--iss-focus); }
 .dock-btn.warn { color: var(--iss-warning-fg); }
-.demo-tools { position: fixed; z-index: 790; right: 12px; bottom: calc(var(--dock-h) + 10px); width: 340px; max-height: min(620px, calc(100vh - var(--topbar-h) - var(--dock-h) - 28px)); display: flex; flex-direction: column; background: var(--iss-surface); color: var(--iss-text); border: 1px solid var(--iss-border-strong); border-radius: 14px; box-shadow: var(--iss-shadow-pop); overflow: hidden; }
-.demo-tools.with-banner { bottom: calc(var(--dock-h) + 118px); max-height: calc(100vh - var(--topbar-h) - var(--dock-h) - 140px); }
+.demo-tools { position: fixed; z-index: 790; right: 12px; bottom: calc(var(--dock-h) + 10px); width: 340px; max-height: min(620px, calc(100vh - var(--topbar-h) - var(--dock-h) - 72px)); display: flex; flex-direction: column; background: var(--iss-surface); color: var(--iss-text); border: 1px solid var(--iss-border-strong); border-radius: 14px; box-shadow: var(--iss-shadow-pop); overflow: hidden; }
+/* While the guided-demo banner is showing, sit above it and never cover the screen header's buttons. */
+.demo-tools.with-banner { bottom: calc(var(--dock-h) + 118px); max-height: calc(100vh - var(--topbar-h) - var(--dock-h) - 180px); }
 .demo-tools > header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--iss-border); color: var(--iss-warning-fg); }
 .demo-tools > header h2 { margin: 0; font-size: 14px; font-weight: 800; color: var(--iss-text); }
 .dt-intro { margin: 0; padding: 10px 12px 4px; font-size: 12px; line-height: 1.45; color: var(--iss-text-muted); }

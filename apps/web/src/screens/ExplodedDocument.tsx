@@ -386,7 +386,7 @@ export function ExplodedDocument() {
             <div className="field"><span className="label">Component</span>
               <div className="ex-selected" data-testid="selected-node" data-node-id={node.id} title={tech ? undefined : node.id}>
                 <span className="ex-sel-name">{name}</span>
-                {tech && <span className="ex-sel-id chip code" title={node.id}>{node.id}</span>}
+                {tech ? <span className="ex-sel-id chip code" title={node.id}>{node.id}</span> : <span className="sr-only"> ({node.id}) </span>}
                 <span className="ex-sel-type">{tech ? (node.type === 'variant-set' ? 'C11 Variant Set' : 'C10 Conditional Region') : (node.type === 'variant-set' ? 'Variant set' : 'Conditional region')}</span>
               </div>
             </div>

@@ -4,7 +4,7 @@ import { CATALOG_BY_TYPE, projectFields, getPath, nodeMap, requiredNodeIds, appl
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
 import { useScenarioEngine, useStudio } from '../../state/store';
 import { Icon } from '../../ui/icons';
-import { Tech, Biz, Named } from '../../ui/common';
+import { Tech, Biz } from '../../ui/common';
 import { predicateSentence, nodeTitle, localeLabel } from '../../ui/plain';
 import { insertToken } from './RichTextEditor';
 import { ImpactPreview, ReachLine } from '../../ui/ImpactPreview';
@@ -97,7 +97,7 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
       ) : (
         <>
           <div className="insp-id">
-            <div className="insp-name"><Named name={node.name ?? nodeTitle(project, node.id)} code={node.id} /></div>
+            <div className="insp-name" title={node.id}>{node.name ?? nodeTitle(project, node.id)}</div>
             <div className="row wrap" style={{ gap: 6 }}>
               <Tech><span className="chip code" data-testid="inspector-node-id" title={node.id}>{node.id}</span><span className="chip code" title="Component code">{CATALOG_BY_TYPE[node.type].code}</span></Tech>
               {rnode.required && <span className="chip">Required</span>}
