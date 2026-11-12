@@ -22,7 +22,7 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
 | Unit tests | 112/112 |
-| Browser tests | 78/78 (49 acceptance/pack + 29 v0.2/v0.3 feature tests) |
+| Browser tests | 87/87 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 9 v0.4 UX tests) |
 | Build | OK |
 
 ## v0.2 additions (all verified by the tests above)
@@ -34,6 +34,20 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 
 - Version history & compare, review/approval workflow with component comments, optional sign-in with roles and an activity log, templates + text styles + brand kit, decision-table view with tie/shadow/gap analysis, regression test cases, Content & Translations (S13), email and SMS channels, 2.5D Landscape restored.
 
+## v0.4 additions (UX pass — 11 changes approved by the user one by one)
+
+- Menu grouped by job (Build / Explore / Check & publish / Help & admin); labelled top bar (*Previewing as*, *Output*, *Saved · vN* always readable) with one settings menu for detail level, theme, tour and shortcuts.
+- Demo-only defect controls moved out of Rules & Data and Validate into one status-bar *Demo tools* panel (closed by default; opens during the Guided Demo).
+- Validate & Compare and Preview & Export run automatically and show whether the result is up to date; automatic previews do not add export-history entries.
+- Detail panels never open empty (Cube, Landscape, Page Stack, Validate, Design inspector pre-select the most relevant item); Cube cells no longer truncate.
+- Design inspector: four tabs (Content, Data & rules, Layout, Review); collapsible component list.
+- Business view shows names first with codes on hover (components, fields, customers, languages); rule numbers stay as small tags.
+- Project Gallery: one main button per card plus a menu, a *Start here* panel, the synthetic-data statement and a collapsed real-vs-simulated list; restoring an unchanged sample no longer creates a version.
+- Content & Translations: drafts save as you type, actions only on the active row, progress bar summary.
+- Calmer visuals: rows instead of nested cards, three chip styles, sentence-case headings.
+- Narrow windows: side panels become drawers at 900–1100 px; a notice below 900 px. Activity log groups repeated entries under day headings.
+- Verified by `e2e/ux.spec.ts` (U01–U09) plus the existing suites; test IDs required by `contracts/SCREEN_CONTRACT.json` are unchanged.
+
 ## Not verified / open
 
 - **Live AI provider:** not exercised; no credentials were used.
@@ -41,6 +55,7 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 - **Assistive technology:** screen-reader manual pass not run.
 - **Deployment:** none; not authorised.
 - **Brand logo:** official artwork to be supplied by InfoSlips (slot ready).
+- **UX pass:** checked in Chromium at 1440×900, 1280×720 and 1000×700, light and dark; not every screen was inspected by eye in every theme/size/view combination, and no usability test with real users has been run.
 - **Windows:** scripts made cross-platform but not executed on Windows here; Docker image built and smoke-tested on Linux.
 - **Live AI:** still unverified (needs your API key in a local `.env`).
 
