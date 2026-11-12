@@ -124,7 +124,7 @@ export function nodeInnerHtml(n: RNode, mode: RenderMode, renderChild: (c: RNode
       const title = sel.map((x) => esc(x.title)).join(' · ');
       const body = n.text?.length ? blocksHtml(n.text) : '';
       const missingLoc = sel.some((x) => x.missingLocale) ? `<p class="iss-locale-missing">[Approved translation missing — English approved text shown]</p>` : '';
-      return `<section class="iss-variant${banner}" aria-label="${title}"><h3 class="iss-variant-title">${title}</h3>${body}${missingLoc}</section>`;
+      return `<section class="iss-variant${banner}" aria-label="${title}"><h2 class="iss-variant-title">${title}</h2>${body}${missingLoc}</section>`;
     }
     case 'disclosure': {
       const d = n.disclosure!;

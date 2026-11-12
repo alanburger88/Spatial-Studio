@@ -24,10 +24,10 @@
 .ls-stage .stage-toolbar .chip { background: rgba(17,27,46,.85); }
 .ls-empty { position: absolute; inset: 0; display: grid; place-items: center; }
 .ls-viewport { position: absolute; inset: 52px 0 4px 0; display: grid; place-items: center; perspective: 1500px; perspective-origin: 50% 20%; }
-.ls-plane { position: relative; transform-style: preserve-3d; transition: transform var(--iss-motion-depth) var(--iss-ease); border-radius: 14px; border: 1px solid rgba(127,179,245,.35); background: linear-gradient(160deg, rgba(127,179,245,.10), rgba(78,175,96,.05) 60%, rgba(10,17,32,.4)); box-shadow: 0 30px 60px rgba(0,0,0,.5); margin-top: 40px; }
-.ls-plane-grid { position: absolute; inset: 0; border-radius: 14px; background-image: linear-gradient(rgba(148,163,184,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.12) 1px, transparent 1px); pointer-events: none; }
+.ls-plane { position: relative; transform-style: preserve-3d; transition: transform var(--iss-motion-depth) var(--iss-ease); margin-top: 40px; }
+.ls-floor { position: absolute; inset: 0; transform: translateZ(-40px); border-radius: 14px; border: 1px solid rgba(127,179,245,.35); background-color: rgba(127,179,245,.05); background-image: linear-gradient(rgba(148,163,184,.14) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.14) 1px, transparent 1px), linear-gradient(160deg, rgba(127,179,245,.10), rgba(78,175,96,.05) 60%, rgba(10,17,32,.4)); box-shadow: 0 30px 60px rgba(0,0,0,.5); pointer-events: none; }
 .ls-node { position: absolute; width: 0; height: 0; transform-style: preserve-3d; }
-.ls-shadow { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, rgba(0,0,0,.55), rgba(0,0,0,.0) 70%); border: 1px solid color-mix(in srgb, var(--sc) 45%, transparent); }
+.ls-shadow { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%) translateZ(-40px); border-radius: 50%; background: radial-gradient(circle, rgba(0,0,0,.55), rgba(0,0,0,.0) 70%); border: 1px solid color-mix(in srgb, var(--sc) 45%, transparent); }
 .ls-stem { position: absolute; left: -1px; top: 0; width: 2px; background: linear-gradient(to bottom, var(--sc), color-mix(in srgb, var(--sc) 15%, transparent)); opacity: .85; }
 .ls-lift { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: flat; transition: transform var(--iss-motion-depth) var(--iss-ease); }
 .sev-ok { --sc: #4EAF60; } .sev-warning { --sc: #F0AD4E; } .sev-blocking { --sc: #ED7474; }

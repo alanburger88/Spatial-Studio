@@ -327,7 +327,7 @@ function CubeScene(props: { cube: CubeResult; yaw: number; tilt: number; zSlice:
 
   return (
     <div className="cube-viewport" style={{ perspective: 1600 }}>
-      <div className="cube-world" style={{ transform: `rotateX(${tilt}deg) rotateY(${yaw}deg)` }} data-testid="cube-3d">
+      <div className="cube-world" style={{ transform: `rotateX(${tilt}deg) rotateY(${yaw}deg)` }} data-testid="cube-3d" aria-hidden="true">
         {faces.map((f) => {
           const front = facingViewer(f.normal, yaw, tilt);
           return <div key={f.id} className={`cube-face${front ? ' front' : ''}${hideFront && front ? ' hidden' : ''}`} style={{ width: f.w, height: f.h, margin: `${-f.h / 2}px 0 0 ${-f.w / 2}px`, backgroundSize: `${f.w / f.cols}px ${f.h / f.rows}px`, transform: f.tf }} />;
@@ -339,13 +339,16 @@ function CubeScene(props: { cube: CubeResult; yaw: number; tilt: number; zSlice:
         {/* slicer sheet */}
         {sliceZ >= 0 && <div className="cube-sheet" style={{ width: W, height: H, margin: `${-H / 2}px 0 0 ${-W / 2}px`, transform: `translateZ(${zPos(sliceZ)}px)` }} />}
 
+      </div>
+      {/* Data layer: same camera as the frame, separate 3D context so wireframe planes can never slice the labels or cells. */}
+      <div className="cube-world" style={{ transform: `rotateX(${tilt}deg) rotateY(${yaw}deg)` }} data-testid="cube-3d-data">
         {/* tick labels + axis titles (billboards, always facing the viewer) */}
-        {ax.categories.map((c, i) => <div key={`tx${c.key}`} className="cube-tick tx" style={{ transform: bb(px(i), H / 2 + 24, D / 2, 70) }} title={c.label}><span>{tickText(c.label)}</span></div>)}
+        {ax.categories.map((c, i) => <div key={`tx${c.key}`} className="cube-tick tx" style={{ transform: bb(px(i), H / 2 + 24 + (nx > 3 && i % 2 ? 24 : 0), D / 2, 70) }} title={c.label}><span>{tickText(c.label)}</span></div>)}
         {ay.categories.map((c, j) => <div key={`ty${c.key}`} className="cube-tick ty" style={{ transform: bb(-W / 2 - 12, py(j), D / 2, 70) }} title={c.label}><span>{tickText(c.label)}</span></div>)}
         {az.categories.map((c, k) => <div key={`tz${c.key}`} className={`cube-tick tz${sliceZ === k ? ' on' : ''}`} style={{ transform: bb(W / 2 + 14, H / 2 + 14, zPos(k), 70) }} title={c.label}><span>{tickText(c.label)}</span></div>)}
-        <div className="cube-axis-title ax-x" style={{ transform: bb(-W / 2 + 40, H / 2 + 92, D / 2, 70) }}>X · {ax.label} →</div>
+        <div className="cube-axis-title ax-x" style={{ transform: bb(-W / 2 + 10, H / 2 + 104, D / 2, 70) }}>X · {ax.label} →</div>
         <div className="cube-axis-title ax-y" style={{ transform: bb(-W / 2 - 4, -H / 2 - 22, D / 2, 70) }}>↑ Y · {ay.label}</div>
-        <div className="cube-axis-title ax-z" style={{ transform: bb(W / 2 - 40, H / 2 + 96, D / 2, 70) }}>Z · {az.label} (front → back)</div>
+        <div className="cube-axis-title ax-z" style={{ transform: bb(W / 2 + 6, H / 2 + 14, D / 2, 70) }}>Z · {az.label} (front → back)</div>
 
         {/* cells */}
         {cube.cells.map((c) => {

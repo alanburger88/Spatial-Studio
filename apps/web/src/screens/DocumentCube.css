@@ -22,7 +22,7 @@
 .cube-mark { --mk: #94A3B8; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; font-size: 10.5px; font-weight: 800; color: #0A1120; background: var(--mk); flex: none; }
 .cube-mark.sm { width: 16px; height: 16px; font-size: 10px; }
 .cube-mark.empty { background: transparent; border: 1px dashed var(--iss-border-strong); color: var(--iss-text-faint); }
-.cube-badge { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--iss-error); color: #1b0606; font-size: 11px; font-weight: 900; flex: none; box-shadow: 0 0 0 2px #0F1A2E; }
+.cube-badge { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--iss-error); color: #1b0606; font-size: 11px; font-weight: 900; flex: none; border: 2px solid #0F1A2E; }
 
 /* center column */
 .cube-center { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; }
@@ -30,7 +30,7 @@
 .cube-toolbar .chip { background: rgba(17,27,46,.85); backdrop-filter: blur(4px); }
 .cube-stage-msg { position: absolute; inset: 0; display: grid; place-items: center; z-index: 3; }
 .cube-viewport { position: absolute; inset: 44px 0 20px 0; transform-style: preserve-3d; }
-.cube-world { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; transition: transform var(--iss-motion-depth) var(--iss-ease); }
+.cube-world { position: absolute; left: 50%; top: 46%; margin-top: -30px; width: 0; height: 0; transform-style: preserve-3d; transition: transform var(--iss-motion-depth) var(--iss-ease); }
 .cube-world > * { transform-style: preserve-3d; }
 .cube-world .cube-cell, .cube-world .cube-cell *, .cube-tick *, .cube-axis-title { transform-style: flat; }
 .cube-face { position: absolute; left: 0; top: 0;  border: 1px solid rgba(127,179,245,.38); background:
@@ -47,22 +47,23 @@
 .cube-cell-wrap { transition: transform var(--iss-motion-depth) var(--iss-ease); }
 .cube-tick, .cube-axis-title { transition: transform var(--iss-motion-depth) var(--iss-ease); }
 .cube-tick span, .cube-axis-title { display: block; }
-.cube-tick span { position: absolute; width: 82px; margin-left: -41px; margin-top: -14px; font-size: 10px; line-height: 1.2; text-align: center; color: var(--iss-text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.cube-tick.ty span { margin-left: -82px; text-align: right; margin-top: -12px; }
-.cube-tick.tz span { margin-left: 0; text-align: left; width: 78px; margin-top: -2px; color: #A8CCF8; }
+.cube-tick span { position: absolute; width: 88px; margin-left: -44px; margin-top: -14px; font-size: 9.5px; line-height: 1.2; text-align: center; color: var(--iss-text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cube-tick.tx span { -webkit-line-clamp: 1; }
+.cube-tick.ty span { width: 78px; margin-left: -78px; text-align: right; margin-top: -12px; }
+.cube-tick.tz span { margin-left: 0; text-align: left; width: 70px; margin-top: -2px; color: #A8CCF8; }
 .cube-tick.tz.on span { color: #fff; font-weight: 700; }
 .cube-axis-title { white-space: nowrap; font-size: 11.5px; font-weight: 800; letter-spacing: .02em; color: var(--ax); text-shadow: 0 1px 6px rgba(0,0,0,.8); display: block; }
 .cube-axis-title { width: auto; }
 .cube-axis-title.ax-x { transform-origin: 0 0; }
 
-.cube-cell { position: absolute; left: -18px; top: -12px; width: 36px; height: 24px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 8px; border: 1.5px solid var(--mk); background: color-mix(in srgb, var(--mk) 22%, #0F1A2E); color: var(--iss-text); cursor: pointer; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; box-shadow: 0 6px 14px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12); transition: transform var(--iss-motion-fast) var(--iss-ease), box-shadow var(--iss-motion-fast), background var(--iss-motion-fast); padding: 0 4px; }
+.cube-cell { position: absolute; left: -18px; top: -12px; width: 36px; height: 24px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 8px; border: 1.5px solid var(--mk); background: color-mix(in srgb, var(--mk) 22%, #0F1A2E); color: var(--iss-text); cursor: pointer; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; box-shadow: inset 0 1px 0 rgba(255,255,255,.14); transition: transform var(--iss-motion-fast) var(--iss-ease), background var(--iss-motion-fast); padding: 0 4px; }
 .cube-cell:hover { transform: scale(1.12); background: color-mix(in srgb, var(--mk) 34%, #0F1A2E); }
-.cube-cell:focus-visible { outline: none; box-shadow: var(--iss-focus), 0 6px 14px rgba(0,0,0,.45); }
-.cube-cell.selected { box-shadow: 0 0 0 2px #fff, 0 0 18px var(--mk); transform: scale(1.14); }
+.cube-cell:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.cube-cell.selected { outline: 2px solid #fff; outline-offset: 2px; transform: scale(1.14); background: color-mix(in srgb, var(--mk) 40%, #0F1A2E); }
 .cube-cell .cube-badge { position: absolute; top: -7px; right: -7px; }
-.cube-cell.empty { width: 18px; height: 18px; left: -9px; top: -9px; border: 1px dashed rgba(148,163,184,.38); background: rgba(148,163,184,.05); box-shadow: none; opacity: .65; color: var(--iss-text-faint); }
+.cube-cell.empty { width: 18px; height: 18px; left: -9px; top: -9px; border: 1px dashed rgba(148,163,184,.38); background: rgba(148,163,184,.05); opacity: .65; color: var(--iss-text-faint); }
 .cube-cell.empty:hover { opacity: 1; background: rgba(148,163,184,.16); transform: scale(1.2); }
-.cube-cell.empty.selected { opacity: 1; border-style: solid; border-color: #fff; box-shadow: 0 0 12px rgba(255,255,255,.4); }
+.cube-cell.empty.selected { opacity: 1; border-style: solid; border-color: #fff; }
 .cube-zero { font-size: 14px; line-height: 1; }
 
 .cube-controls { flex: none; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 5px 10px; row-gap: 4px; border-radius: 10px; background: var(--iss-surface); border: 1px solid var(--iss-border); }

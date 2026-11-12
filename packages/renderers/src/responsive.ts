@@ -87,9 +87,9 @@ a{color:#1D5941}
 .iss-card.iss-plain{background:transparent;box-shadow:none;padding:0}
 .iss-node{min-width:0}
 .iss-head .iss-img{height:44px;width:auto;max-width:220px}
-.iss-head .iss-rich h2{font-size:24px}
+.iss-head .iss-rich h1,.iss-head .iss-rich h2{font-size:24px;margin:0 0 4px}
 .iss-hf--document-header{color:#92400e;font-weight:700;font-size:12px;letter-spacing:.08em;text-align:right}
-.iss-hf--page-footer{font-size:13px;color:#64748B;border-top:2px solid #4EAF60;padding-top:10px}
+.iss-hf--page-footer{font-size:13px;color:#475569;border-top:2px solid #4EAF60;padding-top:10px}
 .iss-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .iss-metric{padding:12px 14px;border-radius:12px}.iss-metric-label{font-size:11px}.iss-metric-value{font-size:22px}.iss-metric--secondary .iss-metric-value{font-size:16px}
 .iss-table-tools{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:4px 0 8px}
@@ -108,7 +108,7 @@ details.iss-expl summary{cursor:pointer;display:flex;flex-direction:column;gap:2
 .iss-tip{position:absolute;pointer-events:none;background:#0F172A;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;opacity:0;transition:opacity .15s}
 .iss-chart-data{font-size:13px;margin-top:8px}
 .iss-banner{font-size:22px}
-.iss-meta{font-size:12px;color:#64748B;margin-top:24px;word-break:break-all}
+.iss-meta{font-size:12px;color:#475569;margin-top:24px;word-break:break-all}
 @media (max-width:960px){.iss-main,.iss-aside{grid-column:1/-1}}
 @media (max-width:600px){.iss-shell{padding:12px}.iss-head{grid-template-columns:1fr}.iss-head>*{grid-column:1/-1 !important}.iss-main{grid-template-columns:1fr}.iss-main>*{grid-column:1/-1 !important}.iss-banner{font-size:18px}.iss-table{font-size:13px}}
 @media (prefers-reduced-motion:reduce){*{transition:none !important}}
@@ -157,16 +157,17 @@ export function renderInteractiveHtml(res: Resolution, project: Project): string
 <style>${htmlCss(accent)}</style></head>
 <body>
 <a class="iss-skip" href="#iss-main">Skip to content</a>
-<div class="iss-demo-ribbon" role="note">SYNTHETIC DEMO DATA — fictional ${esc(project.issuer?.name ?? '')}; not a legal document${project.documentType === 'eob' ? ' · THIS IS NOT A BILL' : ''}</div>
+<aside class="iss-demo-ribbon" aria-label="Synthetic data notice">SYNTHETIC DEMO DATA — fictional ${esc(project.issuer?.name ?? '')}; not a legal document${project.documentType === 'eob' ? ' · THIS IS NOT A BILL' : ''}</aside>
 <div class="iss-shell">
-<header class="iss-head" aria-label="Document header">${areas.header.map(card).join('')}</header>
+<header class="iss-head" aria-label="Document header">${areas.header.map(card).join('').replace(/<h2>([\s\S]*?)<\/h2>/, '<h1>$1</h1>')}</header>
 <main id="iss-main" class="iss-grid">
 <div class="iss-main">${areas.main.map(card).join('')}</div>
 <aside class="iss-aside" aria-label="Related information">${areas.aside.map((n) => card({ ...n, layout: { ...n.layout, html: { ...n.layout?.html, span: 12 } } })).join('')}</aside>
 </main>
 ${hasExpl ? '<div class="iss-tools"><button class="iss-btn" type="button" data-action="expand-all" aria-expanded="false">Expand all explanations</button></div>' : ''}
-<footer class="iss-foot">${areas.footer.map(card).join('')}</footer>
+<footer class="iss-foot">${areas.footer.map(card).join('')}
 <p class="iss-meta">Composed by InfoSlips Spatial Studio · run ${esc(res.runId)} · content digest ${esc(res.contentDigest.slice(0, 16))} · rules ${esc(res.rulesDigest.slice(0, 12))} · model v${res.modelVersion}</p>
+</footer>
 </div>
 <script type="application/json" id="iss-semantic-manifest">${manifestJson}</script>
 <script>${INTERACTION_JS}</script>

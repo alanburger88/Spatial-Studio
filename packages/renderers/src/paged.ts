@@ -7,8 +7,8 @@ export const PAGED_RENDERER_VERSION = 'iss-paged-renderer/1.0.0';
 
 export function documentCss(accent: string): string {
   return `
-:root{--ink:#0F172A;--body:#334155;--muted:#64748B;--rule:#E2E8F0;--tint:#F1F5F9;--accent:${accent};--brand:#4EAF60;--lime:#DBE64C}
-.iss-rich h2{font-size:15pt;font-weight:800;color:var(--ink);margin:0 0 3pt;letter-spacing:-.01em}
+:root{--ink:#0F172A;--body:#334155;--muted:#4B5A6E;--rule:#E2E8F0;--tint:#F1F5F9;--accent:${accent};--brand:#4EAF60;--lime:#DBE64C}
+.iss-rich h1,.iss-rich h2{font-size:15pt;font-weight:800;color:var(--ink);margin:0 0 3pt;letter-spacing:-.01em}
 .iss-rich h3{font-size:11.5pt;font-weight:700;color:var(--ink);margin:0 0 3pt}
 .iss-rich h4{font-size:10pt;font-weight:700;margin:0 0 2pt}
 .iss-rich p{margin:0 0 3pt}
@@ -28,14 +28,14 @@ export function documentCss(accent: string): string {
 .iss-row .iss-field-label{font-size:7.5pt;text-transform:uppercase;letter-spacing:.06em}
 .iss-row .iss-field-value{font-size:10.5pt}.iss-field-label{color:var(--muted);font-weight:600}.iss-field-value{font-weight:700;color:var(--ink)}
 .iss-variant{border-left:3pt solid var(--accent);background:var(--tint);padding:7pt 10pt;border-radius:0 5pt 5pt 0}
-.iss-variant-title{font-size:10.5pt;font-weight:700;color:var(--ink);margin:0 0 2pt}
+h2.iss-variant-title,.iss-variant-title{font-size:10.5pt;font-weight:700;color:var(--ink);margin:0 0 2pt;letter-spacing:0}
 .iss-variant p{margin:0}
 .iss-unresolved{border:1.5pt dashed #dc2626;color:#991b1b;padding:6pt 8pt;font-weight:700;border-radius:4pt}
 .iss-locale-missing{color:#92400e;font-size:8pt;margin-top:3pt}
 .iss-disclosure{border-top:0.75pt solid var(--rule);padding-top:5pt;font-size:7.5pt;color:var(--muted);position:relative}
 .iss-disclosure h4{font-size:8pt;margin:0 0 2pt;color:var(--body);text-transform:uppercase;letter-spacing:.05em}
 .iss-disclosure p{margin:0}
-.iss-version{font-size:6.5pt;color:#94A3B8;position:absolute;right:0;top:5pt}
+.iss-version{font-size:6.5pt;color:#5B6B80;position:absolute;right:0;top:5pt}
 .iss-banner{border:2pt solid var(--ink);background:var(--lime);color:var(--ink);padding:8pt 12pt;border-radius:5pt;font-size:16pt;font-weight:900;text-align:center;letter-spacing:.04em}
 .iss-banner .iss-version{color:#334155;top:2pt;right:6pt}
 .iss-action{font-size:9pt}

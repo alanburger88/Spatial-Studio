@@ -14,6 +14,7 @@ const METRIC_HELP: Record<Metric, string> = {
 };
 const SEV_ICON = { ok: '✓', warning: '▲', blocking: '■' } as const;
 const SEV_TEXT = { ok: 'No findings', warning: 'Warnings', blocking: 'Blocking' } as const;
+const FLOOR = 40; // floor sits this far below the bubbles' reference plane so lifted discs never intersect it
 const PLANE_W = 600, PLANE_H = 270, PLANE_TILT = 54;
 
 const pct = (n: number, d: number) => (d ? `${((n / d) * 100).toFixed(n / d < 0.1 ? 1 : 0)}%` : '0%');
@@ -184,7 +185,7 @@ export function ScenarioLandscape() {
             ) : (
               <div className="ls-viewport">
                 <div className="ls-plane" style={{ width: PLANE_W, height: PLANE_H, transform: `rotateX(${PLANE_TILT}deg)` }} data-testid="landscape-plane">
-                  <div className="ls-plane-grid" style={{ backgroundSize: `${PLANE_W / totalSub}px ${PLANE_H / rowsShown}px` }} />
+                  <div className="ls-floor" style={{ backgroundSize: `${PLANE_W / totalSub}px ${PLANE_H / rowsShown}px` }} />
                   {visible.map((c) => {
                     const p = cell(c), d = diam(c), e = elev(c);
                     const sel = selectedId === c.clusterId;
@@ -192,7 +193,7 @@ export function ScenarioLandscape() {
                       <div key={c.clusterId} className={`ls-node sev-${c.severity}${sel ? ' selected' : ''}`} style={{ left: p.x, top: p.y }}>
                         <span className="ls-shadow" style={{ width: d, height: d }} />
                         <span className="ls-lift" style={{ transform: `translateZ(${e}px) rotateX(${-PLANE_TILT}deg)` }}>
-                          <span className="ls-stem" style={{ height: e * Math.cos((PLANE_TILT * Math.PI) / 180) / Math.cos(0) * 1 }} />
+                          <span className="ls-stem" style={{ height: (e + FLOOR) * Math.cos((PLANE_TILT * Math.PI) / 180) }} />
                           <button
                             className="ls-bubble"
                             style={{ width: d, height: d }}

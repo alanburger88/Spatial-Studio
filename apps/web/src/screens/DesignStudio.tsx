@@ -118,7 +118,7 @@ export function DesignStudio() {
       e.preventDefault();
       const m = markFor(id, e);
       const p = plan(project, id, m.pos, dragging);
-      if ('reject' in p) { setReject({ nodeId: m.pos === 'into' ? id : (parentOf(project, id)?.id ?? id), reason: p.reject }); setMark(null); e.dataTransfer.dropEffect = 'none'; }
+      if ('reject' in p) { setReject({ nodeId: m.pos === 'into' ? id : (parentOf(project, id)?.id ?? id), reason: p.reject }); setMark(null); }
       else { setReject(null); setMark(m); e.dataTransfer.dropEffect = dragging.kind === 'node' ? 'move' : 'copy'; }
     },
     onDropNode: (id, e) => {
