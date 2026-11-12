@@ -4,9 +4,13 @@ import path from 'node:path';
 
 const r = (p: string) => path.resolve(__dirname, '../../', p);
 const api = process.env.API_URL ?? 'http://127.0.0.1:3001';
+// Separate optimizer cache per dev-server port so parallel instances never invalidate each other.
+const portArg = process.argv.includes('--port') ? process.argv[process.argv.indexOf('--port') + 1] : 'default';
 
 export default defineConfig({
   plugins: [react()],
+  cacheDir: `node_modules/.vite/port-${portArg}`,
+  optimizeDeps: { include: ['react', 'react-dom', 'react-dom/client', 'react-router-dom', 'zustand', 'immer', '@tiptap/react', '@tiptap/starter-kit', '@tiptap/extension-link', '@tiptap/core'] },
   resolve: {
     alias: {
       '@iss/model': r('packages/model/src/index.ts'),

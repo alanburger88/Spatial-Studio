@@ -1,6 +1,34 @@
-{ "name": "@iss/web", "version": "0.1.0", "private": true, "type": "module",
-  "scripts": { "dev": "vite --host 127.0.0.1 --port 5173 --strictPort", "build": "vite build", "preview": "vite preview --host 127.0.0.1 --port 5173 --strictPort" },
-  "dependencies": { "@iss/model": "workspace:*", "@iss/resolver": "workspace:*", "@iss/renderers": "workspace:*", "@iss/scenarios": "workspace:*", "@iss/validation": "workspace:*",
-    "react": "18.3.1", "react-dom": "18.3.1", "react-router-dom": "6.28.0", "zustand": "5.0.2", "immer": "10.1.1",
-    "@tiptap/react": "2.10.3", "@tiptap/starter-kit": "2.10.3", "@tiptap/pm": "2.10.3", "@tiptap/extension-link": "2.10.3", "@tiptap/core": "2.10.3" },
-  "devDependencies": { "@vitejs/plugin-react": "4.3.4", "vite": "6.0.5", "@types/react": "18.3.12", "@types/react-dom": "18.3.1" } }
+{
+  "name": "@iss/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 5173 --strictPort"
+  },
+  "dependencies": {
+    "@iss/model": "workspace:*",
+    "@iss/renderers": "workspace:*",
+    "@iss/resolver": "workspace:*",
+    "@iss/scenarios": "workspace:*",
+    "@iss/validation": "workspace:*",
+    "@tiptap/core": "2.27.3",
+    "@tiptap/extension-link": "2.27.3",
+    "@tiptap/pm": "2.27.3",
+    "@tiptap/react": "2.27.3",
+    "@tiptap/starter-kit": "2.27.3",
+    "immer": "10.1.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.28.0",
+    "zustand": "5.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "6.0.5"
+  }
+}
