@@ -227,3 +227,19 @@ a { color: var(--iss-accent-strong); }
   .crumbs > a, .crumbs > span { display: none; }
   .topbar .brand-name { display: none; }
 }
+
+/* Top bar: the output selector and save controls never collapse; the breadcrumb and picker give way first. */
+.topbar [data-testid='select-profile'] { flex: none; min-width: 112px; }
+.topbar-group > * { flex: none; }
+.topbar-group > .rp { flex: 0 1 auto; min-width: 150px; }
+.crumbs { flex: 0 1 auto; }
+.crumb-select { min-width: 90px; max-width: 260px; }
+.topbar-group > .rp { max-width: 300px; }
+.rp > .rp-trigger { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; }
+/* Narrow desktops: drop secondary text first so the customer and output controls keep their room. */
+@media (max-width: 1520px) {
+  .topbar .brand-name { display: none; }
+  .crumbs > a, .crumbs > span { display: none; }
+  .topbar .save-state { font-size: 0; gap: 0; }
+  .topbar .save-state .dot { width: 10px; height: 10px; }
+}

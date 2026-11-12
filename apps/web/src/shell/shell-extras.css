@@ -14,7 +14,7 @@
 .help-note { margin: 6px 4px 2px; padding: 8px 10px; border-top: 1px solid var(--iss-border); font-size: 12px; color: var(--iss-text-muted); }
 .help-note strong { color: var(--iss-text); }
 .help-note p { margin: 4px 0 0; line-height: 1.45; }
-@media (max-width: 1360px) {
+@media (max-width: 1600px) {
   .palette-btn .pal-btn-label, .palette-btn .kbd { display: none; }
   .palette-btn { width: 32px; padding: 0; gap: 0; }
 }

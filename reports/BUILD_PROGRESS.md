@@ -1,6 +1,6 @@
 # Autonomous implementation checkpoint
 
-**Status:** POC built and verified locally (2026-11-12). Branch `claude/magical-franklin-aonsol`.
+**Status:** POC v0.2 (polish pass + "Now" bundle) built and verified locally (2026-11-12). Branch `claude/magical-franklin-aonsol`.
 
 ## Gate log
 
@@ -21,9 +21,14 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | Pack validation | PASS |
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
-| Unit tests | 40/40 |
-| Browser tests | 49/49 |
+| Unit tests | 53/53 |
+| Browser tests | 58/58 (49 acceptance/pack + 9 v0.2 feature tests) |
 | Build | OK |
+
+## v0.2 additions (all verified by the tests above)
+
+- Review polish: compact headers, Business/Technical view, light theme (default) + dark, searchable customer picker, consistent status dock, reworked Exploded/Cube/Landscape/Design/Rules/Outputs/Validate/Assistant/Journey/Page Stack/Demo screens.
+- Project duplicate/rename/delete; CSV/JSON record import with column matching; custom data fields; impact preview; batch runs to ZIP; image library; Ctrl+K command palette; shortcuts sheet, help menu and first-visit tour; Docker one-command run; Windows-friendly scripts.
 
 ## Not verified / open
 
@@ -31,7 +36,9 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 - **Firefox/Safari:** smoke test not run.
 - **Assistive technology:** screen-reader manual pass not run.
 - **Deployment:** none; not authorised.
-- **Brand logo:** official artwork not available in the environment.
+- **Brand logo:** official artwork to be supplied by InfoSlips (slot ready).
+- **Windows:** scripts made cross-platform but not executed on Windows here; Docker image built and smoke-tested on Linux.
+- **Live AI:** still unverified (needs your API key in a local `.env`).
 
 ## Exact next runnable commands
 

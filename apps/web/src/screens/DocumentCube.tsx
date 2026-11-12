@@ -293,7 +293,7 @@ export function DocumentCube() {
                       <tr key={key} className={selected === key ? 'selected' : c.count === 0 ? 'cube-row-empty' : ''} onClick={() => { setSelected(key); setYKey(c.y); }} data-testid="cube-row">
                         <td title={labelOf(0, c.x)}>{labelOf(0, c.x)}</td><td title={labelOf(1, c.y)}>{labelOf(1, c.y)}</td><td title={labelOf(2, c.z)}>{labelOf(2, c.z)}</td>
                         <td className="num"><strong>{c.count}</strong></td>
-                        <td>{c.count === 0 ? <span className="muted">No matching records</span> : <span className="cube-outcome-cell"><span className="cube-mark sm" style={{ ['--mk' as string]: st.color }}>{st.letter}</span><span className={viewMode === 'technical' ? 'mono' : ''}>{outcomeName(c.dominantOutcome)}</span>{c.simulationOnly && <span className="chip sim">SIMULATION ONLY</span>}</span>}</td>
+                        <td>{c.count === 0 ? <span className="muted">No matching fixture</span> : <span className="cube-outcome-cell"><span className="cube-mark sm" style={{ ['--mk' as string]: st.color }}>{st.letter}</span><span className={viewMode === 'technical' ? 'mono' : ''}>{outcomeName(c.dominantOutcome)}</span>{c.simulationOnly && <span className="chip sim">SIMULATION ONLY</span>}</span>}</td>
                         <td>{c.blocking > 0 && <span className="chip error">■ {c.blocking} blocking</span>} {c.warnings > 0 && <span className="chip warning">▲ {c.warnings} warning</span>}{issuesOf(c) === 0 && <span className="muted">{c.count ? 'None' : '—'}</span>}</td>
                         <td><button className="btn sm" disabled={!c.representative} onClick={(e) => { e.stopPropagation(); setSelected(key); openScenario(c, 'design'); }} aria-label={`Open ${labelOf(0, c.x)}, ${labelOf(1, c.y)}, ${labelOf(2, c.z)}`}>Open</button></td>
                       </tr>
@@ -436,7 +436,7 @@ function CubeMatrix(props: { cube: CubeResult; activeY: string; onY: (k: string)
               const c = byKey.get(key);
               if (!c) return <div key={z.key} className="cube-mx-cell vacant" role="gridcell" />;
               const st = outcomeStyle(c.dominantOutcome);
-              const label = `${ax.label} ${x.label}, ${ay.label} ${labelFor(ay, activeY)}, ${az.label} ${z.label}: ${c.count === 0 ? 'no matching records' : `${c.count} scenarios, dominant outcome ${outcomeName(c.dominantOutcome)}${c.blocking ? `, ${c.blocking} blocking` : ''}`}`;
+              const label = `${ax.label} ${x.label}, ${ay.label} ${labelFor(ay, activeY)}, ${az.label} ${z.label}: ${c.count === 0 ? 'no matching fixture' : `${c.count} scenarios, dominant outcome ${outcomeName(c.dominantOutcome)}${c.blocking ? `, ${c.blocking} blocking` : ''}`}`;
               return (
                 <div key={z.key} role="gridcell" className="cube-mx-gc">
                   <button
@@ -447,7 +447,7 @@ function CubeMatrix(props: { cube: CubeResult; activeY: string; onY: (k: string)
                     data-cell={key.split(SEP).join('|')}
                     onClick={() => onSelect(key)}
                   >
-                    {c.count === 0 ? <span className="cube-mx-none">no matching records</span> : (
+                    {c.count === 0 ? <span className="cube-mx-none">'no matching fixture</span> : (
                       <>
                         <span className="cube-mx-top"><strong className="cube-mx-n">{c.count}</strong>{c.blocking > 0 && <span className="cube-badge" aria-hidden="true">!</span>}</span>
                         <span className="cube-mx-oc"><span className="cube-mark sm">{st.letter}</span><span className="cube-mx-name">{outcomeName(c.dominantOutcome)}</span></span>
@@ -495,7 +495,7 @@ function Inspector(props: { cell: CubeCell; cube: CubeResult; engineProject: Non
       </div>
 
       {cell.count === 0 ? (
-        <div className="callout" data-testid="cube-empty-cell"><strong>No matching records</strong><br /><span className="muted">No seeded record resolves to this intersection. Nothing is fabricated; create an edge case from Rules &amp; Data to cover it.</span></div>
+        <div className="callout" data-testid="cube-empty-cell"><strong>No matching fixture</strong><br /><span className="muted">No seeded record resolves to this intersection. Nothing is fabricated; create an edge case from Rules &amp; Data to cover it.</span></div>
       ) : (
         <>
           <div className="section-title">Outcome breakdown</div>
