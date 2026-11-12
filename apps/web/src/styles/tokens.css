@@ -1,0 +1,73 @@
+/*
+ * InfoSlips Spatial Studio design tokens.
+ * Brand palette and typography from the InfoSlips brand system (greens, slate scale, Inter).
+ * Logo artwork is not bundled in this environment: the shell uses a replaceable wordmark slot (--iss-logo-url).
+ * Functional status colours (warning amber, error coral) are retained for unambiguous diagnostics.
+ */
+:root {
+  /* Brand */
+  --iss-green: #4EAF60;
+  --iss-green-dark: #1D5941;
+  --iss-green-medium: #277656;
+  --iss-acorn: #80D100;
+  --iss-lime: #DBE64C;
+  --iss-slate-1: #0F172A;
+  --iss-slate-2: #334155;
+  --iss-slate-3: #64748B;
+  --iss-slate-4: #94A3B8;
+  --iss-slate-5: #CBD5E1;
+  --iss-slate-6: #E2E8F0;
+  --iss-slate-7: #F1F5F9;
+  --iss-logo-url: none;
+
+  /* Workstation surfaces (dark slate shell, bright paper) */
+  --iss-shell: #0A1120;
+  --iss-surface: #111B2E;
+  --iss-surface-raised: #17233A;
+  --iss-surface-hover: #1D2B45;
+  --iss-surface-sunken: #0C1526;
+  --iss-border: #26344D;
+  --iss-border-strong: #34466A;
+  --iss-paper: #ffffff;
+  --iss-paper-ink: #0F172A;
+  --iss-text: #F1F5F9;
+  --iss-text-muted: #94A3B8;
+  --iss-text-faint: #64748B;
+
+  /* Semantics */
+  --iss-accent: var(--iss-green);
+  --iss-accent-strong: #63C774;
+  --iss-accent-soft: rgba(78, 175, 96, 0.16);
+  --iss-variant: var(--iss-lime);
+  --iss-variant-soft: rgba(219, 230, 76, 0.14);
+  --iss-success: #57C6A5;
+  --iss-warning: #F0AD4E;
+  --iss-warning-soft: rgba(240, 173, 78, 0.15);
+  --iss-error: #ED7474;
+  --iss-error-soft: rgba(237, 116, 116, 0.15);
+  --iss-info: #7FB3F5;
+
+  --iss-radius-sm: 6px;
+  --iss-radius-md: 10px;
+  --iss-radius-lg: 14px;
+  --iss-shadow-plane: 0 18px 45px rgba(0, 0, 0, 0.38);
+  --iss-shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --iss-shadow-paper: 0 2px 4px rgba(0, 0, 0, 0.25), 0 24px 60px rgba(0, 0, 0, 0.45);
+  --iss-font-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --iss-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --iss-motion-fast: 140ms;
+  --iss-motion-mid: 260ms;
+  --iss-motion-depth: 420ms;
+  --iss-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --iss-focus: 0 0 0 2px var(--iss-shell), 0 0 0 4px var(--iss-accent);
+
+  --topbar-h: 58px;
+  --nav-w: 212px;
+  --inspector-w: 320px;
+  --dock-h: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --iss-motion-fast: 0ms; --iss-motion-mid: 0ms; --iss-motion-depth: 0ms; }
+}
+:root[data-reduced-motion='true'] { --iss-motion-fast: 0ms; --iss-motion-mid: 0ms; --iss-motion-depth: 0ms; }

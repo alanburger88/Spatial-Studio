@@ -28,6 +28,7 @@
     "@types/node": "22.10.2",
     "axe-core": "4.10.2",
     "pdfjs-dist": "4.9.155",
+    "playwright": "1.63.0",
     "tsx": "4.19.2",
     "typescript": "5.7.2",
     "vite": "6.0.5",
