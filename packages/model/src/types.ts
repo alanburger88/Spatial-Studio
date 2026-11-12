@@ -160,6 +160,8 @@ export interface DocNode {
 
   // Rich text
   content?: RichDoc;
+  /** Named text style from `project.styles` (A4). */
+  styleId?: string;
 
   // Content-part backed nodes (disclosure, conditional single-part sections)
   contentPartId?: string;
@@ -215,6 +217,8 @@ export interface ContentPart {
   approvedLocales: Partial<Record<Locale, string>>;
   syntheticDemoOnly: boolean;
   type: 'text' | 'disclosure';
+  /** Unapproved translation drafts (C1). Only `approvedLocales` ever reach a resolved document. */
+  draftLocales?: Partial<Record<Locale, string>>;
 }
 
 /* ---------------------------------------------------------------- Profiles */
@@ -275,6 +279,54 @@ export interface Project {
   lastSavedAt?: string;
   /** Project-level data fields beyond the standard contract (paths `custom.<key>`); travel with the model for deterministic runs. */
   customFields?: CustomField[];
+  /** Named paragraph/character styles (A4). */
+  styles?: TextStyle[];
+  /** Project brand kit (A4): applied by the renderers to every output. */
+  brand?: BrandKit;
+  /** Pinned regression scenarios with expected outcomes (B4). Travel with the model. */
+  testCases?: TestCase[];
+}
+
+/** A named text style. Sizes in points; colours are CSS hex. */
+export interface TextStyle {
+  id: string;
+  name: string;
+  kind: 'paragraph' | 'character';
+  fontSizePt?: number;
+  fontWeight?: 400 | 600 | 700 | 800;
+  italic?: boolean;
+  color?: string;
+  lineHeight?: number;
+  spaceBeforePt?: number;
+  spaceAfterPt?: number;
+  uppercase?: boolean;
+}
+
+/** Brand kit: colours, document font and an optional logo (data URI from the image library). */
+export interface BrandKit {
+  primary: string;
+  accent: string;
+  text?: string;
+  fontFamily?: 'Arial' | 'Georgia' | 'Verdana' | 'Trebuchet MS';
+  logoDataUri?: string;
+  logoAlt?: string;
+}
+
+/** A pinned scenario and the outcome it must keep producing. */
+export interface TestCase {
+  id: string;
+  name: string;
+  recordId: string;
+  overrides?: Record<string, unknown>;
+  journeyCursor?: number | null;
+  expect: {
+    selectedVariants?: Record<string, string | null>;
+    visibleNodeIds?: string[];
+    hiddenNodeIds?: string[];
+    approvedLocale?: string | null;
+    noBlocking?: boolean;
+  };
+  createdAt?: string;
 }
 
 /* ---------------------------------------------------------- Synthetic data */

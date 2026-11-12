@@ -23,6 +23,7 @@ export const SCREENS = [
   { id: 'S10', path: 'outputs', label: 'Preview & Export', icon: Icon.outputs },
   { id: 'S11', path: 'demo', label: 'Guided Demo', icon: Icon.demo },
   { id: 'S12', path: 'assistant', label: 'AI Assistant', icon: Icon.ai },
+  { id: 'S13', path: 'content', label: 'Content & Translations', icon: Icon.list },
 ] as const;
 
 function isTyping(el: EventTarget | null) {

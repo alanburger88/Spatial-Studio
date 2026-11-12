@@ -3,7 +3,7 @@ import { CATALOG_BY_TYPE } from './catalog';
 import { digestOf } from './digest';
 import { isSafeUrl, sanitizeRichDoc, tokensIn } from './rich';
 import { projectFieldIndex, validateCustomFields } from './fields';
-import type { ContentPart, CustomField, DocNode, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
+import type { BrandKit, ContentPart, CustomField, DocNode, Locale, TestCase, TextStyle, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
 import { validatePredicate, validateRule } from './validate';
 
 /**
@@ -28,6 +28,12 @@ export type Command =
   | { type: 'SET_JOURNEY'; events: JourneyEvent[] }
   | { type: 'UPDATE_PROFILE'; profileId: string; patch: Partial<PresentationProfile> }
   | { type: 'SET_CUSTOM_FIELDS'; fields: CustomField[] }
+  | { type: 'SET_STYLES'; styles: TextStyle[] }
+  | { type: 'SET_BRAND'; brand: BrandKit | null }
+  | { type: 'UPSERT_TEST_CASE'; testCase: TestCase }
+  | { type: 'DELETE_TEST_CASE'; testCaseId: string }
+  | { type: 'SET_TRANSLATION_DRAFT'; partId: string; locale: Locale; text: string | null }
+  | { type: 'APPROVE_TRANSLATION'; partId: string; locale: Locale }
   | { type: 'RESTORE_SNAPSHOT'; project: Project; label: string };
 
 export type CommandResult =
@@ -82,6 +88,7 @@ function reject(code: string, message: string, nodeId?: string): CommandResult {
 function validateNodeShape(node: DocNode, project: Project): string | null {
   if (!/^[a-z0-9][a-z0-9-]{1,63}$/.test(node.id)) return `Invalid node id “${node.id}”.`;
   if (!CATALOG_BY_TYPE[node.type]) return `Unknown component type ${node.type}.`;
+  if (node.styleId && !(project.styles ?? []).some((s) => s.id === node.styleId)) return `Unknown text style “${node.styleId}”.`;
   if (node.action && !isSafeUrl(node.action.url)) return `Unsafe action URL. Only https:// links are allowed.`;
   if (node.qr && !isSafeUrl(node.qr.url)) return `Unsafe QR destination. Only https:// links are allowed.`;
   if (node.visibleWhen) { const e = validatePredicate(node.visibleWhen, projectFieldIndex(project)); if (e.length) return e[0]; }
@@ -292,6 +299,66 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
       if (bad) return reject('FIELD_IN_USE', `A rule no longer validates with these fields: ${bad.join(' ')}`);
       return { ok: true, label: 'Edit data fields', project: bump(project, (d) => { d.customFields = cmd.fields.map((f) => ({ ...f })); }) };
     }
+    case 'SET_STYLES': {
+      const errs = validateStyles(cmd.styles);
+      if (errs.length) return reject('INVALID_STYLES', errs.join(' '));
+      const ids = new Set(cmd.styles.map((x) => x.id));
+      const orphan = project.nodes.find((n) => n.styleId && !ids.has(n.styleId));
+      if (orphan) return reject('STYLE_IN_USE', `Style ${orphan.styleId} is still used by ${orphan.name ?? orphan.id}.`);
+      return { ok: true, label: 'Edit text styles', project: bump(project, (d) => { d.styles = cmd.styles.map((x) => ({ ...x })); }) };
+    }
+    case 'SET_BRAND': {
+      if (cmd.brand) {
+        const hex = /^#[0-9a-fA-F]{6}$/;
+        if (!hex.test(cmd.brand.primary) || !hex.test(cmd.brand.accent) || (cmd.brand.text && !hex.test(cmd.brand.text))) return reject('INVALID_BRAND', 'Brand colours must be 6-digit hex values such as #4EAF60.');
+        if (cmd.brand.logoDataUri && !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(cmd.brand.logoDataUri)) return reject('INVALID_BRAND', 'Brand logo must be a PNG, JPEG or WebP image from the image library.');
+        if (cmd.brand.logoDataUri && !cmd.brand.logoAlt?.trim()) return reject('INVALID_BRAND', 'A brand logo needs alternative text.');
+      }
+      return { ok: true, label: cmd.brand ? 'Edit brand kit' : 'Remove brand kit', project: bump(project, (d) => { if (cmd.brand) d.brand = { ...cmd.brand }; else delete d.brand; }) };
+    }
+    case 'UPSERT_TEST_CASE': {
+      const t = cmd.testCase;
+      if (!/^[A-Za-z0-9-]{1,40}$/.test(t.id ?? '')) return reject('INVALID_TEST', 'Test case id must be letters, digits or dashes.');
+      if (!t.name?.trim()) return reject('INVALID_TEST', 'Give the test case a name.');
+      if (!/^(CARD|EOB)-\d{4}$/.test(t.recordId ?? '')) return reject('INVALID_TEST', 'Test case needs a record ID.');
+      const existing = (project.testCases ?? []).some((x) => x.id === t.id);
+      return { ok: true, label: `${existing ? 'Edit' : 'Add'} test “${t.name}”`, project: bump(project, (d) => {
+        d.testCases = [...(d.testCases ?? []).filter((x) => x.id !== t.id), { ...t }];
+      }) };
+    }
+    case 'DELETE_TEST_CASE': {
+      const t = (project.testCases ?? []).find((x) => x.id === cmd.testCaseId);
+      if (!t) return reject('NOT_FOUND', `Unknown test case ${cmd.testCaseId}.`);
+      return { ok: true, label: `Delete test “${t.name}”`, project: bump(project, (d) => { d.testCases = (d.testCases ?? []).filter((x) => x.id !== cmd.testCaseId); }) };
+    }
+    case 'SET_TRANSLATION_DRAFT': {
+      const part = project.contentParts.find((c) => c.id === cmd.partId);
+      if (!part) return reject('NOT_FOUND', `Unknown content part ${cmd.partId}.`);
+      if (!['en-US', 'es-US'].includes(cmd.locale)) return reject('INVALID_LOCALE', `Unsupported locale ${cmd.locale}.`);
+      if (cmd.text !== null && cmd.text.length > 4000) return reject('TOO_LONG', 'Translations are limited to 4,000 characters.');
+      return { ok: true, label: `${cmd.text === null ? 'Discard' : 'Draft'} ${cmd.locale} for “${part.title}”`, project: bump(project, (d) => {
+        const c = d.contentParts.find((x) => x.id === cmd.partId)!;
+        const drafts = { ...(c.draftLocales ?? {}) };
+        if (cmd.text === null || !cmd.text.trim()) delete drafts[cmd.locale]; else drafts[cmd.locale] = cmd.text;
+        if (Object.keys(drafts).length) c.draftLocales = drafts; else delete c.draftLocales;
+      }) };
+    }
+    case 'APPROVE_TRANSLATION': {
+      const part = project.contentParts.find((c) => c.id === cmd.partId);
+      const draft = part?.draftLocales?.[cmd.locale];
+      if (!part) return reject('NOT_FOUND', `Unknown content part ${cmd.partId}.`);
+      if (!draft?.trim()) return reject('NO_DRAFT', `There is no ${cmd.locale} draft to approve for “${part.title}”.`);
+      const tokensOf = (t: string) => [...t.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]).sort().join(',');
+      const source = part.approvedLocales['en-US'];
+      if (source && tokensOf(source) !== tokensOf(draft)) return reject('TOKEN_MISMATCH', `The ${cmd.locale} text must use the same data tokens as the English text (${tokensOf(source) || 'none'}).`);
+      return { ok: true, label: `Approve ${cmd.locale} for “${part.title}”`, project: bump(project, (d) => {
+        const c = d.contentParts.find((x) => x.id === cmd.partId)!;
+        c.approvedLocales = { ...c.approvedLocales, [cmd.locale]: draft };
+        c.version += 1;
+        const drafts = { ...(c.draftLocales ?? {}) }; delete drafts[cmd.locale];
+        if (Object.keys(drafts).length) c.draftLocales = drafts; else delete c.draftLocales;
+      }) };
+    }
     case 'RESTORE_SNAPSHOT': {
       return { ok: true, label: cmd.label, project: { ...cmd.project, modelVersion: project.modelVersion + 1 } };
     }
@@ -320,4 +387,22 @@ export function customFieldUsage(project: Project): Array<{ path: string; where:
   }
   for (const c of project.contentParts) for (const t of Object.values(c.approvedLocales)) (t ?? '').replace(/\{\{\s*(custom\.[A-Za-z0-9]+)/g, (_m: string, path: string) => { add(path, c.title); return ''; });
   return [...map].map(([path, where]) => ({ path, where: [...where] }));
+}
+
+/** Validation for named text styles. */
+export function validateStyles(styles: TextStyle[]): string[] {
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  for (const st of styles) {
+    if (!/^[a-z][a-z0-9-]{0,39}$/.test(st.id ?? '')) errors.push(`Style id “${st.id}” must be lowercase letters, digits or dashes.`);
+    if (seen.has(st.id)) errors.push(`Style id “${st.id}” is used twice.`);
+    seen.add(st.id);
+    if (!st.name?.trim()) errors.push(`Style ${st.id} needs a name.`);
+    if (st.kind !== 'paragraph' && st.kind !== 'character') errors.push(`Style ${st.id} must be paragraph or character.`);
+    if (st.fontSizePt !== undefined && (st.fontSizePt < 6 || st.fontSizePt > 48)) errors.push(`Style ${st.id}: font size must be 6–48 pt.`);
+    if (st.color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(st.color)) errors.push(`Style ${st.id}: colour must be a 6-digit hex value.`);
+    if (st.lineHeight !== undefined && (st.lineHeight < 1 || st.lineHeight > 3)) errors.push(`Style ${st.id}: line height must be 1–3.`);
+    for (const k of ['spaceBeforePt', 'spaceAfterPt'] as const) if (st[k] !== undefined && (st[k]! < 0 || st[k]! > 72)) errors.push(`Style ${st.id}: spacing must be 0–72 pt.`);
+  }
+  return errors;
 }

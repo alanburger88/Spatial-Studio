@@ -12,6 +12,7 @@ import { ValidateCompare } from './screens/ValidateCompare';
 import { PreviewExport } from './screens/PreviewExport';
 import { GuidedDemo } from './screens/GuidedDemo';
 import { AiAssistant } from './screens/AiAssistant';
+import { Translations } from './screens/Translations';
 
 const S = (el: JSX.Element) => <StudioShell>{el}</StudioShell>;
 
@@ -35,6 +36,7 @@ export function App() {
         <Route path="/studio/:project/outputs" element={S(<PreviewExport />)} />
         <Route path="/studio/:project/demo" element={S(<GuidedDemo />)} />
         <Route path="/studio/:project/assistant" element={S(<AiAssistant />)} />
+        <Route path="/studio/:project/content" element={S(<Translations />)} />
         <Route path="*" element={<PlainShell><div className="empty"><strong>Page not found</strong><a href="/projects">Back to Project Gallery</a></div></PlainShell>} />
       </Routes>
     </BrowserRouter>

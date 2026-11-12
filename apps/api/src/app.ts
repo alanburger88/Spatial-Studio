@@ -14,12 +14,16 @@ import { staticRuleAnalysis, bindingAnalysis, modelAccessibility, axeToFindings,
 import { Composer } from './composer';
 import { Store } from './db';
 import { BatchRunner, BATCH_LIMIT, type BatchOutput } from './batch';
+import { registerTemplateRoutes } from './routes/templates';
+import { registerChannelRoutes } from './routes/channels';
+import { registerTranslationRoutes } from './routes/translations';
+import type { RouteDeps } from './routes/deps';
 import { handleMessage, providerConfig, providerStatus, type Proposal } from './assistant';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public extra: Record<string, unknown> = {}) { super(message); }
 }
 
@@ -168,6 +172,12 @@ export async function buildApp(opts: AppOptions = {}) {
     store.deleteProject(req.params.projectId);
     return { deleted: true, projectId: req.params.projectId };
   });
+
+  /* Feature route modules (each owns its own file; see routes/deps.ts for the shared helpers they receive). */
+  const deps: RouteDeps = { store, composer, ApiError, projectOr404, recordOr404, allRecords, checkDraftProject, runFor: (b) => runFor(ResolveBody.parse(b)) };
+  registerTemplateRoutes(app, deps);
+  registerChannelRoutes(app, deps);
+  registerTranslationRoutes(app, deps);
 
   /* Image asset library: PNG/JPEG/WebP only (checked by magic bytes), ≤ 280 KB so the data URI stays within the renderer's embed limit. */
   const ASSET_MAX = 280 * 1024;
