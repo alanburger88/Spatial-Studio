@@ -348,7 +348,7 @@ export function ProjectGallery() {
             <div className="gal-stats">
               <div><strong>15</strong><span>component types</span></div>
               <div><strong>20</strong><span>sample rules</span></div>
-              <div><strong>{counts ? counts.card + counts.eob : '…'}</strong><span>sample customers</span></div>
+              <div><strong>{counts ? counts.card + counts.eob : '…'}</strong><span>synthetic records</span></div>
               <div><strong>12</strong><span>personas</span></div>
             </div>
             <p className="muted gal-note" data-testid="synthetic-statement">All sample people, accounts, providers and organisations are fictional ({counts ? `${counts.card} card and ${counts.eob} EOB records` : '…'}, seed SPATIAL-STUDIO-DEMO-2026-11). Nothing here connects to production data.</p>
@@ -370,7 +370,7 @@ export function ProjectGallery() {
             <ul className="gal-list sim">
               <li>AFP output (profile simulation — no AFP bytes)</li>
               <li>Credit disclosures and EOB adjudication (illustrative)</li>
-              <li>“Reach” = counts of sample records</li>
+              <li>“Reach” = counts of synthetic records</li>
             </ul>
           </div>
         </aside>

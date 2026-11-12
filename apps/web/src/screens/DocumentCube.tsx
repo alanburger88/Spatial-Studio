@@ -210,7 +210,7 @@ export function DocumentCube() {
               <button aria-pressed={view === 'grid'} onClick={() => setView('grid')} data-testid="cube-view-grid">Grid</button>
               <button aria-pressed={view === '3d'} onClick={() => setView('3d')} data-testid="cube-view-3d">Explore in 3D</button>
             </span>
-            {cube && <span className="cube-status">{cube.universeSize} scenarios · {nonEmpty} of {total} intersections populated<Tech> · {cube.universeSize} evaluated / {cube.plannedSize} planned</Tech></span>}
+            {cube && <span className="cube-status">{cube.universeSize} synthetic scenarios · {nonEmpty} of {total} intersections populated<Tech> · {cube.universeSize} evaluated / {cube.plannedSize} planned</Tech></span>}
           <details className="cube-filters">
             <summary className="btn sm" data-testid="cube-filters-toggle">Filters{Object.keys(filters).length > 0 ? ` (${Object.keys(filters).length})` : ''}</summary>
             <div className="cube-filters-pop">

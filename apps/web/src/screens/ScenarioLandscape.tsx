@@ -124,7 +124,7 @@ export function ScenarioLandscape() {
           </div>
 
           <div className="ls-status" data-testid="landscape-coverage">
-            <strong data-testid="landscape-evaluated">{landscape.evaluated} scenarios<Tech> evaluated / {landscape.plannedSize} planned</Tech></strong>
+            <strong data-testid="landscape-evaluated">{landscape.evaluated} synthetic scenarios<Tech> evaluated / {landscape.plannedSize} planned</Tech></strong>
             <span className="ls-sep" aria-hidden="true">·</span>
             <span>{outputLabel}{profileId === 'paged-afp-sim' ? ' (simulation only)' : ''}</span>
             <span className="ls-sep" aria-hidden="true">·</span>
@@ -249,7 +249,7 @@ export function ScenarioLandscape() {
                 <div className={`ls-sev big ${selected.severity}`}><span aria-hidden="true">{SEV_ICON[selected.severity]}</span> {SEV_TEXT[selected.severity]}</div>
                 <div className="ls-insp-count">
                   <span className="ls-insp-num" data-testid="landscape-cluster-count">{selected.count}</span>
-                  <span>scenarios · {pct(selected.count, landscape.universeSize)} of {landscape.universeSize}<br /><span className="muted">{selected.recordIds.length} distinct seeded records</span></span>
+                  <span>scenarios · {pct(selected.count, landscape.universeSize)} of {landscape.universeSize}<br /><span className="muted">{selected.recordIds.length} distinct synthetic records</span></span>
                 </div>
                 <dl className="kv ls-kv">
                   <dt>Blocking scenarios</dt><dd>{selected.blockingScenarios}</dd>

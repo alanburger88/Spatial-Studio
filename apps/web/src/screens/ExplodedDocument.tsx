@@ -285,7 +285,7 @@ export function ExplodedDocument() {
                       title={`${v.title} — ${STATE_LABEL[st]}`}>
                       <span className="ex-list-title"><span className="ex-z" aria-hidden="true">Z{i + 1}</span> {v.title}</span>
                       <span className={`ex-list-meta st-${st}`}><Mark st={st} />{STATE_LABEL[st]}</span>
-                      <span className="ex-list-reach">{r ? `${r.count} of ${r.total}` : reach ? `0 of ${totalSeeded}` : '—'} seeded records</span>
+                      <span className="ex-list-reach">{r ? `${r.count} of ${r.total}` : reach ? `0 of ${totalSeeded}` : '—'} synthetic records</span>
                     </button>
                   </li>
                 );
@@ -364,7 +364,7 @@ export function ExplodedDocument() {
                     <div key={v.id} ref={(el) => { if (el) panelEls.current.set(v.id, el); else panelEls.current.delete(v.id); }}
                       className={`ex-panel st-${st}${isActive ? ' focused' : ''}${exploded && !collapsing ? '' : ' is-collapsed'}`} style={style} data-variant={v.id} data-state={st}
                       role="button" tabIndex={i === focusIdx ? 0 : -1} aria-pressed={isActive}
-                      aria-label={`Z${i + 1} ${v.title}: ${STATE_LABEL[st]}. Rules ${v.candidateRuleIds.join(', ') || 'none'}. Reach ${r?.count ?? 0} of ${r?.total ?? totalSeeded} seeded records.`}
+                      aria-label={`Z${i + 1} ${v.title}: ${STATE_LABEL[st]}. Rules ${v.candidateRuleIds.join(', ') || 'none'}. Reach ${r?.count ?? 0} of ${r?.total ?? totalSeeded} synthetic records.`}
                       onClick={() => chooseVariant(v.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseVariant(v.id); } }}
                       onFocus={() => setFocusIdx(i)} data-testid={`panel-${v.id}`}>
                       <VariantCard v={v} st={st} reach={r} totalSeeded={totalSeeded} active={isActive} project={project} res={res} tech={tech} zIndex={i + 1} compact={!isActive} />
@@ -446,7 +446,7 @@ export function ExplodedDocument() {
               <button className="btn sm" onClick={() => navigate(`/studio/${project.projectId}/design`)} data-testid="edit-variant"><Icon.design width={14} height={14} /> Edit variant</button>
             </div>
             {active && reach && <>
-              <div className="section-title">Reach · seeded records</div>
+              <div className="section-title">Synthetic reach</div>
               <dl className="kv ex-kv">
                 <dt>Seeded records</dt><dd>{activeReach?.count ?? 0} of {totalSeeded}</dd>
                 <dt>Top personas</dt><dd className="ex-prose">{activeReach?.personas.slice(0, 3).map(([p, c]) => `${personaShort(p)} (${c})`).join(', ') || 'None'}</dd>
@@ -484,11 +484,11 @@ function VariantCard({ v, st, reach, totalSeeded, active, onChoose, project, res
         {v.isFallback && <span className="chip">fallback</span>}
         {v.missingLocale && <span className="chip warning">translation missing</span>}
         {v.source === 'section-rule' && <span className="chip info">section rule</span>}
-        {compact && <span className="ex-reach-mini" title={`${count} of ${tot} seeded records (${pct}%)`}>{count}/{tot}</span>}
+        {compact && <span className="ex-reach-mini" title={`${count} of ${tot} synthetic records (${pct}%)`}>{count}/{tot}</span>}
       </div>
       {!compact && <div className="ex-reach">
           <span className="ex-reach-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
-          <span>{reach || totalSeeded ? `${count} of ${tot} seeded records · ${pct}%` : 'Reach —'}</span>
+          <span>{reach || totalSeeded ? `${count} of ${tot} synthetic records · ${pct}%` : 'Reach —'}</span>
           {tech && v.contentVersion !== null && <span className="mono faint">v{v.contentVersion}</span>}
         </div>}
     </div>

@@ -9,7 +9,8 @@ export class ApiFailure extends Error {
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) } });
+    // Only declare a JSON body when one is sent: Fastify rejects an empty body with Content-Type: application/json (e.g. DELETE).
+    res = await fetch(path, { ...init, headers: { ...(init?.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(init?.headers ?? {}) } });
   } catch (e) {
     throw new ApiFailure(0, 'NETWORK', 'The Spatial Studio API is not reachable. Start it with `pnpm dev`.');
   }

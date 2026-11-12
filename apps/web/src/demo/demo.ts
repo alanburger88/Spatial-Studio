@@ -74,7 +74,7 @@ export const DEMO_STEPS: DemoStep[] = [
   },
   {
     id: 'explode', time: '1:30', chapter: 'Explode', title: 'Pull the document apart',
-    narration: 'Payment Guidance unfolds into its five real, named variants. Depth means one thing only: alternative outcomes of this component. Each panel shows its rules and how many sample customers receive it.',
+    narration: 'Payment Guidance unfolds into its five real, named variants. Depth means one thing only: alternative outcomes of this component. Each panel shows its rules and how many synthetic customers receive it.',
     proof: 'Panels derive from variantIds + rules of the canonical node.',
     run: async (nav) => {
       S().select('payment-guidance');
@@ -124,7 +124,7 @@ export const DEMO_STEPS: DemoStep[] = [
   },
   {
     id: 'landscape', time: '3:40', chapter: 'Cube & Landscape', title: 'Outcome clusters and risk',
-    narration: 'The Landscape groups every evaluated scenario by its resolved outcome. Bubble size is the number of sample records, and the cluster sizes reconcile exactly to the evaluated universe.',
+    narration: 'The Landscape groups every evaluated scenario by its resolved outcome. Bubble size is a synthetic record count, and the cluster sizes reconcile exactly to the evaluated universe.',
     proof: 'Σ cluster sizes = evaluated scenarios.',
     run: async (nav) => {
       nav('/studio/aster-card-demo/landscape');

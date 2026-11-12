@@ -706,7 +706,7 @@ function BatchTab() {
             <div className="bx-tile"><b>{count('draft')}</b><span>Drafts</span></div>
             <div className="bx-tile"><b>{totalPages}</b><span>Total pages</span></div>
             <div className="bx-tile"><b>{fmtDur(batch.durationMs)}</b><span>Total time</span></div>
-            <div className="bx-tile"><b>{batch.done ? fmtDur((batch.durationMs ?? 0) / batch.done) : '—'}</b><span>Average per record</span></div>
+            <div className="bx-tile"><b>{batch.done ? fmtDur((batch.durationMs ?? 0) / batch.done) : '—'}</b><span>Avg per record</span></div>
           </div>
           <Proof label="Proof">
             <span className="mono">Batch {batch.batchId} · model v{batch.modelVersion} · ZIP SHA-256 {batch.zipSha256 ?? '—'}</span>

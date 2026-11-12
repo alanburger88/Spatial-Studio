@@ -377,7 +377,7 @@ export function RulesData() {
       const gone = applyCommand(project, { type: 'DELETE_RULE', ruleId: stored.id });
       if (gone.ok) {
         const imp = impactOf(project, gone.project, records);
-        effect = imp.changed.length ? ` This changes ${imp.changed.length} of ${imp.evaluated} ${docType === 'eob' ? 'members' : 'customers'}' documents${imp.newBlocking ? ` and adds ${imp.newBlocking} blocking issue${imp.newBlocking === 1 ? '' : 's'}` : ''}.` : ` No ${docType === 'eob' ? "member's" : "customer's"} document changes.`;
+        effect = imp.changed.length ? ` This changes ${imp.changed.length} of ${imp.evaluated} synthetic ${docType === 'eob' ? 'members' : 'customers'}' documents${imp.newBlocking ? ` and adds ${imp.newBlocking} blocking issue${imp.newBlocking === 1 ? '' : 's'}` : ''}.` : ` No synthetic ${docType === 'eob' ? "member's" : "customer's"} document changes.`;
       }
     }
     if (!window.confirm(`Delete rule ${stored.id}?${effect} You can undo this from the top bar.`)) return;

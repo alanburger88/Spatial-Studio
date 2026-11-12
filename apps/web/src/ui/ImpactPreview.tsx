@@ -88,8 +88,8 @@ export function ImpactPreview({ before, after, className }: { before: Project; a
   return (
     <div className={`imp ${n ? 'has-changes' : ''} ${className ?? ''}`} data-testid="impact-preview" aria-busy={pending}>
       <div className="imp-summary" data-testid="impact-summary" role="status">
-        {none ? <span className="imp-none">No {after.documentType === 'eob' ? "member's" : "customer's"} document changes</span>
-          : <strong>Changes {n} of {impact.evaluated} {after.documentType === 'eob' ? 'members' : 'customers'}</strong>}
+        {none ? <span className="imp-none">No synthetic {after.documentType === 'eob' ? "member's" : "customer's"} document changes</span>
+          : <strong>Changes {n} of {impact.evaluated} synthetic {after.documentType === 'eob' ? 'members' : 'customers'}</strong>}
         {impact.newBlocking > 0 && <span className="imp-bad">+{impact.newBlocking} new blocking issue{impact.newBlocking === 1 ? '' : 's'}</span>}
         {impact.resolvedBlocking > 0 && <span className="imp-good">{impact.resolvedBlocking} blocking issue{impact.resolvedBlocking === 1 ? '' : 's'} resolved</span>}
         <Tech>{ms !== null && <span className="muted mono imp-ms">{impact.evaluated}×2 resolves · {ms} ms</span>}</Tech>
@@ -119,5 +119,5 @@ export function ReachLine({ nodeId, variantId, testId = 'impact-reach' }: { node
   }, [engine, nodeId, variantId]);
   if (!data) return null;
   const word = engine!.project.documentType === 'eob' ? 'members' : 'customers';
-  return <p className="imp-reach" data-testid={testId}>{data.n === 0 ? <>Not shown to any of the {data.total} {word} right now</> : <>Shown to <strong>{data.n} of {data.total}</strong> {word}</>}</p>;
+  return <p className="imp-reach" data-testid={testId}>{data.n === 0 ? <>Not shown to any of the {data.total} synthetic {word} right now</> : <>Shown to <strong>{data.n} of {data.total} synthetic</strong> {word}</>}</p>;
 }
