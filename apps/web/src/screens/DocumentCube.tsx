@@ -10,8 +10,8 @@ const AXIS_NAMES = ['X', 'Y', 'Z'] as const;
 const AXIS_TESTIDS = ['cube-axis-x', 'cube-axis-y', 'cube-axis-z'] as const;
 const OUTCOME_COLORS = ['#4EAF60', '#7FB3F5', '#B49BFA', '#DBE64C', '#57C6A5', '#F08FC0', '#F0AD4E', '#94A3B8'];
 const LETTERS = 'ABCDEFGH';
-const DEFAULT_YAW = -36;
-const DEFAULT_TILT = -24;
+const DEFAULT_YAW = -32;
+const DEFAULT_TILT = -20;
 const SEP = '␟';
 
 type SortKey = 'x' | 'y' | 'z' | 'count' | 'outcome' | 'issues';
@@ -233,7 +233,7 @@ export function DocumentCube() {
               <label className="cube-slider">Tilt<input type="range" min={-50} max={20} value={tilt} onChange={(e) => setTilt(+e.target.value)} aria-label="Tilt cube up or down" data-testid="cube-tilt" /><output>{tilt}°</output></label>
               <button className="btn sm" onClick={() => { setYaw(DEFAULT_YAW); setTilt(DEFAULT_TILT); }} data-testid="cube-reset-camera"><Icon.reset width={14} height={14} /> Reset camera</button>
               <span className="cube-ctl-sep" />
-              <label className="cube-slicer">Z slice
+              <label className="cube-slicer">Slice Z
                 <select className="select" value={zSlice ?? ''} onChange={(e) => setZSlice(e.target.value || null)} data-testid="cube-zslice" aria-label="Show a single Z layer or all layers">
                   <option value="">All layers</option>
                   {cube?.axes[2].categories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
@@ -308,7 +308,7 @@ function CubeScene(props: { cube: CubeResult; yaw: number; tilt: number; zSlice:
   const { cube, yaw, tilt, zSlice, hideFront, selected, onSelect, outcomeStyle } = props;
   const [ax, ay, az] = cube.axes;
   const nx = Math.max(ax.categories.length, 1), ny = Math.max(ay.categories.length, 1), nz = Math.max(az.categories.length, 1);
-  const P = 58; // grid pitch: one category = one equal step (discrete grid, not physical distance)
+  const P = 56; // grid pitch: one category = one equal step (discrete grid, not physical distance)
   const W = P * Math.max(nx, 3), H = P * Math.max(ny, 3) * 0.95, D = P * Math.max(nz, 3);
   const px = (i: number) => -W / 2 + (i + 0.5) * (W / nx);
   const py = (j: number) => H / 2 - (j + 0.5) * (H / ny);
@@ -322,7 +322,7 @@ function CubeScene(props: { cube: CubeResult; yaw: number; tilt: number; zSlice:
     { id: 'top', w: W, h: D, cols: nx, rows: nz, tf: `rotateX(90deg) translateZ(${H / 2}px)`, normal: [0, -1, 0] },
     { id: 'bottom', w: W, h: D, cols: nx, rows: nz, tf: `rotateX(-90deg) translateZ(${H / 2}px)`, normal: [0, 1, 0] },
   ];
-  const bb = (x: number, y: number, z: number) => `translate3d(${x}px, ${y}px, ${z}px) rotateY(${-yaw}deg) rotateX(${-tilt}deg)`;
+  const bb = (x: number, y: number, z: number, lift = 0) => `translate3d(${x}px, ${y}px, ${z}px) rotateY(${-yaw}deg) rotateX(${-tilt}deg) translateZ(${lift}px)`;
   const sliceZ = zSlice ? az.categories.findIndex((c) => c.key === zSlice) : -1;
 
   return (
@@ -340,12 +340,12 @@ function CubeScene(props: { cube: CubeResult; yaw: number; tilt: number; zSlice:
         {sliceZ >= 0 && <div className="cube-sheet" style={{ width: W, height: H, margin: `${-H / 2}px 0 0 ${-W / 2}px`, transform: `translateZ(${zPos(sliceZ)}px)` }} />}
 
         {/* tick labels + axis titles (billboards, always facing the viewer) */}
-        {ax.categories.map((c, i) => <div key={`tx${c.key}`} className="cube-tick tx" style={{ transform: bb(px(i), H / 2 + 24, D / 2) }} title={c.label}><span>{c.label}</span></div>)}
-        {ay.categories.map((c, j) => <div key={`ty${c.key}`} className="cube-tick ty" style={{ transform: bb(-W / 2 - 12, py(j), D / 2) }} title={c.label}><span>{c.label}</span></div>)}
-        {az.categories.map((c, k) => <div key={`tz${c.key}`} className={`cube-tick tz${sliceZ === k ? ' on' : ''}`} style={{ transform: bb(W / 2 + 14, H / 2 + 14, zPos(k)) }} title={c.label}><span>{c.label}</span></div>)}
-        <div className="cube-axis-title ax-x" style={{ transform: bb(-W / 2, H / 2 + 62, D / 2) }}>X · {ax.label} →</div>
-        <div className="cube-axis-title ax-y" style={{ transform: bb(-W / 2 - 4, -H / 2 - 22, D / 2) }}>↑ Y · {ay.label}</div>
-        <div className="cube-axis-title ax-z" style={{ transform: bb(W / 2 + 6, H / 2 + 44, D / 2) }}>Z · {az.label} (front → back)</div>
+        {ax.categories.map((c, i) => <div key={`tx${c.key}`} className="cube-tick tx" style={{ transform: bb(px(i), H / 2 + 24, D / 2, 70) }} title={c.label}><span>{tickText(c.label)}</span></div>)}
+        {ay.categories.map((c, j) => <div key={`ty${c.key}`} className="cube-tick ty" style={{ transform: bb(-W / 2 - 12, py(j), D / 2, 70) }} title={c.label}><span>{tickText(c.label)}</span></div>)}
+        {az.categories.map((c, k) => <div key={`tz${c.key}`} className={`cube-tick tz${sliceZ === k ? ' on' : ''}`} style={{ transform: bb(W / 2 + 14, H / 2 + 14, zPos(k), 70) }} title={c.label}><span>{tickText(c.label)}</span></div>)}
+        <div className="cube-axis-title ax-x" style={{ transform: bb(-W / 2 + 40, H / 2 + 92, D / 2, 70) }}>X · {ax.label} →</div>
+        <div className="cube-axis-title ax-y" style={{ transform: bb(-W / 2 - 4, -H / 2 - 22, D / 2, 70) }}>↑ Y · {ay.label}</div>
+        <div className="cube-axis-title ax-z" style={{ transform: bb(W / 2 - 40, H / 2 + 96, D / 2, 70) }}>Z · {az.label} (front → back)</div>
 
         {/* cells */}
         {cube.cells.map((c) => {
@@ -356,10 +356,10 @@ function CubeScene(props: { cube: CubeResult; yaw: number; tilt: number; zSlice:
           const label = `${ax.label} ${labelFor(ax, c.x)}, ${ay.label} ${labelFor(ay, c.y)}, ${az.label} ${labelFor(az, c.z)}: ${c.count === 0 ? 'no matching fixture' : `${c.count} scenarios, dominant outcome ${c.dominantOutcome}${c.blocking ? `, ${c.blocking} blocking` : ''}`}`;
           if (dimmed) return null;
           return (
-            <div key={key} className="cube-cell-wrap" style={{ transform: bb(px(i), py(j), zPos(k)) }}>
+            <div key={key} className="cube-cell-wrap" style={{ transform: bb(px(i), py(j), zPos(k), 4) }}>
               <button
                 className={`cube-cell${c.count === 0 ? ' empty' : ''}${selected === key ? ' selected' : ''}`}
-                style={{ ['--mk' as string]: st.color }}
+                style={{ ['--mk' as string]: st.color, ...(c.count > 0 ? { opacity: Math.max(0.66, 1 - 0.09 * k) } : {}) }}
                 tabIndex={c.count === 0 ? -1 : 0}
                 aria-label={label}
                 aria-pressed={selected === key}
@@ -379,6 +379,7 @@ function CubeScene(props: { cube: CubeResult; yaw: number; tilt: number; zSlice:
   );
 }
 
+const tickText = (l: string) => l.replace(/^Day (\d+) · /, 'D$1 · ');
 const labelFor = (ax: CubeResult['axes'][number], key: string) => ax.categories.find((c) => c.key === key)?.label ?? key;
 
 /* -------------------------------------------------------------- inspector */

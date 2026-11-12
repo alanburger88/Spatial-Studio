@@ -123,13 +123,14 @@
 .rd-f { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .rd-f label { font-size: 11.5px; color: var(--iss-text-muted); font-weight: 600; }
 .rd-f .select, .rd-f .input { width: 100%; min-height: 28px; font-size: 12.5px; }
-.rd-f .hint { font-size: 10px; color: var(--iss-text-faint); }
+.rd-f .hint { font-size: 10px; color: var(--iss-text-faint); overflow-wrap: anywhere; }
 .rd-f.ov .select, .rd-f.ov .input { border-color: var(--iss-warning); background-color: var(--iss-warning-soft); }
 .rd-ovmark { color: var(--iss-warning); }
 .rd-diff { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 190px; overflow: auto; }
-.rd-diff li { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 8px; border: 1px solid rgba(240,173,78,.4); background: var(--iss-warning-soft); border-radius: 8px; font-size: 12px; }
-.rd-diff-k { flex: 0 1 auto; font-size: 11px; min-width: 0; overflow-wrap: anywhere; }
-.rd-diff-v { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rd-diff li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; padding: 4px 6px 4px 8px; border: 1px solid rgba(240,173,78,.4); background: var(--iss-warning-soft); border-radius: 8px; font-size: 12px; }
+.rd-diff-k { font-size: 11px; min-width: 0; overflow-wrap: anywhere; color: var(--iss-text-muted); }
+.rd-diff li .btn { grid-column: 2; grid-row: 1 / span 2; }
+.rd-diff-v { text-align: left; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .rd-old { color: var(--iss-text-muted); text-decoration: line-through; }
 .rd-gen { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .rd-gen .code { max-height: 180px; }
@@ -143,3 +144,9 @@
 .rd-tp-items { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 3px; }
 .rd-tp-items .chip { font-size: 10px; padding: 0 5px; }
 .rd-tp .table td { padding: 5px 6px; }
+
+.rd-tp .table { table-layout: fixed; }
+.rd-tp .table th:nth-child(1) { width: 47%; }
+.rd-tp .table th:nth-child(2) { width: 17%; }
+.rd-tp .table th:nth-child(4) { width: 34px; }
+.rd-tp .table td { overflow-wrap: anywhere; }

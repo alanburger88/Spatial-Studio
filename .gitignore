@@ -11,3 +11,4 @@ artifacts/
 reports/generated/
 *.log
 .DS_Store
+scripts/_*.mjs

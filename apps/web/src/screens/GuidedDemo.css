@@ -1,0 +1,19 @@
+.demo-grid { grid-template-columns: minmax(0, 1fr) 320px; }
+.demo-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.demo-step { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--iss-border); border-radius: 12px; padding: 10px 12px; background: var(--iss-surface-raised); }
+.demo-step.current { border-color: var(--iss-accent); box-shadow: inset 3px 0 0 var(--iss-accent); }
+.demo-step.fail { border-color: rgba(237,116,116,.6); }
+.demo-time { font: 700 12px var(--iss-font-mono); color: var(--iss-lime); background: var(--iss-variant-soft); border-radius: 6px; padding: 3px 6px; margin-top: 2px; }
+.demo-chapter { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--iss-accent-strong); font-weight: 700; }
+.demo-title { font-weight: 800; font-size: 15px; margin: 1px 0 3px; }
+.demo-narr { margin: 0 0 4px; font-size: 13px; color: var(--iss-text-muted); }
+.demo-proof { font-size: 12px; color: var(--iss-text-faint); }
+.demo-check { margin-top: 6px; font-size: 12px; font-weight: 600; }
+.demo-check.ok { color: #9BE3AA; }
+.demo-check.fail { color: #FFB4B4; }
+.demo-banner { position: fixed; left: calc(var(--nav-w) + 24px); right: 24px; bottom: calc(var(--dock-h) + 12px); z-index: 800; display: flex; gap: 14px; align-items: center; background: rgba(15,23,42,.94); border: 1px solid rgba(78,175,96,.55); border-radius: 16px; padding: 12px 16px; box-shadow: 0 20px 50px rgba(0,0,0,.5); backdrop-filter: blur(8px); animation: toast-in var(--iss-motion-mid) var(--iss-ease); max-width: 1100px; margin: 0 auto; }
+.demo-banner-step { font: 800 18px var(--iss-font-ui); color: var(--iss-accent-strong); min-width: 52px; text-align: center; }
+.demo-banner-title { font-weight: 800; font-size: 14px; }
+.demo-banner-text { font-size: 13px; color: var(--iss-text-muted); margin-top: 2px; }
+.demo-banner-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.demo-resume { position: fixed; right: 24px; bottom: calc(var(--dock-h) + 12px); z-index: 800; }

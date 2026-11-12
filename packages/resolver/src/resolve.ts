@@ -522,7 +522,8 @@ export function resolve(input: ResolveInput): Resolution {
   const projectDigest = projectContentDigest(project);
   const rulesDigest = digestOf(project.rules);
   const runId = 'run-' + shortDigest({ projectDigest, recordId: effective.recordId, overrides: input.overrides ?? {}, journeyCursor, claimIndex, profileId, engine: ENGINE_VERSION }, 16);
-  const { producer: _p, ...manifestCore } = manifest;
+  // Content digest is content-addressed: excludes producer and the model version counter.
+  const { producer: _p, modelVersion: _mv, ...manifestCore } = manifest;
 
   return {
     runId, projectId: project.projectId, modelVersion: project.modelVersion, projectDigest, recordId: effective.recordId, profileId, journeyCursor,

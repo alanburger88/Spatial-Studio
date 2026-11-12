@@ -4,6 +4,7 @@ import type { ProfileId } from '@iss/model';
 import { personaLabel, useIsDirty, useResolution, useStudio } from '../state/store';
 import { BrandMark, Icon } from '../ui/icons';
 import { ErrorState, Loading, Toasts } from '../ui/common';
+import { DemoBanner } from '../screens/GuidedDemo';
 
 export const SCREENS = [
   { id: 'S01', path: '/projects', label: 'Project Gallery', icon: Icon.gallery },
@@ -164,6 +165,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
         {status === 'error' ? <ErrorState title="Project could not be loaded" message={error ?? ''} onRetry={() => projectId && useStudio.getState().openProject(projectId)} /> : ready ? children : <Loading label="Loading project model…" />}
       </main>
       <Dock />
+      <DemoBanner />
       <Toasts />
     </div>
   );

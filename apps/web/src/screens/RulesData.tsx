@@ -146,7 +146,7 @@ export function makeTransactions(n: number, totalCents: number) {
     amountCents: base + (i < extra ? 1 : 0),
   }));
 }
-function abridge(v: unknown): unknown {
+export function abridge(v: unknown): unknown {
   if (Array.isArray(v)) return v.length > 3 ? [...v.slice(0, 2).map(abridge), `… ${v.length - 2} more rows`] : v.map(abridge);
   if (isPlainObject(v)) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, abridge(x)]));
   return v;
@@ -238,7 +238,8 @@ export function RulesData() {
   const res = useResolution();
   const record = useRecord();
   const [params, setParams] = useSearchParams();
-  const dataRef = useRef<HTMLElement>(null);
+  const dataRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   const docType: DocumentType = project?.documentType ?? 'credit-statement';
   const fields = useMemo(() => fieldsFor(docType), [docType]);
@@ -372,7 +373,7 @@ export function RulesData() {
       subtitle="Edit the declarative rules behind each document outcome, test them against every synthetic record, and inspect the exact inputs behind the current scenario."
       badge={<span className="chip sim">Synthetic data only</span>}
       actions={<>
-        <button className="btn" onClick={() => dataRef.current?.scrollIntoView({ behavior: useStudio.getState().reducedMotion ? 'auto' : 'smooth', block: 'start' })}><Icon.list /> Scenario data</button>
+        <button className="btn" onClick={() => { const b = bodyRef.current, d = dataRef.current; if (b && d) b.scrollTo({ top: b.scrollTop + d.getBoundingClientRect().top - b.getBoundingClientRect().top - 4, behavior: useStudio.getState().reducedMotion ? 'auto' : 'smooth' }); }}><Icon.list /> Scenario data</button>
         <button className="btn primary" onClick={addRule} data-testid="add-rule"><Icon.plus /> Add rule</button>
       </>} />
   );
@@ -380,7 +381,7 @@ export function RulesData() {
   return (
     <section className="screen" data-testid="rules-data-view">
       {header}
-      <div className="screen-body rd-body">
+      <div className="screen-body rd-body" ref={bodyRef}>
         <div className="rd-row rd-row1">
           <RuleTree project={project} ruleTrace={ruleTrace} selectedId={isNew ? draft?.id ?? '' : ruleId} newId={isNew ? draft?.id : undefined} onSelect={selectRule} />
 
@@ -470,7 +471,7 @@ export function RulesData() {
           <TracePanel res={res} onSelectRule={selectRule} fieldMap={fieldMap} />
         </div>
 
-        <div className="rd-row rd-row2" ref={dataRef as React.RefObject<HTMLDivElement>}>
+        <div className="rd-row rd-row2" ref={dataRef}>
           <FixturePanel project={project} />
           <RecordEditor project={project} fields={fields} fieldMap={fieldMap} />
           <TokenPicker fields={fields} />
@@ -835,6 +836,7 @@ function FixturePanel({ project }: { project: Project }) {
             <button className="btn sm" disabled={!isCard || !fbRemoved} onClick={() => restoreFallback()}>Restore fallback</button>
             <button className="btn sm ghost" disabled={!isCard} onClick={() => patchOverrides({ card: { paymentStatus: 'overdue', missedPayments: 0 } })} data-testid="no-match-scenario">No-match scenario</button>
           </div>
+          {!isCard && <p className="hint">Credit-statement project only (payment-guidance exists only in the Aster Card sample).</p>}
           <p className="hint">No-match scenario sets <span className="mono">paymentStatus=overdue</span>, <span className="mono">missedPayments=0</span> (scenario overrides, not model edits).</p>
         </div>
       </div>

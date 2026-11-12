@@ -504,6 +504,9 @@ function CompareSummary({ a, b, labelA, labelB, tableId }: { a: ComposedPages; b
   const ids = [...new Set([...pa.keys(), ...pb.keys()])];
   const rows = ids.map((id) => ({ id, pa: pa.get(id) ?? [], pb: pb.get(id) ?? [] }));
   const changed = (r: { pa: number[]; pb: number[] }) => r.pa.join() !== r.pb.join();
+  const [all, setAll] = useState(false);
+  const isTable = (id: string) => id === tableId || a.pages.some((p) => p.tables[id]) || b.pages.some((p) => p.tables[id]);
+  const shown = all ? rows : rows.filter((r) => changed(r) || isTable(r.id));
   const dA = a.diagnostics.length, dB = b.diagnostics.length;
   return (
     <div className="ps-compare" data-testid="compare-summary">
@@ -516,15 +519,16 @@ function CompareSummary({ a, b, labelA, labelB, tableId }: { a: ComposedPages; b
         <caption className="sr-only">Components by node id, with the pages they occupy in each composition</caption>
         <thead><tr><th>Node</th><th>A pages</th><th>B pages</th><th>Table rows A / B</th><th>Moved</th></tr></thead>
         <tbody>
-          {rows.map((r) => (
+          {shown.map((r) => (
             <tr key={r.id} className={changed(r) ? 'selected' : ''}>
               <td className="mono">{r.id}</td><td>{pageSpan(r.pa)}</td><td>{pageSpan(r.pb)}</td>
-              <td>{r.id === tableId || a.pages.some((p) => p.tables[r.id]) || b.pages.some((p) => p.tables[r.id]) ? `${tableRowsTotal(a, r.id)} / ${tableRowsTotal(b, r.id)}` : '—'}</td>
+              <td>{isTable(r.id) ? `${tableRowsTotal(a, r.id)} / ${tableRowsTotal(b, r.id)}` : '—'}</td>
               <td>{changed(r) ? <span className="chip warning">differs</span> : 'same'}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => setAll(!all)}>{all ? 'Show changed and table nodes only' : `Show all ${rows.length} nodes`} · {rows.filter(changed).length} differ</button>
     </div>
   );
 }

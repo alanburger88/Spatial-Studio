@@ -316,7 +316,7 @@ function AssistantTurn({ turn, project, onApply, onDecide }: { turn: Extract<Tur
                 </div>
                 {!mutating ? (
                   <button className="btn primary sm" onClick={() => onApply(i)} disabled={st.busy || (st.done && a.action !== 'compare_scenarios')} data-testid="action-apply">
-                    {st.done ? 'Applied' : a.action === 'generate_edge_case' ? (edge ? 'Apply to scenario' : 'Generate') : a.action === 'compare_scenarios' ? 'Compare' : 'Apply'}
+                    {st.done ? (a.action === 'compare_scenarios' ? 'Compared' : 'Applied') : a.action === 'generate_edge_case' ? (edge ? 'Apply to scenario' : 'Generate') : a.action === 'compare_scenarios' ? 'Compare' : 'Apply'}
                   </button>
                 ) : <span className="muted ai-small">See proposal below</span>}
               </div>
@@ -400,7 +400,7 @@ function ProposalCard({ proposal: p, state, currentVersion, onDecide }: { propos
           ) : <p className="muted">No evaluated scenario changes its selected variant.</p>}
         </div>
       </div>
-      <p className="muted ai-prov">Provenance: {p.provenance}</p>
+      {!decided && <p className="muted ai-prov">Provenance: {p.provenance}</p>}
       {stale && <div className="callout warning" role="status">The model changed since this proposal was made (v{p.baseModelVersion} → v{currentVersion}). The server records the version you decide against.</div>}
 
       {!decided && (

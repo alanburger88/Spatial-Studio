@@ -434,11 +434,11 @@ export function JourneySimulator() {
 
               <div className="section-title">Prior state → resulting state</div>
               <table className="table jr-state" aria-label="State transition">
-                <thead><tr><th>State path</th><th>{idx === 0 ? 'Prior' : `Prior (${prior?.cursor === null ? 'Baseline' : `Day ${prior?.day}`})`}</th><th>Resulting</th><th><span className="sr-only">Change</span></th></tr></thead>
+                <thead><tr><th>State path</th><th>{idx === 0 ? 'Prior' : `Prior (${prior?.cursor === null ? 'Baseline' : `Day ${prior?.day}`})`}</th><th>Resulting</th></tr></thead>
                 <tbody>
                   {statePaths.map((p) => {
                     const a = prior?.state[p]; const b = sel.state[p]; const ch = idx > 0 && a !== b;
-                    return <tr key={p} className={ch ? 'selected' : ''}><td className="mono">{p}</td><td>{idx === 0 ? '—' : fmt(a)}</td><td><strong>{fmt(b)}</strong></td><td>{ch ? <span className="chip accent">changed</span> : ''}</td></tr>;
+                    return <tr key={p} className={ch ? 'selected' : ''}><td className="mono">{p}</td><td>{idx === 0 ? '—' : fmt(a)}</td><td><strong>{fmt(b)}</strong> {ch && <span className="chip accent">changed</span>}</td></tr>;
                   })}
                 </tbody>
               </table>

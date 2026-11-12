@@ -1,4 +1,4 @@
-.jr-body { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; min-height: 0; }
+.screen-body.jr-body { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; min-height: 0; }
 .jr-banner { display: flex; gap: 10px; align-items: center; line-height: 1.4; padding: 7px 12px; flex: none; }
 .jr-banner svg { flex: none; margin-top: 2px; color: var(--iss-accent-strong); }
 .jr-timeline-panel { flex: none; overflow: visible; }
@@ -25,7 +25,7 @@
 .jr-pending .jr-card { opacity: .62; }
 .jr-selected .jr-card { box-shadow: 0 0 0 3px var(--iss-accent), var(--iss-shadow-pop); opacity: 1; }
 .jr-selected .jr-card::before { content: 'Selected'; position: absolute; margin-top: -28px; font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--iss-accent-strong); }
-.jr-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr) minmax(360px, 440px); gap: 12px; align-items: start; }
+.jr-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr) minmax(340px, 400px); gap: 12px; align-items: start; }
 @media (max-width: 1280px) { .jr-grid { grid-template-columns: 300px minmax(0, 1fr); } .jr-docpane { grid-column: 1 / -1; } }
 .jr-grid > .panel { overflow: visible; }
 .jr-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }

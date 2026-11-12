@@ -62,7 +62,10 @@ export function bindingAnalysis(project: Project): Finding[] {
     if (n.headerFooter) tokensInText(n.headerFooter.text).forEach((p) => check(n.id, p, 'Header token'));
     for (const s of n.chart?.series ?? []) check(n.id, s.path, 'Chart series');
   }
-  for (const c of project.contentParts) for (const t of Object.values(c.approvedLocales)) tokensInText(t ?? '').forEach((p) => { if (!fields.has(p)) out.push({ code: 'INVALID_BINDING', severity: 'warning', nodeId: c.id, source: 'binding', message: `Content part ${c.id} references unknown field “${p}”.` }); });
+  const referenced = new Set<string>();
+  for (const n of project.nodes) { (n.variantIds ?? []).forEach((v) => referenced.add(v)); if (n.contentPartId) referenced.add(n.contentPartId); }
+  for (const r of project.rules) if (r.then.op === 'showSection') referenced.add(r.then.targetNodeId);
+  for (const c of project.contentParts.filter((x) => referenced.has(x.id))) for (const t of Object.values(c.approvedLocales)) tokensInText(t ?? '').forEach((p) => { if (!fields.has(p)) out.push({ code: 'INVALID_BINDING', severity: 'warning', nodeId: c.id, source: 'binding', message: `Content part ${c.id} references unknown field “${p}”.` }); });
   return out;
 }
 

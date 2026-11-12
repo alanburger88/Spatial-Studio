@@ -31,7 +31,8 @@
 .cube-stage-msg { position: absolute; inset: 0; display: grid; place-items: center; z-index: 3; }
 .cube-viewport { position: absolute; inset: 44px 0 20px 0; transform-style: preserve-3d; }
 .cube-world { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; transition: transform var(--iss-motion-depth) var(--iss-ease); }
-.cube-world * { transform-style: preserve-3d; }
+.cube-world > * { transform-style: preserve-3d; }
+.cube-world .cube-cell, .cube-world .cube-cell *, .cube-tick *, .cube-axis-title { transform-style: flat; }
 .cube-face { position: absolute; left: 0; top: 0;  border: 1px solid rgba(127,179,245,.38); background:
   linear-gradient(rgba(127,179,245,.10) 1px, transparent 1px) 0 0 / 20% 20%,
   linear-gradient(90deg, rgba(127,179,245,.10) 1px, transparent 1px) 0 0 / 20% 20%,
@@ -54,7 +55,7 @@
 .cube-axis-title { width: auto; }
 .cube-axis-title.ax-x { transform-origin: 0 0; }
 
-.cube-cell { position: absolute; left: -20px; top: -13px; width: 40px; height: 26px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 8px; border: 1.5px solid var(--mk); background: color-mix(in srgb, var(--mk) 22%, #0F1A2E); color: var(--iss-text); cursor: pointer; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; box-shadow: 0 6px 14px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12); transition: transform var(--iss-motion-fast) var(--iss-ease), box-shadow var(--iss-motion-fast), background var(--iss-motion-fast); padding: 0 4px; }
+.cube-cell { position: absolute; left: -18px; top: -12px; width: 36px; height: 24px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 8px; border: 1.5px solid var(--mk); background: color-mix(in srgb, var(--mk) 22%, #0F1A2E); color: var(--iss-text); cursor: pointer; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; box-shadow: 0 6px 14px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12); transition: transform var(--iss-motion-fast) var(--iss-ease), box-shadow var(--iss-motion-fast), background var(--iss-motion-fast); padding: 0 4px; }
 .cube-cell:hover { transform: scale(1.12); background: color-mix(in srgb, var(--mk) 34%, #0F1A2E); }
 .cube-cell:focus-visible { outline: none; box-shadow: var(--iss-focus), 0 6px 14px rgba(0,0,0,.45); }
 .cube-cell.selected { box-shadow: 0 0 0 2px #fff, 0 0 18px var(--mk); transform: scale(1.14); }
@@ -64,12 +65,12 @@
 .cube-cell.empty.selected { opacity: 1; border-style: solid; border-color: #fff; box-shadow: 0 0 12px rgba(255,255,255,.4); }
 .cube-zero { font-size: 14px; line-height: 1; }
 
-.cube-controls { flex: none; display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; padding: 5px 10px; border-radius: 10px; background: var(--iss-surface); border: 1px solid var(--iss-border); }
+.cube-controls { flex: none; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 5px 10px; row-gap: 4px; border-radius: 10px; background: var(--iss-surface); border: 1px solid var(--iss-border); }
 .cube-slider { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--iss-text-muted); font-weight: 600; }
-.cube-slider input[type=range] { width: 70px; accent-color: var(--iss-accent); }
-.cube-slider output { min-width: 34px; font-variant-numeric: tabular-nums; color: var(--iss-text); }
+.cube-slider input[type=range] { width: 56px; accent-color: var(--iss-accent); }
+.cube-slider output { min-width: 30px; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--iss-text); }
 .cube-ctl-sep { display: none; }
-.cube-slicer { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--iss-text-muted); font-weight: 600; }
+.cube-slicer { white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--iss-text-muted); font-weight: 600; }
 .cube-slicer .select { min-height: 26px; padding-top: 0; padding-bottom: 0; font-size: 12px; max-width: 160px; }
 .cube-controls input[type=range]:focus-visible { outline: 2px solid var(--iss-accent); outline-offset: 3px; }
 
