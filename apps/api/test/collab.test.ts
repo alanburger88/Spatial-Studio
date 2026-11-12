@@ -14,7 +14,8 @@ describe('collaboration (auth off: local admin)', () => {
   afterAll(async () => { await ctx.app.close(); });
   const inj = (method: any, url: string, payload?: any, headers?: any) => ctx.app.inject({ method, url, payload, headers });
   const get = async (id: string) => (await inj('GET', `/api/v1/projects/${id}`)).json().project;
-  const save = async (project: any) => inj('PUT', `/api/v1/projects/${project.projectId}`, { project }, { 'if-match': `"${project.modelVersion}"` });
+  /** Saves an edited copy; If-Match carries the version that was loaded (one below the bumped model version). */
+  const save = async (project: any) => inj('PUT', `/api/v1/projects/${project.projectId}`, { project }, { 'if-match': `"${project.modelVersion - 1}"` });
 
   it('session reports auth off and the built-in local admin', async () => {
     const s = (await inj('GET', '/api/v1/session')).json();

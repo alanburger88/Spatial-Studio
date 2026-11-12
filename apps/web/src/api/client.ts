@@ -1,4 +1,4 @@
-import type { Persona, Project, SyntheticRecord } from '@iss/model';
+import type { Permission, Persona, Project, ProjectDiff, Role, SyntheticRecord, TestCaseResult, WorkflowAction, WorkflowState } from '@iss/model';
 
 /** Typed client for the local Spatial Studio API (/api/v1, proxied by Vite). */
 
@@ -101,6 +101,28 @@ export interface BatchDto {
 }
 export interface AssetDto { assetId: string; name: string; mime: string; size: number; sha256: string; width: number | null; height: number | null; createdAt: string }
 
+
+/* ----------------------------------------------------------- collaboration (versions, review, comments, audit, users) */
+
+export interface SessionUser { id: string; name: string; email: string | null; role: Role; local?: boolean; disabled?: boolean; createdAt?: string; updatedAt?: string }
+export interface SessionInfo { authEnabled: boolean; user: SessionUser | null; permissions: Permission[]; roles?: Role[]; expiresAt: string | null }
+export interface WorkflowStep { action: string; from: WorkflowState; to: WorkflowState; user: string | null; at: string }
+export interface VersionDto { modelVersion: number; contentDigest: string; savedAt: string; savedBy: string | null; label: string | null; bytes: number; current: boolean; workflow: WorkflowStep[] }
+export interface VersionMeta { modelVersion: number; contentDigest: string; savedAt: string; savedBy: string | null; label: string | null; title: string }
+export interface BlockingGroup { code: string; severity: string; nodeId: string | null; locale: string | null; message: string; source: string; recordIds: string[] }
+export interface Readiness { ready: boolean; modelVersion: number; recordsChecked: number; blocking: BlockingGroup[]; tests: Array<TestCaseResult & { error?: string }>; testsRun: number; testsFailed: number }
+export interface WorkflowEventDto { id: number; action: string; from: WorkflowState; to: WorkflowState; comment: string | null; user: string | null; userId: string | null; at: string; modelVersion: number }
+export interface WorkflowDto {
+  projectId: string; modelVersion: number; state: WorkflowState; label: string; stateVersion: number | null; updatedAt: string | null; updatedBy: string | null;
+  actions: Array<{ action: WorkflowAction; label: string; to: WorkflowState; available: boolean; allowed: boolean; reason: string | null }>;
+  history: WorkflowEventDto[]; readiness: Readiness | null;
+}
+export interface CommentDto { id: string; projectId: string; nodeId: string; parentId: string | null; body: string; author: string; authorName: string; createdAt: string; resolvedAt: string | null; resolvedBy: string | null; modelVersion: number; mine: boolean }
+export interface AuditEventDto { id: number; at: string; user: string | null; userName: string | null; action: string; projectId: string | null; modelVersion: number | null; detail: Record<string, any> }
+export interface AuditQuery { projectId?: string; user?: string; action?: string; since?: string; before?: number; limit?: number }
+
+const qs = (q: Record<string, unknown>) => { const u = new URLSearchParams(); for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== null && v !== '') u.set(k, String(v)); const s = u.toString(); return s ? `?${s}` : ''; };
+
 export const api = {
   health: () => json<{ status: string; ai: { mode: 'external' | 'offline'; label: string; model?: string } }>('/api/v1/health'),
   projects: () => json<{ projects: ProjectSummary[] }>('/api/v1/projects'),
@@ -148,4 +170,22 @@ export const api = {
   asset: (id: string) => json<{ asset: AssetDto; dataUri: string }>(`/api/v1/assets/${id}`),
   assetRawUrl: (id: string) => `/api/v1/assets/${id}/raw`,
   deleteAsset: (id: string) => json<{ deleted: boolean; note?: string }>(`/api/v1/assets/${id}`, { method: 'DELETE', body: '{}' }),
+  // Collaboration: session, version history, review workflow, comments, audit, users.
+  session: () => json<SessionInfo>('/api/v1/session'),
+  login: (email: string, password: string) => json<SessionInfo>('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  logout: () => json<{ signedOut: boolean }>('/api/v1/auth/logout', { method: 'POST', body: '{}' }),
+  versions: (id: string) => json<{ projectId: string; currentVersion: number; versions: VersionDto[] }>(`/api/v1/projects/${id}/versions`),
+  version: (id: string, v: number) => json<{ modelVersion: number; contentDigest: string; savedAt: string; savedBy: string | null; label: string | null; project: Project }>(`/api/v1/projects/${id}/versions/${v}`),
+  versionDiff: (id: string, a: number, b: number) => json<{ from: VersionMeta; to: VersionMeta; diff: ProjectDiff }>(`/api/v1/projects/${id}/versions/${a}/diff/${b}`),
+  restoreVersion: (id: string, v: number, ifMatch: number) => json<{ project: Project; restored: boolean; restoredVersion: number; workflow: { state: WorkflowState } }>(`/api/v1/projects/${id}/versions/${v}/restore`, { method: 'POST', body: JSON.stringify({ confirm: true }), headers: { 'If-Match': `"${ifMatch}"` } }),
+  workflow: (id: string, checks = true) => json<WorkflowDto>(`/api/v1/projects/${id}/workflow${checks ? '' : '?checks=0'}`),
+  workflowAction: (id: string, action: WorkflowAction, comment?: string) => json<WorkflowDto>(`/api/v1/projects/${id}/workflow`, { method: 'POST', body: JSON.stringify({ action, ...(comment ? { comment } : {}) }) }),
+  comments: (id: string, q: { nodeId?: string; status?: 'open' | 'resolved' | 'all' } = {}) => json<{ comments: CommentDto[]; counts: { open: number; resolved: number } }>(`/api/v1/projects/${id}/comments${qs(q)}`),
+  addComment: (id: string, body: { nodeId?: string; parentId?: string; body: string }) => json<{ comment: CommentDto }>(`/api/v1/projects/${id}/comments`, { method: 'POST', body: JSON.stringify(body) }),
+  resolveComment: (id: string, commentId: string, resolved: boolean) => json<{ comment: CommentDto }>(`/api/v1/projects/${id}/comments/${commentId}/resolve`, { method: 'POST', body: JSON.stringify({ resolved }) }),
+  deleteComment: (id: string, commentId: string) => json<{ deleted: boolean; removed: number }>(`/api/v1/projects/${id}/comments/${commentId}`, { method: 'DELETE' }),
+  audit: (q: AuditQuery = {}) => json<{ events: AuditEventDto[]; nextBefore: number | null; actors: Array<{ id: string; name: string; count: number }>; authEnabled: boolean }>(`/api/v1/audit${qs(q as Record<string, unknown>)}`),
+  users: () => json<{ users: SessionUser[]; roles: Role[]; authEnabled: boolean }>('/api/v1/users'),
+  createUser: (body: { email: string; name: string; role: Role; password: string }) => json<{ user: SessionUser }>('/api/v1/users', { method: 'POST', body: JSON.stringify(body) }),
+  updateUser: (userId: string, patch: { name?: string; role?: Role; disabled?: boolean; password?: string }) => json<{ user: SessionUser }>(`/api/v1/users/${userId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 };

@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { useMemo } from 'react';
-import { applyCommand, projectContentDigest, type Command, type Persona, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
+import { applyCommand, projectContentDigest, roleCan, ROLE_LABEL, type Command, type Permission, type Persona, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
 import { resolve, type Resolution } from '@iss/resolver';
 import { ScenarioEngine, type DimensionId } from '@iss/scenarios';
 import { staticRuleAnalysis, bindingAnalysis } from '@iss/validation';
-import { api, ApiFailure, type ProjectSummary } from '../api/client';
+import { api, ApiFailure, type ProjectSummary, type SessionInfo } from '../api/client';
 
 /**
  * Central studio store: one canonical project model, one typed command bus, shared view context.
@@ -78,6 +78,23 @@ interface StudioState {
   setViewMode(v: ViewMode): void;
   setTheme(v: Theme): void;
   setLastValidation(v: { runId: string; counts: Record<string, number> } | null): void;
+
+  /* Collaboration (additive): who is signed in (auth is off by default → built-in local admin). */
+  session: SessionInfo | null;
+  sessionStatus: LoadStatus;
+  loadSession(): Promise<SessionInfo | null>;
+  signOut(): Promise<void>;
+  /** Adopt a project version the server just stored (e.g. after restoring an older version). Clears undo history. */
+  replaceProject(project: Project): void;
+  /** Throw away unsaved edits by reloading the saved model from the server. */
+  discardChanges(): Promise<void>;
+}
+
+/** Why the signed-in user may not change the model (null when they may). Auth off → never blocked. */
+export function editBlockedReason(session: SessionInfo | null): string | null {
+  if (!session?.authEnabled || !session.user) return null;
+  if (roleCan(session.user.role, 'edit')) return null;
+  return session.user.role === 'reviewer' ? 'Reviewers can comment but not edit' : `${ROLE_LABEL[session.user.role]}s can review but not edit`;
 }
 
 export type ViewMode = 'business' | 'technical';
@@ -141,6 +158,41 @@ export const useStudio = create<StudioState>((set, get) => ({
   viewMode: initialViewMode,
   theme: initialTheme,
   lastValidation: null,
+  session: null,
+  sessionStatus: 'idle',
+
+  async loadSession() {
+    if (get().sessionStatus === 'idle') set({ sessionStatus: 'loading' });
+    try {
+      const session = await api.session();
+      set({ session, sessionStatus: 'ready' });
+      return session;
+    } catch {
+      // API unreachable: screens show their own errors; behave as local mode.
+      set({ sessionStatus: 'error' });
+      return null;
+    }
+  },
+
+  async signOut() {
+    try { await api.logout(); } catch { /* already signed out */ }
+    set({ session: get().session ? { ...get().session!, user: null, permissions: [] } : null, project: null, projectStatus: 'idle', projects: [], projectsStatus: 'idle', past: [], future: [] });
+  },
+
+  replaceProject(project) {
+    const ctx = get().ctx;
+    const selectedNodeId = ctx.selectedNodeId && project.nodes.some((n) => n.id === ctx.selectedNodeId) ? ctx.selectedNodeId : defaultCtx(project).selectedNodeId;
+    set({ project, serverVersion: project.modelVersion, savedDigest: projectContentDigest(project), past: [], future: [], ctx: { ...ctx, selectedNodeId } });
+    get().loadProjects();
+  },
+
+  async discardChanges() {
+    const p = get().project;
+    if (!p) return;
+    const { project } = await api.project(p.projectId);
+    get().replaceProject(project);
+    get().toast({ kind: 'info', title: 'Unsaved changes discarded', message: `${project.title} · v${project.modelVersion}` });
+  },
 
   async loadProjects() {
     set({ projectsStatus: 'loading', projectsError: null });
@@ -174,6 +226,11 @@ export const useStudio = create<StudioState>((set, get) => ({
   dispatch(cmd) {
     const project = get().project;
     if (!project) return { ok: false, code: 'NO_PROJECT', message: 'No project is open.' };
+    const blocked = editBlockedReason(get().session);
+    if (blocked) {
+      get().toast({ kind: 'warning', title: 'Read-only', message: `${blocked}.` });
+      return { ok: false, code: 'FORBIDDEN', message: `${blocked}.` };
+    }
     const res = applyCommand(project, cmd);
     if (!res.ok) {
       set({ lastRejection: { code: res.code, message: res.message, nodeId: res.nodeId, at: Date.now() } });
@@ -187,6 +244,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   undo() {
     const { past, project } = get();
     if (!past.length || !project) return;
+    if (editBlockedReason(get().session)) return;
     const prev = past[past.length - 1];
     const restored = { ...prev.project, modelVersion: project.modelVersion + 1 };
     set({ project: restored, past: past.slice(0, -1), future: [{ project, label: prev.label }, ...get().future].slice(0, HISTORY_LIMIT) });
@@ -196,6 +254,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   redo() {
     const { future, project } = get();
     if (!future.length || !project) return;
+    if (editBlockedReason(get().session)) return;
     const next = future[0];
     const restored = { ...next.project, modelVersion: project.modelVersion + 1 };
     set({ project: restored, future: future.slice(1), past: [...get().past, { project, label: next.label }].slice(-HISTORY_LIMIT) });
@@ -205,6 +264,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   async save() {
     const { project, serverVersion } = get();
     if (!project) return false;
+    const blocked = editBlockedReason(get().session);
+    if (blocked) { get().toast({ kind: 'warning', title: 'Read-only', message: `${blocked}.` }); return false; }
     set({ saving: true });
     try {
       const { project: saved } = await api.saveProject(project, serverVersion);
@@ -222,6 +283,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   async resetProject() {
     const { project } = get();
     if (!project) return;
+    const blocked = editBlockedReason(get().session);
+    if (blocked) { get().toast({ kind: 'warning', title: 'Read-only', message: `${blocked}.` }); return; }
     const { project: fresh } = await api.resetProject(project.projectId);
     try { localStorage.removeItem(ctxKey(project.projectId)); } catch { /* ignore */ }
     set({ project: fresh, serverVersion: fresh.modelVersion, savedDigest: projectContentDigest(fresh), past: [], future: [], ctx: defaultCtx(fresh) });
@@ -270,6 +333,13 @@ export const useStudio = create<StudioState>((set, get) => ({
 }));
 
 /* ----------------------------------------------------------- derived hooks */
+
+/** Role-aware UI: may the signed-in user do this? Always true when auth is off (local admin). */
+export function useCan(p: Permission): boolean {
+  const session = useStudio((s) => s.session);
+  if (!session?.authEnabled) return true;
+  return roleCan(session.user?.role, p);
+}
 
 export function useIsDirty(): boolean {
   const project = useStudio((s) => s.project);
