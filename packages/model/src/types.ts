@@ -293,6 +293,9 @@ export interface SyntheticRecord {
   member?: Record<string, unknown>;
   claims?: Array<Record<string, unknown>>;
   demonstrationOnly?: boolean;
+  /** Set on records imported by a user (JSON/CSV) rather than seeded fixtures. */
+  imported?: boolean;
+  sourceId?: string | null;
 }
 
 export interface Persona {

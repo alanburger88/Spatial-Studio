@@ -4,18 +4,24 @@ import { COMPONENT_CATALOG, CATALOG_BY_TYPE, defaultNode, dropRejection, newNode
 import { renderInteractiveHtml } from '@iss/renderers';
 import type { RNode, Resolution } from '@iss/resolver';
 import { useResolution, useStudio } from '../state/store';
-import { ScreenHeader } from '../ui/common';
+import { ScreenHeader, Tech } from '../ui/common';
 import { C, Icon } from '../ui/icons';
-import { PagePreview, PT, PAGE_W_PT, type NodeInteraction } from '../doc/PagePreview';
+import { PagePreview, PT, PAGE_W_PT, PAGE_H_PT, type NodeInteraction } from '../doc/PagePreview';
 import { Inspector } from './design/Inspector';
 import { RichTextEditor } from './design/RichTextEditor';
 import './DesignStudio.css';
 
+const SCROLL_PAD_X = 20, SCROLL_PAD_Y = 16;
 type Drag = { kind: 'component'; type: ComponentType } | { kind: 'node'; id: string };
 type Mark = { id: string; pos: 'before' | 'after' | 'into' };
 const INTO_TYPES = new Set(['disclosure', 'header-footer', 'variant-set', 'conditional-region', 'container']);
 
 let dragging: Drag | null = null;
+
+const LS_HIDDEN = 'iss.design.showHidden';
+const LS_HINT = 'iss.design.pullHintSeen';
+const lsGet = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } };
 
 function plan(project: Project, targetId: string, mark: Mark['pos'], drag: Drag): { parentId: string; index: number } | { reject: string } {
   const type: ComponentType = drag.kind === 'component' ? drag.type : nodeMap(project).get(drag.id)!.type;
@@ -53,16 +59,24 @@ export function DesignStudio() {
   const [grid, setGrid] = useState(false);
   const [snap, setSnap] = useState(true);
   const [device, setDevice] = useState<1200 | 768 | 390>(1200);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const [stageW, setStageW] = useState(900);
+  const [showHidden, setShowHidden] = useState(() => lsGet(LS_HIDDEN) === '1');
+  const [hintSeen, setHintSeen] = useState(() => lsGet(LS_HINT) === '1');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: 700, h: 600 });
   useEffect(() => {
-    const el = stageRef.current;
+    const el = scrollRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setStageW(el.clientWidth));
+    const measure = () => setBox({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
-  const fit = Math.max(0.5, Math.min(1.15, (stageW - 64) / (PAGE_W_PT * PT)));
+  }, [!!res]);
+  // Fit: whole page when that stays readable (>= 60%), otherwise page width. Recomputed from the measured canvas.
+  const availW = Math.max(200, box.w - 2 * SCROLL_PAD_X), availH = Math.max(200, box.h - 2 * SCROLL_PAD_Y);
+  const fitW = availW / (PAGE_W_PT * PT), fitPage = availH / (PAGE_H_PT * PT);
+  const fit = Math.max(0.4, Math.min(1.15, fitPage >= 0.6 ? Math.min(fitW, fitPage) : fitW));
+  const fitsWholePage = fitPage >= 0.6 && fitPage <= fitW;
   const scale = zoom ?? fit;
   const selected = ctx.selectedNodeId;
   const map = useMemo(() => nodeMap(project), [project]);
@@ -162,6 +176,7 @@ export function DesignStudio() {
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
     },
+    hiddenMode: showHidden ? 'ghost' : 'marker',
     renderEditor: (n: RNode) => (
       <RichTextEditor
         value={map.get(n.id)?.content}
@@ -228,12 +243,17 @@ export function DesignStudio() {
   if (!res) return <section className="screen" data-testid="design-canvas"><ScreenHeader id="S02" title="2D Design Studio" subtitle="Select a synthetic record that matches this project." /></section>;
   const palette = COMPONENT_CATALOG.filter((c) => !paletteQuery || c.label.toLowerCase().includes(paletteQuery.toLowerCase()) || c.code.toLowerCase().includes(paletteQuery.toLowerCase()));
   const canExplode = selNode && (selNode.type === 'variant-set' || selNode.type === 'conditional-region');
+  let hiddenCount = 0;
+  const countHidden = (n: RNode, parentVisible: boolean) => { if (!n.visible && parentVisible) hiddenCount++; n.children.forEach((c) => countHidden(c, n.visible)); };
+  countHidden(res.root, true);
+  const toggleHidden = () => { const v = !showHidden; setShowHidden(v); lsSet(LS_HIDDEN, v ? '1' : '0'); };
+  const dismissHint = () => { setHintSeen(true); lsSet(LS_HINT, '1'); };
+  const goExplode = () => { dismissHint(); navigate(`/studio/${project.projectId}/exploded/${selNode!.id}`); };
 
   return (
     <section className="screen design" aria-label="2D Design Studio">
-      <ScreenHeader id="S02" title="2D Design Studio" subtitle="Edit accurate page geometry and responsive profiles on one semantic component tree. Every edit is a typed, undoable model command."
-        badge={<span className="chip accent">Author</span>}
-        actions={<button className="btn primary" disabled={!canExplode} onClick={() => navigate(`/studio/${project.projectId}/exploded/${selNode!.id}`)} data-testid="explore-variants"><Icon.exploded /> Explore variants</button>}
+      <ScreenHeader id="S02" title="2D Design Studio" subtitle="Edit accurate page geometry and responsive profiles on one semantic component tree. Every edit is a typed, undoable model command. Select a variant or conditional section and use its pull handle, or Explore variants, to open the Exploded view."
+        actions={<button className="btn primary" disabled={!canExplode} onClick={goExplode} data-testid="explore-variants" title={canExplode ? 'Open the selected section in the Exploded view' : 'Select a variant set or conditional section first'}><Icon.exploded /> Explore variants</button>}
       />
       <div className="screen-body workbench">
         <aside className="panel" aria-label="Components and layers">
@@ -243,45 +263,51 @@ export function DesignStudio() {
           </div>
           {leftTab === 'palette' ? (
             <div className="panel-body" data-testid="component-palette">
-              <input className="input" placeholder="Search 15 components…" value={paletteQuery} onChange={(e) => setPaletteQuery(e.target.value)} aria-label="Search components" style={{ width: '100%', marginBottom: 8 }} />
+              <input className="input" placeholder={`Search ${COMPONENT_CATALOG.length} components…`} value={paletteQuery} onChange={(e) => setPaletteQuery(e.target.value)} aria-label="Search components" style={{ width: '100%', marginBottom: 8 }} />
               <ul className="palette" aria-label="Component palette (drag onto the page, or press Insert)">
                 {palette.map((c) => {
                   const Ico = C[c.type];
                   return (
                     <li key={c.type}>
-                      <div className="palette-item" draggable onDragStart={(e) => { dragging = { kind: 'component', type: c.type }; e.dataTransfer.setData('application/x-iss-component', c.type); e.dataTransfer.effectAllowed = 'copy'; }} onDragEnd={() => { dragging = null; setMark(null); }} data-testid={`palette-${c.type}`} title={c.description}>
-                        <span className="palette-icon"><Ico /></span>
-                        <span className="grow"><span className="palette-label">{c.label}</span><span className="palette-code">{c.code}{c.deep ? ' · deep' : ''}</span></span>
-                        <button className="btn sm ghost" onClick={() => insertViaKeyboard(c.type)} aria-label={`Insert ${c.label}`} data-testid={`insert-${c.type}`}><Icon.plus width={14} height={14} /></button>
+                      <div className="palette-item" draggable onDragStart={(e) => { dragging = { kind: 'component', type: c.type }; e.dataTransfer.setData('application/x-iss-component', c.type); e.dataTransfer.effectAllowed = 'copy'; }} onDragEnd={() => { dragging = null; setMark(null); }} data-testid={`palette-${c.type}`} title={`${c.description} (${c.code}${c.deep ? ', deep' : ''})`}>
+                        <span className="palette-icon"><Ico width={15} height={15} /></span>
+                        <span className="palette-label grow">{c.label}<Tech><span className="palette-code">{c.code}{c.deep ? ' · deep' : ''}</span></Tech></span>
+                        <button className="btn sm ghost icon" onClick={() => insertViaKeyboard(c.type)} aria-label={`Insert ${c.label}`} title={`Insert ${c.label} after the selection`} data-testid={`insert-${c.type}`}><Icon.plus width={14} height={14} /></button>
                       </div>
                     </li>
                   );
                 })}
+                {!palette.length && <li className="muted" style={{ fontSize: 12 }}>No component matches “{paletteQuery}”.</li>}
               </ul>
-              <p className="muted" style={{ fontSize: 11.5 }}>Drop into the flow region, onto a section, or into the page-1 header zone for a fixed anchor. Invalid targets explain why and leave the model unchanged.</p>
+              <p className="muted palette-note">Drag onto the page, or use + to insert after the selection. Invalid targets explain why and leave the model unchanged.</p>
             </div>
           ) : (
             <div className="panel-body" data-testid="layers-tree"><LayersTree project={project} res={res} selected={selected} onSelect={(id) => select(id)} /></div>
           )}
         </aside>
 
-        <div className="stage design-stage" ref={stageRef}>
-          <div className="stage-grid" />
-          <div className="stage-toolbar">
-            <span className="chip">{isHtml ? 'Interactive HTML profile' : 'Page 1 · US Letter portrait · paged profile'}</span>
-            <span className="chip mono">{Math.round(scale * 100)}%</span>
+        <div className="design-stage">
+          <div className="ds-toolbar">
+            <span className="chip" title={isHtml ? 'Interactive HTML profile' : 'US Letter portrait · paged profile · page 1 of the composed document'}>{isHtml ? 'Interactive HTML' : 'Page 1 · Letter'}</span>
+            <span className="chip mono" title={zoom === null ? (fitsWholePage ? 'Fit: whole page' : 'Fit: page width') : 'Manual zoom'}>{Math.round(scale * 100)}%</span>
             {!isHtml && <>
               <button className="btn sm icon" aria-label="Zoom out" onClick={() => setZoom(Math.max(0.4, scale - 0.1))}>−</button>
               <button className="btn sm icon" aria-label="Zoom in" onClick={() => setZoom(Math.min(1.6, scale + 0.1))}>+</button>
-              <button className="btn sm" onClick={() => setZoom(null)}>Fit</button>
+              <button className="btn sm" aria-pressed={zoom === null} onClick={() => setZoom(null)} title="Fit the page to the canvas">Fit</button>
               <button className="btn sm" aria-pressed={grid} onClick={() => setGrid(!grid)}>Grid</button>
-              <button className="btn sm" aria-pressed={snap} onClick={() => setSnap(!snap)}>Snap 2pt</button>
+              <button className="btn sm" aria-pressed={snap} onClick={() => setSnap(!snap)} title="Snap moves and resizes to 2 pt">Snap</button>
+              <button className="btn sm" aria-pressed={showHidden} onClick={toggleHidden} data-testid="toggle-hidden-sections" aria-label="Show hidden sections" title={`Show hidden sections as ghosts in the page (${hiddenCount} hidden for this customer). Off: shown as ⊘ margin markers.`}>⊘ Hidden{hiddenCount ? ` · ${hiddenCount}` : ''}</button>
             </>}
             {isHtml && <div className="segmented" role="group" aria-label="Device width">{([1200, 768, 390] as const).map((w) => <button key={w} aria-pressed={device === w} onClick={() => setDevice(w)}>{w === 1200 ? 'Desktop' : w === 768 ? 'Tablet' : 'Mobile'}</button>)}</div>}
             <span style={{ flex: 1 }} />
-            {canExplode && <span className="chip variant">Pull handle on {selNode!.id} opens the Exploded view</span>}
+            {canExplode && !hintSeen && (
+              <span className="chip variant ds-hint" role="status">
+                Pull handle on {nodeTitleOf(selNode!)} opens the Exploded view
+                <button className="ds-hint-x" aria-label="Dismiss hint" onClick={dismissHint}>✕</button>
+              </span>
+            )}
           </div>
-          <div className="design-scroll" data-testid="design-canvas" tabIndex={0} onKeyDown={onCanvasKey} aria-label="Page canvas. Arrow keys move fixed anchors (Shift = 10 pt), Alt+arrows reorder flow components, Delete removes, Enter edits text." onClick={() => { setEditingId(null); }}>
+          <div className="design-scroll" ref={scrollRef} data-testid="design-canvas" tabIndex={0} onKeyDown={onCanvasKey} aria-label="Page canvas. Arrow keys move fixed anchors (Shift = 10 pt), Alt+arrows reorder flow components, Delete removes, Enter edits text." onClick={() => { setEditingId(null); }}>
             {isHtml ? <HtmlProfileCanvas res={res} project={project} width={device} selected={selected} onSelect={(id) => select(id)} />
               : <PagePreview res={res} project={project} scale={scale} ia={ia} showGrid={grid} onPageDragOver={onPageDragOver} onPageDrop={onPageDrop} onBackgroundClick={() => { setEditingId(null); }} />}
           </div>
@@ -292,6 +318,8 @@ export function DesignStudio() {
     </section>
   );
 }
+
+const nodeTitleOf = (n: DocNode) => n.name ?? n.id;
 
 function LayersTree({ project, res, selected, onSelect }: { project: Project; res: Resolution; selected: string | null; onSelect: (id: string) => void }) {
   const map = nodeMap(project);
@@ -308,7 +336,7 @@ function LayersTree({ project, res, selected, onSelect }: { project: Project; re
           <span className="grow layer-name">{n.name ?? n.id}</span>
           {n.layout?.paged?.mode === 'fixed' && <span className="layer-tag">fixed</span>}
           {(n.type === 'variant-set' || n.type === 'conditional-region') && <span className="layer-count">{n.variantIds?.length ?? 0}</span>}
-          {visible.get(id) === false && <span className="layer-tag" title="Not rendered in this scenario">hidden</span>}
+          {visible.get(id) === false && <span className="layer-tag" title="Hidden for this customer: no rule or condition shows it">hidden</span>}
         </button>
         {n.children?.length ? <ul role="group">{n.children.map((c) => render(c, depth + 1))}</ul> : null}
       </li>
@@ -327,7 +355,8 @@ function HtmlProfileCanvas({ res, project, width, selected, onSelect }: { res: R
       const doc = f.contentDocument;
       if (!doc) return;
       const style = doc.createElement('style');
-      style.textContent = `[data-node-id]{cursor:pointer}[data-node-id].iss-sel{outline:3px solid #4EAF60;outline-offset:3px;border-radius:12px}`;
+      const sel = getComputedStyle(document.documentElement).getPropertyValue('--iss-green-medium').trim() || 'currentColor';
+      style.textContent = `[data-node-id]{cursor:pointer}[data-node-id].iss-sel{outline:3px solid ${sel};outline-offset:3px;border-radius:12px}`;
       doc.head.appendChild(style);
       doc.addEventListener('click', (e) => {
         const el = (e.target as HTMLElement).closest('[data-node-id]');

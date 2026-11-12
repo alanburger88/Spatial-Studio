@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 // Loaded via require so test bundlers that do not know the newer node:sqlite builtin leave it alone.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
-import { projectContentDigest, sha256Hex, type Project } from '@iss/model';
+import { projectContentDigest, sha256Hex, type Project, type SyntheticRecord } from '@iss/model';
 import { seedProjects } from '@iss/model/fixtures';
 
 /**
@@ -14,6 +14,8 @@ import { seedProjects } from '@iss/model/fixtures';
 export class Store {
   db: DatabaseSyncT;
   artifactDir: string;
+  private sampleIds = new Set(seedProjects().map((p) => p.projectId));
+  isSample(projectId: string) { return this.sampleIds.has(projectId); }
   constructor(dataDir: string) {
     mkdirSync(dataDir, { recursive: true });
     this.artifactDir = path.join(dataDir, 'artifacts');
@@ -25,6 +27,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS runs(run_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, record_id TEXT NOT NULL, request_json TEXT NOT NULL, summary_json TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS artifacts(artifact_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, kind TEXT NOT NULL, filename TEXT NOT NULL, sha256 TEXT NOT NULL, size INTEGER NOT NULL, page_count INTEGER, meta_json TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS snapshots(snapshot_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, record_id TEXT NOT NULL, event_id TEXT NOT NULL, run_id TEXT NOT NULL, content_digest TEXT NOT NULL, canonical TEXT NOT NULL, sha256 TEXT NOT NULL, issued_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS imported_records(record_id TEXT PRIMARY KEY, document_type TEXT NOT NULL, source_id TEXT, json TEXT NOT NULL, imported_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS proposals(proposal_id TEXT PRIMARY KEY, json TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, decided_at TEXT);
     `);
     this.ensureSeeds();
@@ -37,6 +40,36 @@ export class Store {
     }
   }
 
+  /* ---------------------------------------------------------- imported records */
+
+  importedRecords(documentType?: string): SyntheticRecord[] {
+    const rows = (documentType ? this.db.prepare('SELECT json FROM imported_records WHERE document_type=? ORDER BY record_id').all(documentType) : this.db.prepare('SELECT json FROM imported_records ORDER BY record_id').all()) as any[];
+    return rows.map((r) => JSON.parse(r.json));
+  }
+
+  nextImportNumber(documentType: string): number {
+    const ids = (this.db.prepare('SELECT record_id FROM imported_records WHERE document_type=?').all(documentType) as any[]).map((r) => Number(String(r.record_id).split('-')[1]));
+    return ids.length ? Math.max(...ids) + 1 : 0;
+  }
+
+  addImportedRecords(records: SyntheticRecord[]) {
+    const now = new Date().toISOString();
+    const st = this.db.prepare('INSERT INTO imported_records(record_id,document_type,source_id,json,imported_at) VALUES (?,?,?,?,?)');
+    for (const r of records) st.run(r.recordId, r.documentType, (r as any).sourceId ?? null, JSON.stringify(r), now);
+  }
+
+  clearImportedRecords(documentType?: string): number {
+    const res = documentType ? this.db.prepare('DELETE FROM imported_records WHERE document_type=?').run(documentType) : this.db.prepare('DELETE FROM imported_records').run();
+    return Number(res.changes);
+  }
+
+  /* ---------------------------------------------------------- projects (user copies) */
+
+  deleteProject(projectId: string) {
+    this.db.prepare('DELETE FROM projects WHERE project_id=?').run(projectId);
+    this.db.prepare('DELETE FROM snapshots WHERE project_id=?').run(projectId);
+  }
+
   seedFor(projectId: string): Project | undefined {
     return seedProjects().find((p) => p.projectId === projectId);
   }
@@ -44,7 +77,7 @@ export class Store {
   listProjects() {
     return (this.db.prepare('SELECT project_id, json, model_version, content_digest, seed_digest, updated_at FROM projects ORDER BY project_id').all() as any[]).map((r) => {
       const p = JSON.parse(r.json) as Project;
-      return { projectId: p.projectId, title: p.title, documentType: p.documentType, modelVersion: r.model_version, schemaVersion: p.schemaVersion, issuer: p.issuer, contentDigest: r.content_digest, modified: r.content_digest !== r.seed_digest, updatedAt: r.updated_at, nodeCount: p.nodes.length, ruleCount: p.rules.length };
+      return { projectId: p.projectId, title: p.title, sample: this.sampleIds.has(p.projectId), derivedFrom: (p as any).derivedFrom ?? null, documentType: p.documentType, modelVersion: r.model_version, schemaVersion: p.schemaVersion, issuer: p.issuer, contentDigest: r.content_digest, modified: r.content_digest !== r.seed_digest, updatedAt: r.updated_at, nodeCount: p.nodes.length, ruleCount: p.rules.length };
     });
   }
 

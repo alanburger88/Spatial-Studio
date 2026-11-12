@@ -8,19 +8,38 @@ A working proof of concept of a customer-communications (CCM) design studio. One
 
 ## Quick start
 
-Prerequisites: Node 22+, pnpm 10 (via Corepack), Python 3.10+ (for the pack verifiers), Chromium for Playwright (`npx playwright install chromium` if not already present).
+Prerequisites: Node 22.13+, pnpm 10, Python 3.10+ (only for the pack verifiers), and Playwright's Chromium (used by the API to compose PDFs).
 
 ```bash
 pnpm install
 ```
 
 ```bash
+pnpm setup:browser
+```
+
+```bash
 pnpm dev
 ```
+
+### Windows (PowerShell)
+
+1. If PowerShell says *“running scripts is disabled on this system”*, allow scripts for your user once: `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` (answer **Y**).
+2. `npm install -g pnpm`, then open a new PowerShell window.
+3. Run the three commands above from the repository folder. All `pnpm` scripts are cross-platform (`pnpm verify` replaces `./scripts/verify-all.sh --app`; Python is found as `py`, `python` or `python3`).
 
 Open **http://127.0.0.1:5173/projects**. The API runs on **http://127.0.0.1:3001/api/v1** (health: `/api/v1/health`). `pnpm start` runs the API plus the production build via `vite preview` instead of the dev server.
 
 Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the Project Gallery to restore the approved samples at any time.
+
+## Using the studio
+
+- **Business / Technical** (top bar): Business view speaks in plain language — rules read as sentences, and run IDs, hashes and raw expressions sit behind *Proof* disclosures. Technical view shows every engine detail inline.
+- **Light / dark theme** (top bar moon/sun). Light is the default; spatial viewports stay dark in both.
+- **Customer picker** (top bar): search by name, persona, ID or language.
+- **Your own projects**: *Duplicate* any project in the Project Gallery to get an editable copy; copies can be renamed and deleted (the approved samples can only be restored).
+- **Your own records**: *Import records* (Project Gallery) accepts CSV or JSON. Every row is checked against the data contract and rejected rows say why; accepted rows get IDs `CARD-5001…` / `EOB-5001…` and appear in every view. Download the CSV template from the import dialog. **Use synthetic or anonymised data only** — records stay in the local `.data` folder. *Remove imported* deletes them.
+- The status bar always shows the same rule & binding check counts as **Validate & Compare** (or the full validation result once you have run it for the current scenario); click it to open Validate.
 
 ## Verify
 
@@ -41,7 +60,7 @@ pnpm verify:app
 ```
 
 ```bash
-./scripts/verify-all.sh --app
+pnpm verify
 ```
 
 | Command | What it proves |
@@ -87,11 +106,15 @@ One model → one pure resolver → many projections. The browser and the API ru
 
 ## Optional live AI
 
-Offline mode is the default and fully functional. To enable the server-side Claude adapter, set in a local, uncommitted `.env` / environment for the API only:
+Offline mode is the default and fully functional; when it does not understand a question it says so and lists questions it can answer. To enable the server-side Claude adapter, create a local, uncommitted `.env` file in the repository root (the API reads it at start-up; real environment variables take precedence):
 
 ```bash
-AI_PROVIDER=anthropic AI_MODEL=claude-opus-5-5 AI_API_KEY=... pnpm dev
+AI_PROVIDER=anthropic
+AI_MODEL=claude-opus-5-5
+AI_API_KEY=your-key-here
 ```
+
+Restart `pnpm dev` afterwards. Live usage is billed to the Anthropic account that owns the key.
 
 Keys never reach the browser. Model output is treated as untrusted and re-validated against the typed allowlist; rule/content changes are proposals that require explicit approval.
 

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { DEMO_STEPS, useDemo } from '../demo/demo';
-import { ScreenHeader } from '../ui/common';
+import { ScreenHeader, Proof, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
 import './GuidedDemo.css';
 
@@ -17,7 +17,6 @@ export function GuidedDemo() {
   return (
     <section className="screen" data-testid="demo-view">
       <ScreenHeader id="S11" title="Guided Demo" subtitle="An eight-minute stakeholder narrative. Every step performs real commands, scenario changes and exports, then verifies a checkpoint against live state."
-        badge={<span className="chip info">Offline-safe · AI optional</span>}
         actions={<>
           <button className="btn primary" onClick={() => demo.start(nav)} disabled={demo.running} data-testid="start-demo"><Icon.demo /> {demo.runs ? 'Restart demo' : 'Start guided demo'}</button>
           <button className="btn" onClick={() => demo.next(nav)} disabled={demo.running || demo.index >= DEMO_STEPS.length - 1 || demo.index < 0} data-testid="next-demo-step">Next step <Icon.chevron /></button>
@@ -39,7 +38,7 @@ export function GuidedDemo() {
                       <div className="demo-chapter">{s.chapter}</div>
                       <div className="demo-title">{s.title}</div>
                       <p className="demo-narr">{s.narration}</p>
-                      <div className="demo-proof"><strong>Proof:</strong> {s.proof}</div>
+                      <div className="demo-proof"><Proof label="Proof"><Tech><strong>Proof:</strong> </Tech>{s.proof}</Proof></div>
                       {r && <div className={`demo-check ${r.ok ? 'ok' : 'fail'}`} data-testid={`checkpoint-${s.id}`}>{r.ok ? '✓ Checkpoint passed' : '✗ Checkpoint failed'} — {r.detail}{r.digest && <span className="mono"> · {r.digest.slice(0, 12)}</span>}</div>}
                     </div>
                     <button className="btn sm" disabled={demo.running || demo.index < 0} onClick={() => demo.runStep(i, nav)} aria-label={`Run step ${i + 1}: ${s.title}`}>Run</button>
@@ -61,13 +60,12 @@ export function GuidedDemo() {
             <div className="section-title">Guardrails</div>
             <ul className="gal-list">
               <li>Start resets both projects to the approved samples — no stale state.</li>
-              <li>The banner follows you across screens; “Explore freely” hides it without losing your place.</li>
-              <li>Live AI is optional; the labelled offline assistant answers from the engine trace.</li>
+              <li>The banner follows you across screens; “Explore freely” hides it.</li>
               <li>If an export fails, stop and report — never substitute a saved file.</li>
               <li>AFP is always presented as a simulation.</li>
             </ul>
             <div className="section-title">Keyboard</div>
-            <p className="muted" style={{ fontSize: 12.5 }}>Alt+1…9 jumps between views. In the banner: Next, Pause and Explore are buttons; Esc does nothing destructive.</p>
+            <p className="muted" style={{ fontSize: 12.5 }}>Alt+1…9 jumps between views.</p>
           </div>
         </aside>
       </div>

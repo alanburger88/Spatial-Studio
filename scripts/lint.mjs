@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 let failed = 0;
-const tsc = spawnSync('npx', ['tsc', '-p', 'tsconfig.json', '--noEmit'], { stdio: 'inherit' });
+const tsc = spawnSync('npx', ['tsc', '-p', 'tsconfig.json', '--noEmit'], { stdio: 'inherit', shell: process.platform === 'win32' });
 if (tsc.status) { console.error('✗ typecheck failed'); failed++; } else console.log('✓ typecheck');
 const walk = (d) => readdirSync(d).flatMap((f) => { const p = path.join(d, f); return statSync(p).isDirectory() ? (f === 'node_modules' || f === 'dist' ? [] : walk(p)) : [p]; });
 const files = ['apps', 'packages'].flatMap(walk).filter((f) => /\.(ts|tsx)$/.test(f));

@@ -129,7 +129,7 @@ export function nodeInnerHtml(n: RNode, mode: RenderMode, renderChild: (c: RNode
     case 'disclosure': {
       const d = n.disclosure!;
       const isBanner = d.contentPartId === 'not-a-bill-banner';
-      return `<aside class="iss-disclosure${isBanner ? ' iss-banner' : ''}" role="note" aria-label="${esc(d.title)}">${isBanner ? '' : `<h4>${esc(d.title)}</h4>`}${blocksHtml(n.text)}<span class="iss-version">${esc(d.contentPartId)} v${d.version}</span></aside>`;
+      return `<aside class="iss-disclosure${isBanner ? ' iss-banner' : ''}" role="note" aria-label="${esc(d.title)}">${isBanner ? '' : `<h3>${esc(d.title)}</h3>`}${blocksHtml(n.text)}<span class="iss-version">${esc(d.contentPartId)} v${d.version}</span></aside>`;
     }
     case 'action-link': {
       const a = n.action!;
@@ -142,7 +142,7 @@ export function nodeInnerHtml(n: RNode, mode: RenderMode, renderChild: (c: RNode
     }
     case 'expandable-explanation': {
       const e = n.explanation!;
-      if (mode.target === 'paged') return `<div class="iss-expl"><h4>${esc(e.title)}</h4><p>${esc(e.summary)}</p><p class="iss-expl-details">${esc(e.details)}</p></div>`;
+      if (mode.target === 'paged') return `<div class="iss-expl"><h3>${esc(e.title)}</h3><p>${esc(e.summary)}</p><p class="iss-expl-details">${esc(e.details)}</p></div>`;
       return `<details class="iss-expl"><summary><span class="iss-expl-title">${esc(e.title)}</span><span class="iss-expl-summary">${esc(e.summary)}</span></summary><p>${esc(e.details)}</p></details>`;
     }
     case 'chart':

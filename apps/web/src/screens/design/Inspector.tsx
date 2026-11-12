@@ -4,10 +4,13 @@ import { CATALOG_BY_TYPE, fieldsFor, getPath, nodeMap, requiredNodeIds, type Doc
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
 import { useScenarioEngine, useStudio } from '../../state/store';
 import { Icon } from '../../ui/icons';
+import { Tech, Biz } from '../../ui/common';
+import { predicateSentence } from '../../ui/plain';
 import { insertToken } from './RichTextEditor';
 
 type Tab = 'content' | 'data' | 'rules' | 'layout' | 'a11y' | 'impact';
-const TABS: Array<[Tab, string]> = [['content', 'Content'], ['data', 'Data'], ['rules', 'Rules'], ['layout', 'Layout'], ['a11y', 'Accessibility'], ['impact', 'Impact']];
+const TAB_TITLES: Partial<Record<Tab, string>> = { a11y: 'Accessibility' };
+const TABS: Array<[Tab, string]> = [['content', 'Content'], ['data', 'Data'], ['rules', 'Rules'], ['layout', 'Layout'], ['a11y', 'A11y'], ['impact', 'Impact']];
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return <div className="field"><label>{label}{children}</label>{hint && <span className="hint">{hint}</span>}</div>;
@@ -31,7 +34,7 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
   const rnode = nodeId ? indexTree(res.root).get(nodeId) : undefined;
   return (
     <aside className="panel insp" aria-label="Component inspector" data-testid="component-inspector">
-      <div className="panel-head">Inspector {node && <span className="sub">{CATALOG_BY_TYPE[node.type].code} · {CATALOG_BY_TYPE[node.type].label}</span>}</div>
+      <div className="panel-head">Inspector {node && <span className="sub"><Tech>{CATALOG_BY_TYPE[node.type].code} · </Tech>{CATALOG_BY_TYPE[node.type].label}</span>}</div>
       {!node || !rnode ? (
         <div className="panel-body"><div className="empty"><strong>No component selected</strong><span>Select a component on the page or in Layers. Use the palette to insert one.</span></div></div>
       ) : (
@@ -39,15 +42,15 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
           <div className="insp-id">
             <div className="insp-name">{node.name ?? node.id}</div>
             <div className="row wrap" style={{ gap: 6 }}>
-              <span className="chip accent mono" data-testid="inspector-node-id">{node.id}</span>
+              <span className="chip accent mono" data-testid="inspector-node-id" title={node.id}>{node.id}</span>
               {rnode.required && <span className="chip">Required</span>}
               {node.locked && <span className="chip warning"><Icon.lock width={12} height={12} /> Locked</span>}
               {node.layout?.paged?.mode === 'fixed' ? <span className="chip info">Fixed anchor</span> : <span className="chip">Flow</span>}
             </div>
             {!rnode.visible && <div className="callout warning" style={{ marginTop: 8 }} data-testid="not-rendered"><strong>Not rendered in this scenario.</strong> {rnode.hiddenReason}</div>}
           </div>
-          <div className="tabs" role="tablist" aria-label="Inspector sections">
-            {TABS.map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} data-testid={`insp-tab-${id}`}>{label}</button>)}
+          <div className="tabs insp-tabs" role="tablist" aria-label="Inspector sections">
+            {TABS.map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} aria-label={TAB_TITLES[id]} title={TAB_TITLES[id]} onClick={() => setTab(id)} data-testid={`insp-tab-${id}`}>{label}</button>)}
           </div>
           <div className="panel-body" role="tabpanel">
             {tab === 'content' && <ContentTab node={node} project={project} res={res} onEditText={onEditText} />}
@@ -182,6 +185,16 @@ function TokenPicker({ project, res }: { project: Project; res: Resolution }) {
   );
 }
 
+/** Plain-language reason a variant appears (Business view). */
+function variantWhen(project: Project, node: DocNode, vid: string, ruleIds: string[]): string {
+  const rules = ruleIds.map((id) => project.rules.find((r) => r.id === id)).filter((r): r is NonNullable<typeof r> => !!r);
+  if (rules.length) return rules.map((r) => `When ${predicateSentence(project, r.when)}.`).join(' ');
+  const cond = node.variantConditions?.[vid];
+  if (cond) return `When ${predicateSentence(project, cond)}.`;
+  if (node.fallbackVariantId === vid) return 'Used when no other option applies.';
+  return node.ruleDriven ? 'Shown by a rule when its conditions match.' : 'No condition set.';
+}
+
 function VariantsEditor({ node, project, res }: { node: DocNode; project: Project; res: Resolution }) {
   const dispatch = useStudio((s) => s.dispatch);
   const rnode = indexTree(res.root).get(node.id);
@@ -213,7 +226,8 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
           return (
             <li key={vid} className={rv?.selected ? 'active' : ''} data-testid={`variant-${vid}`}>
               <div className="row"><strong className="grow">{p?.title ?? vid}</strong>{rv?.selected && <span className="chip accent">Selected</span>}{node.fallbackVariantId === vid && <span className="chip">Fallback</span>}</div>
-              <div className="mono muted">{vid} · v{p?.version ?? '?'} · rules: {rv?.candidateRuleIds.join(', ') || (node.variantConditions?.[vid] ? describePredicate(node.variantConditions[vid]) : node.ruleDriven ? 'shown by additive rule' : '—')}</div>
+              <Tech><div className="mono muted">{vid} · v{p?.version ?? '?'} · rules: {rv?.candidateRuleIds.join(', ') || (node.variantConditions?.[vid] ? describePredicate(node.variantConditions[vid]) : node.ruleDriven ? 'shown by additive rule' : '—')}</div></Tech>
+              <Biz><div className="variant-when muted">{variantWhen(project, node, vid, rv?.candidateRuleIds ?? [])}</div></Biz>
               {editing === vid ? (
                 <div style={{ marginTop: 6 }}>
                   <textarea className="textarea" value={editText} onChange={(e) => setEditText(e.target.value)} aria-label={`Text for ${vid}`} />

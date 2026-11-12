@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import { z } from 'zod';
-import { canonicalJson, fieldsFor, projectContentDigest, validateRule, SCHEMA_VERSION, type Project, type ProfileId } from '@iss/model';
+import { canonicalJson, fieldsFor, projectContentDigest, validateRule, csvToRecords, prepareImport, IMPORT_LIMIT, SCHEMA_VERSION, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
 import { renderPagedDocument, renderInteractiveHtml, compareManifests, afpSimulation, AFP_SIMULATION_LABEL, PAGED_RENDERER_VERSION, HTML_RENDERER_VERSION } from '@iss/renderers';
@@ -63,7 +63,9 @@ export async function buildApp(opts: AppOptions = {}) {
   });
 
   const projectOr404 = (id: string) => { const p = store.getProject(id); if (!p) throw new ApiError(404, 'NOT_FOUND', `Unknown project ${id}.`); return p; };
-  const recordOr404 = (id: string) => { const r = RECORDS.find((x) => x.recordId === id); if (!r) throw new ApiError(404, 'NOT_FOUND', `Unknown synthetic record ${id}.`); return r; };
+  /** Seeded synthetic fixtures plus any records the user imported locally. */
+  const allRecords = (): SyntheticRecord[] => [...RECORDS, ...store.importedRecords()];
+  const recordOr404 = (id: string) => { const r = allRecords().find((x) => x.recordId === id); if (!r) throw new ApiError(404, 'NOT_FOUND', `Unknown synthetic record ${id}.`); return r; };
 
   /** Resolve a request, persist it as an immutable run, and return the resolution + the exact request. */
   function runFor(body: ResolveBodyT): { res: Resolution; project: Project; request: ResolveBodyT } {
@@ -133,20 +135,72 @@ export async function buildApp(opts: AppOptions = {}) {
   app.post<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/reset', async (req) => {
     const current = projectOr404(req.params.projectId);
     if ((req.body as any)?.confirm !== true) throw new ApiError(400, 'CONFIRMATION_REQUIRED', 'Reset requires {"confirm": true}.');
-    const seed = store.seedFor(req.params.projectId)!;
+    const seed = store.seedFor(req.params.projectId);
+    if (!seed) throw new ApiError(400, 'NOT_A_SAMPLE', 'Only approved sample projects can be restored.');
     const reset = store.putProject({ ...seed, modelVersion: current.modelVersion + 1 }, projectContentDigest(seed));
     if ((req.body as any)?.clearSnapshots !== false) store.clearSnapshots(req.params.projectId);
     return { project: reset, reset: true, seedDigest: projectContentDigest(seed) };
   });
+  const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'project';
+  const cleanTitle = (t: unknown) => { const s = typeof t === 'string' ? t.trim().replace(/\s+/g, ' ') : ''; if (s.length < 2 || s.length > 80) throw new ApiError(400, 'INVALID_TITLE', 'Title must be 2–80 characters.'); return s; };
+  app.post<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/duplicate', async (req, reply) => {
+    const src = projectOr404(req.params.projectId);
+    const title = cleanTitle((req.body as any)?.title ?? `${src.title} (copy)`);
+    let id = slug(title); if (id.length < 3) id = `${id}-copy`;
+    for (let i = 2; store.getProject(id); i++) id = `${slug(title).slice(0, 36)}-${i}`;
+    const { lastSavedAt: _l, ...rest } = src as Project & { lastSavedAt?: string };
+    const copy = { ...rest, projectId: id, title, modelVersion: 1, derivedFrom: { projectId: src.projectId, modelVersion: src.modelVersion } } as Project;
+    const saved = store.putProject(copy, projectContentDigest(copy));
+    reply.status(201);
+    return { project: saved, duplicatedFrom: src.projectId };
+  });
+  app.patch<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId', async (req) => {
+    const current = projectOr404(req.params.projectId);
+    const title = cleanTitle((req.body as any)?.title);
+    const saved = store.putProject({ ...current, title, modelVersion: current.modelVersion + 1 });
+    return { project: saved, renamed: true };
+  });
+  app.delete<{ Params: { projectId: string } }>('/api/v1/projects/:projectId', async (req) => {
+    projectOr404(req.params.projectId);
+    if (store.isSample(req.params.projectId)) throw new ApiError(400, 'SAMPLE_PROJECT', 'Approved sample projects cannot be deleted; use Restore approved sample instead.');
+    store.deleteProject(req.params.projectId);
+    return { deleted: true, projectId: req.params.projectId };
+  });
+
+  /* Imported scenario records: validated against the typed data contract; stored locally only. */
+  app.post<{ Body: Record<string, any> }>('/api/v1/records/import', async (req) => {
+    const b = (req.body ?? {}) as { documentType?: string; format?: string; data?: unknown; dryRun?: boolean };
+    if (b.documentType !== 'credit-statement' && b.documentType !== 'eob') throw new ApiError(400, 'INVALID_REQUEST', 'documentType must be credit-statement or eob.');
+    const documentType = b.documentType;
+    let items: unknown[];
+    if (b.format === 'csv') {
+      if (typeof b.data !== 'string') throw new ApiError(400, 'INVALID_REQUEST', 'CSV import expects data as text.');
+      const parsed = csvToRecords(b.data, documentType);
+      if (parsed.headerErrors.length) throw new ApiError(422, 'INVALID_CSV_HEADER', parsed.headerErrors.join(' '), { errors: parsed.headerErrors });
+      items = parsed.records;
+    } else {
+      let data = b.data;
+      if (typeof data === 'string') { try { data = JSON.parse(data); } catch { throw new ApiError(400, 'INVALID_JSON', 'The file is not valid JSON.'); } }
+      items = Array.isArray(data) ? data : Array.isArray((data as any)?.records) ? (data as any).records : [data];
+    }
+    if (!items.length) throw new ApiError(400, 'EMPTY_IMPORT', 'No records found in the file.');
+    if (items.length > IMPORT_LIMIT) throw new ApiError(413, 'IMPORT_TOO_LARGE', `At most ${IMPORT_LIMIT} records per import.`);
+    const rows = prepareImport(items, documentType, store.nextImportNumber(documentType));
+    const ok = rows.filter((r) => r.record).map((r) => r.record!);
+    if (!b.dryRun && ok.length) store.addImportedRecords(ok);
+    return { documentType, dryRun: !!b.dryRun, imported: ok.map((r) => ({ recordId: r.recordId, sourceId: r.sourceId ?? null, name: `${r.customer.givenName} ${r.customer.familyName}` })), rejected: rows.filter((r) => !r.record).map(({ row, sourceId, errors }) => ({ row, sourceId, errors })), total: items.length };
+  });
+  app.delete<{ Querystring: { documentType?: string } }>('/api/v1/records/imported', async (req) => ({ removed: store.clearImportedRecords(req.query.documentType) }));
+
   app.get<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/schemas', async (req) => {
     const p = projectOr404(req.params.projectId);
     return { documentType: p.documentType, fields: fieldsFor(p.documentType), dimensions: DIMENSIONS.filter((d) => d.documentTypes.includes(p.documentType)), edgeCasePresets: EDGE_CASE_PRESETS.filter((e) => e.documentType === p.documentType) };
   });
 
   app.get<{ Querystring: { documentType?: string; full?: string } }>('/api/v1/records', async (req) => {
-    const recs = RECORDS.filter((r) => !req.query.documentType || r.documentType === req.query.documentType);
+    const recs = allRecords().filter((r) => !req.query.documentType || r.documentType === req.query.documentType);
     if (req.query.full === '1') return { seed: FIXTURE_SEED, syntheticOnly: true, records: recs };
-    return { seed: FIXTURE_SEED, syntheticOnly: true, records: recs.map((r) => ({ recordId: r.recordId, documentType: r.documentType, personaId: r.personaId ?? null, name: `${r.customer.givenName} ${r.customer.familyName}`, locale: r.customer.locale, status: (r.card as any)?.paymentStatus ?? (r.claims?.[0] as any)?.status, synthetic: true })) };
+    return { seed: FIXTURE_SEED, syntheticOnly: true, records: recs.map((r) => ({ recordId: r.recordId, documentType: r.documentType, personaId: r.personaId ?? null, name: `${r.customer.givenName} ${r.customer.familyName}`, locale: r.customer.locale, status: (r.card as any)?.paymentStatus ?? (r.claims?.[0] as any)?.status, synthetic: !r.imported, imported: !!r.imported })) };
   });
   app.get<{ Params: { recordId: string } }>('/api/v1/records/:recordId', async (req) => ({ record: recordOr404(req.params.recordId), synthetic: true }));
   app.get('/api/v1/personas', async () => ({ personas: PERSONAS }));
@@ -215,7 +269,7 @@ export async function buildApp(opts: AppOptions = {}) {
       const sev = list.filter((i) => i.severity !== 'info');
       suiteStatus[suite] = { status: sev.some((i) => i.severity === 'blocking' || i.severity === 'error') ? 'errors' : sev.length ? 'warnings' : 'clean', count: list.length, durationMs: Date.now() - t0 };
     };
-    if (suites.includes('rules')) { const t0 = t(); add('rules', [...res.findings.filter((f) => f.source === 'resolver' || f.source === 'domain'), ...staticRuleAnalysis(project, RECORDS)].map((f) => toIssue(f, 'rules', { runId: res.runId, reproduction: repro })), t0); }
+    if (suites.includes('rules')) { const t0 = t(); add('rules', [...res.findings.filter((f) => f.source === 'resolver' || f.source === 'domain'), ...staticRuleAnalysis(project, allRecords())].map((f) => toIssue(f, 'rules', { runId: res.runId, reproduction: repro })), t0); }
     if (suites.includes('bindings')) {
       const t0 = t();
       const seen = new Set<string>();
@@ -279,14 +333,14 @@ export async function buildApp(opts: AppOptions = {}) {
   app.post('/api/v1/analysis/cube', async (req) => {
     const b = req.body as any;
     const project = b?.project ? checkDraftProject(b.project, b.projectId) : projectOr404(String(b?.projectId));
-    const cube = buildCube(new ScenarioEngine(project, RECORDS), (b?.axes ?? ['persona', 'output', 'journey']) as [DimensionId, DimensionId, DimensionId], { offsets: b?.offsets, filters: b?.filters });
+    const cube = buildCube(new ScenarioEngine(project, allRecords()), (b?.axes ?? ['persona', 'output', 'journey']) as [DimensionId, DimensionId, DimensionId], { offsets: b?.offsets, filters: b?.filters });
     if (cube.errors.length) throw new ApiError(400, 'INVALID_AXES', cube.errors.join(' '));
     return cube;
   });
   app.post('/api/v1/analysis/landscape', async (req) => {
     const b = req.body as any;
     const project = b?.project ? checkDraftProject(b.project, b.projectId) : projectOr404(String(b?.projectId));
-    return buildLandscape(new ScenarioEngine(project, RECORDS), { includeJourney: !!b?.includeJourney, filters: b?.filters });
+    return buildLandscape(new ScenarioEngine(project, allRecords()), { includeJourney: !!b?.includeJourney, filters: b?.filters });
   });
 
   app.get<{ Params: { artifactId: string } }>('/api/v1/artifacts/:artifactId', async (req, reply) => {
@@ -308,7 +362,7 @@ export async function buildApp(opts: AppOptions = {}) {
     recordOr404(recordId);
     const cfg = providerConfig();
     if (b.forceOffline === true) cfg.provider = 'offline';
-    const reply = await handleMessage(b.message, { project, records: RECORDS, recordId, overrides: ctx.overrides ?? {}, journeyCursor: ctx.journeyCursor ?? null, selectedNodeId: ctx.selectedNodeId ?? null }, cfg);
+    const reply = await handleMessage(b.message, { project, records: allRecords(), recordId, overrides: ctx.overrides ?? {}, journeyCursor: ctx.journeyCursor ?? null, selectedNodeId: ctx.selectedNodeId ?? null }, cfg);
     if (reply.proposal) store.saveProposal(reply.proposal.proposalId, reply.proposal);
     return reply;
   });

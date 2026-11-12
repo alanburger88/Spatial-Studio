@@ -5,7 +5,8 @@ import { explainNode, resolve } from '@iss/resolver';
 import { replayJourney, type JourneySnapshot } from '@iss/scenarios';
 import { renderInteractiveHtml } from '@iss/renderers';
 import { api } from '../api/client';
-import { Dialog, Empty, ErrorState, Loading, ScreenHeader } from '../ui/common';
+import { Biz, Dialog, Empty, ErrorState, Loading, Proof, ScreenHeader, Tech } from '../ui/common';
+import { nodeTitle, ruleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { useRecord, useResolution, useStudio } from '../state/store';
 import './JourneySimulator.css';
@@ -172,7 +173,7 @@ function EventEditor({ docType, initial, existingIds, existingEvent, onSave, onC
           </div>
         ))}
         <button className="btn sm" onClick={() => setD((s) => ({ ...s, payload: [...s.payload, { key: '', value: '' }] }))}><Icon.plus /> Add payload field</button>
-        <p className="hint muted">Saving creates one undoable model edit (Edit journey events). Synthetic data only.</p>
+        <p className="hint muted">Saving creates one undoable model edit (Edit journey events).</p>
       </div>
     </Dialog>
   );
@@ -191,7 +192,7 @@ function ScaledPreview({ html, title }: { html: string; title: string }) {
     setBox({ w: el.clientWidth, h: el.clientHeight });
     return () => ro.disconnect();
   }, []);
-  const W = 980;
+  const W = 860;
   const scale = Math.max(0.2, Math.min(1, box.w / W));
   return (
     <div className="jr-frame-wrap" ref={wrap}>
@@ -227,6 +228,10 @@ export function JourneySimulator() {
   const firstIssued = issuedSnaps[0];
   const primaryNodeId = useMemo(() => project.nodes.find((n) => n.type === 'variant-set')?.id ?? null, [project]);
   const nodeName = (id: string) => project.nodes.find((n) => n.id === id)?.name ?? id;
+  const viewMode = useStudio((st) => st.viewMode);
+  const biz = viewMode === 'business';
+  const variantName = (v: unknown) => (biz && typeof v === 'string' ? nodeTitle(project, v) : fmt(v));
+  const ruleName = (id: string) => { const r = project.rules.find((x) => x.id === id); return biz && r ? ruleTitle(project, r) : id; };
 
   /* server freeze / verify */
   const [server, setServer] = useState<ServerState>({ status: 'loading', issued: [] });
@@ -306,7 +311,7 @@ export function JourneySimulator() {
   const explanation = useMemo(() => (res && primaryNodeId ? explainNode(res, primaryNodeId) : null), [res, primaryNodeId]);
   const guarded = res?.semanticManifest?.guardedLiabilityNodeIds ?? [];
 
-  if (!record) return <section className="screen" data-testid="journey-view"><ScreenHeader id="S08" title="Journey Simulator" subtitle="" /><Loading label="Loading synthetic record…" /></section>;
+  if (!record) return <section className="screen" data-testid="journey-view"><ScreenHeader id="S08" title="Journey Simulator" subtitle="" /><Loading label="Loading record…" /></section>;
   if (!sel) return <section className="screen" data-testid="journey-view"><ScreenHeader id="S08" title="Journey Simulator" subtitle="" /><ErrorState message="This record could not be replayed for the open project." /></section>;
 
   const statePaths = Array.from(new Set([...Object.keys(prior?.state ?? {}), ...Object.keys(sel.state)]));
@@ -327,11 +332,9 @@ export function JourneySimulator() {
       <div className="screen-body jr-body">
         <div className="sr-only" role="status" aria-live="polite">{announce}</div>
 
-        <div className="jr-banner callout accent" data-testid="issued-notice">
-          <Icon.lock /> <div><strong>The issued statement is never rewritten.</strong> {eob
-            ? 'The adjudicated EOB is a frozen snapshot; review and appeal events create new previews.'
-            : 'The Day 1 statement is a frozen snapshot; later events create new previews.'}
-            {' '}<span className="muted">Record <span className="mono">{record.recordId}</span> · synthetic data.</span></div>
+        <div className="jr-banner" data-testid="issued-notice">
+          <Icon.lock /> <span><strong>The issued {eob ? 'EOB' : 'statement'} is never rewritten.</strong> <span className="muted">Later events create new previews.</span></span>
+          <Tech><span className="muted jr-banner-rec">Record <span className="mono">{record.recordId}</span></span></Tech>
         </div>
 
         {/* timeline */}
@@ -348,11 +351,11 @@ export function JourneySimulator() {
                     <button className="jr-card" aria-current={selected ? 'step' : undefined} onClick={() => setJourneyCursor(s.cursor)} data-testid={`timeline-card-${s.eventId ?? 'baseline'}`}>
                       <span className="jr-day">{s.cursor === null ? 'Start' : s.day !== null ? `Day ${s.day}` : `Event ${s.cursor + 1}`}</span>
                       <strong className="jr-label">{s.cursor === null ? 'Baseline' : events[s.cursor]?.label ?? events[s.cursor]?.eventType}</strong>
-                      <span className="mono jr-type">{s.cursor === null ? 'record as seeded' : events[s.cursor]?.eventType}</span>
+                      {biz ? <span className="jr-type">{s.cursor === null ? 'Record as seeded' : ''}</span> : <span className="mono jr-type">{s.cursor === null ? 'record as seeded' : events[s.cursor]?.eventType}</span>}
                       <KindChip s={s} />
                       {pending && <span className="jr-sub">Not yet triggered</span>}
                       {s.kind === 'skipped' && <span className="jr-sub jr-warn">Precondition not met</span>}
-                      {s.kind !== 'baseline' && <span className="jr-sub">Variant · <span className="mono">{fmt(Object.values(s.selectedVariants)[0])}</span></span>}
+                      {s.kind !== 'baseline' && <span className="jr-sub">Variant · <span className={biz ? '' : 'mono'}>{variantName(Object.values(s.selectedVariants)[0])}</span></span>}
                     </button>
                   </li>
                 );
@@ -364,10 +367,10 @@ export function JourneySimulator() {
         <div className="jr-grid">
           {/* left: keyboard event list + editing */}
           <div className="panel jr-events">
-            <div className="panel-head"><Icon.list /> Event list <span className="sub">Keyboard equivalent</span></div>
+            <div className="panel-head"><Icon.list /> Events <span className="sub">Keyboard list</span></div>
             <div className="panel-body">
               <ul className="jr-list" aria-label="Journey events">
-                <li><button className={`jr-row${cursor === null ? ' sel' : ''}`} onClick={() => setJourneyCursor(null)}><span className="jr-row-main"><strong>Baseline</strong><span className="muted">Record as seeded</span></span></button></li>
+                <li><button className={`jr-row${cursor === null ? ' sel' : ''}`} onClick={() => setJourneyCursor(null)}><span className="jr-row-main"><strong>Baseline</strong></span></button></li>
                 {events.map((e, i) => {
                   const s = snaps[i + 1];
                   const pending = cursor === null || i > cursor;
@@ -376,8 +379,8 @@ export function JourneySimulator() {
                       <button className={`jr-row${cursor === i ? ' sel' : ''}`} onClick={() => setJourneyCursor(i)} aria-pressed={cursor === i} data-testid={`event-row-${e.eventId}`}>
                         <span className="jr-row-main">
                           <strong>{e.day !== undefined ? `Day ${e.day} · ` : ''}{e.label ?? e.eventType}</strong>
-                          <span className="mono muted">{e.eventType}</span>
-                          <span className="jr-row-state">{s && <KindChip s={s} />}{pending && <span className="muted">not yet triggered</span>}</span>
+                          <Tech><span className="mono muted">{e.eventType}</span></Tech>
+                          <span className="jr-row-state">{s && <KindChip s={s} />}{pending && <span className="muted">pending</span>}</span>
                           {s?.kind === 'skipped' && <span className="jr-warn">{s.skippedReason}</span>}
                         </span>
                       </button>
@@ -399,7 +402,7 @@ export function JourneySimulator() {
                 </select>
                 <button className="btn" onClick={() => setEditor({ mode: 'add', type: addType })} data-testid="add-event"><Icon.plus /> Add event</button>
               </div>
-              <p className="hint muted jr-hint">Edits are model edits (undoable in the top bar). Moving an event re-runs every rule; preconditions may skip events.</p>
+              
             </div>
           </div>
 
@@ -409,6 +412,12 @@ export function JourneySimulator() {
             <div className="panel-body">
               {sel.kind === 'skipped' && <div className="callout warning" role="status"><strong>Event skipped.</strong> {sel.skippedReason}</div>}
 
+              <div className="jr-integrity" data-testid="snapshot-integrity" role="status">
+                {!firstIssued ? <span className="muted">This journey has no issued snapshot event.</span> : server.status === 'error' ? <span className="muted">Server verification unavailable.</span> : server.status === 'loading' && !issuedServer ? <span className="muted">Verifying issued snapshot…</span> : issuedServer?.verified ? <span className="chip accent"><Icon.lock width={12} height={12} /> Issued {firstIssued.day !== null && firstIssued.day !== undefined ? `Day ${firstIssued.day} ` : ''}statement is unchanged ✓ (verified)</span> : <span className="chip error">Issued snapshot verification failed</span>}
+                {firstIssued && (sel.contentDigest === firstIssued.contentDigest ? <span className="chip">This preview matches what was issued</span> : <span className="chip variant">This preview differs from what was issued</span>)}
+                {issuedServer?.currentModelWouldDiffer && <span className="chip warning">Current model would compose differently; issued copy unchanged</span>}
+              </div>
+              <Proof label="Hashes and run" testId="snapshot-proof">
               <div className="jr-hashes">
                 <div className="card jr-hash issued">
                   <div className="jr-hash-h"><Icon.lock width={14} height={14} /> Issued snapshot (immutable)</div>
@@ -431,6 +440,7 @@ export function JourneySimulator() {
                     {firstIssued && (sel.contentDigest === firstIssued.contentDigest ? <span className="chip">Same content as the issued snapshot</span> : <span className="chip variant">Differs from the issued snapshot</span>)}</div>
                 </div>
               </div>
+              </Proof>
 
               <div className="section-title">Prior state → resulting state</div>
               <table className="table jr-state" aria-label="State transition">
@@ -449,9 +459,9 @@ export function JourneySimulator() {
 
               <div className="section-title">Selected content variants</div>
               <div className="jr-variants">
-                {prior && prior.cursor !== sel.cursor && <div className="muted">Before: {Object.entries(prior.selectedVariants).map(([k, v]) => <span key={k} className="chip" style={{ marginRight: 4 }}>{nodeName(k)}: <span className="mono">{fmt(v)}</span></span>)}</div>}
-                <div>Now: {Object.entries(sel.selectedVariants).map(([k, v]) => <span key={k} className="chip variant" style={{ marginRight: 4 }}>{nodeName(k)}: <span className="mono">{fmt(v)}</span></span>)}</div>
-                <div>Matched rules: {sel.matchedRuleIds.map((r) => <span key={r} className="chip" style={{ marginRight: 4 }}>{r}</span>)}</div>
+                {prior && prior.cursor !== sel.cursor && <div className="muted">Before: {Object.entries(prior.selectedVariants).map(([k, v]) => <span key={k} className="chip" style={{ marginRight: 4 }}>{nodeName(k)}: <span className={biz ? '' : 'mono'}>{variantName(v)}</span></span>)}</div>}
+                <div>Now: {Object.entries(sel.selectedVariants).map(([k, v]) => <span key={k} className="chip variant" style={{ marginRight: 4 }}>{nodeName(k)}: <span className={biz ? '' : 'mono'}>{variantName(v)}</span></span>)}</div>
+                <div>Matched rules: {sel.matchedRuleIds.map((r) => <span key={r} className="chip" style={{ marginRight: 4 }} title={r}>{ruleName(r)}</span>)}</div>
               </div>
 
               <div className="section-title">Why this variant</div>

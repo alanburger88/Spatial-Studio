@@ -62,6 +62,8 @@ interface StudioState {
   redo(): void;
   save(): Promise<boolean>;
   resetProject(): Promise<void>;
+  /** Re-fetch records for the open project (after an import or removal). */
+  refreshRecords(): Promise<void>;
   setRecord(recordId: string): void;
   setOverrides(overrides: Record<string, unknown>): void;
   patchOverrides(patch: Record<string, unknown>): void;
@@ -225,6 +227,15 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ project: fresh, serverVersion: fresh.modelVersion, savedDigest: projectContentDigest(fresh), past: [], future: [], ctx: defaultCtx(fresh) });
     get().toast({ kind: 'success', title: 'Approved sample restored', message: `${fresh.title} reset to the seeded fixture (v${fresh.modelVersion}).` });
     get().loadProjects();
+  },
+
+  async refreshRecords() {
+    const project = get().project;
+    if (!project) { set({ records: [] }); return; }
+    const { records } = await api.records(project.documentType);
+    const ctx = get().ctx;
+    set({ records });
+    if (!records.some((r) => r.recordId === ctx.recordId)) get().setCtx({ recordId: defaultCtx(project).recordId, overrides: {}, journeyCursor: null });
   },
 
   setRecord(recordId) { get().setCtx({ recordId, overrides: {}, journeyCursor: null }); },

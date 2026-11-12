@@ -6,7 +6,8 @@ import {
 } from '@iss/model';
 import { describePredicate, resolve, type Finding, type TraceEntry } from '@iss/resolver';
 import { EDGE_CASE_PRESETS } from '@iss/scenarios';
-import { ScreenHeader, Loading, Empty, SeverityLabel, formatMoney } from '../ui/common';
+import { ScreenHeader, Loading, Empty, SeverityLabel, formatMoney, Tech, Biz, Proof } from '../ui/common';
+import { ruleTitle, ruleSentence, predicateSentence, fieldLabel, nodeTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { useStudio, useResolution, useRecord } from '../state/store';
 import { api } from '../api/client';
@@ -238,9 +239,8 @@ export function RulesData() {
   const res = useResolution();
   const record = useRecord();
   const [params, setParams] = useSearchParams();
-  const dataRef = useRef<HTMLDivElement>(null);
-  const bodyRef = useRef<HTMLDivElement>(null);
 
+  const techMode = useStudio((s) => s.viewMode) === 'technical';
   const docType: DocumentType = project?.documentType ?? 'credit-statement';
   const fields = useMemo(() => fieldsFor(docType), [docType]);
   const fieldMap = useMemo(() => fieldIndex(docType), [docType]);
@@ -259,6 +259,9 @@ export function RulesData() {
   const [astErrors, setAstErrors] = useState<string[]>([]);
   const [enableMsg, setEnableMsg] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<TestOutcome | null>(null);
+  const [dock, setDock] = useState<DockTab | null>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
+  const openDock = (t: DockTab) => { setDock(t); setTimeout(() => dockRef.current?.scrollIntoView({ block: 'nearest', behavior: useStudio.getState().reducedMotion ? 'auto' : 'smooth' }), 30); };
 
   useEffect(() => {
     if (isNew || !stored) return;
@@ -370,10 +373,9 @@ export function RulesData() {
   /* ------------------------------------------------------------------ render */
   const header = (
     <ScreenHeader id="S07" title="Rules & Data"
-      subtitle="Edit the declarative rules behind each document outcome, test them against every synthetic record, and inspect the exact inputs behind the current scenario."
-      badge={<span className="chip sim">Synthetic data only</span>}
+      subtitle="Edit the declarative rules behind each document outcome, test them against every record, and inspect the exact inputs behind the current scenario."
       actions={<>
-        <button className="btn" onClick={() => { const b = bodyRef.current, d = dataRef.current; if (b && d) b.scrollTo({ top: b.scrollTop + d.getBoundingClientRect().top - b.getBoundingClientRect().top - 4, behavior: useStudio.getState().reducedMotion ? 'auto' : 'smooth' }); }}><Icon.list /> Scenario data</button>
+        <button className="btn" onClick={() => openDock('scenario')}><Icon.list /> Scenario data</button>
         <button className="btn primary" onClick={addRule} data-testid="add-rule"><Icon.plus /> Add rule</button>
       </>} />
   );
@@ -381,7 +383,7 @@ export function RulesData() {
   return (
     <section className="screen" data-testid="rules-data-view">
       {header}
-      <div className="screen-body rd-body" ref={bodyRef}>
+      <div className="screen-body rd-body">
         <div className="rd-row rd-row1">
           <RuleTree project={project} ruleTrace={ruleTrace} selectedId={isNew ? draft?.id ?? '' : ruleId} newId={isNew ? draft?.id : undefined} onSelect={selectRule} />
 
@@ -392,9 +394,9 @@ export function RulesData() {
               <>
                 <div className="panel-head">
                   <span className="mono rd-ruleid">{draft.id}</span>
-                  <span>{isNew ? 'New rule draft' : stored?.title ?? 'Rule'}</span>
+                  <span className="rd-headtitle" title={draft.title || undefined}>{isNew ? 'New rule draft' : ruleTitle(project, draft)}</span>
                   {isDirty && <span className="chip warning" data-testid="draft-chip">{isNew ? 'Draft · not in model' : 'Unsaved draft'}</span>}
-                  {!isDirty && <span className="chip accent">In sync with model v{project.modelVersion}</span>}
+                  {!isDirty && <span className="chip accent">Saved<Tech> · model v{project.modelVersion}</Tech></span>}
                   <div className="right">
                     {!isNew && stored && (
                       <Switch checked={stored.enabled !== false} onChange={toggleEnabled} label={`Rule ${stored.id} enabled`} testid="rule-enabled-toggle" />
@@ -402,6 +404,7 @@ export function RulesData() {
                   </div>
                 </div>
                 <div className="rd-editor-scroll">
+                  <p className="rd-summary" data-testid="rule-summary">{ruleSentence(project, draft)}</p>
                   {enableMsg && <div className="callout error rd-gap" role="alert" data-testid="rule-protected-msg"><strong>Not allowed.</strong> {enableMsg}</div>}
                   {draft.mode === 'obligation' && (
                     <div className="callout accent rd-gap"><strong>Obligation rule.</strong> It enforces mandatory content, cannot be disabled or deleted, and its required nodes are read-only.</div>
@@ -411,9 +414,9 @@ export function RulesData() {
                     <button role="tab" id="rd-tab-ast" aria-selected={tab === 'ast'} aria-controls="rd-pane" onClick={() => switchTab('ast')} data-testid="tab-ast">Advanced AST</button>
                   </div>
                   <div id="rd-pane" role="tabpanel" aria-labelledby={tab === 'visual' ? 'rd-tab-visual' : 'rd-tab-ast'}>
-                    <h3 className="section-title">IF — condition</h3>
+                    <h3 className="section-title">If — condition</h3>
                     {tab === 'visual' ? (
-                      <VisualBuilder when={draft.when} fields={fields} fieldMap={fieldMap} onChange={setWhen} onUseAst={() => switchTab('ast')} />
+                      <VisualBuilder tech={techMode} when={draft.when} fields={fields} fieldMap={fieldMap} onChange={setWhen} onUseAst={() => switchTab('ast')} />
                     ) : (
                       <div className="field">
                         <label htmlFor="rd-ast">Declarative expression (JSON). Never executed as code; validated before it can be applied.</label>
@@ -421,28 +424,28 @@ export function RulesData() {
                         {astErrors.length === 0 ? <span className="hint rd-ok">Valid expression. Reads as: {describePredicate(draft.when)}</span> : null}
                       </div>
                     )}
-                    <div className="rd-reads"><span className="rd-reads-lbl">Reads as</span> <span data-testid="rule-reads-as">{describePredicate(draft.when)}</span></div>
+                    <Tech><div className="rd-reads"><span className="rd-reads-lbl">Reads as</span> <span data-testid="rule-reads-as">{describePredicate(draft.when)}</span></div></Tech>
 
-                    <h3 className="section-title">THEN — outcome</h3>
+                    <h3 className="section-title">Then — outcome</h3>
                     <ActionEditor draft={draft} project={project} nodes={modelNodes} onChange={patchDraft} locked={!isNew && stored?.mode === 'obligation'} />
 
-                    <h3 className="section-title">Precedence &amp; metadata</h3>
+                    <h3 className="section-title">Name &amp; precedence</h3>
                     <div className="rd-meta">
-                      <div className="field"><label htmlFor="rd-id">Rule ID</label>
-                        <input id="rd-id" className="input mono" value={draft.id} disabled={!isNew} onChange={(e) => patchDraft({ id: e.target.value.toUpperCase() })} /></div>
+                      <div className="field rd-wide"><label htmlFor="rd-title">Rule name</label>
+                        <input id="rd-title" className="input" placeholder={ruleTitle(project, { ...draft, title: undefined })} value={draft.title ?? ''} onChange={(e) => patchDraft({ title: e.target.value })} data-testid="rule-title" /></div>
+                      {(isNew || techMode) && <div className="field"><label htmlFor="rd-id">Rule ID</label>
+                        <input id="rd-id" className="input mono" value={draft.id} disabled={!isNew} onChange={(e) => patchDraft({ id: e.target.value.toUpperCase() })} /></div>}
                       <div className="field"><label htmlFor="rd-mode">Mode</label>
                         <select id="rd-mode" className="select" value={draft.mode} onChange={(e) => patchDraft({ mode: e.target.value as RuleMode })} disabled={modeOptions(draft.then.op).length < 2}>
                           {modeOptions(draft.then.op).map((m) => <option key={m} value={m}>{m}</option>)}
                         </select>
-                        <span className="hint">{draft.then.op === 'selectVariant' ? 'selectVariant is exclusive.' : draft.then.op === 'requireNodes' ? 'requireNodes is an obligation.' : 'This action is additive.'}</span></div>
+                        <span className="hint">{draft.then.op === 'selectVariant' ? 'Exclusive: one message wins.' : draft.then.op === 'requireNodes' ? 'Obligation: always required.' : 'Additive: applies independently.'}</span></div>
                       <div className="field"><label htmlFor="rd-prio">Priority (0–10000)</label>
                         <NumField id="rd-prio" label="Priority" min={0} value={draft.priority} onCommit={(n) => patchDraft({ priority: n })} testid="rule-priority" />
-                        <span className="hint">{draft.mode === 'exclusive' ? 'Highest wins within the group; equal priority is a blocking tie.' : 'Additive/obligation rules apply independently.'}</span></div>
-                      <div className="field"><label htmlFor="rd-group">Exclusive group</label>
+                        <span className="hint">{draft.mode === 'exclusive' ? 'Highest wins; equal priority is a blocking tie.' : 'Not used for ordering here.'}</span></div>
+                      {techMode && <div className="field"><label htmlFor="rd-group">Exclusive group</label>
                         <input id="rd-group" className="input mono" value={draft.exclusiveGroup ?? ''} readOnly disabled placeholder="—" />
-                        <span className="hint">Equals the target node for exclusive rules.</span></div>
-                      <div className="field rd-wide"><label htmlFor="rd-title">Title</label>
-                        <input id="rd-title" className="input" value={draft.title ?? ''} onChange={(e) => patchDraft({ title: e.target.value })} /></div>
+                        <span className="hint">Equals the target node for exclusive rules.</span></div>}
                     </div>
 
                     {allErrors.length > 0 && (
@@ -452,34 +455,49 @@ export function RulesData() {
                       </div>
                     )}
 
-                    <p className="hint rd-note">Apply is one undo step (top bar). Test runs the real resolver on all {records.length} synthetic {docType === 'eob' ? 'EOB' : 'statement'} records using a temporary copy of the project.</p>
+                    <p className="hint rd-note">Apply is one undo step (top bar). Test runs the real resolver on all {records.length} {docType === 'eob' ? 'EOB' : 'statement'} records using a temporary copy of the project.</p>
                     {testResult && <TestPanel result={testResult} draft={draft} onPick={(id) => useStudio.getState().setRecord(id)} />}
                   </div>
                 </div>
-                <div className="rd-actions">
-                      <button className="btn primary" disabled={!canApply} onClick={apply} data-testid="apply-rule-change" title={canApply ? 'Commit this rule as one undoable change' : allErrors[0] ?? 'No changes to apply'}>
-                        <Icon.save /> {isNew ? 'Add rule to model' : 'Apply rule change'}
-                      </button>
-                      <button className="btn" onClick={runTest} disabled={allErrors.length > 0} data-testid="test-rule"><Icon.target /> Test this rule</button>
-                      <button className="btn ghost" onClick={cancelDraft} disabled={!isDirty}>{isNew ? 'Discard draft' : 'Revert draft'}</button>
-                      {!isNew && stored && stored.mode !== 'obligation' && <button className="btn ghost danger" onClick={deleteRule}><Icon.trash /> Delete</button>}
-                    </div>
+                <div className="rd-actions" data-testid="rule-actions">
+                  <button className="btn primary" disabled={!canApply} onClick={apply} data-testid="apply-rule-change" title={canApply ? 'Commit this rule as one undoable change' : allErrors[0] ?? 'No changes to apply'}>
+                    <Icon.save /> {isNew ? 'Add rule to model' : 'Apply rule change'}
+                  </button>
+                  <button className="btn" onClick={runTest} disabled={allErrors.length > 0} data-testid="test-rule"><Icon.target /> Test this rule</button>
+                  <button className="btn ghost" onClick={cancelDraft} disabled={!isDirty}>{isNew ? 'Discard draft' : 'Revert draft'}</button>
+                  {!isNew && stored && stored.mode !== 'obligation' && <button className="btn ghost danger" onClick={deleteRule}><Icon.trash /> Delete</button>}
+                  {!canApply && <span className="rd-actions-hint">{allErrors.length ? 'Fix the issues above to apply.' : 'No changes to apply.'}</span>}
+                </div>
               </>
             )}
           </div>
 
-          <TracePanel res={res} onSelectRule={selectRule} fieldMap={fieldMap} />
+          <TracePanel project={project} res={res} onSelectRule={selectRule} fieldMap={fieldMap} />
         </div>
 
-        <div className="rd-row rd-row2" ref={dataRef}>
-          <FixturePanel project={project} />
-          <RecordEditor project={project} fields={fields} fieldMap={fieldMap} />
-          <TokenPicker fields={fields} />
+        <div className="rd-dock" ref={dockRef}>
+          <div className="rd-dockbar">
+            <div className="rd-docktabs" role="tablist" aria-label="Scenario data and reference">
+              {(['scenario', 'tokens'] as DockTab[]).map((t) => (
+                <button key={t} role="tab" id={`rd-dock-tab-${t}`} aria-selected={dock === t} aria-controls={`rd-dock-${t}`} onClick={() => (dock === t ? setDock(null) : openDock(t))} data-testid={`dock-tab-${t}`}>
+                  {t === 'scenario' ? <><Icon.design /> Scenario data</> : <><Icon.list /> Fields &amp; tokens</>}
+                  <span className="rd-caret" aria-hidden="true">{dock === t ? '▾' : '▴'}</span>
+                </button>
+              ))}
+            </div>
+            <FixtureStrip project={project} />
+          </div>
+          <div className="rd-drawer" hidden={!dock}>
+            <div id="rd-dock-scenario" role="tabpanel" aria-labelledby="rd-dock-tab-scenario" hidden={dock !== 'scenario'}><RecordEditor project={project} fields={fields} fieldMap={fieldMap} /></div>
+            <div id="rd-dock-tokens" role="tabpanel" aria-labelledby="rd-dock-tab-tokens" hidden={dock !== 'tokens'}><TokenPicker fields={fields} /></div>
+          </div>
         </div>
       </div>
     </section>
   );
 }
+
+type DockTab = 'scenario' | 'tokens';
 
 function modeOptions(op: RuleAction['op']): RuleMode[] {
   return op === 'selectVariant' ? ['exclusive'] : op === 'requireNodes' ? ['obligation'] : ['additive'];
@@ -504,51 +522,52 @@ function RuleTree({ project, ruleTrace, selectedId, newId, onSelect }: { project
   };
   const row = (r: Rule) => {
     const t = ruleTrace.get(r.id);
-    const state = r.enabled === false ? { label: 'disabled', cls: 'warning' } : !t ? { label: 'no trace', cls: '' } : t.matched ? { label: t.outcome === 'not-matched' ? 'matched' : t.outcome, cls: t.outcome === 'tie' ? 'error' : t.outcome === 'outranked' ? 'info' : 'accent' } : { label: 'not matched', cls: '' };
+    const state = ruleState(r, t);
+    const title = ruleTitle(project, r);
     return (
-      <button key={r.id} type="button" data-rule-row data-testid={`rule-row-${r.id}`} className={`rd-rule ${selectedId === r.id ? 'selected' : ''}`} aria-pressed={selectedId === r.id} onClick={() => onSelect(r.id)}>
-        <span className="rd-rule-top"><span className="mono rd-rule-id">{r.id}</span><span className="rd-rule-title">{r.title ?? describeAction(r.then)}</span></span>
+      <button key={r.id} type="button" data-rule-row data-testid={`rule-row-${r.id}`} className={`rd-rule ${selectedId === r.id ? 'selected' : ''}`} aria-pressed={selectedId === r.id} onClick={() => onSelect(r.id)} title={title}>
+        <span className="rd-rule-title">{title}</span>
         <span className="rd-rule-meta">
-          <span className="chip">P{r.priority}</span>
-          <span className={`chip ${r.enabled === false ? 'warning' : ''}`}>{r.enabled === false ? '○ off' : '● on'}</span>
-          <span className={`chip ${state.cls}`} data-testid={`rule-state-${r.id}`}>{state.label}</span>
+          <span className="mono rd-rule-id">{r.id}</span>
+          <Tech><span className="rd-prio">P{r.priority}</span></Tech>
+          <span className={`rd-state ${state.cls}`} data-testid={`rule-state-${r.id}`}>{state.label}</span>
         </span>
       </button>
     );
   };
   return (
     <aside className="panel" aria-label="Rule tree" data-testid="rule-tree">
-      <div className="panel-head"><Icon.rules /> Rules <span className="sub">{project.rules.length} in model</span></div>
+      <div className="panel-head"><Icon.rules /> Rules <span className="sub">{project.rules.length} rules</span></div>
       <div className="panel-body rd-tree" ref={listRef} onKeyDown={onKey}>
         {newId && <div className="rd-newrow"><span className="mono">{newId}</span> <span className="chip warning">draft</span></div>}
-        <h3 className="section-title">Exclusive · one winner per group</h3>
+        <h3 className="section-title">Choose one message (exclusive)</h3>
         {groups.map((g) => (
-          <div key={g} className="rd-group" role="group" aria-label={`Exclusive group ${g}`}>
-            <div className="rd-group-name"><Icon.target /> {nodes.get(g)?.name ?? g} <span className="mono muted">{g}</span></div>
+          <div key={g} className="rd-group" role="group" aria-label={`Choose one message: ${nodes.get(g)?.name ?? g}`}>
+            <div className="rd-group-name"><Icon.target /> {nodes.get(g)?.name ?? nodeTitle(project, g)} <Tech><span className="mono muted">{g}</span></Tech></div>
             {exclusive.filter((r) => (r.exclusiveGroup ?? '') === g).sort((a, b) => b.priority - a.priority).map(row)}
           </div>
         ))}
-        <h3 className="section-title">Additive · independent</h3>
+        <h3 className="section-title">Add-ons (independent)</h3>
         {additive.map(row)}
-        <h3 className="section-title">Obligation · mandatory</h3>
+        <h3 className="section-title">Always required</h3>
         {obligation.map(row)}
       </div>
     </aside>
   );
 }
-function describeAction(a: RuleAction): string {
-  switch (a.op) {
-    case 'selectVariant': return `Select ${a.variantId}`;
-    case 'showSection': return `Show ${a.targetNodeId}`;
-    case 'requireNodes': return `Require ${a.nodeIds.length} nodes`;
-    case 'setApprovedLocale': return `Locale ${a.locale}`;
-    case 'setPresentationHint': return `Hint ${a.hint}`;
-  }
+const OUTCOME_WORD: Record<string, string> = { selected: 'Selected', applied: 'Applied', required: 'Applied', outranked: 'Outranked', tie: 'Tie', 'not-matched': 'Not matched', disabled: 'Off', 'out-of-scope': 'Out of scope' };
+const outcomeCls = (o: string) => (o === 'selected' || o === 'applied' || o === 'required' ? 'ok' : o === 'tie' ? 'bad' : o === 'outranked' ? 'info' : o === 'disabled' ? 'warn' : '');
+/** One clear status word per rule for the current scenario, derived from the resolver trace. */
+function ruleState(r: Rule, t: TraceEntry | undefined): { label: string; cls: string } {
+  if (r.enabled === false) return { label: 'Off', cls: 'warn' };
+  if (!t) return { label: 'Not evaluated', cls: '' };
+  if (!t.matched) return { label: 'Not matched', cls: '' };
+  return { label: OUTCOME_WORD[t.outcome] ?? 'Matched', cls: outcomeCls(t.outcome) || 'ok' };
 }
 
 /* ------------------------------------------------------------- visual builder */
 
-function VisualBuilder({ when, fields, fieldMap, onChange, onUseAst }: { when: Predicate; fields: FieldDef[]; fieldMap: Map<string, FieldDef>; onChange: (p: Predicate) => void; onUseAst: () => void }) {
+function VisualBuilder({ when, fields, fieldMap, onChange, onUseAst, tech }: { tech: boolean; when: Predicate; fields: FieldDef[]; fieldMap: Map<string, FieldDef>; onChange: (p: Predicate) => void; onUseAst: () => void }) {
   const visual = useMemo(() => toVisual(when), [when]);
   if (!visual) {
     return (
@@ -592,10 +611,13 @@ function VisualBuilder({ when, fields, fieldMap, onChange, onUseAst }: { when: P
             <li key={i} className="rd-cond" data-testid={`cond-${i}`}>
               <span className="rd-cond-join" aria-hidden="true">{i === 0 ? 'IF' : visual.combiner.toUpperCase()}</span>
               <label className="rd-not"><input type="checkbox" checked={c.neg} onChange={(e) => update(i, { neg: e.target.checked })} /> NOT</label>
-              <select className="select rd-field" aria-label={`Condition ${i + 1} field`} value={c.path} onChange={(e) => changeField(i, e.target.value)} data-testid={`cond-${i}-field`}>
-                {!f && <option value={c.path}>{c.path} (unknown)</option>}
-                {pickable.map((x) => <option key={x.path} value={x.path}>{x.path}{x.derived ? ' · derived' : ''} — {x.label}</option>)}
-              </select>
+              <div className="rd-fieldwrap">
+                <select className="select rd-field" aria-label={`Condition ${i + 1} field`} title={f ? `${f.label} (${c.path})` : c.path} value={c.path} onChange={(e) => changeField(i, e.target.value)} data-testid={`cond-${i}-field`}>
+                  {!f && <option value={c.path}>{c.path} (unknown)</option>}
+                  {pickable.map((x) => <option key={x.path} value={x.path}>{x.label}{x.derived ? ' (derived)' : ''}</option>)}
+                </select>
+                {tech && <span className="rd-path mono" title={c.path}>{c.path}</span>}
+              </div>
               <select className="select rd-op" aria-label={`Condition ${i + 1} operator`} value={c.op} onChange={(e) => changeOp(i, e.target.value as LeafOp)} data-testid={`cond-${i}-op`}>
                 {ops.map((o) => <option key={o} value={o}>{OP_LABEL[o]}</option>)}
               </select>
@@ -614,6 +636,8 @@ function VisualBuilder({ when, fields, fieldMap, onChange, onUseAst }: { when: P
 
 function ActionEditor({ draft, project, nodes, onChange, locked }: { draft: Rule; project: Project; nodes: DocNode[]; onChange: (p: Partial<Rule>) => void; locked: boolean }) {
   const a = draft.then;
+  const tech = useStudio((s) => s.viewMode) === 'technical';
+  const idSuffix = (id: string) => (tech ? ` · ${id}` : '');
   const targets = variantNodes(project);
   const setAction = (op: RuleAction['op']) => {
     if (op === a.op) return;
@@ -628,8 +652,8 @@ function ActionEditor({ draft, project, nodes, onChange, locked }: { draft: Rule
   if (locked || a.op === 'requireNodes') {
     return (
       <div className="card rd-action" data-testid="action-editor">
-        <div className="muted">Requires these nodes in every output (read-only)</div>
-        <div className="row wrap rd-gap">{a.op === 'requireNodes' && a.nodeIds.map((n) => <span key={n} className="chip accent mono"><Icon.lock /> {n}</span>)}</div>
+        <div className="muted">Always included in every output (read-only)</div>
+        <div className="row wrap rd-gap">{a.op === 'requireNodes' && a.nodeIds.map((n) => <span key={n} className="chip accent" title={n}><Icon.lock /> {nodeTitle(project, n)}</span>)}</div>
       </div>
     );
   }
@@ -645,24 +669,24 @@ function ActionEditor({ draft, project, nodes, onChange, locked }: { draft: Rule
         {a.op === 'selectVariant' && (() => {
           const t = targets.find((n) => n.id === a.targetNodeId);
           return (<>
-            <div className="field"><label htmlFor="rd-target">Target node</label>
-              <select id="rd-target" className="select" value={a.targetNodeId} data-testid="action-target"
+            <div className="field"><label htmlFor="rd-target">Where it appears</label>
+              <select id="rd-target" className="select" title={nodeTitle(project, a.targetNodeId)} value={a.targetNodeId} data-testid="action-target"
                 onChange={(e) => { const n = targets.find((x) => x.id === e.target.value)!; onChange({ then: { op: 'selectVariant', targetNodeId: n.id, variantId: n.variantIds?.[0] ?? '' }, exclusiveGroup: n.id }); }}>
                 {!t && <option value={a.targetNodeId}>{a.targetNodeId} (invalid)</option>}
-                {targets.map((n) => <option key={n.id} value={n.id}>{n.name ?? n.id} · {n.id}</option>)}
+                {targets.map((n) => <option key={n.id} value={n.id}>{n.name ?? n.id}{idSuffix(n.id)}</option>)}
               </select></div>
-            <div className="field"><label htmlFor="rd-variant">Variant</label>
-              <select id="rd-variant" className="select" value={a.variantId} data-testid="action-variant" onChange={(e) => onChange({ then: { ...a, variantId: e.target.value } })}>
+            <div className="field"><label htmlFor="rd-variant">Message shown</label>
+              <select id="rd-variant" className="select" title={nodeTitle(project, a.variantId)} value={a.variantId} data-testid="action-variant" onChange={(e) => onChange({ then: { ...a, variantId: e.target.value } })}>
                 {!t?.variantIds?.includes(a.variantId) && <option value={a.variantId}>{a.variantId} (not defined)</option>}
-                {(t?.variantIds ?? []).map((v) => <option key={v} value={v}>{project.contentParts.find((c) => c.id === v)?.title ?? v} · {v}</option>)}
+                {(t?.variantIds ?? []).map((v) => <option key={v} value={v}>{nodeTitle(project, v)}{idSuffix(v)}</option>)}
               </select></div>
           </>);
         })()}
         {a.op === 'showSection' && (
           <div className="field"><label htmlFor="rd-sec">Section</label>
-            <select id="rd-sec" className="select" value={a.targetNodeId} data-testid="action-target" onChange={(e) => onChange({ then: { op: 'showSection', targetNodeId: e.target.value } })}>
-              <optgroup label="Rule-driven sections">{nodes.filter((n) => n.ruleDriven).map((n) => <option key={n.id} value={n.id}>{n.name ?? n.id} · {n.id}</option>)}</optgroup>
-              <optgroup label="Other nodes">{nodes.filter((n) => !n.ruleDriven).map((n) => <option key={n.id} value={n.id}>{n.name ?? n.id} · {n.id}</option>)}</optgroup>
+            <select id="rd-sec" className="select" title={nodeTitle(project, a.targetNodeId)} value={a.targetNodeId} data-testid="action-target" onChange={(e) => onChange({ then: { op: 'showSection', targetNodeId: e.target.value } })}>
+              <optgroup label="Rule-driven sections">{nodes.filter((n) => n.ruleDriven).map((n) => <option key={n.id} value={n.id}>{n.name ?? n.id}{idSuffix(n.id)}</option>)}</optgroup>
+              <optgroup label="Other sections">{nodes.filter((n) => !n.ruleDriven).map((n) => <option key={n.id} value={n.id}>{n.name ?? n.id}{idSuffix(n.id)}</option>)}</optgroup>
             </select></div>
         )}
         {a.op === 'setPresentationHint' && (
@@ -715,7 +739,7 @@ function TestPanel({ result, draft, onPick }: { result: TestOutcome; draft: Rule
   const shown = all ? result.rows : interesting.slice(0, 8);
   return (
     <div className="rd-test" data-testid="rule-test-result">
-      <h3 className="section-title">Test result · {draft.id} against {result.total} synthetic records</h3>
+      <h3 className="section-title">Test result · {draft.id} against {result.total} records</h3>
       <div className="rd-stats">
         <div className="rd-stat"><strong data-testid="test-matched">{result.matched}</strong><span>records matched</span></div>
         <div className="rd-stat"><strong data-testid="test-changed">{result.changed}</strong><span>primary variant changes{result.primaryNode ? ` (${result.primaryNode})` : ''}</span></div>
@@ -730,12 +754,12 @@ function TestPanel({ result, draft, onPick }: { result: TestOutcome; draft: Rule
             {shown.map((r) => (
               <tr key={(r.current ? 'cur-' : '') + r.recordId} className={r.current ? 'selected' : ''}>
                 <td><button className="rowlink" onClick={() => onPick(r.recordId)} title="Switch scenario to this record">{r.recordId}</button>{r.current && <span className="chip accent rd-mini">current scenario</span>}<div className="muted">{r.persona ?? ''}</div></td>
-                <td><span className={`chip ${r.matched ? 'accent' : ''}`}>{r.matched ? '✔ ' : '– '}{r.outcome}</span></td>
+                <td><span className={`chip ${r.matched ? 'accent' : ''}`}>{r.matched ? '✔ ' : '– '}{OUTCOME_WORD[r.outcome] ?? r.outcome}</span></td>
                 <td className="mono rd-inputs">{Object.entries(r.inputs).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ') || '—'}</td>
                 <td>{r.primaryBefore === null && r.primaryAfter === null ? <span className="muted">n/a</span> : <span className={r.changed ? 'rd-changed' : ''}>{r.primaryBefore ?? 'none'} → {r.primaryAfter ?? 'none'}{r.changed ? ' ● changed' : ' (same)'}</span>}</td>
               </tr>
             ))}
-            {!shown.length && <tr><td colSpan={4} className="muted">This draft matches no seeded record and changes nothing.</td></tr>}
+            {!shown.length && <tr><td colSpan={4} className="muted">This draft matches no record and changes nothing.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -749,42 +773,63 @@ function TestPanel({ result, draft, onPick }: { result: TestOutcome; draft: Rule
 
 const OUTCOME_ICON: Record<string, string> = { selected: '✔', outranked: '↓', tie: '⚠', applied: '✔', required: '■', 'not-matched': '–', disabled: '○', 'out-of-scope': '·' };
 
-function TracePanel({ res, onSelectRule, fieldMap }: { res: ReturnType<typeof useResolution>; onSelectRule: (id: string) => void; fieldMap: Map<string, FieldDef> }) {
+function TracePanel({ project, res, onSelectRule, fieldMap }: { project: Project; res: ReturnType<typeof useResolution>; onSelectRule: (id: string) => void; fieldMap: Map<string, FieldDef> }) {
   const [matchedOnly, setMatchedOnly] = useState(false);
   if (!res) return <aside className="panel" data-testid="rule-trace"><Loading label="Resolving scenario…" /></aside>;
   const entries = res.trace.filter((t) => !matchedOnly || t.matched);
   const order = { blocking: 0, error: 1, warning: 2, info: 3 } as Record<string, number>;
   const findings = [...res.findings].sort((a, b) => order[a.severity] - order[b.severity]);
   const fmt = (k: string, v: unknown) => { const f = fieldMap.get(k); return f?.type === 'cents' && typeof v === 'number' ? `${v} (${formatMoney(v)})` : JSON.stringify(v); };
+  const plainVal = (k: string, v: unknown) => { const f = fieldMap.get(k); if (v === true) return 'yes'; if (v === false) return 'no'; if (v === null || v === undefined) return 'empty'; if (f?.type === 'cents' && typeof v === 'number') return formatMoney(v); return String(v); };
+  const ruleOf = (id: string) => project.rules.find((r) => r.id === id);
+  const matchedCount = res.trace.filter((t) => t.matched).length;
   return (
     <aside className="panel" data-testid="rule-trace" aria-label="Decision trace">
-      <div className="panel-head"><Icon.list /> Decision trace <span className="sub mono">{res.recordId}</span>
+      <div className="panel-head"><Icon.list /> Decision trace <Tech><span className="sub mono">{res.recordId}</span></Tech>
         <div className="right"><label className="rd-check"><input type="checkbox" checked={matchedOnly} onChange={(e) => setMatchedOnly(e.target.checked)} /> matched only</label></div></div>
       <div className="panel-body rd-trace">
-        <div className="rd-run mono">{res.runId} · {res.trace.filter((t) => t.matched).length}/{res.trace.length} matched</div>
+        <div className="rd-run">{matchedCount} of {res.trace.length} rules matched for this scenario</div>
+        <Proof label="Run ID"><span className="mono rd-run">{res.runId} · {res.recordId}</span></Proof>
         <h3 className="section-title">Findings ({findings.length})</h3>
         {findings.length === 0 ? <div className="callout accent">No findings for this scenario.</div> : (
           <ul className="rd-findings" data-testid="trace-findings">{findings.map((f, i) => <FindingRow key={i} f={f} onSelectRule={onSelectRule} />)}</ul>
         )}
         <h3 className="section-title">Evaluations ({entries.length})</h3>
         <ol className="rd-trace-list">
-          {entries.map((t, i) => (
-            <li key={t.ruleId + i} className={`rd-trace-item o-${t.outcome} ${t.matched ? 'm' : ''}`} data-testid={`trace-${t.ruleId}`}>
-              <div className="rd-trace-head">
-                {t.kind === 'rule' ? <button className="rowlink mono rd-tid" onClick={() => onSelectRule(t.ruleId)} aria-label={`Open rule ${t.ruleId}`}>{t.ruleId}</button> : <span className="mono rd-tid">{t.ruleId}</span>}
-                <span className="chip">{t.mode ?? t.kind}</span>
-                {t.priority !== undefined && <span className="chip">P{t.priority}</span>}
-                <span className={`chip ${t.enabled ? '' : 'warning'}`}>{t.enabled ? 'enabled' : 'disabled'}</span>
-                <span className={`chip rd-out ${t.outcome === 'selected' || t.outcome === 'applied' || t.outcome === 'required' ? 'accent' : t.outcome === 'tie' ? 'error' : t.outcome === 'outranked' ? 'info' : ''}`}>{OUTCOME_ICON[t.outcome]} {t.outcome}</span>
-              </div>
-              <div className="rd-trace-cond">{t.matched ? 'matched' : 'did not match'} · {describePredicate(t.expression)}</div>
-              {Object.keys(t.predicateInputs).length > 0 && (
-                <div className="rd-trace-inputs">{Object.entries(t.predicateInputs).map(([k, v]) => <span key={k} className="rd-input"><span className="muted">{k}</span> = <b>{fmt(k, v)}</b></span>)}</div>
-              )}
-              {t.targetNodeId && <div className="rd-trace-target muted">target {t.targetNodeId}{t.action?.op === 'selectVariant' ? ` → ${t.action.variantId}` : ''}</div>}
-              {t.note && <div className="rd-trace-note">{t.note}</div>}
-            </li>
-          ))}
+          {entries.map((t, i) => {
+            const rule = t.kind === 'rule' ? ruleOf(t.ruleId) : undefined;
+            const word = OUTCOME_WORD[t.outcome] ?? t.outcome;
+            const inputs = Object.entries(t.predicateInputs);
+            return (
+              <li key={t.ruleId + i} className={`rd-trace-item o-${t.outcome} ${t.matched ? 'm' : ''}`} data-testid={`trace-${t.ruleId}`}>
+                <div className="rd-trace-head">
+                  {rule && <span className="rd-trace-title" title={ruleTitle(project, rule)}>{ruleTitle(project, rule)}</span>}
+                  <span className={`rd-state ${outcomeCls(t.outcome)}`}>{OUTCOME_ICON[t.outcome]} {word}</span>
+                </div>
+                <div className="rd-trace-head rd-trace-tags">
+                  {t.kind === 'rule' ? <button className="rowlink mono rd-tid" onClick={() => onSelectRule(t.ruleId)} aria-label={`Open rule ${t.ruleId}`}>{t.ruleId}</button> : <span className="mono rd-tid">{t.ruleId}</span>}
+                  <Tech>
+                    <span className="chip">{t.mode ?? t.kind}</span>
+                    {t.priority !== undefined && <span className="chip">P{t.priority}</span>}
+                    <span className={`chip ${t.enabled ? '' : 'warning'}`}>{t.enabled ? 'enabled' : 'disabled'}</span>
+                  </Tech>
+                  <Biz>{!t.enabled && <span className="chip warning">off</span>}</Biz>
+                </div>
+                <div className="rd-trace-cond"><strong>{t.matched ? 'Matched' : 'Not matched'}:</strong> {predicateSentence(project, t.expression)}</div>
+                <Biz>
+                  {inputs.length > 0 && <div className="rd-trace-plain muted">Inputs: {inputs.map(([k, v]) => `${fieldLabel(project, k)} = ${plainVal(k, v)}`).join(' · ')}</div>}
+                </Biz>
+                <Tech>
+                  <div className="rd-trace-cond mono rd-raw">{describePredicate(t.expression)}</div>
+                  {inputs.length > 0 && (
+                    <div className="rd-trace-inputs">{inputs.map(([k, v]) => <span key={k} className="rd-input"><span className="muted">{k}</span> = <b>{fmt(k, v)}</b></span>)}</div>
+                  )}
+                  {t.targetNodeId && <div className="rd-trace-target muted">target {t.targetNodeId}{t.action?.op === 'selectVariant' ? ` → ${t.action.variantId}` : ''}</div>}
+                </Tech>
+                {t.note && <div className="rd-trace-note">{t.note}</div>}
+              </li>
+            );
+          })}
         </ol>
       </div>
     </aside>
@@ -805,42 +850,30 @@ function FindingRow({ f, onSelectRule }: { f: Finding; onSelectRule: (id: string
 
 /* -------------------------------------------------------- defect fixtures (O-demo) */
 
-function FixturePanel({ project }: { project: Project }) {
+function FixtureStrip({ project }: { project: Project }) {
   const setRecord = useStudio((s) => s.setRecord);
   const patchOverrides = useStudio((s) => s.patchOverrides);
   const isCard = project.documentType === 'credit-statement';
   const r3 = project.rules.find((r) => r.id === 'R03');
   const d01On = !!r3 && r3.priority === 400;
   const fbRemoved = project.nodes.find((n) => n.id === 'payment-guidance')?.fallbackVariantId === undefined;
+  const why = isCard ? undefined : 'Credit-statement project only (R03/R04 and payment-guidance exist only in the Aster Card sample).';
   return (
-    <aside className="panel" aria-label="Deliberate defect fixtures" data-testid="defect-fixtures">
-      <div className="panel-head"><Icon.warning /> Defect fixtures <span className="chip warning">demo only</span></div>
-      <div className="panel-body rd-fixtures">
-        <p className="hint">These deliberately break the model so the validators can be shown finding real defects. Every action is undoable from the top bar.</p>
-        <div className="card">
-          <strong>D01 · R03/R04 priority tie</strong>
-          <p className="hint">Sets R03 to <span className="mono">missedPayments ≥ 2</span> at priority 400 — equal to R04. A customer with 2 missed payments and an assistance request then matches two exclusive rules.</p>
-          <div className="row wrap">
-            <button className="btn danger sm" disabled={!isCard || d01On} onClick={() => injectD01()} data-testid="inject-d01">Inject D01: R03/R04 priority tie</button>
-            <button className="btn sm" disabled={!isCard || !d01On} onClick={() => restoreR03()}>Restore R03</button>
-            <button className="btn sm ghost" disabled={!isCard} onClick={() => setRecord('CARD-0002')}>Use CARD-0002</button>
-          </div>
-          {!isCard && <p className="hint">Credit-statement projects only (R03/R04 do not exist in the EOB sample).</p>}
-          {d01On && <p className="hint rd-ok">D01 is active in the model.</p>}
-        </div>
-        <div className="card">
-          <strong>AT-10 · Remove fallback</strong>
-          <p className="hint">Removes the explicit fallback of <span className="mono">payment-guidance</span>. Then load a scenario where no rule matches.</p>
-          <div className="row wrap">
-            <button className="btn danger sm" disabled={!isCard || fbRemoved} onClick={() => removeFallback()} data-testid="remove-fallback">Remove fallback</button>
-            <button className="btn sm" disabled={!isCard || !fbRemoved} onClick={() => restoreFallback()}>Restore fallback</button>
-            <button className="btn sm ghost" disabled={!isCard} onClick={() => patchOverrides({ card: { paymentStatus: 'overdue', missedPayments: 0 } })} data-testid="no-match-scenario">No-match scenario</button>
-          </div>
-          {!isCard && <p className="hint">Credit-statement project only (payment-guidance exists only in the Aster Card sample).</p>}
-          <p className="hint">No-match scenario sets <span className="mono">paymentStatus=overdue</span>, <span className="mono">missedPayments=0</span> (scenario overrides, not model edits).</p>
-        </div>
-      </div>
-    </aside>
+    <div className="rd-fixtures" role="group" aria-label="Deliberate defect fixtures" data-testid="defect-fixtures" title={why ?? 'These deliberately break the model so the validators can be shown finding real defects. Every action is undoable from the top bar.'}>
+      <span className="rd-fix-label"><Icon.warning /> Defect fixtures <span className="chip warning">demo only</span></span>
+      <span className="rd-fix-group">
+        <span className="rd-fix-name" title="Sets R03 to missedPayments ≥ 2 at priority 400, equal to R04, so a customer with 2 missed payments and an assistance request matches two exclusive rules.">Priority tie{d01On && <span className="rd-ok"> · active</span>}</span>
+        <button className="btn danger sm" disabled={!isCard || d01On} onClick={() => injectD01()} data-testid="inject-d01" title="Inject D01: R03/R04 priority tie">Inject D01</button>
+        <button className="btn sm" disabled={!isCard || !d01On} onClick={() => restoreR03()}>Restore R03</button>
+        <button className="btn sm ghost" disabled={!isCard} onClick={() => setRecord('CARD-0002')}>Use CARD-0002</button>
+      </span>
+      <span className="rd-fix-group">
+        <span className="rd-fix-name" title="Removes the explicit fallback of payment-guidance. Then load a scenario where no rule matches.">No fallback{fbRemoved && isCard && <span className="rd-ok"> · removed</span>}</span>
+        <button className="btn danger sm" disabled={!isCard || fbRemoved} onClick={() => removeFallback()} data-testid="remove-fallback">Remove fallback</button>
+        <button className="btn sm" disabled={!isCard || !fbRemoved} onClick={() => restoreFallback()}>Restore fallback</button>
+        <button className="btn sm ghost" disabled={!isCard} onClick={() => patchOverrides({ card: { paymentStatus: 'overdue', missedPayments: 0 } })} data-testid="no-match-scenario" title="Scenario override (not a model edit): paymentStatus=overdue, missedPayments=0">No-match scenario</button>
+      </span>
+    </div>
   );
 }
 
@@ -897,13 +930,12 @@ function RecordEditor({ project, fields, fieldMap }: { project: Project; fields:
         <Icon.design /> Scenario data
         <span className="sub mono">{record?.recordId}{record?.personaId ? ` · ${personaName(personas, record.personaId)}` : ''}</span>
         <div className="right">
-          <span className="chip sim">Synthetic</span>
           <span className={`chip ${diff.length ? 'warning' : ''}`} data-testid="override-count">{diff.length} override{diff.length === 1 ? '' : 's'}</span>
           <button className="btn sm" onClick={() => clearOverrides()} disabled={!Object.keys(overrides).length} data-testid="reset-scenario"><Icon.reset /> Reset scenario</button>
         </div>
       </div>
       <div className="panel-body rd-record">
-        <p className="hint">Edits here are scenario overrides applied on top of the fixture. The fixture and the project model are never changed, and the project is not marked unsaved.</p>
+        <p className="hint">Edits here are scenario overrides applied on top of the record. The record and the project model are never changed.</p>
         {!eff ? <Loading /> : (
           <div className="rd-record-grid">
             <div>

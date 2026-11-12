@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resolve } from '@iss/resolver';
-import { ScreenHeader, Loading, SeverityLabel, formatMoney } from '../ui/common';
+import { ScreenHeader, Loading, SeverityLabel, formatMoney, Proof, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { useStudio, useResolution, useScenarioRequest, useRecord } from '../state/store';
 import { api, ApiFailure } from '../api/client';
 import { abridge, injectD01, makeTransactions, restoreR03 } from './RulesData';
+import { ParityRow } from './PreviewExport';
+import './PreviewExport.css';
 import './ValidateCompare.css';
 
 /* ------------------------------------------------------------------ types */
@@ -40,7 +42,21 @@ const lastReports = new Map<string, Report>();
 
 const idsOf = (i: Issue) => [...(i.ruleIds ?? []), ...(i.ruleId && !(i.ruleIds ?? []).includes(i.ruleId) ? [i.ruleId] : [])];
 const sevRank = (s: Sev) => SEVS.indexOf(s);
-const fmtVal = (v: unknown): string => (v === undefined ? '—' : typeof v === 'string' ? v : JSON.stringify(v));
+
+/** Issues that report the same root cause (same rule pair) from different checks are shown as one card. */
+interface Group { key: string; primary: Issue; members: Issue[]; severity: Sev }
+function groupIssues(list: Issue[]): Group[] {
+  const out: Group[] = []; const byKey = new Map<string, Group>();
+  for (const i of list) {
+    const ids = [...new Set(idsOf(i))].sort();
+    const key = ids.length >= 2 ? `pair:${ids.join('+')}` : `issue:${i.issueId}`;
+    const g = byKey.get(key);
+    if (g) { g.members.push(i); if (sevRank(i.severity) < sevRank(g.severity)) { g.severity = i.severity; g.primary = i; } }
+    else { const n: Group = { key, primary: i, members: [i], severity: i.severity }; byKey.set(key, n); out.push(n); }
+  }
+  return out;
+}
+const countGroups = (gs: Group[]): Record<Sev, number> => { const c: Record<Sev, number> = { blocking: 0, error: 0, warning: 0, info: 0 }; gs.forEach((g) => { c[g.severity]++; }); return c; };
 
 /* ----------------------------------------------------------------- screen */
 
@@ -102,10 +118,16 @@ export function ValidateCompare() {
     }
   };
 
+  /** The shell dock compares against the server's raw per-check counts. */
+  useEffect(() => { useStudio.getState().setLastValidation(report ? { runId: report.runId, counts: report.counts } : null); }, [report]);
+
   const issues = report?.issues ?? [];
-  const shown = useMemo(() => issues.filter((i) => sevFilter.includes(i.severity) && (suiteFilter === 'all' || i.suite === suiteFilter)).sort((a, b) => sevRank(a.severity) - sevRank(b.severity) || a.suite.localeCompare(b.suite)), [issues, sevFilter, suiteFilter]);
-  const current = issues.find((i) => i.issueId === selected) ?? null;
-  useEffect(() => { if (selected && !shown.some((i) => i.issueId === selected)) setSelected(null); }, [shown, selected]);
+  const groups = useMemo(() => groupIssues(issues), [issues]);
+  const gCounts = useMemo(() => countGroups(groups), [groups]);
+  const shown = useMemo(() => groups.filter((g) => sevFilter.includes(g.severity) && (suiteFilter === 'all' || g.members.some((i) => i.suite === suiteFilter))).sort((a, b) => sevRank(a.severity) - sevRank(b.severity) || a.primary.suite.localeCompare(b.primary.suite)), [groups, sevFilter, suiteFilter]);
+  const currentGroup = groups.find((g) => g.primary.issueId === selected) ?? null;
+  const current = currentGroup?.primary ?? null;
+  useEffect(() => { if (selected && !shown.some((g) => g.primary.issueId === selected)) setSelected(null); }, [shown, selected]);
 
   const choose = (id: string, focusInspector = false) => {
     setSelected(id);
@@ -143,7 +165,6 @@ export function ValidateCompare() {
     <section className="screen" data-testid="validate-view">
       <ScreenHeader id="S09" title="Validate & Compare"
         subtitle="Run the real rule, binding, pagination, PDF/HTML parity and accessibility checks for the current scenario, then jump to the exact cause."
-        badge={<span className="chip sim">Synthetic data only</span>}
         actions={
           <>
             <button className="btn primary" onClick={run} disabled={running || !req || !suites.length} data-testid="run-validation">
@@ -162,19 +183,19 @@ export function ValidateCompare() {
               <div className="callout error" role="alert" data-testid="validation-error"><strong>{error.title}.</strong> {error.message} <button className="btn sm" onClick={run}><Icon.reset /> Retry</button></div>
             )}
             {stale && !running && (
-              <div className="callout warning" data-testid="stale-marker"><strong>Results are stale.</strong> The model or scenario changed after this report ran (report run <span className="mono">{report!.runId}</span>, current <span className="mono">{currentRunId}</span>). <button className="btn sm" onClick={run}>Re-run validation</button></div>
+              <div className="callout warning" data-testid="stale-marker"><strong>Results are stale.</strong> The model or scenario changed after this report ran. <Tech><span className="muted">report <span className="mono">{report!.runId}</span> · current <span className="mono">{currentRunId}</span></span></Tech> <button className="btn sm" onClick={run}>Re-run validation</button></div>
             )}
           </div>
 
           {/* suite selection */}
-          <div className="vc-suitepick" role="group" aria-label="Suites to run">
-            <span className="muted">Suites to run</span>
+          <fieldset className="vc-suitepick">
+            <legend>Suites to run</legend>
             {SUITES.map((s) => (
-              <button key={s.id} type="button" className="chip vc-toggle" aria-pressed={suites.includes(s.id)} title={s.what} onClick={() => setSuites((cur) => (cur.includes(s.id) ? cur.filter((x) => x !== s.id) : [...cur, s.id]))}>
-                {suites.includes(s.id) ? '☑' : '☐'} {s.label}
-              </button>
+              <label key={s.id} className="vc-check" title={s.what}>
+                <input type="checkbox" checked={suites.includes(s.id)} onChange={() => setSuites((cur) => (cur.includes(s.id) ? cur.filter((x) => x !== s.id) : [...cur, s.id]))} data-testid={`suite-toggle-${s.id}`} /> {s.label}
+              </label>
             ))}
-          </div>
+          </fieldset>
 
           {!report && status !== 'running' && status !== 'error' && (
             <div className="panel vc-empty" data-testid="validation-empty">
@@ -189,9 +210,9 @@ export function ValidateCompare() {
 
           {(report || running) && (
             <>
-              <Overview report={report} running={running} suites={suites} stale={stale} />
+              <Overview report={report} running={running} suites={suites} stale={stale} gCounts={gCounts} />
               <section className="panel vc-listpanel" data-testid="validation-list-panel" aria-label="Issues">
-                <div className="panel-head">Issues <span className="sub">{report ? `${shown.length} of ${issues.length}` : ''}</span>
+                <div className="panel-head">Issues <span className="sub">{report ? `${shown.length} of ${groups.length} issue${groups.length === 1 ? '' : 's'}${groups.length !== issues.length ? ` (${issues.length} checks)` : ''}` : ''}</span>
                   <div className="right">
                     <label className="vc-sel"><span className="rd-sr">Filter by suite</span>
                       <select className="select" value={suiteFilter} onChange={(e) => setSuiteFilter(e.target.value as 'all' | Suite)} aria-label="Filter by suite" data-testid="filter-suite">
@@ -201,29 +222,40 @@ export function ValidateCompare() {
                 </div>
                 <div className="vc-sevfilter" role="group" aria-label="Filter by severity">
                   {SEVS.map((s) => (
-                    <button key={s} type="button" className={`chip vc-toggle ${s}`} aria-pressed={sevFilter.includes(s)} data-testid={`filter-${s}`} onClick={() => setSevFilter((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]))}>
-                      {sevFilter.includes(s) ? '☑' : '☐'} {s} {report ? report.counts[s] ?? 0 : ''}
-                    </button>
+                    <label key={s} className={`vc-check vc-sev ${s}`}>
+                      <input type="checkbox" checked={sevFilter.includes(s)} data-testid={`filter-${s}`} onChange={() => setSevFilter((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]))} /> {s} <span className="vc-n">{report ? gCounts[s] : ''}</span>
+                    </label>
                   ))}
                 </div>
                 <div className="vc-list-scroll">
                   {report && (
                     <ul className="vc-list" data-testid="validation-list" aria-label="Validation issues" ref={listRef} onKeyDown={onListKey}>
-                      {shown.map((i) => (
-                        <li key={i.issueId}>
-                          <button type="button" data-issue={i.issueId} data-testid={`issue-${i.code}`} className={`vc-issue ${i.severity} ${selected === i.issueId ? 'selected' : ''}`} aria-current={selected === i.issueId} onClick={() => choose(i.issueId)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); choose(i.issueId, true); } }}>
-                            <span className="vc-issue-top"><SeverityLabel severity={i.severity} /><span className="mono vc-code">{i.code}</span><span className="chip vc-suite">{i.suite}</span>
-                              {i.nodeId && <span className="chip mono">{i.nodeId}</span>}
-                              {idsOf(i).map((r) => <span key={r} className="chip mono accent">{r}</span>)}
-                              {i.page !== undefined && <span className="chip">page {i.page}</span>}</span>
-                            <span className="vc-issue-msg">{i.message}</span>
-                          </button>
-                        </li>
-                      ))}
+                      {shown.map((g) => {
+                        const i = g.primary;
+                        const multi = g.members.length > 1;
+                        return (
+                          <li key={g.key} className="vc-item">
+                            <button type="button" data-issue={i.issueId} data-testid={`issue-${i.code}`} className={`vc-issue ${g.severity} ${selected === i.issueId ? 'selected' : ''}`} aria-current={selected === i.issueId} onClick={() => choose(i.issueId)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); choose(i.issueId, true); } }}>
+                              <span className="vc-issue-top"><SeverityLabel severity={g.severity} /><span className="mono vc-code">{i.code}</span><span className="chip vc-suite">{i.suite}</span>
+                                {i.nodeId && <span className="chip mono">{i.nodeId}</span>}
+                                {[...new Set(g.members.flatMap(idsOf))].map((r) => <span key={r} className="chip mono accent">{r}</span>)}
+                                {i.page !== undefined && <span className="chip">page {i.page}</span>}
+                                {multi && <span className="chip info vc-agree-chip">{g.members.length} checks agree</span>}</span>
+                              <span className="vc-issue-msg">{i.message}</span>
+                            </button>
+                            {multi && (
+                              <details className="vc-agree">
+                                <summary>Show the {g.members.length} agreeing checks</summary>
+                                <ul>{g.members.map((m) => <li key={m.issueId}><span className="mono">{m.code}</span> <span className="muted">{m.suite}{m.source ? ` · ${m.source}` : ''}</span></li>)}</ul>
+                              </details>
+                            )}
+                          </li>
+                        );
+                      })}
                       {!shown.length && (
                         <li className="vc-clean" data-testid="validation-clean">
-                          {issues.length ? 'No issues match the current filters.' : <><span className="sev ok">✔ clean</span> No findings from the {report.suitesRequested.length} suite(s) that ran. Automated checks are not WCAG or regulatory certification.</>}
+                          {groups.length ? 'No issues match the current filters.' : <><span className="sev ok">✔ clean</span> No findings from the {report.suitesRequested.length} suite(s) that ran. Automated checks are not WCAG or regulatory certification.</>}
                         </li>
                       )}
                     </ul>
@@ -234,11 +266,11 @@ export function ValidateCompare() {
               {report && <ParityPanel report={report} />}
             </>
           )}
-          <p className="hint vc-note" data-testid="certification-note">Automated checks are not WCAG or regulatory certification. They are necessary but not sufficient; PDF accessibility (tagging/PDF-UA) is not evaluated. All data is synthetic.</p>
+          <p className="hint vc-note" data-testid="certification-note">Automated checks are not WCAG or regulatory certification. They are necessary but not sufficient; PDF accessibility (tagging/PDF-UA) is not evaluated.</p>
         </div>
 
         <aside className="panel vc-inspector" data-testid="validation-inspector" aria-label="Validation detail" tabIndex={-1} ref={inspectorRef}>
-          {current ? <Inspector issue={current} onGo={goTo} sourceLabel={sourceLabel(current)} stale={stale} /> : (
+          {current ? <Inspector issue={current} members={currentGroup!.members} onGo={goTo} sourceLabel={sourceLabel(current)} stale={stale} /> : (
             <div className="empty"><strong>Select an issue</strong><span>Choose an item in the list (arrow keys move, Enter opens details) to see the message, suggested fix, reproduction and a link to its source.</span></div>
           )}
         </aside>
@@ -253,40 +285,55 @@ const STATUS_VIEW: Record<string, { icon: string; label: string; cls: string }> 
   clean: { icon: '✔', label: 'clean', cls: 'ok' }, warnings: { icon: '▲', label: 'warnings', cls: 'warning' }, errors: { icon: '■', label: 'errors', cls: 'error' }, 'not-run': { icon: '–', label: 'not run', cls: '' },
 };
 
-function Overview({ report, running, suites, stale }: { report: Report | null; running: boolean; suites: Suite[]; stale: boolean }) {
+function Overview({ report, running, suites, stale, gCounts }: { report: Report | null; running: boolean; suites: Suite[]; stale: boolean; gCounts: Record<Sev, number> }) {
+  const raw = report?.counts;
   return (
     <section className="vc-overview" aria-label="Overview" data-testid="validation-overview">
       <div className="vc-counters">
-        {SEVS.map((s) => (
-          <div key={s} className={`vc-counter ${s} ${report && report.counts[s] ? 'has' : ''}`} data-testid={`count-${s}`}>
-            <strong>{report ? report.counts[s] ?? 0 : '…'}</strong><SeverityLabel severity={s} />
-          </div>
-        ))}
-        <div className="vc-counter"><strong data-testid="page-count">{report?.pageCount ?? '–'}</strong><span className="muted">PDF pages</span></div>
-        <div className="vc-meta">
-          {report && <><div className="mono">{report.runId}</div><div className="muted">{report.recordId} · model v{report.modelVersion} · {report.overrideCount} override group(s)</div><div className="muted">ran {report.ranAt} · {(report.elapsedMs / 1000).toFixed(1)}s{stale ? ' · stale' : ''}</div></>}
-        </div>
-      </div>
-      <div className="vc-suites" data-testid="suite-cards">
-        {SUITES.map((s) => {
-          const st = report?.suites?.[s.id];
-          const view = running && suites.includes(s.id) && !report ? { icon: '…', label: 'running', cls: '' } : STATUS_VIEW[st?.status ?? 'not-run'];
+        {SEVS.map((s) => {
+          const n = report ? gCounts[s] : 0; const r = raw?.[s] ?? 0;
           return (
-            <div key={s.id} className={`vc-suite ${view.cls}`} data-testid={`suite-${s.id}`}>
-              <div className="vc-suite-head"><span className={`sev ${view.cls}`}><span aria-hidden="true">{view.icon}</span> {view.label}</span></div>
-              <strong>{s.label}</strong>
-              <div className="muted">{st && st.status !== 'not-run' ? `${st.count} finding${st.count === 1 ? '' : 's'} · ${st.durationMs} ms` : 'not run'}</div>
+            <div key={s} className={`vc-counter ${s} ${report && n ? 'has' : ''}`} data-testid={`count-${s}`}>
+              <strong>{report ? n : '…'}</strong><SeverityLabel severity={s} />
+              {report && r !== n && <small className="muted">{r} checks</small>}
             </div>
           );
         })}
+        <div className="vc-counter"><strong data-testid="page-count">{report?.pageCount ?? '–'}</strong><span className="muted">PDF pages</span></div>
+        <div className="vc-meta">
+          {report && <>
+            <div className="muted">{report.recordId} · ran {report.ranAt} · {(report.elapsedMs / 1000).toFixed(1)}s{stale ? ' · stale' : ''}</div>
+            <Tech><div className="muted" data-testid="raw-counts">raw checks: {SEVS.map((s) => `${s} ${raw?.[s] ?? 0}`).join(' · ')}</div></Tech>
+            <Proof label="Proof"><span className="mono">{report.runId}</span> <span className="muted">· model v{report.modelVersion} · {report.overrideCount} override group(s)</span></Proof>
+          </>}
+        </div>
       </div>
+      <table className="table vc-suites" data-testid="suite-cards">
+        <caption className="rd-sr">Result per validation suite</caption>
+        <thead><tr><th scope="col">Suite</th><th scope="col">Status</th><th scope="col" className="num">Findings</th><th scope="col" className="num">Time</th></tr></thead>
+        <tbody>
+          {SUITES.map((s) => {
+            const st = report?.suites?.[s.id];
+            const view = running && suites.includes(s.id) && !report ? { icon: '…', label: 'running', cls: '' } : STATUS_VIEW[st?.status ?? 'not-run'];
+            const ran = st && st.status !== 'not-run';
+            return (
+              <tr key={s.id} className={`vc-suite ${view.cls}`} data-testid={`suite-${s.id}`}>
+                <th scope="row">{s.label}</th>
+                <td><span className={`sev ${view.cls}`}><span aria-hidden="true">{view.icon}</span> {view.label}</span></td>
+                <td className="num">{ran ? st.count : '–'}</td>
+                <td className="num muted">{ran ? `${st.durationMs} ms` : '–'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </section>
   );
 }
 
 /* --------------------------------------------------------------- inspector */
 
-function Inspector({ issue: i, onGo, sourceLabel, stale }: { issue: Issue; onGo: (i: Issue, ruleId?: string) => void; sourceLabel: string; stale: boolean }) {
+function Inspector({ issue: i, members, onGo, sourceLabel, stale }: { issue: Issue; members: Issue[]; onGo: (i: Issue, ruleId?: string) => void; sourceLabel: string; stale: boolean }) {
   const setRecord = useStudio((s) => s.setRecord);
   const setOverrides = useStudio((s) => s.setOverrides);
   const setJourneyCursor = useStudio((s) => s.setJourneyCursor);
@@ -303,6 +350,12 @@ function Inspector({ issue: i, onGo, sourceLabel, stale }: { issue: Issue; onGo:
       <div className="panel-body vc-detail" aria-labelledby="vc-detail-title">
         <h2 className="vc-detail-code mono">{i.code}</h2>
         <p className="vc-detail-msg">{i.message}</p>
+        {members.length > 1 && (
+          <div className="callout info vc-members" data-testid="issue-members">
+            <strong>{members.length} checks agree on this root cause</strong>
+            <ul>{members.map((m) => <li key={m.issueId}><span className="mono">{m.code}</span> <span className="muted">· {m.suite}</span></li>)}</ul>
+          </div>
+        )}
         {stale && <div className="callout warning">This report is stale; re-run validation to confirm the issue still applies.</div>}
         <dl className="kv vc-kv">
           <dt>Suite</dt><dd>{i.suite}</dd>
@@ -312,7 +365,6 @@ function Inspector({ issue: i, onGo, sourceLabel, stale }: { issue: Issue; onGo:
           {i.page !== undefined && <><dt>Page</dt><dd>{i.page}</dd></>}
           {i.locale && <><dt>Locale</dt><dd>{i.locale}</dd></>}
           {i.source && <><dt>Source</dt><dd>{i.source}</dd></>}
-          {i.runId && <><dt>Run</dt><dd className="mono">{i.runId}</dd></>}
         </dl>
         {i.suggestion && <><h3 className="section-title">Suggested correction</h3><div className="callout accent" data-testid="issue-suggestion">{i.suggestion}</div></>}
         <h3 className="section-title">Reproduction</h3>
@@ -325,6 +377,7 @@ function Inspector({ issue: i, onGo, sourceLabel, stale }: { issue: Issue; onGo:
           </div>
         ) : <div className="muted">This check does not depend on a particular scenario (model-level analysis).</div>}
         {i.details && Object.keys(i.details).length > 0 && (<><h3 className="section-title">Details</h3><pre className="code" data-testid="issue-details">{JSON.stringify(abridge(i.details), null, 2)}</pre></>)}
+        {i.runId && <Proof label="Proof"><span className="mono">run {i.runId}</span></Proof>}
         <h3 className="section-title">Source</h3>
         <div className="row wrap">
           <button className="btn primary" onClick={() => onGo(i)} data-testid="go-to-source"><Icon.external /> Go to source</button>
@@ -351,20 +404,12 @@ function ParityPanel({ report }: { report: Report }) {
         <span className="sub">{p.checks.length} checks</span>
         <div className="right"><label className="rd-check"><input type="checkbox" checked={onlyBad} onChange={(e) => setOnlyBad(e.target.checked)} /> mismatches only</label></div></div>
       <div className="vc-parity-scroll">
-        <table className="table">
-          <caption className="rd-sr">Expected resolver facts compared with values extracted from the PDF and HTML outputs</caption>
-          <thead><tr><th scope="col">Check</th><th scope="col">Expected</th><th scope="col">PDF</th><th scope="col">HTML</th><th scope="col">Result</th></tr></thead>
+        <table className="table ox-par-table">
+          <caption className="rd-sr">Expected resolver facts compared with values extracted from the PDF and HTML outputs; select a row for the values</caption>
+          <thead><tr><th scope="col">Check</th><th scope="col">Result</th></tr></thead>
           <tbody>
-            {rows.map((c) => (
-              <tr key={c.id} className={c.status === 'mismatch' ? 'vc-bad' : ''}>
-                <th scope="row" className="vc-rowhead">{c.label}{c.blocking && <span className="chip error vc-mini">blocking</span>}{c.note && <div className="muted">{c.note}</div>}</th>
-                <td className="mono vc-val" title={fmtVal(c.expected)}>{fmtVal(c.expected)}</td>
-                <td className="mono vc-val" title={fmtVal(c.pdf)}>{fmtVal(c.pdf)}</td>
-                <td className="mono vc-val" title={fmtVal(c.html)}>{fmtVal(c.html)}</td>
-                <td>{c.status === 'match' ? <span className="sev ok">✔ match</span> : c.status === 'mismatch' ? <span className="sev error">■ mismatch</span> : <span className="sev info">● allowed</span>}</td>
-              </tr>
-            ))}
-            {!rows.length && <tr><td colSpan={5} className="muted">No mismatching checks.</td></tr>}
+            {rows.map((c) => <ParityRow key={c.id} c={c} />)}
+            {!rows.length && <tr><td colSpan={2} className="muted">No mismatching checks.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -406,31 +451,30 @@ function DefectPanel() {
     patchOverrides({ claims: [{ ...claim0, patientResponsibilityCents: 30000, liabilityConfirmed: false, status: 'denied-pending-review' }, ...eff.claims.slice(1)] });
   };
   const n = Object.keys(overrides).length;
-  const Card = ({ id, title, text, on, children, note }: { id: string; title: string; text: string; on: boolean; children: React.ReactNode; note?: string }) => (
+  const Card = ({ id, title, text, on, children }: { id: string; title: string; text: string; on: boolean; children: React.ReactNode }) => (
     <div className={`card vc-defect ${on ? 'active' : ''}`} data-testid={`defect-${id}`}>
       <div className="vc-defect-head"><strong>{id.toUpperCase()} · {title}</strong>{on && <span className="chip warning">active</span>}</div>
-      <p className="hint">{text}</p>
+      <p className="hint vc-defect-text">{text}</p>
       <div className="row wrap">{children}</div>
-      {note && <p className="hint">{note}</p>}
     </div>
   );
   return (
     <aside className="panel vc-defects" aria-label="Seeded defect fixtures" data-testid="seeded-defects">
-      <div className="panel-head">Seeded defects <span className="chip warning">demo fixtures</span></div>
+      <div className="panel-head">Seeded defects</div>
       <div className="panel-body">
-        <p className="hint">Deliberate defects for the guided demo. Apply one, then run validation to see the real finding. Model edits are undoable from the top bar; overrides are scenario-only.</p>
-        <Card id="d01" title="Rule priority tie" on={active.d01} text="R03 and R04 get equal priority 400 in the same exclusive group. Also switches to CARD-0002 (2 missed payments + assistance), which matches both rules." note={!isCard ? 'Credit-statement project only.' : 'Expect EXCLUSIVE_PRIORITY_TIE.'}>
+        <p className="hint">Apply one, then run validation. Model edits are undoable.</p>
+        <Card id="d01" title="Rule priority tie" on={active.d01} text={!isCard ? 'Credit-statement project only.' : 'Two exclusive rules tie on priority; loads CARD-0002.'}>
           <button className="btn danger sm" onClick={() => { if (injectD01()) useStudio.getState().setRecord('CARD-0002'); }} disabled={!isCard || active.d01} data-testid="seed-d01">Inject D01</button>
           <button className="btn sm" onClick={() => restoreR03()} disabled={!isCard || !active.d01}>Restore R03</button>
         </Card>
-        <Card id="d02" title="Missing Spanish disclosure" on={active.d02} text="Scenario override customer.locale = es-US where mandatory translations are not approved." note="Expect REQUIRED_TRANSLATION_MISSING.">
+        <Card id="d02" title="Missing Spanish disclosure" on={active.d02} text="Spanish locale without an approved translation.">
           <button className="btn danger sm" onClick={() => patchOverrides({ customer: { locale: 'es-US' } })} disabled={active.d02} data-testid="seed-d02">Apply D02</button>
         </Card>
-        <Card id="d03" title="Table overflow, no continuation" on={active.d03} text="250 synthetic transactions (scenario) and flowContinuation=false on the transaction table (model edit)." note={!isCard ? 'Credit-statement project only.' : 'Expect FLOW_OVERFLOW_NO_CONTINUATION.'}>
+        <Card id="d03" title="Table overflow, no continuation" on={active.d03} text={!isCard ? 'Credit-statement project only.' : '250 transactions with table continuation turned off.'}>
           <button className="btn danger sm" onClick={d03} disabled={!isCard || active.d03} data-testid="seed-d03">Apply D03</button>
           <button className="btn sm" disabled={!isCard || table?.flowContinuation !== false} onClick={() => dispatch({ type: 'UPDATE_NODE', nodeId: 'transaction-table', patch: { flowContinuation: true } })}>Re-enable continuation</button>
         </Card>
-        <Card id="d04" title="Unconfirmed liability as due" on={active.d04} text="Claim override: member responsibility $300.00 with liabilityConfirmed=false, status denied-pending-review." note={isCard ? 'EOB project only.' : `Sets ${formatMoney(30000)} against an unconfirmed claim.`}>
+        <Card id="d04" title="Unconfirmed liability as due" on={active.d04} text={isCard ? 'EOB project only.' : `${formatMoney(30000)} member liability on an unconfirmed claim.`}>
           <button className="btn danger sm" onClick={d04} disabled={isCard || !claim0 || active.d04} data-testid="seed-d04">Apply D04</button>
         </Card>
         <button className="btn" onClick={() => clearOverrides()} disabled={!n} data-testid="clear-overrides"><Icon.reset /> Clear scenario overrides{n ? ` (${n})` : ''}</button>

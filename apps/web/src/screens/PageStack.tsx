@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { resolve } from '@iss/resolver';
 import { api, ApiFailure, type ComposedPages } from '../api/client';
 import { useStudio, useScenarioRequest, personaLabel } from '../state/store';
-import { ScreenHeader, Loading, ErrorState, Empty } from '../ui/common';
+import { ScreenHeader, Loading, ErrorState, Empty, Tech, Proof } from '../ui/common';
+import { nodeTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import './PageStack.css';
 
@@ -202,6 +203,8 @@ export function PageStack() {
   const patchOverrides = useStudio((s) => s.patchOverrides);
   const baseReq = useScenarioRequest();
   const isCard = project.documentType === 'credit-statement';
+  const biz = useStudio((s) => s.viewMode) === 'business';
+  const nm = (id: string) => (biz ? nodeTitle(project, id) : id);
 
   const [mode, setMode] = useState<Mode>('scenario');
   const [layout, setLayout] = useState<Layout>('stack');
@@ -293,7 +296,7 @@ export function PageStack() {
       <ScreenHeader
         id="S06" title="Page Composition Stack"
         subtitle="Real pages from the headless-Chromium composer, counted again from the generated PDF. Nothing here is estimated."
-        badge={<span className={'chip ' + (comp ? (pdfOk ? 'accent' : 'error') : '')} data-testid="page-count" aria-live="polite">{countText}</span>}
+        badge={<span className={'ps-count' + (comp && !pdfOk ? ' bad' : '')} data-testid="page-count" aria-live="polite">{countText}</span>}
         actions={<button className="btn" onClick={() => { A.reload(); B.reload(); }} disabled={A.loading}><Icon.reset /> Recompose</button>}
       />
       <div className="screen-body ps-body">
@@ -329,13 +332,13 @@ export function PageStack() {
             {isCard && (
               <label className="ps-toggle">
                 <input type="checkbox" checked={stress} onChange={toggleStress} data-testid="stress-250" />
-                <span><strong>Stress: 250 rows</strong><small>Scenario override: card.transactions = 250 synthetic rows summing to the record's purchases.</small></span>
+                <span><strong>Stress: 250 rows</strong><small>{biz ? 'Show this statement with 250 transactions.' : "Scenario override: card.transactions = 250 rows summing to the record's purchases."}</small></span>
               </label>
             )}
             {tableNode && (
               <label className="ps-toggle">
                 <input type="checkbox" checked={!continuationOn} onChange={toggleContinuation} data-testid="disable-continuation" />
-                <span><strong>Disable continuation</strong><small>Model edit on “{tableNode.name ?? tableNode.id}” (flowContinuation=false). Undoable from the top bar.</small></span>
+                <span><strong>Disable continuation</strong><small>{biz ? `Stop “${nodeTitle(project, tableNode.id)}” continuing onto the next page. Undoable.` : `Model edit on “${tableNode.name ?? tableNode.id}” (flowContinuation=false). Undoable from the top bar.`}</small></span>
               </label>
             )}
 
@@ -350,8 +353,7 @@ export function PageStack() {
             </div>
 
             <div className="callout ps-sibling">
-              <strong>Interactive HTML</strong>
-              <span>The responsive HTML sibling is not paper: it has no pages. Open it in Preview &amp; Export.</span>
+              <span><strong>Interactive HTML</strong> has no pages.</span>
               <button className="btn sm" onClick={() => navigate(`/studio/${project.projectId}/outputs`)}><Icon.external /> Go to outputs</button>
             </div>
           </div>
@@ -368,16 +370,18 @@ export function PageStack() {
                   <button aria-pressed={viewSide === 'B'} onClick={() => setViewSide('B')}>B · Compared</button>
                 </div>
               )}
-              {comp && <span className="chip">run <span className="mono">{comp.runId}</span></span>}
-              {comp && <span className="chip">{comp.engine}</span>}
-              {comp && <span className="chip">{comp.durationMs} ms</span>}
+              <Tech>
+                {comp && <span className="chip">run <span className="mono">{comp.runId}</span></span>}
+                {comp && <span className="chip">{comp.engine}</span>}
+                {comp && <span className="chip">{comp.durationMs} ms</span>}
+              </Tech>
               {active.loading && <span className="chip info" role="status"><span className="spinner" /> Composing… {(active.elapsed / 1000).toFixed(1)} s</span>}
               {stale && !A.loading && <span className="chip warning" data-testid="stale-marker">Stale — scenario or model changed since this composition</span>}
               {stale && A.loading && <span className="chip warning">Previous composition (updating)</span>}
               {selected && <button className="btn sm" onClick={() => setSelected(null)}><Icon.stack /> Back to stack</button>}
             </div>
 
-            {comparing && A.data && B.data && <CompareSummary a={A.data} b={B.data} labelA={scenarioLabel(A.data)} labelB={scenarioLabel(B.data)} tableId={tableNode?.id ?? null} />}
+            {comparing && A.data && B.data && <CompareSummary a={A.data} b={B.data} labelA={scenarioLabel(A.data)} labelB={scenarioLabel(B.data)} tableId={tableNode?.id ?? null} nm={nm} />}
             {active.error && !active.loading ? (
               <ErrorState title={`Composition failed (${active.error.code})`} message={active.error.message} onRetry={() => { A.reload(); B.reload(); }} />
             ) : !comp ? (
@@ -427,23 +431,23 @@ export function PageStack() {
               <>
                 <dl className="kv">
                   <dt>Page</dt><dd>{selected ? `${selected} of ${comp.pageCount}` : `none selected (${comp.pageCount} total)`}</dd>
-                  <dt>Run ID</dt><dd className="mono">{comp.runId}</dd>
                   <dt>Source scenario</dt><dd>{scenarioLabel(comp)}</dd>
                   <dt>Transactions</dt><dd>{comp.transactionCount ?? '—'}</dd>
                   <dt>Diagnostics</dt><dd>{diagList.length}</dd>
                 </dl>
+                <Proof label="Run details"><dl className="kv"><dt>Run ID</dt><dd className="mono">{comp.runId}</dd><dt>Composer</dt><dd>{comp.engine} · {comp.durationMs} ms</dd></dl></Proof>
                 {selPage ? (
                   <>
-                    <div className="section-title">Nodes on page {selected}</div>
+                    <div className="section-title">{biz ? 'On page' : 'Nodes on page'} {selected}</div>
                     <div className="ps-chips">
-                      {selPage.nodeIds.map((id) => <button key={id} className={'chip' + (selNode === id ? ' accent' : '')} onClick={() => select(id)}>{id}</button>)}
-                      {selPage.fixedNodeIds.map((id) => <button key={id} className="chip" onClick={() => select(id)} title="Fixed (repeating) region">{id} · fixed</button>)}
+                      {selPage.nodeIds.map((id) => <button key={id} className={'chip' + (selNode === id ? ' accent' : '')} onClick={() => select(id)} title={id}>{nm(id)}</button>)}
+                      {selPage.fixedNodeIds.map((id) => <button key={id} className="chip" onClick={() => select(id)} title={`${id} · fixed (repeating) region`}>{nm(id)} · fixed</button>)}
                     </div>
                     <div className="section-title">Continued components</div>
                     {Object.entries(selPage.tables).length === 0 ? <span className="muted">No tables on this page.</span> : (
                       <ul className="ps-plain">
                         {Object.entries(selPage.tables).map(([id, t]) => (
-                          <li key={id}><button className="rowlink-btn" onClick={() => select(id)}>{id}</button>: {t.rows} rows ({t.firstRowId ?? '—'} → {t.lastRowId ?? '—'}){t.continued ? ' · continued' : ''}{t.headerRepeated ? ' · heading repeated' : ''}</li>
+                          <li key={id}><button className="rowlink-btn" onClick={() => select(id)} title={id}>{nm(id)}</button>: {rowRange(comp, selected!, id)}{t.continued ? ' · continued' : ''}{t.headerRepeated ? ' · heading repeated' : ''}<Tech> ({t.firstRowId ?? '—'} → {t.lastRowId ?? '—'})</Tech></li>
                         ))}
                       </ul>
                     )}
@@ -468,10 +472,10 @@ export function PageStack() {
                     <li key={p.index} className={selected === p.index ? 'sel' : ''}>
                       <button className="ps-list-main" onClick={() => setSelected(p.index)} aria-current={selected === p.index}>
                         <strong>Page {p.index}</strong>
-                        <span className="ps-nodes">{p.nodeIds.join(', ') || '—'}</span>
+                        <span className="ps-nodes" title={p.nodeIds.join(', ')}>{p.nodeIds.map(nm).join(', ') || '—'}</span>
                         {Object.entries(p.tables).map(([id, t]) => (
                           <span key={id} className="ps-trow">
-                            {id}: rows {t.firstRowId ?? '—'}–{t.lastRowId ?? '—'} ({t.rows})
+                            {nm(id)}: {rowRange(comp, p.index, id)}<Tech> ({t.firstRowId ?? '—'}–{t.lastRowId ?? '—'})</Tech>
                             {t.continued && <span className="chip info">continued</span>}
                             {t.headerRepeated && <span className="chip accent">heading repeated</span>}
                           </span>
@@ -499,7 +503,16 @@ export function PageStack() {
 
 /* ------------------------------------------------------------ before / after */
 
-function CompareSummary({ a, b, labelA, labelB, tableId }: { a: ComposedPages; b: ComposedPages; labelA: string; labelB: string; tableId: string | null }) {
+/** "rows 1–5 of 250" for the table `id` on page `pageIndex`, derived from per-page row counts. */
+function rowRange(c: ComposedPages, pageIndex: number, id: string): string {
+  let before = 0;
+  for (const p of c.pages) { if (p.index >= pageIndex) break; before += p.tables[id]?.rows ?? 0; }
+  const rows = c.pages.find((p) => p.index === pageIndex)?.tables[id]?.rows ?? 0;
+  const total = tableRowsTotal(c, id);
+  return rows === 0 ? `no rows of ${total}` : `rows ${before + 1}–${before + rows} of ${total}`;
+}
+
+function CompareSummary({ a, b, labelA, labelB, tableId, nm }: { nm: (id: string) => string; a: ComposedPages; b: ComposedPages; labelA: string; labelB: string; tableId: string | null }) {
   const pa = nodePages(a), pb = nodePages(b);
   const ids = [...new Set([...pa.keys(), ...pb.keys()])];
   const rows = ids.map((id) => ({ id, pa: pa.get(id) ?? [], pb: pb.get(id) ?? [] }));
@@ -521,7 +534,7 @@ function CompareSummary({ a, b, labelA, labelB, tableId }: { a: ComposedPages; b
         <tbody>
           {shown.map((r) => (
             <tr key={r.id} className={changed(r) ? 'selected' : ''}>
-              <td className="mono">{r.id}</td><td>{pageSpan(r.pa)}</td><td>{pageSpan(r.pb)}</td>
+              <td title={r.id}>{nm(r.id)}</td><td>{pageSpan(r.pa)}</td><td>{pageSpan(r.pb)}</td>
               <td>{isTable(r.id) ? `${tableRowsTotal(a, r.id)} / ${tableRowsTotal(b, r.id)}` : '—'}</td>
               <td>{changed(r) ? <span className="chip warning">differs</span> : 'same'}</td>
             </tr>

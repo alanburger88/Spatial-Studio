@@ -41,7 +41,7 @@ const stress = (purchasesCents: number) => Array.from({ length: 250 }, (_, i) =>
 export const DEMO_STEPS: DemoStep[] = [
   {
     id: 'familiar-page', time: '0:00', chapter: 'Familiar page', title: 'A familiar statement, built in an unfamiliar way',
-    narration: 'Aster Card’s October statement for Jordan Mercer (synthetic). Every block on this page is a component in one canonical model, with stable IDs, typed data bindings and rules.',
+    narration: 'Aster Card’s October statement for Jordan Mercer. Every block on this page is a component in one canonical model, with stable IDs, typed data bindings and rules.',
     proof: 'Resolver selects payment-standard via R01; new balance $1,248.00.',
     run: async (nav) => {
       await ensureProject('aster-card-demo');
@@ -74,7 +74,7 @@ export const DEMO_STEPS: DemoStep[] = [
   },
   {
     id: 'explode', time: '1:30', chapter: 'Explode', title: 'Pull the document apart',
-    narration: 'Payment Guidance unfolds into its five real, named variants. Depth means one thing only: alternative outcomes of this component. Each panel shows its rules and how many synthetic customers receive it.',
+    narration: 'Payment Guidance unfolds into its five real, named variants. Depth means one thing only: alternative outcomes of this component. Each panel shows its rules and how many sample customers receive it.',
     proof: 'Panels derive from variantIds + rules of the canonical node.',
     run: async (nav) => {
       S().select('payment-guidance');
@@ -112,7 +112,7 @@ export const DEMO_STEPS: DemoStep[] = [
   },
   {
     id: 'cube', time: '3:15', chapter: 'Cube & Landscape', title: 'See the whole possibility space',
-    narration: 'The Cube intersects persona × language × journey state across all 70 synthetic card records. Empty intersections say “No matching fixture” instead of inventing output.',
+    narration: 'The Cube intersects persona × language × journey state across all 70 sample card records. Empty intersections say “No matching fixture” instead of inventing output.',
     proof: 'Cells come from resolving every seeded record.',
     run: async (nav) => {
       S().setCtx({ cubeAxes: ['persona', 'language', 'journey'] });
@@ -124,7 +124,7 @@ export const DEMO_STEPS: DemoStep[] = [
   },
   {
     id: 'landscape', time: '3:40', chapter: 'Cube & Landscape', title: 'Outcome clusters and risk',
-    narration: 'The Landscape groups every evaluated scenario by its resolved outcome. Bubble size is a synthetic record count, and the cluster sizes reconcile exactly to the evaluated universe.',
+    narration: 'The Landscape groups every evaluated scenario by its resolved outcome. Bubble size is the number of sample records, and the cluster sizes reconcile exactly to the evaluated universe.',
     proof: 'Σ cluster sizes = evaluated scenarios.',
     run: async (nav) => {
       nav('/studio/aster-card-demo/landscape');

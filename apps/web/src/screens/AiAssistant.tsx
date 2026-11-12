@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { projectContentDigest } from '@iss/model';
 import { resolve } from '@iss/resolver';
 import { api } from '../api/client';
-import { ScreenHeader } from '../ui/common';
+import { ScreenHeader, Biz, Proof } from '../ui/common';
+import { ruleSentence, ruleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { useStudio } from '../state/store';
 import './AiAssistant.css';
@@ -13,6 +14,7 @@ import './AiAssistant.css';
 type Action = { action: string; [k: string]: any };
 type Reply = {
   mode: 'external' | 'offline'; providerStatus: string; requestId: string; response: string;
+  understood?: boolean; suggestions?: string[];
   actions: Action[]; rejected: Array<{ action: unknown; reason: string }>;
   explanation?: { runId: string; nodeId: string; summary: string; evidence: Array<{ ruleId: string; outcome: string; condition: string; inputs: Record<string, unknown> }>; notRendered?: string };
   proposal?: Proposal;
@@ -34,18 +36,21 @@ type Turn =
 const threads = new Map<string, Turn[]>();
 let seq = 1;
 
-const PROMPTS = [
-  'Choose assistance case CARD-0002',
-  'Show me a Spanish-speaking cardholder who has missed two payments and requests assistance',
-  'Explain the selected variant',
-  'Show Spanish edge case',
-  'Run validation',
-  'Open cube',
-  'Change R04 priority to 420',
-  'Disable R04',
-  'Switch to EOB',
-];
+const PROMPT_GROUPS: Record<string, Array<{ title: string; prompts: string[] }>> = {
+  'credit-statement': [
+    { title: 'Scenario', prompts: ['Choose assistance case CARD-0002', 'Show me a Spanish-speaking cardholder who has missed two payments and requests assistance', 'Show Spanish edge case', 'Compare CARD-0001 and CARD-0002'] },
+    { title: 'Explain', prompts: ['Why is this message showing?', 'What rules apply?', 'Explain the selected variant'] },
+    { title: 'Edit (needs approval)', prompts: ['Change R04 priority to 420', 'Disable R04'] },
+    { title: 'Navigate', prompts: ['Run validation', 'Open cube', 'Export PDF', 'Switch to EOB'] },
+  ],
+  eob: [
+    { title: 'Scenario', prompts: ['Choose case EOB-0002', 'Show me a claim that was denied pending review', 'Show claim appeal edge case', 'Compare EOB-0001 and EOB-0002'] },
+    { title: 'Explain', prompts: ['Why is this message showing?', 'What rules apply?', 'Explain the selected variant'] },
+    { title: 'Navigate', prompts: ['Run validation', 'Open cube', 'Export PDF', 'Switch to Aster Card'] },
+  ],
+};
 
+const pick = (text: string, set: (t: string) => void) => { set(text); document.getElementById('ai-input')?.focus(); };
 const fmt = (v: unknown) => (v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 const nest = (fields: Record<string, unknown>) => {
   const out: any = {};
@@ -86,13 +91,13 @@ export function AiAssistant() {
   const [forceOffline, setForceOffline] = useState(false);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const logEnd = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { api.assistantStatus().then(setStatus).catch((e) => setStatusError(e.message)); }, []);
   const lastReply = [...turns].reverse().find((t): t is Extract<Turn, { kind: 'assistant' }> => t.kind === 'assistant');
   const mode: 'external' | 'offline' | null = forceOffline ? 'offline' : lastReply?.reply.mode ?? status?.mode ?? null;
   const modeLabel = mode === 'external' ? 'Live AI' : mode === 'offline' ? 'Guided Assistant (offline)' : statusError ? 'Assistant unavailable' : 'Checking assistant…';
-  useEffect(() => { logEnd.current?.scrollIntoView({ block: 'end', behavior: store.getState().reducedMotion ? 'auto' : 'smooth' }); }, [turns.length, store]);
+  useEffect(() => { const el = logRef.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: store.getState().reducedMotion ? 'auto' : 'smooth' }); }, [turns.length, sending, store]);
 
   const primaryNodeId = project.nodes.find((n) => n.type === 'variant-set')?.id ?? null;
 
@@ -197,8 +202,8 @@ export function AiAssistant() {
         badge={<span className={`chip ${mode === 'external' ? 'accent' : 'warning'} ai-badge`} data-testid="ai-mode" title={lastReply?.reply.providerStatus ?? status?.label}>{mode === 'external' ? <Icon.ai width={14} height={14} /> : <Icon.rules width={14} height={14} />} {modeLabel}</span>} />
       <div className="screen-body ai-body">
         <div className="panel ai-thread-panel">
-          <div className="panel-head"><Icon.ai /> Conversation <span className="sub">Synthetic scenario data only</span></div>
-          <div className="ai-log" role="log" aria-live="polite" aria-label="Conversation" tabIndex={0}>
+          <div className="panel-head"><Icon.ai /> Conversation</div>
+          <div className="ai-log" ref={logRef} role="log" aria-live="polite" aria-label="Conversation" tabIndex={0}>
             {turns.length === 0 && (
               <div className="ai-welcome">
                 <h2>Ask about this document</h2>
@@ -211,10 +216,9 @@ export function AiAssistant() {
                 <div key={t.id} className="ai-msg assistant"><div className="callout error" role="alert"><strong>The assistant could not answer.</strong> {t.message}
                   <div className="ai-retry"><button className="btn sm" onClick={() => send(t.text)} disabled={sending}><Icon.reset /> Retry</button><span className="muted"> Switch on &ldquo;Force offline fallback&rdquo; to use the guided assistant.</span></div></div></div>
               );
-              return <AssistantTurn key={t.id} turn={t} project={project} onApply={(i) => applyAction(t, i)} onDecide={(ok) => decide(t, ok)} />;
+              return <AssistantTurn key={t.id} turn={t} project={project} onApply={(i) => applyAction(t, i)} onDecide={(ok) => decide(t, ok)} onPick={(q) => pick(q, setInput)} />;
             })}
             {sending && <div className="ai-msg assistant"><span className="spinner" /> <span className="muted">Working…</span></div>}
-            <div ref={logEnd} />
           </div>
           <form className="ai-compose" onSubmit={(e) => { e.preventDefault(); send(input); }}>
             <label htmlFor="ai-input" className="sr-only">Message to the assistant</label>
@@ -236,13 +240,24 @@ export function AiAssistant() {
                 <dt>Scenario</dt><dd className="mono">{ctx.recordId}</dd>
               </dl>
               {statusError && <div className="callout error" role="alert" style={{ marginTop: 8 }}>Status unavailable: {statusError}</div>}
+              <div className="ai-live-how">
+                <strong>{mode === 'external' ? 'Live mode is on' : 'Enable live mode'}</strong>
+                {mode === 'external'
+                  ? <p className="muted">Questions go to the server-side adapter; every action it returns is re-validated against the typed allowlist.</p>
+                  : <p className="muted">Offline is the default and always works. For free-form questions, put <span className="mono">AI_PROVIDER=anthropic</span> and <span className="mono">AI_API_KEY=…</span> (optionally <span className="mono">AI_MODEL</span>) in a local, uncommitted <span className="mono">.env</span> or the API environment, then restart the API. The key stays on the server and never reaches the browser.</p>}
+              </div>
               <label className="ai-toggle"><input type="checkbox" checked={forceOffline} onChange={(e) => setForceOffline(e.target.checked)} data-testid="force-offline" /> <span><strong>Force offline fallback</strong><br /><span className="muted">Demonstrates that the deterministic guided assistant always works, with no outbound calls.</span></span></label>
             </div>
           </div>
           <div className="panel">
             <div className="panel-head">Suggested prompts</div>
             <div className="panel-body ai-chips">
-              {PROMPTS.map((p) => <button key={p} className="chip ai-chip" onClick={() => { setInput(p); document.getElementById('ai-input')?.focus(); }} data-testid="prompt-chip">{p}</button>)}
+              {(PROMPT_GROUPS[project.documentType] ?? PROMPT_GROUPS.eob).map((g) => (
+                <div className="ai-chip-group" key={g.title}>
+                  <div className="ai-ba-h">{g.title}</div>
+                  <div className="ai-chip-wrap">{g.prompts.map((p) => <button key={p} type="button" className="ai-chip" title={p} onClick={() => pick(p, setInput)} data-testid="prompt-chip">{p}</button>)}</div>
+                </div>
+              ))}
               <p className="hint muted">Choosing a prompt fills the box; press Send to ask.</p>
             </div>
           </div>
@@ -253,7 +268,7 @@ export function AiAssistant() {
                 <li>Only allowlisted, typed actions are accepted; anything else is rejected with a reason.</li>
                 <li>Explanations come from the deterministic resolver trace, not from the language model.</li>
                 <li>Rule and content changes are proposals; approving is one undoable command.</li>
-                <li>No real communications are sent. Synthetic data only.</li>
+                <li>No real communications are sent.</li>
               </ul>
             </div>
           </div>
@@ -265,17 +280,24 @@ export function AiAssistant() {
 
 /* ---------------------------------------------------------- assistant turn */
 
-function AssistantTurn({ turn, project, onApply, onDecide }: { turn: Extract<Turn, { kind: 'assistant' }>; project: any; onApply: (i: number) => void; onDecide: (ok: boolean) => void }) {
+function AssistantTurn({ turn, project, onApply, onDecide, onPick }: { turn: Extract<Turn, { kind: 'assistant' }>; project: any; onApply: (i: number) => void; onDecide: (ok: boolean) => void; onPick: (q: string) => void }) {
   const { reply } = turn;
   const nodeName = (id: string) => project.nodes.find((n: any) => n.id === id)?.name ?? id;
   const hasEngineEvidence = !!reply.explanation;
   return (
     <div className="ai-msg assistant" data-testid="assistant-reply">
       <div className="ai-msg-head">
-        <span className={`chip ${reply.mode === 'external' ? 'accent' : 'warning'}`} title={reply.providerStatus}>{reply.mode === 'external' ? 'Live AI' : 'Guided Assistant (offline)'}</span>
-        <span className="muted mono ai-req">{reply.requestId}</span>
+        <span className={`chip ${reply.mode === 'external' ? 'accent' : 'warning'}`} title={reply.providerStatus}>Answered by: {reply.mode === 'external' ? 'Live AI' : 'Guided Assistant (offline)'}</span>
+        {reply.mode === 'offline' && reply.understood === false && <span className="chip">Not understood</span>}
+        <Proof label="Request ID"><span className="muted mono ai-req">{reply.requestId}</span></Proof>
       </div>
       <p className="ai-text">{reply.response}</p>
+      {reply.suggestions && reply.suggestions.length > 0 && (
+        <div className="ai-suggest" data-testid="assistant-suggestions">
+          <div className="ai-ba-h">Questions the offline assistant can answer here</div>
+          <div className="ai-suggest-list">{reply.suggestions.map((q) => <button key={q} type="button" className="ai-chip" onClick={() => onPick(q)} data-testid="prompt-chip">{q}</button>)}</div>
+        </div>
+      )}
 
       {reply.scenarioPreview && (
         <div className="card ai-preview" data-testid="scenario-preview">
@@ -350,7 +372,7 @@ function AssistantTurn({ turn, project, onApply, onDecide }: { turn: Extract<Tur
       )}
       {!hasEngineEvidence && reply.mode === 'external' && reply.actions.length === 0 && !reply.proposal && <p className="muted ai-small">Live AI text is not engine evidence. Ask &ldquo;explain the selected variant&rdquo; for a trace-based explanation.</p>}
 
-      {reply.proposal && <ProposalCard proposal={reply.proposal} state={turn.proposal!} currentVersion={useStudio.getState().project!.modelVersion} onDecide={onDecide} />}
+      {reply.proposal && <ProposalCard project={project} proposal={reply.proposal} state={turn.proposal!} currentVersion={useStudio.getState().project!.modelVersion} onDecide={onDecide} />}
     </div>
   );
 }
@@ -375,17 +397,38 @@ function ActionSummary({ a }: { a: Action }) {
 
 /* ------------------------------------------------------------ O08 proposal */
 
-function ProposalCard({ proposal: p, state, currentVersion, onDecide }: { proposal: Proposal; state: ProposalState; currentVersion: number; onDecide: (ok: boolean) => void }) {
+/** Business-language before -> after lines for a proposal, derived from the model rules and the server's command. */
+function plainChange(project: any, p: Proposal): string[] {
+  if (p.kind !== 'rule') return [`Wording for ${p.targetId}: “${fmt(p.before)}” → “${fmt(p.after)}”`];
+  const before = project.rules.find((r: any) => r.id === p.targetId);
+  const after = p.command?.rule;
+  if (!before || !after) return [`Rule ${p.targetId} would change. Open the proof for the raw difference.`];
+  const t0 = ruleTitle(project, before);
+  const title = t0.includes('“') ? t0 : `“${t0}”`;
+  const lines: string[] = [];
+  if (before.priority !== after.priority) lines.push(`Priority ${before.priority} → ${after.priority} for ${title}`);
+  if ((before.enabled !== false) !== (after.enabled !== false)) lines.push(`${title} would be switched ${after.enabled === false ? 'off' : 'on'}`);
+  if (JSON.stringify(before.when) !== JSON.stringify(after.when)) lines.push(`Condition changes from “${ruleSentence(project, before)}” to “${ruleSentence(project, after)}”`);
+  if (!lines.length) lines.push(`No visible change to ${title}`);
+  lines.push(`Rule now reads: ${ruleSentence(project, after)}`);
+  return lines;
+}
+
+
+function ProposalCard({ project, proposal: p, state, currentVersion, onDecide }: { project: any; proposal: Proposal; state: ProposalState; currentVersion: number; onDecide: (ok: boolean) => void }) {
   const decided = state.status === 'approved' || state.status === 'declined';
   const stale = !decided && currentVersion !== p.baseModelVersion;
   const rule = p.kind === 'rule';
   return (
     <div className={`card ai-proposal ${decided ? state.status : ''}`} data-testid="proposal-card" role="group" aria-label={`Proposal for ${p.targetId}`}>
       <div className="ai-card-h"><Icon.rules width={14} height={14} /> Proposal · approval required <span className="chip warning">Not applied</span> <span className="muted">{rule ? 'Rule' : 'Content'} <span className="mono">{p.targetId}</span></span></div>
-      <div className="ai-ba">
-        <div><div className="ai-ba-h">Before</div><pre className="code" data-testid="proposal-before">{JSON.stringify(p.before, null, 2)}</pre></div>
-        <div><div className="ai-ba-h">After</div><pre className="code" data-testid="proposal-after">{JSON.stringify(p.after, null, 2)}</pre></div>
-      </div>
+      <Biz><div className="ai-plain" data-testid="proposal-plain">{plainChange(project, p).map((l, i) => <p key={i} className={i === 0 ? 'ai-plain-main' : 'ai-plain-sub'}>{l}</p>)}</div></Biz>
+      <Proof label="Raw before / after (JSON)">
+        <div className="ai-ba">
+          <div><div className="ai-ba-h">Before</div><pre className="code" data-testid="proposal-before">{JSON.stringify(p.before, null, 2)}</pre></div>
+          <div><div className="ai-ba-h">After</div><pre className="code" data-testid="proposal-after">{JSON.stringify(p.after, null, 2)}</pre></div>
+        </div>
+      </Proof>
       <div className="ai-prop-grid">
         <div>
           <div className="section-title">Validation</div>

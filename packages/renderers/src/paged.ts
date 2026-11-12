@@ -33,7 +33,7 @@ h2.iss-variant-title,.iss-variant-title{font-size:10.5pt;font-weight:700;color:v
 .iss-unresolved{border:1.5pt dashed #dc2626;color:#991b1b;padding:6pt 8pt;font-weight:700;border-radius:4pt}
 .iss-locale-missing{color:#92400e;font-size:8pt;margin-top:3pt}
 .iss-disclosure{border-top:0.75pt solid var(--rule);padding-top:5pt;font-size:7.5pt;color:var(--muted);position:relative}
-.iss-disclosure h4{font-size:8pt;margin:0 0 2pt;color:var(--body);text-transform:uppercase;letter-spacing:.05em}
+.iss-disclosure h3,.iss-disclosure h4{font-size:8pt;margin:0 0 2pt;color:var(--body);text-transform:uppercase;letter-spacing:.05em}
 .iss-disclosure p{margin:0}
 .iss-version{font-size:6.5pt;color:#5B6B80;position:absolute;right:0;top:5pt}
 .iss-banner{border:2pt solid var(--ink);background:var(--lime);color:var(--ink);padding:8pt 12pt;border-radius:5pt;font-size:16pt;font-weight:900;text-align:center;letter-spacing:.04em}
@@ -45,7 +45,7 @@ h2.iss-variant-title,.iss-variant-title{font-size:10.5pt;font-weight:700;color:v
 .iss-qrblock{margin:0;display:flex;gap:6pt;align-items:center;font-size:7.5pt;color:var(--muted)}
 .iss-url{color:var(--ink);font-weight:600}
 .iss-expl{font-size:8.5pt;border:0.75pt solid var(--rule);border-radius:5pt;padding:6pt 8pt}
-.iss-expl h4{margin:0 0 2pt;font-size:9pt;color:var(--ink)}.iss-expl p{margin:0 0 2pt}
+.iss-expl h3,.iss-expl h4{margin:0 0 2pt;font-size:9pt;color:var(--ink)}.iss-expl p{margin:0 0 2pt}
 .iss-figure{margin:0}.iss-chart-title{font-size:8.5pt;font-weight:700;color:var(--ink);margin-bottom:3pt}
 .iss-chart--donut{display:flex;gap:10pt;align-items:center}.iss-chart--donut svg{width:84pt;height:84pt}
 .iss-legend{list-style:none;margin:0;padding:0;font-size:8pt}.iss-legend li{margin:1pt 0}

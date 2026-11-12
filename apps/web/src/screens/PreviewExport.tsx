@@ -3,7 +3,7 @@ import { resolve } from '@iss/resolver';
 import type { ProfileId } from '@iss/model';
 import { api, ApiFailure, type BinaryResult, type ScenarioRequest } from '../api/client';
 import { useStudio, useScenarioRequest } from '../state/store';
-import { ScreenHeader, Empty } from '../ui/common';
+import { ScreenHeader, Empty, Proof } from '../ui/common';
 import { Icon } from '../ui/icons';
 import './PreviewExport.css';
 
@@ -23,8 +23,38 @@ const cache = new Map<string, Session>();
 const emptySession = (): Session => ({ pdf: { status: 'idle' }, html: { status: 'idle' }, afp: { status: 'idle' }, parity: { status: 'idle' } });
 
 const short = (s?: string | null, n = 10) => (s ? s.slice(0, n) : '—');
-const fmtTime = (iso: string) => { const d = new Date(iso.includes('Z') || iso.includes('+') ? iso : iso.replace(' ', 'T') + 'Z'); return isNaN(+d) ? iso : d.toLocaleString(); };
-function val(v: unknown): string { if (v === undefined) return '—'; const s = typeof v === 'string' ? v : JSON.stringify(v); return s.length > 30 ? s.slice(0, 28) + '…' : s; }
+const parseTime = (iso: string) => new Date(iso.includes('Z') || iso.includes('+') ? iso : iso.replace(' ', 'T') + 'Z');
+const fmtTime = (iso: string) => { const d = parseTime(iso); return isNaN(+d) ? iso : d.toLocaleString(); };
+function relTime(iso: string): string {
+  const d = parseTime(iso); if (isNaN(+d)) return iso;
+  const sec = Math.max(0, Math.round((Date.now() - +d) / 1000));
+  if (sec < 45) return 'just now';
+  if (sec < 3600) return `${Math.round(sec / 60)} min ago`;
+  if (sec < 86400) return `${Math.round(sec / 3600)} h ago`;
+  return `${Math.round(sec / 86400)} d ago`;
+}
+const pretty = (v: unknown): string => (v === undefined ? '— (not extracted)' : JSON.stringify(v, null, 2));
+const NOUN: Record<string, [string, string]> = {
+  'selected-variants': ['variant', 'variants'], money: ['amount', 'amounts'], 'member-liability': ['guarded item', 'guarded items'], disclosures: ['disclosure', 'disclosures'],
+  'required-nodes': ['required node', 'required nodes'], 'table-rows': ['table', 'tables'], 'table-totals': ['table total', 'table totals'], identity: ['identity field', 'identity fields'], actions: ['action', 'actions'],
+};
+const sizeOf = (v: unknown): number => (Array.isArray(v) ? v.length : v && typeof v === 'object' ? Object.keys(v).length : v === undefined || v === null ? 0 : 1);
+/** Human summary derived only from the check's own values. */
+export function paritySummary(c: any): string {
+  const [one, many] = NOUN[c.id] ?? ['value', 'values'];
+  const n = sizeOf(c.expected);
+  const base = `${n} ${n === 1 ? one : many}`;
+  if (c.status === 'match') return `${base} · identical`;
+  if (c.status === 'allowed-difference') return `${base} · allowed difference`;
+  const who = [JSON.stringify(c.pdf) !== JSON.stringify(c.expected) ? 'PDF' : '', JSON.stringify(c.html) !== JSON.stringify(c.expected) ? 'HTML' : ''].filter(Boolean).join(' and ') || 'output';
+  let keys = '';
+  const e = c.expected;
+  if (e && typeof e === 'object' && !Array.isArray(e)) {
+    const bad = Object.keys(e).filter((k) => JSON.stringify((c.pdf ?? {})[k]) !== JSON.stringify(e[k]) || JSON.stringify((c.html ?? {})[k]) !== JSON.stringify(e[k]));
+    if (bad.length) keys = `: ${bad.slice(0, 3).join(', ')}${bad.length > 3 ? ` +${bad.length - 3}` : ''}`;
+  }
+  return `${who} differ from expected${keys}`;
+}
 
 function toError(e: unknown): { code: string; message: string; issues: Issue[] } {
   if (e instanceof ApiFailure) return { code: e.code, message: e.message, issues: e.body?.error?.issues ?? [] };
@@ -184,32 +214,41 @@ export function PreviewExport() {
             <div className="panel-head">Export history <span className="sub">{history ? `${history.length} artifacts` : ''}</span>
               <span className="right"><button className="btn sm ghost" onClick={() => setHistTick((t) => t + 1)} aria-label="Refresh export history"><Icon.reset /></button></span>
             </div>
-            <div className="panel-body" style={{ padding: 0 }} data-testid="export-history">
+            <div className="panel-body ox-hist-body" data-testid="export-history">
               {historyErr ? <div className="callout error" style={{ margin: 10 }}>{historyErr}</div>
                 : !history ? <div className="empty" role="status"><span className="spinner" /></div>
                 : history.length === 0 ? <div className="empty"><strong>No exports yet</strong><span>Generate a PDF, HTML or AFP simulation report to start the history.</span></div>
                 : (
-                  <table className="table ox-hist-table">
-                    <thead><tr><th>Kind</th><th>File</th><th className="num">Pages</th><th>sha256</th><th>Run</th><th>Time</th></tr></thead>
-                    <tbody>
-                      {history.map((a) => (
-                        <tr key={a.artifactId}>
-                          <td><span className={'chip' + (a.kind === 'afp-sim' ? ' sim' : a.kind === 'pdf' ? ' accent' : ' info')}>{a.kind === 'afp-sim' ? 'AFP sim' : a.kind.toUpperCase()}</span></td>
-                          <td className="ox-file"><a href={api.artifactUrl(a.artifactId)} download={a.filename} title={`Download ${a.filename}`}><Icon.download /> {a.filename}</a>{a.kind === 'afp-sim' && <small>simulation report (JSON), not an AFP file</small>}</td>
-                          <td className="num">{a.pageCount ?? '—'}</td>
-                          <td className="mono" title={a.sha256}>{short(a.sha256, 8)}</td>
-                          <td className="mono" title={a.runId}>{short(a.runId?.replace('run-', ''), 8)}</td>
-                          <td>{fmtTime(a.createdAt)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <ul className="ox-hist-list">
+                    {history.map((a) => <HistoryRow key={a.artifactId} a={a} />)}
+                  </ul>
                 )}
             </div>
           </section>
         </div>
       </div>
     </section>
+  );
+}
+
+function HistoryRow({ a }: { a: any }) {
+  const [copied, setCopied] = useState(false);
+  const kindLabel = a.kind === 'afp-sim' ? 'AFP sim' : String(a.kind).toUpperCase();
+  const copy = async () => { try { await navigator.clipboard.writeText(a.sha256); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch { /* clipboard unavailable */ } };
+  const detail = [a.recordId, a.kind === 'afp-sim' ? 'simulation report (JSON)' : a.pageCount != null ? `${a.pageCount} page${a.pageCount === 1 ? '' : 's'}` : a.size ? `${(a.size / 1024).toFixed(1)} KB` : ''].filter(Boolean).join(' · ');
+  return (
+    <li className="ox-hist-row" data-testid="history-row">
+      <span className={'chip ox-kind' + (a.kind === 'afp-sim' ? ' sim' : a.kind === 'pdf' ? ' accent' : ' info')}>{kindLabel}</span>
+      <span className="ox-file">
+        <a href={api.artifactUrl(a.artifactId)} download={a.filename} title={`Download ${a.filename}`}><Icon.download /><span className="ox-fname">{a.filename}</span></a>
+        <small title={detail}>{detail}</small>
+      </span>
+      <span className="ox-hist-meta">
+        <span className="ox-hash"><code title={a.sha256}>{short(a.sha256, 8)}</code>
+          <button className="btn sm ghost icon" onClick={copy} aria-label={`Copy SHA-256 of ${a.filename}`} title={copied ? 'Copied' : 'Copy SHA-256'}>{copied ? <Icon.validate /> : <Icon.copy />}</button></span>
+        <time dateTime={a.createdAt} title={fmtTime(a.createdAt)}>{relTime(a.createdAt)}</time>
+      </span>
+    </li>
   );
 }
 
@@ -258,10 +297,6 @@ function Pending({ what, stale }: { what: string; stale?: boolean }) {
   );
 }
 
-function Meta({ rows }: { rows: Array<[string, ReactNode]> }) {
-  return <dl className="ox-meta">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>;
-}
-
 /* ------------------------------------------------------------ PDF */
 
 function PdfTab({ job, stale, onRun, onCancel, isEob }: { job: Job<BinaryResult>; stale: boolean; onRun: (d?: boolean) => void; onCancel: () => void; isEob: boolean }) {
@@ -274,16 +309,14 @@ function PdfTab({ job, stale, onRun, onCancel, isEob }: { job: Job<BinaryResult>
       <IssuesBlock job={job} kind="PDF" onDraft={() => onRun(true)} />
       {r ? (
         <>
-          <Meta rows={[
-            ['Pages (composer)', <span data-testid="pdf-page-count">{r.pageCount ?? '—'}</span>],
-            ['Pages (PDF verified)', <span data-testid="pdf-verified-count">{r.pdfPageCount ?? '—'}</span>],
-            ['Run ID', <span className="mono">{r.runId}</span>],
-            ['Content digest', <span className="mono" title={r.contentDigest}>{short(r.contentDigest, 16)}…</span>],
-            ['SHA-256', <span className="mono" title={r.sha256}>{short(r.sha256, 16)}…</span>],
-            ['File', <span className="mono">{r.filename}</span>],
-            ['Status', r.draft ? <span className="chip error">Watermarked draft</span> : <span className="chip accent">Clean export</span>],
-          ]} />
-          {isEob && <div className="callout accent ox-note">EOB output carries “THIS IS NOT A BILL” (rendered by the paged composer).</div>}
+          <div className="ox-strip">
+            <span className={'chip ' + (r.draft ? 'error' : 'accent')}>{r.draft ? 'Watermarked draft' : 'Clean export'}</span>
+            <span>Pages <strong data-testid="pdf-page-count">{r.pageCount ?? '—'}</strong> composed · <strong data-testid="pdf-verified-count">{r.pdfPageCount ?? '—'}</strong> verified</span>
+            {isEob && <span className="muted">Carries “THIS IS NOT A BILL”.</span>}
+            <Proof label="Proof">
+              <span className="ox-proof">Run <code>{r.runId}</code> · digest <code title={r.contentDigest}>{short(r.contentDigest, 16)}…</code> · SHA-256 <code title={r.sha256}>{short(r.sha256, 16)}…</code> · <code>{r.filename}</code></span>
+            </Proof>
+          </div>
           <div className={'ox-viewer' + (stale ? ' is-stale' : '')} data-testid="pdf-preview">
             <iframe src={r.url} title="Generated PDF preview" />
             {stale && <div className="ox-stale-veil">STALE</div>}
@@ -322,15 +355,14 @@ function HtmlTab({ job, stale, onRun, onCancel, device, setDevice, isEob }: { jo
       <IssuesBlock job={job} kind="HTML" onDraft={() => onRun(true)} />
       {r ? (
         <>
-          <Meta rows={[
-            ['Run ID', <span className="mono">{r.bin.runId}</span>],
-            ['Content digest', <span className="mono" title={r.bin.contentDigest}>{short(r.bin.contentDigest, 16)}…</span>],
-            ['SHA-256', <span className="mono" title={r.bin.sha256}>{short(r.bin.sha256, 16)}…</span>],
-            ['File', <span className="mono">{r.bin.filename}</span>],
-            ['Size', `${(r.bin.blob.size / 1024).toFixed(1)} KB`],
-          ]} />
-          <div className="callout ox-note"><Icon.info /> Sorting, filtering and expandable details work inside the exported file; totals and rule decisions never change. Responsive layout is shown at {w}px.</div>
-          {isEob && <div className="callout accent ox-note">EOB output carries “THIS IS NOT A BILL” (rendered by the HTML renderer).</div>}
+          <div className="ox-strip">
+            <span className={'chip ' + (r.bin.draft ? 'error' : 'accent')}>{r.bin.draft ? 'Watermarked draft' : 'Clean export'}</span>
+            <span>{(r.bin.blob.size / 1024).toFixed(1)} KB · shown at {w}px</span>
+            <span className="muted">{isEob ? 'Carries “THIS IS NOT A BILL”. ' : ''}Sorting and filtering work in the file; totals never change.</span>
+            <Proof label="Proof">
+              <span className="ox-proof">Run <code>{r.bin.runId}</code> · digest <code title={r.bin.contentDigest}>{short(r.bin.contentDigest, 16)}…</code> · SHA-256 <code title={r.bin.sha256}>{short(r.bin.sha256, 16)}…</code> · <code>{r.bin.filename}</code></span>
+            </Proof>
+          </div>
           <div className={'ox-viewer ox-html' + (stale ? ' is-stale' : '')} ref={box} style={{ height: H + 24 }} data-testid="html-preview">
             <div className="ox-device" style={{ width: w * scale, height: H }}>
               <iframe title={`Interactive HTML preview at ${w}px`} sandbox="allow-scripts allow-popups" srcDoc={r.text}
@@ -402,9 +434,9 @@ function ParityPanel({ job, onRun }: { job: Job<any>; onRun: () => void }) {
   const rep = r?.report;
   return (
     <section className="panel ox-parity" data-testid="semantic-parity" aria-label="Semantic parity">
-      <div className="panel-head">Semantic parity <span className="sub">PDF vs HTML</span>
+      <div className="panel-head">Semantic parity
         <span className="right">
-          {rep && <span className={'chip ' + (rep.ok ? 'accent' : 'error')} data-testid="parity-status">{rep.ok ? 'OK — all blocking checks match' : 'Mismatch'}</span>}
+          {rep && <span className={'chip ' + (rep.ok ? 'accent' : 'error')} data-testid="parity-status">{rep.ok ? 'OK — all match' : 'Mismatch'}</span>}
           <button className="btn sm primary" onClick={onRun} disabled={running} data-testid="run-parity">{running ? <><span className="spinner" /> {el} s</> : rep ? 'Re-run parity' : 'Run parity check'}</button>
         </span>
       </div>
@@ -420,19 +452,11 @@ function ParityPanel({ job, onRun }: { job: Job<any>; onRun: () => void }) {
               {r.draft && <span className="chip error">draft run</span>}
             </div>
             <div className="ox-par-scroll">
-              <table className="table ox-par-table">
-                <thead><tr><th>Check</th><th>Expected</th><th>PDF</th><th>HTML</th><th>Status</th><th>Blocking</th></tr></thead>
+              <table className="table ox-par-table" data-testid="parity-table">
+                <caption className="ox-sr">Semantic parity checks between the PDF and HTML outputs; select a row to see expected, PDF and HTML values.</caption>
+                <thead><tr><th scope="col">Check</th><th scope="col">Result</th></tr></thead>
                 <tbody>
-                  {rep.checks.map((c: any) => (
-                    <tr key={c.id} className={c.status === 'mismatch' ? 'selected' : ''}>
-                      <td><strong>{c.label}</strong>{c.note && <small className="ox-note-s">{c.note}</small>}</td>
-                      <td className="mono ox-val" title={JSON.stringify(c.expected)}>{val(c.expected)}</td>
-                      <td className="mono ox-val" title={JSON.stringify(c.pdf)}>{val(c.pdf)}</td>
-                      <td className="mono ox-val" title={JSON.stringify(c.html)}>{val(c.html)}</td>
-                      <td><span className={'chip ' + (c.status === 'match' ? 'accent' : 'error')}>{c.status === 'match' ? '✓ match' : '✕ mismatch'}</span></td>
-                      <td>{c.blocking ? 'blocking' : 'advisory'}</td>
-                    </tr>
-                  ))}
+                  {rep.checks.map((c: any) => <ParityRow key={c.id} c={c} />)}
                 </tbody>
               </table>
             </div>
@@ -441,5 +465,37 @@ function ParityPanel({ job, onRun }: { job: Job<any>; onRun: () => void }) {
         )}
       </div>
     </section>
+  );
+}
+
+export function ParityRow({ c }: { c: any }) {
+  const [open, setOpen] = useState(c.status === 'mismatch');
+  const bad = c.status === 'mismatch';
+  const id = `ox-par-${c.id}`;
+  return (
+    <>
+      <tr className={'ox-par-row' + (bad ? ' selected' : '')} data-testid={`parity-row-${c.id}`} onClick={() => setOpen((o) => !o)}>
+        <td>
+          <button className="ox-par-toggle" aria-expanded={open} aria-controls={id} onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}>
+            <span className={'ox-chev' + (open ? ' open' : '')} aria-hidden="true"><Icon.chevron /></span>
+            <span className="ox-par-text"><strong>{c.label}</strong><small>{paritySummary(c)}</small></span>
+          </button>
+        </td>
+        <td className="ox-par-res">
+          <span className={'chip ' + (c.status === 'match' ? 'accent' : c.status === 'mismatch' ? 'error' : 'info')}>{c.status === 'match' ? '✓ match' : c.status === 'mismatch' ? '✕ mismatch' : 'allowed'}</span>
+          <small>{c.blocking ? 'blocking' : 'advisory'}</small>
+        </td>
+      </tr>
+      {open && (
+        <tr className="ox-par-detail" id={id}>
+          <td colSpan={2}>
+            {c.note && <p className="ox-note-s">{c.note}</p>}
+            {(['expected', 'pdf', 'html'] as const).map((k) => (
+              <div key={k} className="ox-par-val"><span>{k === 'expected' ? 'Expected' : k.toUpperCase()}</span><pre className="mono">{pretty(c[k])}</pre></div>
+            ))}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }

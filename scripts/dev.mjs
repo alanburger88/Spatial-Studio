@@ -10,7 +10,7 @@ const run = (cmd, args, name) => {
   return p;
 };
 if (preview) {
-  const b = spawnSync('pnpm', ['--filter', '@iss/web', 'build'], { stdio: 'inherit' });
+  const b = spawnSync('pnpm', ['--filter', '@iss/web', 'build'], { stdio: 'inherit', shell: process.platform === 'win32' });
   if (b.status) process.exit(b.status);
 }
 const procs = [run('pnpm', ['--filter', '@iss/api', 'start'], 'api'), run('pnpm', ['--filter', '@iss/web', preview ? 'preview' : 'dev'], 'web')];

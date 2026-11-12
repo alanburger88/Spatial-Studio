@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { fieldIndex, validateRule, type Project, type Rule, type SyntheticRecord } from '@iss/model';
 import { describePredicate, explainNode, resolve, type Explanation, type Resolution } from '@iss/resolver';
 import { EDGE_CASE_PRESETS, DIMENSIONS } from '@iss/scenarios';
+import { PERSONAS } from '@iss/model/fixtures';
 
 /* ------------------------------------------------------- typed allowlist */
 
@@ -56,6 +57,9 @@ export interface AssistantReply {
   response: string;
   actions: AssistantAction[];
   rejected: Array<{ action: unknown; reason: string }>;
+  /** Offline only: false when the request was not recognised; `suggestions` then lists questions it can answer. */
+  understood?: boolean;
+  suggestions?: string[];
   explanation?: Explanation;
   proposal?: Proposal;
   scenarioPreview?: { recordId: string; overrides: Record<string, unknown>; runId: string; selectedVariants: Record<string, string | null>; matchedRuleIds: string[] };
@@ -106,72 +110,144 @@ function mergeDeep(a: any, b: any): any {
 /* ---------------------------------------------------------- offline parser */
 
 const VIEW_WORDS: Array<[RegExp, (typeof VIEWS)[number]]> = [
-  [/\bcube\b/i, 'cube'], [/\blandscape\b/i, 'landscape'], [/page stack|pages?\b.*stack|pagination/i, 'page-stack'], [/\bjourney|timeline|day 30|day 45/i, 'journey'],
-  [/\bexport|pdf\b|html\b|afp/i, 'outputs'], [/\brules?\b.*(data|editor)|rule editor/i, 'rules-data'], [/explod/i, 'exploded'], [/\bdesign(er)?\b/i, 'design'],
+  [/\bcube\b/, 'cube'], [/\blandscape\b/, 'landscape'], [/page stack|pages?\b.*stack|pagination|page break/, 'page-stack'], [/\bjourney|timeline|day 30|day 45/, 'journey'],
+  [/\bexport|pdf\b|html\b|afp|download|\boutputs?\b/, 'outputs'], [/\brules?\b.*(data|editor)|rule editor|data editor/, 'rules-data'], [/explod|layers? view|3d/, 'exploded'],
+  [/\b(guided )?(demo|walkthrough|tour)\b/, 'demo'], [/\bdesign(er)?\b|canvas/, 'design'],
 ];
 
-export function offlineInterpret(message: string, ctx: AssistantContext): { reply: string; actions: unknown[] } {
-  const m = message.trim();
+const NUMBER_WORDS: Record<string, string> = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10' };
+
+/** Lower-case, punctuation-free, number-words-as-digits form used by every offline pattern. */
+export function normalizeMessage(message: string): string {
+  return message.toLowerCase()
+    .replace(/[‘’“”"'`]/g, '')
+    .replace(/[^a-z0-9à-ÿ\- ]+/g, ' ')
+    .split(/\s+/).filter(Boolean).map((w) => NUMBER_WORDS[w] ?? w).join(' ');
+}
+
+export function suggestedQuestions(project: Project): string[] {
+  const rule = project.rules.find((r) => r.mode !== 'obligation' && r.enabled !== false) ?? project.rules[0];
+  if (project.documentType === 'credit-statement') return [
+    'Choose assistance case CARD-0002', 'Show me a Spanish-speaking cardholder who has missed two payments and requests assistance', 'Why is this message showing?',
+    'What rules apply?', 'Show Spanish edge case', 'Run validation', rule ? `Change ${rule.id} priority to ${rule.priority + 20}` : 'Open cube', 'Switch to EOB',
+  ];
+  return [
+    'Choose case EOB-0002', 'Show me a claim that was denied pending review', 'Why is this message showing?', 'What rules apply?', 'Show claim appeal edge case', 'Run validation',
+    rule ? `Change ${rule.id} priority to ${rule.priority + 20}` : 'Open cube', 'Switch to Aster Card',
+  ];
+}
+
+export interface OfflineResult { reply: string; actions: unknown[]; understood: boolean; suggestions?: string[] }
+
+export function offlineInterpret(message: string, ctx: AssistantContext): OfflineResult {
+  const n = normalizeMessage(message);
   const actions: unknown[] = [];
   const notes: string[] = [];
+  const facts: string[] = [];
   const isCard = ctx.project.documentType === 'credit-statement';
-  const ids = m.match(/\b(CARD|EOB)-\d{4}\b/gi)?.map((s) => s.toUpperCase()) ?? [];
+  const ids = n.match(/\b(?:card|eob)-\d{4}\b/g)?.map((s) => s.toUpperCase()) ?? [];
+  const verb = /\b(show|open|go|navigate|take me|view|see|jump|bring up|display|launch|export|download|generate|render|switch|use|load|pick|select|choose|find|give|try|simulate)\b/;
 
-  if (/\b(eob|harbor ?care|health ?care|explanation of benefits)\b/i.test(m) && isCard && /switch|open|go|show/i.test(m)) { actions.push({ action: 'open_project', projectId: 'harborcare-demo' }); notes.push('open the HarborCare EOB project'); }
-  if (/\b(aster|credit card|card statement|bank)\b/i.test(m) && !isCard && /switch|open|go|back/i.test(m)) { actions.push({ action: 'open_project', projectId: 'aster-card-demo' }); notes.push('open the Aster Card project'); }
-
-  const ruleRef = /\b(R\d{2})\b/i.exec(m)?.[1]?.toUpperCase();
-  const prio = /priority\s*(?:to|=|of)?\s*(\d{1,5})/i.exec(m);
-  if (ruleRef && /(disable|turn off|switch off)/i.test(m)) { actions.push({ action: 'propose_rule_edit', ruleId: ruleRef, patch: { enabled: false } }); notes.push(`propose disabling ${ruleRef} (needs your approval)`); }
-  else if (ruleRef && /(enable|turn on)/i.test(m)) { actions.push({ action: 'propose_rule_edit', ruleId: ruleRef, patch: { enabled: true } }); notes.push(`propose enabling ${ruleRef}`); }
-  else if (ruleRef && prio) { actions.push({ action: 'propose_rule_edit', ruleId: ruleRef, patch: { priority: Number(prio[1]) } }); notes.push(`propose ${ruleRef} priority ${prio[1]} (needs your approval)`); }
-  else if (ruleRef && /threshold|more than|greater than|over/i.test(m) && /(\d+)/.test(m.replace(ruleRef, ''))) {
-    const rule = ctx.project.rules.find((r) => r.id === ruleRef);
-    const n = Number(/(\d+)\s*$|(?:to|than|over)\s*(\d+)/i.exec(m.replace(ruleRef, ''))?.slice(1).find(Boolean) ?? NaN);
-    if (rule && 'value' in rule.when && typeof (rule.when as any).value === 'number' && Number.isFinite(n)) { actions.push({ action: 'propose_rule_edit', ruleId: ruleRef, patch: { when: { ...rule.when, value: n } } }); notes.push(`propose ${ruleRef} threshold ${n}`); }
+  if (/\b(help|what can you do|what can i ask|how do i use|capabilities|examples?)\b/.test(n) && !actions.length && n.split(' ').length <= 8) {
+    return { reply: 'Offline assistant (scripted capability): I am the guided assistant. I can select scenarios and personas, set scenario fields, explain the engine trace, list matching rules, run validation, open views and propose rule edits. Examples are below; choose one to fill the box.', actions, understood: true, suggestions: suggestedQuestions(ctx.project) };
   }
 
-  if (ids.length >= 2 && /compare/i.test(m)) { actions.push({ action: 'compare_scenarios', recordIds: ids.slice(0, 2) }); notes.push(`compare ${ids[0]} and ${ids[1]}`); }
+  const wantsEob = /\b(eob|harbor ?care|health ?care|explanation of benefits|claims?)\b/.test(n) && /\b(switch|open|go|use|load|change to|take me|back)\b/.test(n);
+  const wantsCard = /\b(aster|credit card|card statement|card demo|bank)\b/.test(n) && /\b(switch|open|go|use|load|change to|take me|back)\b/.test(n);
+  if (wantsEob && isCard) { actions.push({ action: 'open_project', projectId: 'harborcare-demo' }); notes.push('open the HarborCare EOB project'); }
+  else if (wantsCard && !isCard) { actions.push({ action: 'open_project', projectId: 'aster-card-demo' }); notes.push('open the Aster Card project'); }
+  else if ((wantsEob && !isCard) || (wantsCard && isCard)) facts.push(`You are already in the ${isCard ? 'Aster Card' : 'HarborCare EOB'} project.`);
+
+  /* rule references: "R04", "r4", "rule 4" */
+  let ruleRef = /\br(\d{2})\b/.exec(n)?.[1] ? `R${/\br(\d{2})\b/.exec(n)![1]}` : undefined;
+  if (!ruleRef) { const g = /\b(?:rule|r)\s*0?(\d{1,2})\b/.exec(n)?.[1]; if (g) ruleRef = `R${g.padStart(2, '0')}`; }
+  const nr = ruleRef ? n.replace(/\b(?:rule\s*r?|r)\s*0?\d{1,2}\b/, ' ') : n;
+  const target = ruleRef ? ctx.project.rules.find((r) => r.id === ruleRef) : undefined;
+  const prio = /\bpriority[^\d]{0,14}(\d{1,5})/.exec(nr) ?? /\b(?:to|=|at)\s*(\d{1,5})\s+priority/.exec(nr);
+  const rel = /\b(raise|increase|bump|boost|lower|decrease|reduce|drop)\b.*\bby\s*(\d{1,4})\b/.exec(nr);
+  if (ruleRef && /\b(disable|turn off|switch off|deactivate|suspend|stop using|remove)\b/.test(n)) { actions.push({ action: 'propose_rule_edit', ruleId: ruleRef, patch: { enabled: false } }); notes.push(`propose disabling ${ruleRef} (needs your approval)`); }
+  else if (ruleRef && /\b(enable|turn on|switch on|activate|re-?enable|restore)\b/.test(n)) { actions.push({ action: 'propose_rule_edit', ruleId: ruleRef, patch: { enabled: true } }); notes.push(`propose enabling ${ruleRef}`); }
+  else if (ruleRef && prio && !rel) { actions.push({ action: 'propose_rule_edit', ruleId: ruleRef, patch: { priority: Number(prio[1]) } }); notes.push(`propose ${ruleRef} priority ${prio[1]} (needs your approval)`); }
+  else if (ruleRef && target && rel && /priority|rank|precedence/.test(nr)) {
+    const delta = Number(rel[2]) * (/raise|increase|bump|boost/.test(rel[1]) ? 1 : -1);
+    const next = Math.max(0, target.priority + delta);
+    actions.push({ action: 'propose_rule_edit', ruleId: ruleRef, patch: { priority: next } }); notes.push(`propose ${ruleRef} priority ${target.priority} to ${next} (needs your approval)`);
+  }
+  else if (ruleRef && /threshold|more than|greater than|over|at least/.test(nr) && /(\d+)/.test(nr)) {
+    const rule = target;
+    const num = Number(/(?:to|than|over|least)\s*(\d+)|(\d+)\s*$/.exec(nr)?.slice(1).find(Boolean) ?? NaN);
+    if (rule && 'value' in rule.when && typeof (rule.when as any).value === 'number' && Number.isFinite(num)) { actions.push({ action: 'propose_rule_edit', ruleId: ruleRef, patch: { when: { ...rule.when, value: num } } }); notes.push(`propose ${ruleRef} threshold ${num}`); }
+  }
+
+  if (ids.length >= 2 && /\b(compare|vs|versus|against|difference|differ)\b/.test(n)) { actions.push({ action: 'compare_scenarios', recordIds: ids.slice(0, 2) }); notes.push(`compare ${ids[0]} and ${ids[1]}`); }
   else if (ids.length) { actions.push({ action: 'select_scenario', recordId: ids[0] }); notes.push(`select ${ids[0]}`); }
 
-  if (/edge case|generate/i.test(m)) {
-    const preset = /spanish/i.test(m) ? 'spanish-missing-content' : /250|high.?volume|stress/i.test(m) ? 'stress-250' : /zero/i.test(m) ? 'zero-transactions' : /long/i.test(m) ? 'long-merchant' : /threshold/i.test(m) ? 'threshold-exact' : /denied|liabil/i.test(m) ? 'claim-denied-unknown-liability' : /several|multi/i.test(m) ? 'claim-several-lines' : isCard ? 'crossed-priorities' : 'claim-appeal';
+  /* "show me <persona>" — matches a persona name from the fixture set that has a record in this document type */
+  let personaMatched = false;
+  if (!ids.length && verb.test(n) && !/\bedge.?case\b/.test(n)) {
+    const hit = PERSONAS.find((p) => new RegExp(`\\b${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '[- ]?')}\\b`).test(n) && ctx.records.some((r) => r.documentType === ctx.project.documentType && r.personaId === p.id));
+    const rec = hit && ctx.records.find((r) => r.documentType === ctx.project.documentType && r.personaId === hit.id);
+    if (hit && rec) { actions.push({ action: 'select_scenario', recordId: rec.recordId }); notes.push(`select ${rec.recordId}, the “${hit.name}” persona`); personaMatched = true; }
+  }
+
+  const exportWords = /\b(export|pdf|html|afp|download)\b/.test(n);
+  if (!personaMatched && /\bedge.?case\b|\bgenerate\b|\bstress\b/.test(n) && !exportWords) {
+    const preset = /spanish|espanol|es-us/.test(n) ? 'spanish-missing-content' : /250|high.?volume|stress/.test(n) ? 'stress-250' : /zero/.test(n) ? 'zero-transactions' : /long/.test(n) ? 'long-merchant' : /threshold/.test(n) ? 'threshold-exact' : /denied|liabil/.test(n) ? 'claim-denied-unknown-liability' : /several|multi/.test(n) ? 'claim-several-lines' : isCard ? 'crossed-priorities' : 'claim-appeal';
     actions.push({ action: 'generate_edge_case', preset }); notes.push(`generate edge case “${preset}”`);
-  } else if (isCard && !ids.length) {
+  } else if (!ids.length && !personaMatched && !actions.some((a: any) => a.action === 'open_project')) {
     const fields: Record<string, unknown> = {};
-    if (/spanish|español|es-US/i.test(m)) fields['customer.locale'] = 'es-US';
-    if (/(two|2)\s+missed|missed\s+(two|2)/i.test(m)) { fields['card.missedPayments'] = 2; fields['card.paymentStatus'] = 'overdue'; }
-    else if (/(one|1|a|first)\s+missed|missed\s+(one|1|a)\s+payment/i.test(m)) { fields['card.missedPayments'] = 1; fields['card.paymentStatus'] = 'overdue'; }
-    if (/assistance|hardship|help paying/i.test(m) && /request|asked|wants|need/i.test(m)) { fields['card.assistanceRequested'] = true; fields['card.paymentStatus'] = 'overdue'; if (!('card.missedPayments' in fields)) fields['card.missedPayments'] = 2; }
-    if (/arrangement/i.test(m) && /approv/i.test(m)) fields['card.arrangementStatus'] = 'approved';
-    if (/premium|premier/i.test(m)) fields['card.tier'] = 'premium';
-    if (/digital/i.test(m)) fields['card.channelPreference'] = 'digital';
-    if (/paper|print/i.test(m) && !/pdf/i.test(m)) fields['card.channelPreference'] = 'print';
-    if (Object.keys(fields).length) { actions.push({ action: 'set_scenario_fields', fields }); notes.push('set scenario ' + Object.entries(fields).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')); }
-    else if (/assistance/i.test(m) && /(persona|customer|case|cardholder|select|choose|show)/i.test(m)) { actions.push({ action: 'select_scenario', recordId: 'CARD-0002' }); notes.push('select assistance case CARD-0002'); }
-  } else if (!isCard && !ids.length) {
-    const fields: Record<string, unknown> = {};
-    if (/denied|review/i.test(m)) { fields['claim.status'] = 'denied-pending-review'; fields['claim.liabilityConfirmed'] = false; }
-    if (/appeal/i.test(m)) fields['claim.status'] = 'appeal-filed';
-    if (/out.of.network/i.test(m)) fields['claim.network'] = 'out-of-network';
-    if (/covered|processed/i.test(m)) fields['claim.status'] = 'processed-covered';
-    if (Object.keys(fields).length && /(show|select|set|customer|member|claim)/i.test(m) && !/why|explain/i.test(m)) { actions.push({ action: 'set_scenario_fields', fields }); notes.push('set scenario ' + Object.entries(fields).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')); }
+    const question = /\b(why|explain|reason|what rules?|which rules?|how come)\b/.test(n);
+    if (isCard) {
+      if (/spanish|espanol|es-us|speaks spanish/.test(n)) fields['customer.locale'] = 'es-US';
+      if (/\benglish|en-us\b/.test(n) && !fields['customer.locale']) fields['customer.locale'] = 'en-US';
+      const cnt = /(\d+)\s+(?:payments?\s+)?(?:missed|late|overdue|skipped|past due|behind)/.exec(n)?.[1] ?? /(?:missed|skipped)\s+(\d+)/.exec(n)?.[1];
+      if (cnt !== undefined) { fields['card.missedPayments'] = Number(cnt); fields['card.paymentStatus'] = Number(cnt) > 0 ? 'overdue' : 'current'; }
+      else if (/\b(a|first)\s+(missed|late)|missed (a )?payment|late payment|past due|overdue|behind on payments|delinquent/.test(n) && !question) { fields['card.missedPayments'] = 1; fields['card.paymentStatus'] = 'overdue'; }
+      if (/assistance|hardship|struggling|help paying|payment (plan|support|help)|financial (help|difficulty|trouble)/.test(n) && (/request|asked|asks|asking|wants|needs?|seek|applied|applying/.test(n) || verb.test(n)) && !question) {
+        fields['card.assistanceRequested'] = true; fields['card.paymentStatus'] = 'overdue'; if (!('card.missedPayments' in fields)) fields['card.missedPayments'] = 2;
+      }
+      if (/arrangement/.test(n) && /approv/.test(n)) fields['card.arrangementStatus'] = 'approved';
+      if (/premium|premier|gold|platinum/.test(n)) fields['card.tier'] = 'premium';
+      if (/digital|e-?statement|paperless|email only/.test(n)) fields['card.channelPreference'] = 'digital';
+      if (/\bpaper|\bprint(ed)?\b|mailed?/.test(n) && !/pdf/.test(n)) fields['card.channelPreference'] = 'print';
+      if (Object.keys(fields).length && !question) { actions.push({ action: 'set_scenario_fields', fields }); notes.push('set scenario ' + Object.entries(fields).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')); }
+      else if (/assistance|hardship/.test(n) && /(persona|customer|case|cardholder|member)/.test(n) && !question) { actions.push({ action: 'select_scenario', recordId: 'CARD-0002' }); notes.push('select assistance case CARD-0002'); }
+    } else {
+      if (/denied|review|rejected/.test(n)) { fields['claim.status'] = 'denied-pending-review'; fields['claim.liabilityConfirmed'] = false; }
+      if (/appeal/.test(n)) fields['claim.status'] = 'appeal-filed';
+      if (/out.of.network|oon/.test(n)) fields['claim.network'] = 'out-of-network';
+      if (/in.network/.test(n)) fields['claim.network'] = 'in-network';
+      if (/covered|processed|paid|approved claim/.test(n)) fields['claim.status'] = 'processed-covered';
+      if (Object.keys(fields).length && /(show|select|set|customer|member|claim|find|give|use)/.test(n) && !question) { actions.push({ action: 'set_scenario_fields', fields }); notes.push('set scenario ' + Object.entries(fields).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')); }
+    }
   }
 
-  const axes = DIMENSIONS.map((d) => d.id).filter((d) => new RegExp(`\\b${d === 'journey' ? 'journey' : d === 'output' ? 'output' : d === 'language' ? 'language' : d === 'persona' ? 'persona' : d}\\b`, 'i').test(m));
-  if (/axes|axis/i.test(m) && axes.length === 3) { actions.push({ action: 'set_cube_axes', axes }); notes.push(`set cube axes ${axes.join(' × ')}`); }
+  const axes = DIMENSIONS.map((d) => d.id).filter((d) => new RegExp(`\\b${d === 'paymentStatus' ? 'payment status' : d === 'accountTier' ? 'account tier|tier' : d === 'claimStatus' ? 'claim status' : d === 'networkStatus' ? 'network status|network' : d}\\b`).test(n));
+  if (/\baxes|\baxis/.test(n) && axes.length === 3) { actions.push({ action: 'set_cube_axes', axes }); notes.push(`set cube axes ${axes.join(' × ')}`); }
 
-  if (/\b(why|explain|reason)\b/i.test(m)) {
-    const node = ctx.selectedNodeId && ctx.project.nodes.some((n) => n.id === ctx.selectedNodeId && (n.type === 'variant-set' || n.type === 'conditional-region')) ? ctx.selectedNodeId : ctx.project.nodes.find((n) => n.type === 'variant-set')?.id;
-    if (node) { actions.push({ action: 'explain_resolution', nodeId: node }); notes.push(`explain ${node} from the engine trace`); }
+  const asksRules = /\b(what|which|list|show)\b.*\b(rules?)\b.*\b(apply|applies|applied|match|matched|fire|fired|active|in play|used|running)\b|\brules? (apply|applies|matched|fired|in play)\b|\b(matched|active|applicable) rules\b/.test(n);
+  const asksWhy = /\b(why|explain|reason|how come|justify)\b|what (caused|triggered|drives|decides|selects|is driving|am i seeing|is being shown)|which (message|variant)|what (message|variant)|what is (shown|selected|showing)/.test(n);
+  if (asksWhy || asksRules) {
+    const nodes = ctx.project.nodes;
+    const node = ctx.selectedNodeId && nodes.some((x) => x.id === ctx.selectedNodeId && (x.type === 'variant-set' || x.type === 'conditional-region')) ? ctx.selectedNodeId : nodes.find((x) => x.type === 'variant-set')?.id;
+    if (node && !actions.some((a: any) => a.action === 'explain_resolution')) { actions.push({ action: 'explain_resolution', nodeId: node }); notes.push(asksRules && !asksWhy ? `show the rules that apply, from the engine trace for ${node}` : `explain ${node} from the engine trace`); }
+    if (asksRules) {
+      const rec = ctx.records.find((r) => r.recordId === ctx.recordId);
+      if (rec) { const r = resolve({ project: ctx.project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor }); facts.push(`For ${ctx.recordId} the engine matched ${r.result.matchedRuleIds.length ? r.result.matchedRuleIds.join(', ') : 'no rules'} (run ${r.runId}).`); }
+    }
   }
-  if (/\b(validat|run checks|check (the|this) document)/i.test(m)) { actions.push({ action: 'run_validation' }); notes.push('run validation'); }
-  if (!actions.some((a: any) => a.action === 'open_project')) for (const [re, view] of VIEW_WORDS) if (re.test(m) && /\b(open|show|go|navigate|take me|view)\b/i.test(m)) { actions.push({ action: 'navigate_view', view }); notes.push(`open ${view}`); break; }
+  if (/\b(validat\w*|run checks?|check (the|this|my) (document|statement|eob|design|template)|compliance|compliant|preflight|lint|qa)\b/.test(n)) { actions.push({ action: 'run_validation' }); notes.push('run validation'); }
+  if (!actions.some((a: any) => a.action === 'open_project' || a.action === 'run_validation')) for (const [re, view] of VIEW_WORDS) if (re.test(n) && verb.test(n) && !(view === 'design' && /edge.?case/.test(n))) {
+    actions.push({ action: 'navigate_view', view }); notes.push(view === 'outputs' && exportWords ? 'open Outputs, where PDF/HTML export is run (the assistant does not export for you)' : `open ${view}`); break;
+  }
 
-  const reply = actions.length
-    ? `Offline assistant (scripted capability): I recognised a request to ${notes.join('; ')}. The deterministic engine performs each action; nothing is changed without your approval.`
-    : 'Offline assistant (scripted capability): I could not map that to a supported command. Try: “choose assistance case CARD-0002”, “explain the selected variant”, “show Spanish edge case”, “switch to EOB”, “run validation”, “open cube”, or “change R04 priority to 420”.';
-  return { reply, actions };
+  const prefix = 'Offline assistant (scripted capability):';
+  if (actions.length) {
+    const tail = facts.length ? ' ' + facts.join(' ') : '';
+    return { reply: `${prefix} I recognised a request to ${notes.join('; ')}.${tail} The deterministic engine performs each action; nothing is changed without your approval.`, actions, understood: true };
+  }
+  if (facts.length) return { reply: `${prefix} ${facts.join(' ')}`, actions, understood: true };
+  return { reply: `${prefix} I did not understand that offline, so I have not done anything. The offline assistant only understands a fixed set of request types, but it answers those from the deterministic engine. Choose one of these examples for ${ctx.project.title ?? ctx.project.projectId} to fill the box, or enable live mode for free-form questions.`, actions, understood: false, suggestions: suggestedQuestions(ctx.project).slice(0, 6) };
 }
 
 /* ------------------------------------------------------- live provider */
@@ -293,7 +369,7 @@ export async function handleMessage(message: string, ctx: AssistantContext, cfg:
   const status = providerStatus(cfg);
   let mode: 'external' | 'offline' = 'offline';
   let providerNote = status.label;
-  let interpreted: { reply: string; actions: unknown[] } | null = null;
+  let interpreted: { reply: string; actions: unknown[]; understood?: boolean; suggestions?: string[] } | null = null;
   if (status.mode === 'external') {
     interpreted = await externalInterpret(cfg, message, ctx, res);
     if (interpreted) mode = 'external';
@@ -302,6 +378,7 @@ export async function handleMessage(message: string, ctx: AssistantContext, cfg:
   if (!interpreted) interpreted = offlineInterpret(message, ctx);
   const { ok, rejected } = validateActions(interpreted.actions, ctx);
   const reply: AssistantReply = { mode, providerStatus: providerNote, requestId, response: interpreted.reply, actions: ok.filter((a) => a.action !== 'propose_rule_edit' && a.action !== 'propose_content_edit'), rejected };
+  if (mode === 'offline') { reply.understood = interpreted.understood ?? true; if (interpreted.suggestions) reply.suggestions = interpreted.suggestions; }
 
   // Scenario preview: resolved by the deterministic engine (non-mutating).
   let previewOverrides: Record<string, unknown> | null = null;

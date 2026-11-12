@@ -22,6 +22,14 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 export interface ProjectSummary {
   projectId: string; title: string; documentType: 'credit-statement' | 'eob'; modelVersion: number; schemaVersion: string;
   issuer: Project['issuer']; contentDigest: string; modified: boolean; updatedAt: string; nodeCount: number; ruleCount: number;
+  /** Approved seeded sample (restorable, not deletable) vs a user copy. */
+  sample: boolean; derivedFrom: { projectId: string; modelVersion: number } | null;
+}
+
+export interface ImportResult {
+  documentType: 'credit-statement' | 'eob'; dryRun: boolean; total: number;
+  imported: Array<{ recordId: string; sourceId: string | null; name: string }>;
+  rejected: Array<{ row: number; sourceId: string | null; errors: string[] }>;
 }
 
 export interface ScenarioRequest {
@@ -81,6 +89,11 @@ export const api = {
   project: (id: string) => json<{ project: Project }>(`/api/v1/projects/${id}`),
   saveProject: (project: Project, ifMatch: number) => json<{ project: Project; saved: boolean; contentDigest: string }>(`/api/v1/projects/${project.projectId}`, { method: 'PUT', body: JSON.stringify({ project }), headers: { 'If-Match': `"${ifMatch}"` } }),
   resetProject: (id: string) => json<{ project: Project; reset: boolean; seedDigest: string }>(`/api/v1/projects/${id}/reset`, { method: 'POST', body: JSON.stringify({ confirm: true }) }),
+  duplicateProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}/duplicate`, { method: 'POST', body: JSON.stringify({ title }) }),
+  renameProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) }),
+  deleteProject: (id: string) => json<{ deleted: boolean }>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
+  importRecords: (body: { documentType: string; format: 'json' | 'csv'; data: string; dryRun?: boolean }) => json<ImportResult>('/api/v1/records/import', { method: 'POST', body: JSON.stringify(body) }),
+  clearImportedRecords: (documentType?: string) => json<{ removed: number }>(`/api/v1/records/imported${documentType ? `?documentType=${documentType}` : ''}`, { method: 'DELETE' }),
   schemas: (id: string) => json<{ fields: any[]; dimensions: any[]; edgeCasePresets: Array<{ id: string; label: string; description: string }> }>(`/api/v1/projects/${id}/schemas`),
   records: (documentType: string) => json<{ records: SyntheticRecord[]; seed: string }>(`/api/v1/records?documentType=${documentType}&full=1`),
   personas: () => json<{ personas: Persona[] }>('/api/v1/personas'),

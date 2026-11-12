@@ -32,7 +32,51 @@ export interface NodeInteraction {
   onDropNode?: (id: string, e: DragEvent<HTMLDivElement>) => void;
   onNodePointerDown?: (id: string, e: React.PointerEvent<HTMLDivElement>, handle?: string) => void;
   onNodeDragStart?: (id: string, e: DragEvent<HTMLDivElement>) => void;
+  /** How resolved-hidden nodes are drawn: 'ghost' (default, dashed placeholder in the page) or 'marker' (margin tab only). */
+  hiddenMode?: 'ghost' | 'marker';
   transient?: Record<string, { xPt?: number; yPt?: number; wPt?: number; hPt?: number; widthPct?: number }>;
+}
+
+/** Plain-language tooltip for a hidden node: "Name — hidden for this customer (rule R06 not matched)". */
+export function hiddenTip(n: RNode): string {
+  const rules = /\(([A-Z]+\d+(?:,\s*[A-Z]+\d+)*)\)/.exec(n.hiddenReason ?? '')?.[1];
+  const why = rules ? `rule ${rules} not matched` : (n.hiddenReason ?? 'not selected').replace(/\.$/, '');
+  return `${n.name} — hidden for this customer (${why})`;
+}
+
+function HiddenMarks({ nodes, ia, inRow }: { nodes: RNode[]; ia: NodeInteraction; inRow?: boolean }) {
+  return (
+    <div className={`pv-hmark-group${inRow ? ' in-row' : ''}`}>
+      <div className="pv-hmark-stack">
+        {nodes.map((n) => <HiddenMarkButton key={n.id} n={n} ia={ia} />)}
+      </div>
+    </div>
+  );
+}
+
+function HiddenMarkButton({ n, ia, className = '', style }: { n: RNode; ia: NodeInteraction; className?: string; style?: CSSProperties }) {
+  const tip = hiddenTip(n);
+  const selected = ia.selectedId === n.id;
+  return (
+    <button type="button" className={`pv-hmark ${className}${selected ? ' is-selected' : ''}`} title={tip} aria-label={tip} aria-pressed={selected} style={style}
+      data-testid={`hidden-marker-${n.id}`} data-hidden-node={n.id}
+      onClick={(e) => { e.stopPropagation(); ia.onSelect?.(n.id, e); }}>⊘</button>
+  );
+}
+
+/** Children list; in 'marker' mode consecutive hidden nodes collapse into one margin marker stack. */
+function renderNodes(list: RNode[], mode: RenderMode, ia: NodeInteraction, depth: number, inRow?: boolean): ReactNode[] {
+  if (ia.hiddenMode !== 'marker') return list.map((c) => <NodeBox key={c.id} n={c} mode={mode} ia={ia} depth={depth} inRow={inRow} />);
+  const out: ReactNode[] = [];
+  let run: RNode[] = [];
+  const flush = () => { if (run.length) { out.push(<HiddenMarks key={`hm-${run[0].id}`} nodes={run} ia={ia} inRow={inRow} />); run = []; } };
+  for (const c of list) {
+    if (!c.visible) { run.push(c); continue; }
+    flush();
+    out.push(<NodeBox key={c.id} n={c} mode={mode} ia={ia} depth={depth} inRow={inRow} />);
+  }
+  flush();
+  return out;
 }
 
 function limitTable(n: RNode): RNode {
@@ -68,10 +112,10 @@ function NodeBox({ n, mode, ia, depth, inRow }: { n: RNode; mode: RenderMode; ia
   const label = `${n.name} (${n.id})${n.visible ? '' : ' — not rendered in this scenario'}`;
   let inner: ReactNode;
   if (ia.editingId === n.id && ia.renderEditor) inner = ia.renderEditor(n);
-  else if (!n.visible) inner = <div className="pv-ghost"><span className="pv-ghost-name">{n.name}</span><span className="pv-ghost-why">Not rendered in this scenario · {n.hiddenReason}</span></div>;
+  else if (!n.visible) inner = <div className="pv-ghost"><span className="pv-ghost-name">{n.name}</span><span className="pv-ghost-why">Hidden for this customer · {n.hiddenReason}</span></div>;
   else if (n.type === 'container') {
     const row = pl?.direction === 'row';
-    inner = <div className={`iss-container${row ? ' iss-row' : ''}`}>{n.children.map((c) => <NodeBox key={c.id} n={c} mode={mode} ia={ia} depth={depth + 1} inRow={row} />)}{!n.children.length && <div className="pv-empty-container">Empty section — drop components here</div>}</div>;
+    inner = <div className={`iss-container${row ? ' iss-row' : ''}`}>{renderNodes(n.children, mode, ia, depth + 1, row)}{!n.children.length && <div className="pv-empty-container">Empty section — drop components here</div>}</div>;
   } else {
     const shown = limitTable(n);
     inner = <NodeHtml html={nodeInnerHtml(shown, mode, () => '')} />;
@@ -104,6 +148,7 @@ function NodeBox({ n, mode, ia, depth, inRow }: { n: RNode; mode: RenderMode; ia
 
 function FixedBox({ n, mode, ia }: { n: RNode; mode: RenderMode; ia: NodeInteraction }) {
   const pl = n.layout!.paged!;
+  if (!n.visible && ia.hiddenMode === 'marker') return <HiddenMarkButton n={n} ia={ia} className="pv-hmark-fixed" style={{ top: `${pl.yPt ?? 0}pt` }} />;
   const t = ia.transient?.[n.id];
   const x = t?.xPt ?? pl.xPt ?? 0, y = t?.yPt ?? pl.yPt ?? 0, w = t?.wPt ?? pl.wPt ?? 100, h = t?.hPt ?? pl.hPt ?? 20;
   const selected = ia.selectedId === n.id;
@@ -183,7 +228,7 @@ export function PagePreview({ res, project, scale, ia, showGuides = true, showGr
         {fixed.map((n) => <FixedBox key={n.id} n={n} mode={mode} ia={ia} />)}
         <div className="pv-flow" style={{ left: `${left}pt`, top: `${flow.firstPageTopPt}pt`, width: `${width}pt`, minHeight: `${flow.bottomPt - flow.firstPageTopPt}pt` }} data-testid="flow-region">
           {showGuides && <div className="pv-flow-label" aria-hidden="true">Flow region · continues on following pages</div>}
-          {flowNodes.map((n) => <NodeBox key={n.id} n={n} mode={mode} ia={ia} depth={0} />)}
+          {renderNodes(flowNodes, mode, ia, 0)}
           {dropLineY !== null && dropLineY !== undefined && <div className="pv-dropline" style={{ top: dropLineY }} />}
         </div>
         {showGuides && <div className="pv-pagebreak" style={{ top: `${flow.bottomPt}pt` }} aria-hidden="true"><span>End of page 1 flow region · composer paginates the rest</span></div>}
