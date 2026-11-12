@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Allowlisted assistant action",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "action",
+        "recordId"
+      ],
+      "properties": {
+        "action": {
+          "const": "select_scenario"
+        },
+        "recordId": {
+          "type": "string"
+        },
+        "overrides": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "action",
+        "axes"
+      ],
+      "properties": {
+        "action": {
+          "const": "set_cube_axes"
+        },
+        "axes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "persona",
+              "journey",
+              "output",
+              "language",
+              "paymentStatus",
+              "claimStatus",
+              "channel"
+            ]
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "action",
+        "nodeId"
+      ],
+      "properties": {
+        "action": {
+          "const": "focus_component"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "view": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "action",
+        "runId",
+        "nodeId"
+      ],
+      "properties": {
+        "action": {
+          "const": "explain_resolution"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "action",
+        "runId"
+      ],
+      "properties": {
+        "action": {
+          "const": "run_validation"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "action",
+        "patch"
+      ],
+      "properties": {
+        "action": {
+          "const": "propose_rule_edit"
+        },
+        "patch": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "action",
+        "patch"
+      ],
+      "properties": {
+        "action": {
+          "const": "propose_content_edit"
+        },
+        "patch": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

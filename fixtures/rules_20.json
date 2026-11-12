@@ -1,0 +1,367 @@
+[
+  {
+    "id": "R01",
+    "scope": "credit-statement",
+    "mode": "exclusive",
+    "priority": 100,
+    "when": {
+      "op": "eq",
+      "path": "card.paymentStatus",
+      "value": "current"
+    },
+    "then": {
+      "op": "selectVariant",
+      "targetNodeId": "payment-guidance",
+      "variantId": "payment-standard"
+    },
+    "version": 1,
+    "exclusiveGroup": "payment-guidance"
+  },
+  {
+    "id": "R02",
+    "scope": "credit-statement",
+    "mode": "exclusive",
+    "priority": 200,
+    "when": {
+      "op": "eq",
+      "path": "card.missedPayments",
+      "value": 1
+    },
+    "then": {
+      "op": "selectVariant",
+      "targetNodeId": "payment-guidance",
+      "variantId": "payment-reminder"
+    },
+    "version": 1,
+    "exclusiveGroup": "payment-guidance"
+  },
+  {
+    "id": "R03",
+    "scope": "credit-statement",
+    "mode": "exclusive",
+    "priority": 300,
+    "when": {
+      "op": "and",
+      "args": [
+        {
+          "op": "gte",
+          "path": "card.missedPayments",
+          "value": 2
+        },
+        {
+          "op": "eq",
+          "path": "card.assistanceRequested",
+          "value": false
+        }
+      ]
+    },
+    "then": {
+      "op": "selectVariant",
+      "targetNodeId": "payment-guidance",
+      "variantId": "payment-support-offer"
+    },
+    "version": 1,
+    "exclusiveGroup": "payment-guidance"
+  },
+  {
+    "id": "R04",
+    "scope": "credit-statement",
+    "mode": "exclusive",
+    "priority": 400,
+    "when": {
+      "op": "eq",
+      "path": "card.assistanceRequested",
+      "value": true
+    },
+    "then": {
+      "op": "selectVariant",
+      "targetNodeId": "payment-guidance",
+      "variantId": "payment-assistance-requested"
+    },
+    "version": 1,
+    "exclusiveGroup": "payment-guidance"
+  },
+  {
+    "id": "R05",
+    "scope": "credit-statement",
+    "mode": "exclusive",
+    "priority": 500,
+    "when": {
+      "op": "eq",
+      "path": "card.arrangementStatus",
+      "value": "approved"
+    },
+    "then": {
+      "op": "selectVariant",
+      "targetNodeId": "payment-guidance",
+      "variantId": "payment-arrangement-active"
+    },
+    "version": 1,
+    "exclusiveGroup": "payment-guidance"
+  },
+  {
+    "id": "R06",
+    "scope": "credit-statement",
+    "mode": "additive",
+    "priority": 30,
+    "when": {
+      "op": "eq",
+      "path": "card.tier",
+      "value": "premium"
+    },
+    "then": {
+      "op": "showSection",
+      "targetNodeId": "relationship-manager"
+    },
+    "version": 1
+  },
+  {
+    "id": "R07",
+    "scope": "credit-statement",
+    "mode": "additive",
+    "priority": 30,
+    "when": {
+      "op": "eq",
+      "path": "customer.locale",
+      "value": "es-US"
+    },
+    "then": {
+      "op": "setApprovedLocale",
+      "locale": "es-US",
+      "errorIfMissingMandatoryTranslation": true
+    },
+    "version": 1
+  },
+  {
+    "id": "R08",
+    "scope": "credit-statement",
+    "mode": "additive",
+    "priority": 30,
+    "when": {
+      "op": "eq",
+      "path": "card.channelPreference",
+      "value": "digital"
+    },
+    "then": {
+      "op": "setPresentationHint",
+      "hint": "interactive-action-with-print-fallback"
+    },
+    "version": 1
+  },
+  {
+    "id": "R09",
+    "scope": "credit-statement",
+    "mode": "additive",
+    "priority": 30,
+    "when": {
+      "op": "eq",
+      "path": "card.channelPreference",
+      "value": "print"
+    },
+    "then": {
+      "op": "setPresentationHint",
+      "hint": "print-friendly-guidance"
+    },
+    "version": 1
+  },
+  {
+    "id": "R10",
+    "scope": "credit-statement",
+    "mode": "additive",
+    "priority": 30,
+    "when": {
+      "op": "gt",
+      "path": "card.transactions.count",
+      "value": 25
+    },
+    "then": {
+      "op": "setPresentationHint",
+      "hint": "repeating-table-headings-and-continuation"
+    },
+    "version": 1
+  },
+  {
+    "id": "R11",
+    "scope": "credit-statement",
+    "mode": "additive",
+    "priority": 30,
+    "when": {
+      "op": "gt",
+      "path": "card.rewardsBalance",
+      "value": 0
+    },
+    "then": {
+      "op": "showSection",
+      "targetNodeId": "rewards-summary"
+    },
+    "version": 1
+  },
+  {
+    "id": "R12",
+    "scope": "credit-statement",
+    "mode": "obligation",
+    "priority": 1000,
+    "when": {
+      "op": "eq",
+      "path": "documentType",
+      "value": "credit-statement"
+    },
+    "then": {
+      "op": "requireNodes",
+      "nodeIds": [
+        "billing-summary",
+        "payment-due",
+        "sample-disclosure-set"
+      ]
+    },
+    "version": 1
+  },
+  {
+    "id": "R13",
+    "scope": "eob",
+    "mode": "exclusive",
+    "priority": 300,
+    "when": {
+      "op": "eq",
+      "path": "claim.status",
+      "value": "processed-covered"
+    },
+    "then": {
+      "op": "selectVariant",
+      "targetNodeId": "eob-claim-message",
+      "variantId": "eob-covered"
+    },
+    "version": 1,
+    "exclusiveGroup": "eob-claim-message"
+  },
+  {
+    "id": "R14",
+    "scope": "eob",
+    "mode": "exclusive",
+    "priority": 400,
+    "when": {
+      "op": "eq",
+      "path": "claim.status",
+      "value": "denied-pending-review"
+    },
+    "then": {
+      "op": "selectVariant",
+      "targetNodeId": "eob-claim-message",
+      "variantId": "eob-review-needed"
+    },
+    "version": 1,
+    "exclusiveGroup": "eob-claim-message"
+  },
+  {
+    "id": "R15",
+    "scope": "eob",
+    "mode": "exclusive",
+    "priority": 500,
+    "when": {
+      "op": "eq",
+      "path": "claim.status",
+      "value": "appeal-filed"
+    },
+    "then": {
+      "op": "selectVariant",
+      "targetNodeId": "eob-claim-message",
+      "variantId": "eob-appeal-status"
+    },
+    "version": 1,
+    "exclusiveGroup": "eob-claim-message"
+  },
+  {
+    "id": "R16",
+    "scope": "eob",
+    "mode": "additive",
+    "priority": 30,
+    "when": {
+      "op": "eq",
+      "path": "claim.network",
+      "value": "out-of-network"
+    },
+    "then": {
+      "op": "showSection",
+      "targetNodeId": "network-explanation"
+    },
+    "version": 1
+  },
+  {
+    "id": "R17",
+    "scope": "eob",
+    "mode": "additive",
+    "priority": 30,
+    "when": {
+      "op": "gt",
+      "path": "claim.deductibleAppliedCents",
+      "value": 0
+    },
+    "then": {
+      "op": "showSection",
+      "targetNodeId": "deductible-explanation"
+    },
+    "version": 1
+  },
+  {
+    "id": "R18",
+    "scope": "eob",
+    "mode": "additive",
+    "priority": 30,
+    "when": {
+      "op": "and",
+      "args": [
+        {
+          "op": "gt",
+          "path": "claim.patientResponsibilityCents",
+          "value": 0
+        },
+        {
+          "op": "eq",
+          "path": "claim.liabilityConfirmed",
+          "value": true
+        }
+      ]
+    },
+    "then": {
+      "op": "showSection",
+      "targetNodeId": "member-responsibility-summary"
+    },
+    "version": 1
+  },
+  {
+    "id": "R19",
+    "scope": "eob",
+    "mode": "additive",
+    "priority": 30,
+    "when": {
+      "op": "gt",
+      "path": "claims.count",
+      "value": 1
+    },
+    "then": {
+      "op": "showSection",
+      "targetNodeId": "multi-claim-index"
+    },
+    "version": 1
+  },
+  {
+    "id": "R20",
+    "scope": "eob",
+    "mode": "obligation",
+    "priority": 1000,
+    "when": {
+      "op": "eq",
+      "path": "documentType",
+      "value": "eob"
+    },
+    "then": {
+      "op": "requireNodes",
+      "nodeIds": [
+        "not-a-bill-banner",
+        "claim-identifiers",
+        "totals-and-terms"
+      ]
+    },
+    "version": 1
+  }
+]

@@ -1,0 +1,112 @@
+{
+  "card": {
+    "snapshotPolicy": "issued-is-immutable",
+    "events": [
+      {
+        "eventId": "card-day1",
+        "effectiveAt": "2026-11-01T09:00:00-05:00",
+        "eventType": "statement.issued",
+        "effects": [],
+        "emits": "immutable-issued-snapshot"
+      },
+      {
+        "eventId": "card-day30",
+        "effectiveAt": "2026-12-01T09:00:00-05:00",
+        "eventType": "payment.missed",
+        "effects": [
+          {
+            "op": "set",
+            "path": "card.missedPayments",
+            "value": 1
+          },
+          {
+            "op": "set",
+            "path": "card.paymentStatus",
+            "value": "overdue"
+          }
+        ],
+        "emits": "new-communication-preview"
+      },
+      {
+        "eventId": "card-day45",
+        "effectiveAt": "2026-12-16T09:00:00-05:00",
+        "eventType": "assistance.requested",
+        "effects": [
+          {
+            "op": "set",
+            "path": "card.assistanceRequested",
+            "value": true
+          }
+        ],
+        "emits": "new-communication-preview"
+      },
+      {
+        "eventId": "card-day60",
+        "effectiveAt": "2026-12-31T09:00:00-05:00",
+        "eventType": "arrangement.approved",
+        "effects": [
+          {
+            "op": "set",
+            "path": "card.arrangementStatus",
+            "value": "approved"
+          }
+        ],
+        "emits": "new-communication-preview"
+      }
+    ]
+  },
+  "eob": {
+    "snapshotPolicy": "issued-is-immutable",
+    "events": [
+      {
+        "eventId": "eob-received",
+        "eventType": "claim.received",
+        "effects": [
+          {
+            "op": "set",
+            "path": "claim.status",
+            "value": "received"
+          }
+        ]
+      },
+      {
+        "eventId": "eob-adjudicated",
+        "eventType": "claim.adjudicated",
+        "effects": [
+          {
+            "op": "set",
+            "path": "claim.status",
+            "value": "processed-covered"
+          }
+        ]
+      },
+      {
+        "eventId": "eob-review",
+        "eventType": "claim.review.requested",
+        "effects": [
+          {
+            "op": "set",
+            "path": "claim.status",
+            "value": "denied-pending-review"
+          },
+          {
+            "op": "set",
+            "path": "claim.liabilityConfirmed",
+            "value": false
+          }
+        ]
+      },
+      {
+        "eventId": "eob-appeal",
+        "eventType": "appeal.filed",
+        "effects": [
+          {
+            "op": "set",
+            "path": "claim.status",
+            "value": "appeal-filed"
+          }
+        ]
+      }
+    ]
+  }
+}

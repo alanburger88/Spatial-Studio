@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Canonical authorable node",
+  "type": "object",
+  "required": [
+    "id",
+    "type"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{1,79}$"
+    },
+    "type": {
+      "enum": [
+        "container",
+        "rich-text",
+        "image",
+        "shape",
+        "header-footer",
+        "bound-field",
+        "repeating-table",
+        "summary-metric",
+        "chart",
+        "conditional-region",
+        "variant-set",
+        "disclosure",
+        "action-link",
+        "qr-code",
+        "expandable-explanation"
+      ]
+    },
+    "children": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "variantIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "fallbackVariantId": {
+      "type": "string"
+    },
+    "binding": {
+      "type": "string"
+    },
+    "contentPartId": {
+      "type": "string"
+    },
+    "flowContinuation": {
+      "type": "boolean"
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "keyed by presentation profile ID; units mm/pt paged and relative constraints HTML"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "required": {
+      "type": "boolean"
+    },
+    "policy": {
+      "enum": [
+        "exclusive",
+        "additive"
+      ]
+    },
+    "formatter": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,1984 @@
+{
+  "oracleVersion": "1.0",
+  "warning": "Reference golden outputs from independent Python test oracle, not from a built app",
+  "cases": {
+    "card-standard": {
+      "recordId": "CARD-0001",
+      "overrides": {},
+      "expected": {
+        "recordId": "CARD-0001",
+        "documentType": "credit-statement",
+        "selectedVariants": {
+          "payment-guidance": "payment-standard"
+        },
+        "matchedRuleIds": [
+          "R01",
+          "R12"
+        ],
+        "additiveRuleIds": [],
+        "requiredNodes": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "diagnostics": [],
+        "documentFacts": {
+          "newBalanceCents": 124800,
+          "minimumDueCents": 4500,
+          "transactionCount": 12
+        },
+        "resultDigest": "7e65c6674beba91d9df9f9dfd1650e01420113fbdd47a6a7ac70332c17b78209"
+      }
+    },
+    "card-assistance": {
+      "recordId": "CARD-0002",
+      "overrides": {},
+      "expected": {
+        "recordId": "CARD-0002",
+        "documentType": "credit-statement",
+        "selectedVariants": {
+          "payment-guidance": "payment-assistance-requested"
+        },
+        "matchedRuleIds": [
+          "R04",
+          "R06",
+          "R10",
+          "R12"
+        ],
+        "additiveRuleIds": [
+          "R06",
+          "R10"
+        ],
+        "requiredNodes": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "diagnostics": [],
+        "documentFacts": {
+          "newBalanceCents": 246000,
+          "minimumDueCents": 9400,
+          "transactionCount": 45
+        },
+        "resultDigest": "4096c2e2c42f179774ced19132af351b3b64818a3e6f57153f9f7bcfb696f3ed"
+      }
+    },
+    "eob-covered": {
+      "recordId": "EOB-0001",
+      "overrides": {},
+      "expected": {
+        "recordId": "EOB-0001",
+        "documentType": "eob",
+        "selectedVariants": {
+          "eob-claim-message": "eob-covered"
+        },
+        "matchedRuleIds": [
+          "R13",
+          "R18",
+          "R20"
+        ],
+        "additiveRuleIds": [
+          "R18"
+        ],
+        "requiredNodes": [
+          "claim-identifiers",
+          "not-a-bill-banner",
+          "totals-and-terms"
+        ],
+        "diagnostics": [],
+        "documentFacts": {
+          "claimId": "HC-10428",
+          "billedCents": 40000,
+          "allowedCents": 25000,
+          "planPaidCents": 20000,
+          "patientResponsibilityCents": 5000,
+          "liabilityConfirmed": true,
+          "notABill": true
+        },
+        "resultDigest": "2b6505afb78c64afe99c85c3dbd1ea2b63b704d58288680ec65930ab60115d3c"
+      }
+    },
+    "eob-under-review": {
+      "recordId": "EOB-0002",
+      "overrides": {},
+      "expected": {
+        "recordId": "EOB-0002",
+        "documentType": "eob",
+        "selectedVariants": {
+          "eob-claim-message": "eob-review-needed"
+        },
+        "matchedRuleIds": [
+          "R14",
+          "R20"
+        ],
+        "additiveRuleIds": [],
+        "requiredNodes": [
+          "claim-identifiers",
+          "not-a-bill-banner",
+          "totals-and-terms"
+        ],
+        "diagnostics": [],
+        "documentFacts": {
+          "claimId": "HC-10429",
+          "billedCents": 30000,
+          "allowedCents": 0,
+          "planPaidCents": 0,
+          "patientResponsibilityCents": 0,
+          "liabilityConfirmed": false,
+          "notABill": true
+        },
+        "resultDigest": "3261a01d3e99a8d919f834e88b76201806e23423051310f2226a63e436c04a49"
+      }
+    },
+    "card-missed-first": {
+      "recordId": "CARD-0001",
+      "overrides": {
+        "card": {
+          "missedPayments": 1,
+          "paymentStatus": "overdue"
+        }
+      },
+      "expected": {
+        "recordId": "CARD-0001",
+        "documentType": "credit-statement",
+        "selectedVariants": {
+          "payment-guidance": "payment-reminder"
+        },
+        "matchedRuleIds": [
+          "R02",
+          "R12"
+        ],
+        "additiveRuleIds": [],
+        "requiredNodes": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "diagnostics": [],
+        "documentFacts": {
+          "newBalanceCents": 124800,
+          "minimumDueCents": 4500,
+          "transactionCount": 12
+        },
+        "resultDigest": "d1ad02c4270adab33944c55e2fdeed3c82e8060e2c7e379d532692571c68c79f"
+      }
+    },
+    "card-assistance-requested": {
+      "recordId": "CARD-0001",
+      "overrides": {
+        "card": {
+          "missedPayments": 2,
+          "paymentStatus": "overdue",
+          "assistanceRequested": true
+        }
+      },
+      "expected": {
+        "recordId": "CARD-0001",
+        "documentType": "credit-statement",
+        "selectedVariants": {
+          "payment-guidance": "payment-assistance-requested"
+        },
+        "matchedRuleIds": [
+          "R04",
+          "R12"
+        ],
+        "additiveRuleIds": [],
+        "requiredNodes": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "diagnostics": [],
+        "documentFacts": {
+          "newBalanceCents": 124800,
+          "minimumDueCents": 4500,
+          "transactionCount": 12
+        },
+        "resultDigest": "fe83974724b7f99e772d21f6795aaec74024098e67073b1e322f75f71950bf07"
+      }
+    },
+    "card-arrangement-approved": {
+      "recordId": "CARD-0001",
+      "overrides": {
+        "card": {
+          "missedPayments": 2,
+          "paymentStatus": "overdue",
+          "assistanceRequested": true,
+          "arrangementStatus": "approved"
+        }
+      },
+      "expected": {
+        "recordId": "CARD-0001",
+        "documentType": "credit-statement",
+        "selectedVariants": {
+          "payment-guidance": "payment-arrangement-active"
+        },
+        "matchedRuleIds": [
+          "R04",
+          "R05",
+          "R12"
+        ],
+        "additiveRuleIds": [],
+        "requiredNodes": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "diagnostics": [],
+        "documentFacts": {
+          "newBalanceCents": 124800,
+          "minimumDueCents": 4500,
+          "transactionCount": 12
+        },
+        "resultDigest": "168d9212c2a0adc5cc9f589a22433e5067ac79682edd7cb72c47ec1b57d39da8"
+      }
+    },
+    "card-spanish-missing-mandatory-translation": {
+      "recordId": "CARD-0001",
+      "overrides": {
+        "customer": {
+          "locale": "es-US"
+        }
+      },
+      "expected": {
+        "recordId": "CARD-0001",
+        "documentType": "credit-statement",
+        "selectedVariants": {
+          "payment-guidance": "payment-standard"
+        },
+        "matchedRuleIds": [
+          "R01",
+          "R07",
+          "R12"
+        ],
+        "additiveRuleIds": [
+          "R07"
+        ],
+        "requiredNodes": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "diagnostics": [
+          {
+            "code": "REQUIRED_TRANSLATION_MISSING",
+            "severity": "blocking",
+            "nodeId": "billing-summary",
+            "locale": "es-US"
+          },
+          {
+            "code": "REQUIRED_TRANSLATION_MISSING",
+            "severity": "blocking",
+            "nodeId": "payment-due",
+            "locale": "es-US"
+          },
+          {
+            "code": "REQUIRED_TRANSLATION_MISSING",
+            "severity": "blocking",
+            "nodeId": "payment-standard",
+            "locale": "es-US"
+          },
+          {
+            "code": "REQUIRED_TRANSLATION_MISSING",
+            "severity": "blocking",
+            "nodeId": "sample-disclosure-set",
+            "locale": "es-US"
+          }
+        ],
+        "documentFacts": {
+          "newBalanceCents": 124800,
+          "minimumDueCents": 4500,
+          "transactionCount": 12
+        },
+        "resultDigest": "3b0fe8a7f5571d2ee3f5be1f273807bdab151a226b40004ab8a65c509b5b757b"
+      }
+    },
+    "card-inconsistent-payment-state": {
+      "recordId": "CARD-0001",
+      "overrides": {
+        "card": {
+          "missedPayments": 2,
+          "paymentStatus": "current"
+        }
+      },
+      "expected": {
+        "recordId": "CARD-0001",
+        "documentType": "credit-statement",
+        "selectedVariants": {
+          "payment-guidance": "payment-support-offer"
+        },
+        "matchedRuleIds": [
+          "R01",
+          "R03",
+          "R12"
+        ],
+        "additiveRuleIds": [],
+        "requiredNodes": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "diagnostics": [
+          {
+            "code": "INCONSISTENT_PAYMENT_STATE",
+            "severity": "blocking",
+            "nodeId": "payment-guidance"
+          }
+        ],
+        "documentFacts": {
+          "newBalanceCents": 124800,
+          "minimumDueCents": 4500,
+          "transactionCount": 12
+        },
+        "resultDigest": "1f92becba2f8954e14fab7dcde02fcc6fa86017bb30f883ae05639caaec4252c"
+      }
+    },
+    "eob-unconfirmed-liability": {
+      "recordId": "EOB-0002",
+      "overrides": {
+        "claims": [
+          {
+            "claimId": "HC-10429",
+            "serviceDate": "2026-10-19",
+            "service": "Diagnostic laboratory",
+            "billedCents": 30000,
+            "allowedCents": 0,
+            "contractualAdjustmentCents": 0,
+            "planPaidCents": 0,
+            "patientResponsibilityCents": 30000,
+            "liabilityConfirmed": false,
+            "status": "denied-pending-review",
+            "network": "in-network",
+            "deductibleAppliedCents": 0,
+            "amountUnderReviewCents": 30000
+          }
+        ]
+      },
+      "expected": {
+        "recordId": "EOB-0002",
+        "documentType": "eob",
+        "selectedVariants": {
+          "eob-claim-message": "eob-review-needed"
+        },
+        "matchedRuleIds": [
+          "R14",
+          "R20"
+        ],
+        "additiveRuleIds": [],
+        "requiredNodes": [
+          "claim-identifiers",
+          "not-a-bill-banner",
+          "totals-and-terms"
+        ],
+        "diagnostics": [
+          {
+            "code": "UNCONFIRMED_MEMBER_LIABILITY",
+            "severity": "blocking",
+            "nodeId": "totals-and-terms"
+          }
+        ],
+        "documentFacts": {
+          "claimId": "HC-10429",
+          "billedCents": 30000,
+          "allowedCents": 0,
+          "planPaidCents": 0,
+          "patientResponsibilityCents": 30000,
+          "liabilityConfirmed": false,
+          "notABill": true
+        },
+        "resultDigest": "e8714b927903a9308fcaa7c02a4f8b61f5e90a1227b67667923b8042b2206095"
+      }
+    },
+    "card-250-rows": {
+      "recordId": "CARD-0001",
+      "overrides": {
+        "card": {
+          "transactions": [
+            {
+              "id": "STRESS-0001",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 001",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0002",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 002",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0003",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 003",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0004",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 004",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0005",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 005",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0006",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 006",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0007",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 007",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0008",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 008",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0009",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 009",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0010",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 010",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0011",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 011",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0012",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 012",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0013",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 013",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0014",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 014",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0015",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 015",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0016",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 016",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0017",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 017",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0018",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 018",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0019",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 019",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0020",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 020",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0021",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 021",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0022",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 022",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0023",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 023",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0024",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 024",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0025",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 025",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0026",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 026",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0027",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 027",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0028",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 028",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0029",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 029",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0030",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 030",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0031",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 031",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0032",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 032",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0033",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 033",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0034",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 034",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0035",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 035",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0036",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 036",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0037",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 037",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0038",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 038",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0039",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 039",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0040",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 040",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0041",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 041",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0042",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 042",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0043",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 043",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0044",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 044",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0045",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 045",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0046",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 046",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0047",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 047",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0048",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 048",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0049",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 049",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0050",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 050",
+              "amountCents": 204
+            },
+            {
+              "id": "STRESS-0051",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 051",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0052",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 052",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0053",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 053",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0054",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 054",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0055",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 055",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0056",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 056",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0057",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 057",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0058",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 058",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0059",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 059",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0060",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 060",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0061",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 061",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0062",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 062",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0063",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 063",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0064",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 064",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0065",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 065",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0066",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 066",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0067",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 067",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0068",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 068",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0069",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 069",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0070",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 070",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0071",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 071",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0072",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 072",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0073",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 073",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0074",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 074",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0075",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 075",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0076",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 076",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0077",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 077",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0078",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 078",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0079",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 079",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0080",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 080",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0081",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 081",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0082",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 082",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0083",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 083",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0084",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 084",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0085",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 085",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0086",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 086",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0087",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 087",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0088",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 088",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0089",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 089",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0090",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 090",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0091",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 091",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0092",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 092",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0093",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 093",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0094",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 094",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0095",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 095",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0096",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 096",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0097",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 097",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0098",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 098",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0099",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 099",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0100",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 100",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0101",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 101",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0102",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 102",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0103",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 103",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0104",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 104",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0105",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 105",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0106",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 106",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0107",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 107",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0108",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 108",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0109",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 109",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0110",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 110",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0111",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 111",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0112",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 112",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0113",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 113",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0114",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 114",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0115",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 115",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0116",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 116",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0117",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 117",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0118",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 118",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0119",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 119",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0120",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 120",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0121",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 121",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0122",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 122",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0123",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 123",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0124",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 124",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0125",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 125",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0126",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 126",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0127",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 127",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0128",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 128",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0129",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 129",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0130",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 130",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0131",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 131",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0132",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 132",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0133",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 133",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0134",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 134",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0135",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 135",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0136",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 136",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0137",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 137",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0138",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 138",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0139",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 139",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0140",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 140",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0141",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 141",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0142",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 142",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0143",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 143",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0144",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 144",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0145",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 145",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0146",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 146",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0147",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 147",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0148",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 148",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0149",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 149",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0150",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 150",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0151",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 151",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0152",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 152",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0153",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 153",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0154",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 154",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0155",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 155",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0156",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 156",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0157",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 157",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0158",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 158",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0159",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 159",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0160",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 160",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0161",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 161",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0162",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 162",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0163",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 163",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0164",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 164",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0165",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 165",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0166",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 166",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0167",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 167",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0168",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 168",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0169",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 169",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0170",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 170",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0171",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 171",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0172",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 172",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0173",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 173",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0174",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 174",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0175",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 175",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0176",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 176",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0177",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 177",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0178",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 178",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0179",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 179",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0180",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 180",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0181",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 181",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0182",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 182",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0183",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 183",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0184",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 184",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0185",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 185",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0186",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 186",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0187",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 187",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0188",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 188",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0189",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 189",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0190",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 190",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0191",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 191",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0192",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 192",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0193",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 193",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0194",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 194",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0195",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 195",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0196",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 196",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0197",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 197",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0198",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 198",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0199",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 199",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0200",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 200",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0201",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 201",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0202",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 202",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0203",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 203",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0204",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 204",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0205",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 205",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0206",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 206",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0207",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 207",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0208",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 208",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0209",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 209",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0210",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 210",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0211",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 211",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0212",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 212",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0213",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 213",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0214",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 214",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0215",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 215",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0216",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 216",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0217",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 217",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0218",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 218",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0219",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 219",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0220",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 220",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0221",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 221",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0222",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 222",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0223",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 223",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0224",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 224",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0225",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 225",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0226",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 226",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0227",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 227",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0228",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 228",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0229",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 229",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0230",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 230",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0231",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 231",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0232",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 232",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0233",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 233",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0234",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 234",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0235",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 235",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0236",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 236",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0237",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 237",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0238",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 238",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0239",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 239",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0240",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 240",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0241",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 241",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0242",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 242",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0243",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 243",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0244",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 244",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0245",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 245",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0246",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 246",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0247",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 247",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0248",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 248",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0249",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 249",
+              "amountCents": 203
+            },
+            {
+              "id": "STRESS-0250",
+              "date": "2026-10-15",
+              "merchant": "Synthetic transaction 250",
+              "amountCents": 203
+            }
+          ]
+        }
+      },
+      "expected": {
+        "recordId": "CARD-0001",
+        "documentType": "credit-statement",
+        "selectedVariants": {
+          "payment-guidance": "payment-standard"
+        },
+        "matchedRuleIds": [
+          "R01",
+          "R10",
+          "R12"
+        ],
+        "additiveRuleIds": [
+          "R10"
+        ],
+        "requiredNodes": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "diagnostics": [],
+        "documentFacts": {
+          "newBalanceCents": 124800,
+          "minimumDueCents": 4500,
+          "transactionCount": 250
+        },
+        "resultDigest": "c75ebb728f1964bdc5bfa5e3775d1869f96f4bb303616397deaae1452bdba610"
+      }
+    },
+    "card-tie-defect": {
+      "recordId": "CARD-0002",
+      "overrides": {},
+      "rulePatches": [
+        {
+          "id": "R03",
+          "when": {
+            "op": "gte",
+            "path": "card.missedPayments",
+            "value": 2
+          },
+          "priority": 400
+        }
+      ],
+      "expected": {
+        "recordId": "CARD-0002",
+        "documentType": "credit-statement",
+        "selectedVariants": {
+          "payment-guidance": null
+        },
+        "matchedRuleIds": [
+          "R03",
+          "R04",
+          "R06",
+          "R10",
+          "R12"
+        ],
+        "additiveRuleIds": [
+          "R06",
+          "R10"
+        ],
+        "requiredNodes": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "diagnostics": [
+          {
+            "code": "EXCLUSIVE_PRIORITY_TIE",
+            "severity": "blocking",
+            "nodeId": "payment-guidance",
+            "ruleIds": [
+              "R03",
+              "R04"
+            ]
+          }
+        ],
+        "documentFacts": {
+          "newBalanceCents": 246000,
+          "minimumDueCents": 9400,
+          "transactionCount": 45
+        },
+        "resultDigest": "ffa27213cd9a6b7580b27f22ac55501a73a6be03a1f1c5cdd0e214bbe95d863c"
+      }
+    }
+  }
+}

@@ -1,0 +1,266 @@
+[
+  {
+    "id": "P01",
+    "name": "Everyday",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "en-US",
+        "accessibility": {
+          "largeText": false,
+          "highContrast": false
+        }
+      },
+      "card": {
+        "tier": "standard",
+        "paymentStatus": "current",
+        "channelPreference": "email",
+        "transactionCount": 12,
+        "missedPayments": 0,
+        "assistanceRequested": false,
+        "rewardsBalance": 0
+      }
+    }
+  },
+  {
+    "id": "P02",
+    "name": "Premier",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "en-US",
+        "accessibility": {
+          "largeText": false,
+          "highContrast": false
+        }
+      },
+      "card": {
+        "tier": "premium",
+        "paymentStatus": "current",
+        "channelPreference": "email",
+        "transactionCount": 16,
+        "missedPayments": 0,
+        "assistanceRequested": false,
+        "rewardsBalance": 0
+      }
+    }
+  },
+  {
+    "id": "P03",
+    "name": "First Missed Payment",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "en-US",
+        "accessibility": {
+          "largeText": false,
+          "highContrast": false
+        }
+      },
+      "card": {
+        "tier": "standard",
+        "paymentStatus": "overdue",
+        "channelPreference": "email",
+        "transactionCount": 22,
+        "missedPayments": 1,
+        "assistanceRequested": false,
+        "rewardsBalance": 0
+      }
+    }
+  },
+  {
+    "id": "P04",
+    "name": "Financial Assistance",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "en-US",
+        "accessibility": {
+          "largeText": false,
+          "highContrast": false
+        }
+      },
+      "card": {
+        "tier": "standard",
+        "paymentStatus": "overdue",
+        "channelPreference": "email",
+        "transactionCount": 45,
+        "missedPayments": 2,
+        "assistanceRequested": true,
+        "rewardsBalance": 0
+      }
+    }
+  },
+  {
+    "id": "P05",
+    "name": "Spanish Preferred",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "es-US",
+        "accessibility": {
+          "largeText": false,
+          "highContrast": false
+        }
+      },
+      "card": {
+        "tier": "standard",
+        "paymentStatus": "current",
+        "channelPreference": "email",
+        "transactionCount": 18,
+        "missedPayments": 0,
+        "assistanceRequested": false,
+        "rewardsBalance": 0
+      }
+    }
+  },
+  {
+    "id": "P06",
+    "name": "Digital First",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "en-US",
+        "accessibility": {
+          "largeText": false,
+          "highContrast": false
+        }
+      },
+      "card": {
+        "tier": "standard",
+        "paymentStatus": "current",
+        "channelPreference": "digital",
+        "transactionCount": 13,
+        "missedPayments": 0,
+        "assistanceRequested": false,
+        "rewardsBalance": 0
+      }
+    }
+  },
+  {
+    "id": "P07",
+    "name": "Paper Preferred",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "en-US",
+        "accessibility": {
+          "largeText": false,
+          "highContrast": false
+        }
+      },
+      "card": {
+        "tier": "standard",
+        "paymentStatus": "current",
+        "channelPreference": "print",
+        "transactionCount": 12,
+        "missedPayments": 0,
+        "assistanceRequested": false,
+        "rewardsBalance": 0
+      }
+    }
+  },
+  {
+    "id": "P08",
+    "name": "High Volume",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "en-US",
+        "accessibility": {
+          "largeText": false,
+          "highContrast": false
+        }
+      },
+      "card": {
+        "tier": "standard",
+        "paymentStatus": "current",
+        "channelPreference": "email",
+        "transactionCount": 250,
+        "missedPayments": 0,
+        "assistanceRequested": false,
+        "rewardsBalance": 0
+      }
+    }
+  },
+  {
+    "id": "P09",
+    "name": "New Cardholder",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "en-US",
+        "accessibility": {
+          "largeText": false,
+          "highContrast": false
+        }
+      },
+      "card": {
+        "tier": "standard",
+        "paymentStatus": "current",
+        "channelPreference": "digital",
+        "transactionCount": 1,
+        "missedPayments": 0,
+        "assistanceRequested": false,
+        "rewardsBalance": 0
+      }
+    }
+  },
+  {
+    "id": "P10",
+    "name": "Accessibility Focus",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "en-US",
+        "accessibility": {
+          "largeText": true,
+          "highContrast": true
+        }
+      },
+      "card": {
+        "tier": "standard",
+        "paymentStatus": "current",
+        "channelPreference": "email",
+        "transactionCount": 12,
+        "missedPayments": 0,
+        "assistanceRequested": false,
+        "rewardsBalance": 0
+      }
+    }
+  },
+  {
+    "id": "P11",
+    "name": "Rewards Focus",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "en-US",
+        "accessibility": {
+          "largeText": false,
+          "highContrast": false
+        }
+      },
+      "card": {
+        "tier": "premium",
+        "paymentStatus": "current",
+        "channelPreference": "email",
+        "transactionCount": 24,
+        "missedPayments": 0,
+        "assistanceRequested": false,
+        "rewardsBalance": 1800
+      }
+    }
+  },
+  {
+    "id": "P12",
+    "name": "Edge-Case Customer",
+    "sampleOverrides": {
+      "customer": {
+        "locale": "en-US",
+        "accessibility": {
+          "largeText": false,
+          "highContrast": false
+        }
+      },
+      "card": {
+        "tier": "standard",
+        "paymentStatus": "current",
+        "channelPreference": "email",
+        "transactionCount": 7,
+        "missedPayments": 0,
+        "assistanceRequested": false,
+        "rewardsBalance": 0
+      }
+    }
+  }
+]

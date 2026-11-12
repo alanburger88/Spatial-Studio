@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InfoSlips Project Seed",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "documentType",
+    "modelVersion",
+    "rootNodeId",
+    "nodes",
+    "presentationProfiles"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "documentType": {
+      "enum": [
+        "credit-statement",
+        "eob"
+      ]
+    },
+    "modelVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "rootNodeId": {
+      "type": "string"
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "node.schema.json"
+      }
+    },
+    "presentationProfiles": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind"
+        ],
+        "properties": {
+          "id": {
+            "enum": [
+              "paged-pdf",
+              "paged-afp-sim",
+              "html-responsive"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "paged",
+              "afp-simulation",
+              "responsive"
+            ]
+          },
+          "paper": {
+            "type": "string"
+          },
+          "pageMarginsMm": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "breakpointsPx": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "simulationOnly": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,152 @@
+[
+  {
+    "type": "container",
+    "label": "Container / Section",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": false
+  },
+  {
+    "type": "rich-text",
+    "label": "Rich Text",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": true
+  },
+  {
+    "type": "image",
+    "label": "Image / Logo",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": false
+  },
+  {
+    "type": "shape",
+    "label": "Shape / Divider",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": false
+  },
+  {
+    "type": "header-footer",
+    "label": "Header / Footer",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": false
+  },
+  {
+    "type": "bound-field",
+    "label": "Bound Field",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": true
+  },
+  {
+    "type": "repeating-table",
+    "label": "Repeating Table",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": true
+  },
+  {
+    "type": "summary-metric",
+    "label": "Summary / Metric",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": true
+  },
+  {
+    "type": "chart",
+    "label": "Chart",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": true
+  },
+  {
+    "type": "conditional-region",
+    "label": "Conditional Region",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": true
+  },
+  {
+    "type": "variant-set",
+    "label": "Variant Set",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": true
+  },
+  {
+    "type": "disclosure",
+    "label": "Disclosure",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": false
+  },
+  {
+    "type": "action-link",
+    "label": "Action / Link",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": false
+  },
+  {
+    "type": "qr-code",
+    "label": "QR Code",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": false
+  },
+  {
+    "type": "expandable-explanation",
+    "label": "Expandable Explanation",
+    "supportsLayoutProfiles": [
+      "paged-pdf",
+      "paged-afp-sim",
+      "html-responsive"
+    ],
+    "supportsDataBinding": false
+  }
+]

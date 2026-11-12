@@ -1,0 +1,56 @@
+{
+  "runId": "EXAMPLE-NONPRODUCTION-RUN-ID",
+  "result": {
+    "recordId": "CARD-0001",
+    "documentType": "credit-statement",
+    "selectedVariants": {
+      "payment-guidance": "payment-standard"
+    },
+    "matchedRuleIds": [
+      "R01",
+      "R12"
+    ],
+    "additiveRuleIds": [],
+    "requiredNodes": [
+      "billing-summary",
+      "payment-due",
+      "sample-disclosure-set"
+    ],
+    "diagnostics": [],
+    "documentFacts": {
+      "newBalanceCents": 124800,
+      "minimumDueCents": 4500,
+      "transactionCount": 12
+    },
+    "resultDigest": "7e65c6674beba91d9df9f9dfd1650e01420113fbdd47a6a7ac70332c17b78209"
+  },
+  "trace": [
+    {
+      "ruleId": "R01",
+      "matched": true,
+      "predicateInputs": {
+        "card.paymentStatus": "current"
+      }
+    },
+    {
+      "ruleId": "R12",
+      "matched": true,
+      "predicateInputs": {
+        "documentType": "credit-statement"
+      }
+    }
+  ],
+  "semanticManifest": {
+    "modelVersion": 1,
+    "requiredNodeIds": [
+      "billing-summary",
+      "payment-due",
+      "sample-disclosure-set"
+    ],
+    "facts": {
+      "newBalanceCents": 124800,
+      "minimumDueCents": 4500,
+      "transactionCount": 12
+    }
+  }
+}

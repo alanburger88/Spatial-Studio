@@ -1,0 +1,18 @@
+{
+  "bundle": "InfoSlips Spatial Studio POC example fixtures",
+  "version": "1.0.0",
+  "syntheticOnly": true,
+  "bankCustomerCount": 70,
+  "eobCustomerCount": 30,
+  "personaCount": 12,
+  "componentTypeCount": 15,
+  "ruleCount": 20,
+  "contentPartCount": 30,
+  "currencyEncoding": "integer cents",
+  "disclaimer": "Demonstration data; not a certified financial statement, healthcare bill, compliance library or production AFP generator.",
+  "knownLimitations": [
+    "EOB denial/appeal is a modeled illustration, not adjudication",
+    "minimum payments/APR disclosures are illustrative",
+    "all output rendering remains to be implemented"
+  ]
+}

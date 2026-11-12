@@ -1,0 +1,9 @@
+{
+  "projectId": "aster-card-demo",
+  "recordId": "CARD-0001",
+  "overrides": {},
+  "outputContext": {
+    "profileId": "paged-pdf"
+  },
+  "journeyCursor": null
+}

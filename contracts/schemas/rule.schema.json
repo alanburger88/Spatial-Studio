@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Rule",
+  "type": "object",
+  "required": [
+    "id",
+    "scope",
+    "mode",
+    "priority",
+    "when",
+    "then",
+    "version"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^R[0-9]{2}$"
+    },
+    "scope": {
+      "enum": [
+        "credit-statement",
+        "eob"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "exclusive",
+        "additive",
+        "obligation"
+      ]
+    },
+    "priority": {
+      "type": "integer"
+    },
+    "when": {
+      "$ref": "rule-ast.schema.json"
+    },
+    "then": {
+      "type": "object",
+      "required": [
+        "op"
+      ],
+      "additionalProperties": true
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "exclusiveGroup": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,351 @@
+{
+  "schemaVersion": "1.0",
+  "appBase": "/studio",
+  "viewport": {
+    "reference": [
+      1440,
+      900
+    ],
+    "minimum": [
+      1280,
+      720
+    ]
+  },
+  "screens": [
+    {
+      "id": "S01",
+      "route": "/projects",
+      "title": "Project Gallery",
+      "mode": "projects",
+      "primaryAction": "Open bank project",
+      "requiredTestIds": [
+        "project-gallery",
+        "project-card-aster-card-demo",
+        "project-card-harborcare-demo",
+        "reset-demo"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-01",
+        "AT-35"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    },
+    {
+      "id": "S02",
+      "route": "/studio/:project/design",
+      "title": "2D Design Studio",
+      "mode": "design",
+      "primaryAction": "Insert / move / edit component",
+      "requiredTestIds": [
+        "design-canvas",
+        "component-palette",
+        "component-inspector",
+        "save-project",
+        "undo",
+        "redo",
+        "select-profile"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-02",
+        "AT-03",
+        "AT-04",
+        "AT-05",
+        "AT-06",
+        "AT-07"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    },
+    {
+      "id": "S03",
+      "route": "/studio/:project/exploded/:nodeId",
+      "title": "Exploded Document",
+      "mode": "exploded",
+      "primaryAction": "Select resolved variant and rule",
+      "requiredTestIds": [
+        "exploded-view",
+        "variant-list",
+        "selected-node",
+        "collapse-exploded",
+        "open-rule-trace"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-12",
+        "AT-13"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    },
+    {
+      "id": "S04",
+      "route": "/studio/:project/cube",
+      "title": "Document Cube",
+      "mode": "cube",
+      "primaryAction": "Configure 3 dimensions and select intersection",
+      "requiredTestIds": [
+        "cube-view",
+        "cube-axis-x",
+        "cube-axis-y",
+        "cube-axis-z",
+        "cube-flat-table"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-14",
+        "AT-15"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    },
+    {
+      "id": "S05",
+      "route": "/studio/:project/landscape",
+      "title": "Scenario Landscape",
+      "mode": "landscape",
+      "primaryAction": "Filter clusters and open scenario",
+      "requiredTestIds": [
+        "landscape-view",
+        "landscape-cluster-list",
+        "landscape-show-defects"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-16",
+        "AT-17"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    },
+    {
+      "id": "S06",
+      "route": "/studio/:project/page-stack",
+      "title": "Page Composition Stack",
+      "mode": "page-stack",
+      "primaryAction": "Inspect composer-measured pages",
+      "requiredTestIds": [
+        "page-stack-view",
+        "page-count",
+        "page-inspector",
+        "page-flat-list"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-18",
+        "AT-19"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    },
+    {
+      "id": "S07",
+      "route": "/studio/:project/rules-data",
+      "title": "Rules & Data",
+      "mode": "rules-data",
+      "primaryAction": "Edit data and rule; inspect evaluation trace",
+      "requiredTestIds": [
+        "rules-data-view",
+        "rule-editor",
+        "customer-record-editor",
+        "rule-trace",
+        "apply-rule-change"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-08",
+        "AT-09",
+        "AT-10",
+        "AT-11"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    },
+    {
+      "id": "S08",
+      "route": "/studio/:project/journey",
+      "title": "Journey Simulator",
+      "mode": "journey",
+      "primaryAction": "Edit/trigger event and compare snapshots",
+      "requiredTestIds": [
+        "journey-view",
+        "journey-timeline",
+        "trigger-event",
+        "issued-snapshot-hash",
+        "preview-snapshot-hash"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-21",
+        "AT-22",
+        "AT-23"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    },
+    {
+      "id": "S09",
+      "route": "/studio/:project/validate",
+      "title": "Validate & Compare",
+      "mode": "validate",
+      "primaryAction": "Run rules/composer/parity/a11y checks",
+      "requiredTestIds": [
+        "validate-view",
+        "run-validation",
+        "validation-list",
+        "validation-inspector"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-06",
+        "AT-09",
+        "AT-19",
+        "AT-20",
+        "AT-26",
+        "AT-29",
+        "AT-34"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    },
+    {
+      "id": "S10",
+      "route": "/studio/:project/outputs",
+      "title": "Preview & Export",
+      "mode": "outputs",
+      "primaryAction": "Generate actual PDF, interactive HTML, simulated AFP",
+      "requiredTestIds": [
+        "outputs-view",
+        "export-pdf",
+        "export-html",
+        "view-afp-simulation",
+        "semantic-parity"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-24",
+        "AT-25",
+        "AT-26",
+        "AT-27",
+        "AT-28"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    },
+    {
+      "id": "S11",
+      "route": "/studio/:project/demo",
+      "title": "Guided Demo",
+      "mode": "demo",
+      "primaryAction": "Run and reset guided demo",
+      "requiredTestIds": [
+        "demo-view",
+        "start-demo",
+        "next-demo-step",
+        "reset-demo"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-36"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    },
+    {
+      "id": "S12",
+      "route": "/studio/:project/assistant",
+      "title": "AI Assistant",
+      "mode": "assistant",
+      "primaryAction": "Explore, explain and approve suggestions",
+      "requiredTestIds": [
+        "assistant-view",
+        "assistant-input",
+        "assistant-send",
+        "proposal-approve",
+        "proposal-decline",
+        "ai-mode"
+      ],
+      "linkedAcceptanceTests": [
+        "AT-30",
+        "AT-31",
+        "AT-32"
+      ],
+      "requiredStates": [
+        "ready",
+        "loading",
+        "empty",
+        "error"
+      ],
+      "retainSelection": true,
+      "keyboardAlternative": true
+    }
+  ],
+  "sharedContextFields": [
+    "projectId",
+    "modelVersion",
+    "selectedNodeId",
+    "activeRecordId",
+    "journeyCursor",
+    "outputProfileId",
+    "activeScenarioId",
+    "spatialFilters",
+    "activeValidationIssue"
+  ]
+}

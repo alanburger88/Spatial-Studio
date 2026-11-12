@@ -1,0 +1,302 @@
+[
+  {
+    "id": "payment-standard",
+    "version": 1,
+    "title": "Payment instructions",
+    "approvedLocales": {
+      "en-US": "Your payment is due on {{card.dueDate}}."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "payment-reminder",
+    "version": 1,
+    "title": "Payment reminder",
+    "approvedLocales": {
+      "en-US": "We noticed your scheduled payment has not yet arrived."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "payment-support-offer",
+    "version": 1,
+    "title": "Payment support",
+    "approvedLocales": {
+      "en-US": "If making a payment is difficult, review assistance options."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "payment-assistance-requested",
+    "version": 1,
+    "title": "Assistance requested",
+    "approvedLocales": {
+      "en-US": "We have received your request for payment assistance."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "payment-arrangement-active",
+    "version": 1,
+    "title": "Arrangement active",
+    "approvedLocales": {
+      "en-US": "Your approved payment arrangement is active."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "relationship-manager",
+    "version": 1,
+    "title": "Relationship team",
+    "approvedLocales": {
+      "en-US": "Contact your assigned relationship specialist."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "rewards-summary",
+    "version": 1,
+    "title": "Your rewards",
+    "approvedLocales": {
+      "en-US": "Your current rewards points: {{card.rewardsBalance}}."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "billing-summary",
+    "version": 1,
+    "title": "Account summary",
+    "approvedLocales": {
+      "en-US": "New balance: {{card.newBalanceCents}}."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "payment-due",
+    "version": 1,
+    "title": "Payment due",
+    "approvedLocales": {
+      "en-US": "Minimum payment: {{card.minimumDueCents}}."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "sample-disclosure-set",
+    "version": 1,
+    "title": "Demonstration disclosures",
+    "approvedLocales": {
+      "en-US": "Illustrative disclosure wording; not a compliant credit statement."
+    },
+    "syntheticDemoOnly": true,
+    "type": "disclosure"
+  },
+  {
+    "id": "merchant-table-heading",
+    "version": 1,
+    "title": "Recent transactions",
+    "approvedLocales": {
+      "en-US": "Transaction date, merchant, amount."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "account-details",
+    "version": 1,
+    "title": "Account details",
+    "approvedLocales": {
+      "en-US": "Account: {{card.maskedAccount}}."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "payment-online",
+    "version": 1,
+    "title": "Pay online",
+    "approvedLocales": {
+      "en-US": "Use your issuer account portal to review options."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "paper-qr-fallback",
+    "version": 1,
+    "title": "Paper fallback",
+    "approvedLocales": {
+      "en-US": "Use the printed website address to get assistance."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "welcome-cardholder",
+    "version": 1,
+    "title": "Welcome",
+    "approvedLocales": {
+      "en-US": "We are pleased to welcome you as a cardholder."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "high-volume-help",
+    "version": 1,
+    "title": "Transaction guide",
+    "approvedLocales": {
+      "en-US": "See the continuation pages for the complete transaction list."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "language-warning",
+    "version": 1,
+    "title": "Translation notice",
+    "approvedLocales": {
+      "en-US": "Required approved translation is missing."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "credit-adjustment-note",
+    "version": 1,
+    "title": "Credits explained",
+    "approvedLocales": {
+      "en-US": "Credits and adjustments reduce your balance."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "eob-covered",
+    "version": 1,
+    "title": "Covered services",
+    "approvedLocales": {
+      "en-US": "The plan has processed the listed service."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "eob-review-needed",
+    "version": 1,
+    "title": "Claim under review",
+    "approvedLocales": {
+      "en-US": "This claim requires review; do not treat reviewed charges as a bill."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "eob-appeal-status",
+    "version": 1,
+    "title": "Appeal update",
+    "approvedLocales": {
+      "en-US": "Your appeal is being reviewed."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "network-explanation",
+    "version": 1,
+    "title": "Network status",
+    "approvedLocales": {
+      "en-US": "The claim was submitted as out-of-network."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "deductible-explanation",
+    "version": 1,
+    "title": "Deductible",
+    "approvedLocales": {
+      "en-US": "Some allowed charges apply to your deductible."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "member-responsibility-summary",
+    "version": 1,
+    "title": "Member responsibility",
+    "approvedLocales": {
+      "en-US": "Estimated member responsibility: {{claim.patientResponsibilityCents}}."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "multi-claim-index",
+    "version": 1,
+    "title": "Multiple claims",
+    "approvedLocales": {
+      "en-US": "This explanation includes more than one claim."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "not-a-bill-banner",
+    "version": 1,
+    "title": "This is not a bill",
+    "approvedLocales": {
+      "en-US": "THIS IS NOT A BILL."
+    },
+    "syntheticDemoOnly": true,
+    "type": "disclosure"
+  },
+  {
+    "id": "claim-identifiers",
+    "version": 1,
+    "title": "Claim reference",
+    "approvedLocales": {
+      "en-US": "Claim identifier: {{claim.claimId}}."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "totals-and-terms",
+    "version": 1,
+    "title": "Claim totals",
+    "approvedLocales": {
+      "en-US": "Billed, allowed, plan paid and patient responsibility are shown."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "claim-glossary",
+    "version": 1,
+    "title": "Terms explained",
+    "approvedLocales": {
+      "en-US": "View explanations for allowed amount, deductible and adjustment."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  },
+  {
+    "id": "eob-processing",
+    "version": 1,
+    "title": "Processing your claim",
+    "approvedLocales": {
+      "en-US": "Your health plan has received this claim and is processing it."
+    },
+    "syntheticDemoOnly": true,
+    "type": "text"
+  }
+]

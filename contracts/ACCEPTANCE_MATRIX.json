@@ -1,0 +1,511 @@
+{
+  "version": "1.0",
+  "source": "Approved PRODUCT_SPEC.md AT-01–AT-36, augmented with verification instructions",
+  "passRule": "Only actual built-app verification with evidence qualifies",
+  "tests": [
+    {
+      "id": "AT-01",
+      "title": "Open Aster and reload",
+      "testType": "browser",
+      "gate": "G1",
+      "steps": "Open project and reload",
+      "expected": "same node IDs/content/profile selection persist",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-02",
+      "title": "Insert rich text",
+      "testType": "browser",
+      "gate": "G1",
+      "steps": "Drag C02 into flow region",
+      "expected": "real editable node persists in saved project",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-03",
+      "title": "Resize and undo",
+      "testType": "browser",
+      "gate": "G1",
+      "steps": "Resize/align/nudge C06; undo/redo",
+      "expected": "paged geometry and history accurate",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-04",
+      "title": "Invalid drop blocked",
+      "testType": "browser",
+      "gate": "G1",
+      "steps": "Drop into protected area",
+      "expected": "model digest unchanged with specific feedback",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-05",
+      "title": "Bound token renders",
+      "testType": "integration",
+      "gate": "G1",
+      "steps": "Insert {{customer.givenName}}",
+      "expected": "name appears and provenance points to customer.givenName",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-06",
+      "title": "Invalid token flagged",
+      "testType": "integration",
+      "gate": "G1",
+      "steps": "Insert invalid token",
+      "expected": "binding validation diagnostic produced",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-07",
+      "title": "Variants created",
+      "testType": "browser",
+      "gate": "G1",
+      "steps": "Create 3 alternatives for conditional region",
+      "expected": "all variants in editor and Exploded view",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-08",
+      "title": "Persona resolution",
+      "testType": "contract",
+      "gate": "G1",
+      "steps": "Switch P01 to P04 and inspect",
+      "expected": "correct active rule and variant, complete trace",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-09",
+      "title": "Priority tie",
+      "testType": "contract",
+      "gate": "G1",
+      "steps": "Make R03/R04 both highest with same priority",
+      "expected": "EXCLUSIVE_PRIORITY_TIE is blocking; no winner",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-10",
+      "title": "No fallback",
+      "testType": "contract",
+      "gate": "G1",
+      "steps": "Disable matches/remove explicit fallback",
+      "expected": "NO_VARIANT_MATCH blocking result",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-11",
+      "title": "Styling is semantic no-op",
+      "testType": "contract",
+      "gate": "G1",
+      "steps": "Change unrelated chart style",
+      "expected": "financial manifest digest unchanged",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-12",
+      "title": "Stable selection",
+      "testType": "browser",
+      "gate": "G2",
+      "steps": "Click variant in Exploded and return to Design",
+      "expected": "same selected node ID",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-13",
+      "title": "Reduced-motion transition",
+      "testType": "browser",
+      "gate": "G2",
+      "steps": "Expand/collapse with reduced motion",
+      "expected": "no lost edits and keyboard/flat view works",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-14",
+      "title": "Configurable Cube",
+      "testType": "browser",
+      "gate": "G3",
+      "steps": "Change axes persona/language/journey",
+      "expected": "intersection data and labels recomputed",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-15",
+      "title": "Empty Cube cell",
+      "testType": "browser",
+      "gate": "G3",
+      "steps": "Select intersection with no fixture",
+      "expected": "honest no-match, not fabricated data",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-16",
+      "title": "Landscape population reconciliation",
+      "testType": "contract",
+      "gate": "G3",
+      "steps": "Aggregate 100 records",
+      "expected": "all cluster counts sum to evaluated universe",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-17",
+      "title": "Landscape defects only",
+      "testType": "contract",
+      "gate": "G3",
+      "steps": "Filter to rule/validation defects",
+      "expected": "only scenarios with actual findings",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-18",
+      "title": "250-row pagination",
+      "testType": "render",
+      "gate": "G1",
+      "steps": "Compose 250 transactions to PDF",
+      "expected": "multiple pages, repeating table headers, all row IDs",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-19",
+      "title": "Overflow diagnosed",
+      "testType": "render",
+      "gate": "G1",
+      "steps": "Disable continuation",
+      "expected": "real overflow provenance identifies region/page",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-20",
+      "title": "Missing Spanish translation",
+      "testType": "contract",
+      "gate": "G1",
+      "steps": "Set es-US with untranslated required content",
+      "expected": "blocking REQUIRED_TRANSLATION_MISSING diagnostic",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-21",
+      "title": "Journey missed payment",
+      "testType": "integration",
+      "gate": "G4",
+      "steps": "Trigger Day 30 event",
+      "expected": "next preview changes; issued Day 1 digest unchanged",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-22",
+      "title": "Journey assistance",
+      "testType": "integration",
+      "gate": "G4",
+      "steps": "Trigger Day 45 event",
+      "expected": "active variant updates with exact rule trace",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-23",
+      "title": "Journey reorder and replay",
+      "testType": "integration",
+      "gate": "G4",
+      "steps": "Edit/reorder permitted events and replay",
+      "expected": "deterministic state and preserved immutable issuance",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-24",
+      "title": "Real standard PDF",
+      "testType": "render",
+      "gate": "G1",
+      "steps": "Export CARD-0001",
+      "expected": "valid PDF, masked suffix, $1,248.00, measured pages",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-25",
+      "title": "Real interactive HTML",
+      "testType": "browser",
+      "gate": "G1",
+      "steps": "Export same run",
+      "expected": "working sort/filter/expand and correct totals offline",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-26",
+      "title": "PDF/HTML semantic parity",
+      "testType": "contract",
+      "gate": "G1",
+      "steps": "Compare same resolved run",
+      "expected": "required disclosures and money facts equal",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-27",
+      "title": "AFP simulation only",
+      "testType": "browser",
+      "gate": "G5",
+      "steps": "Open AFP presentation",
+      "expected": "simulation warning and no AFP binary export",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-28",
+      "title": "EOB covered reconciliation",
+      "testType": "render",
+      "gate": "G5",
+      "steps": "Open EOB-0001, export",
+      "expected": "amounts reconcile, THIS IS NOT A BILL present",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-29",
+      "title": "EOB unconfirmed liability blocked",
+      "testType": "contract",
+      "gate": "G5",
+      "steps": "Insert $300 owed on denied EOB-0002",
+      "expected": "blocking error, no debt asserted",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-30",
+      "title": "AI scenario selection",
+      "testType": "browser",
+      "gate": "G4",
+      "steps": "Ask assistant for assistance persona",
+      "expected": "validated command changes view/selection; trace genuine",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-31",
+      "title": "Decline AI edit",
+      "testType": "integration",
+      "gate": "G4",
+      "steps": "Propose rule change then decline",
+      "expected": "no source mutation, digest unchanged",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-32",
+      "title": "Offline AI fallback",
+      "testType": "browser",
+      "gate": "G4",
+      "steps": "Disable provider",
+      "expected": "labeled deterministic fallback can explore and explain",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-33",
+      "title": "Keyboard spatial access",
+      "testType": "accessibility",
+      "gate": "G5",
+      "steps": "Navigate node tree and flat alternatives",
+      "expected": "can inspect selected rule/variant without camera",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-34",
+      "title": "Accessibility diagnostics",
+      "testType": "accessibility",
+      "gate": "G5",
+      "steps": "Run automated checks",
+      "expected": "node-backed findings, no certification claim",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-35",
+      "title": "Persistence",
+      "testType": "integration",
+      "gate": "G1",
+      "steps": "Edit, save, reload",
+      "expected": "model persists; reset reproduces original fixture",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "resolver-output"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "AT-36",
+      "title": "Guided demo reset",
+      "testType": "browser",
+      "gate": "G6",
+      "steps": "Run full guided show and reset",
+      "expected": "repeatable transitions, no stale state",
+      "fixture": "Aster/HarborCare seeds plus named golden cases as appropriate",
+      "evidenceRequired": [
+        "automated-test-log",
+        "runtime-artifact"
+      ],
+      "status": "NOT_RUN"
+    }
+  ]
+}

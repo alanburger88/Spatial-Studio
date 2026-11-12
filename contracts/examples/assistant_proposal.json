@@ -1,0 +1,21 @@
+{
+  "mode": "external",
+  "status": "approval_required",
+  "proposalId": "EXAMPLE-PROPOSAL-NOT-SAVED",
+  "action": {
+    "action": "propose_rule_edit",
+    "patch": {
+      "ruleId": "R04",
+      "priority": 420
+    }
+  },
+  "before": {
+    "ruleId": "R04",
+    "priority": 400
+  },
+  "after": {
+    "ruleId": "R04",
+    "priority": 420
+  },
+  "mutationApplied": false
+}

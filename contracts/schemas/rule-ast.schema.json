@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Typed rule AST",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "op",
+        "args"
+      ],
+      "properties": {
+        "op": {
+          "enum": [
+            "and",
+            "or"
+          ]
+        },
+        "args": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "op",
+        "arg"
+      ],
+      "properties": {
+        "op": {
+          "const": "not"
+        },
+        "arg": {
+          "$ref": "#"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "op",
+        "path",
+        "value"
+      ],
+      "properties": {
+        "op": {
+          "enum": [
+            "eq",
+            "ne",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "in"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {}
+      },
+      "additionalProperties": false
+    }
+  ]
+}

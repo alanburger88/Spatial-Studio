@@ -1,0 +1,246 @@
+{
+  "manifestVersion": "1.0",
+  "purpose": "Protected input artifacts only. App source and reports intentionally unprotected",
+  "files": [
+    {
+      "path": "contracts/ACCEPTANCE_MATRIX.json",
+      "bytes": 15993,
+      "sha256": "c0a94c703cba408a62bccbbc05725ed6b3476a081bd580d9bfc8db7bdd442d42"
+    },
+    {
+      "path": "contracts/API_CONTRACT.md",
+      "bytes": 5863,
+      "sha256": "2fec928cd9bfcea3328233c93f9e9a7fc01503664e47182044b58376d5ade5f3"
+    },
+    {
+      "path": "contracts/SCENARIO_GOLDEN_GUIDE.md",
+      "bytes": 3651,
+      "sha256": "67d6a646a4352ab51e791d9939423eade3e74758dc6f6b6a22ef39ecd8de652a"
+    },
+    {
+      "path": "contracts/SCREEN_CONTRACT.json",
+      "bytes": 7887,
+      "sha256": "fdb5bad4d05080c4cb01e6562e5b6117f90389111d30972452559a51fa54a297"
+    },
+    {
+      "path": "contracts/examples/assistant_proposal.json",
+      "bytes": 371,
+      "sha256": "8cc0937b804ba960949e0c308e95514bf607970640efc530d807177bfbff3843"
+    },
+    {
+      "path": "contracts/examples/assistant_select_action.json",
+      "bytes": 80,
+      "sha256": "57caf2b46f6d3f6943432cfc32a76a2ead1bb28e488de9c812017eb5b13943da"
+    },
+    {
+      "path": "contracts/examples/cube_axes.json",
+      "bytes": 164,
+      "sha256": "52a3799ea75e3a548443610b5a2c7905e03b58920c5af0eb71e02ad00b7a4eb3"
+    },
+    {
+      "path": "contracts/examples/resolve_eob_review_response.json",
+      "bytes": 1413,
+      "sha256": "25d7520a03dd2d8631347c0416d7e4744adec817af263d33f6983dbeb2beb83d"
+    },
+    {
+      "path": "contracts/examples/resolve_standard_request.json",
+      "bytes": 163,
+      "sha256": "42199b94669aa91dcea7f35ecc502eae83e5c45e9f416ea7fc50ea94f87ae3d6"
+    },
+    {
+      "path": "contracts/examples/resolve_standard_response.json",
+      "bytes": 1196,
+      "sha256": "473babfdfb39f83bf50e9a1a5aa83e9c8e2b123612e6e8589a976321f44cc9b5"
+    },
+    {
+      "path": "contracts/schemas/assistant-action.schema.json",
+      "bytes": 2821,
+      "sha256": "ec634ed62eeaf2121d7131720bfaf59b575cf77d4a3de80def7f234c91b682eb"
+    },
+    {
+      "path": "contracts/schemas/golden-case.schema.json",
+      "bytes": 688,
+      "sha256": "6370cc737eab3fcd87bb032810aebddac5f7f1bab79c6ae2a7a5b89100438c37"
+    },
+    {
+      "path": "contracts/schemas/node.schema.json",
+      "bytes": 1627,
+      "sha256": "b1823bf693011032ed79186cf03d8fe86684da32067f6ca27ea86fff77fa9010"
+    },
+    {
+      "path": "contracts/schemas/project.schema.json",
+      "bytes": 1869,
+      "sha256": "28f2eb2b58ae6072a94b2a45ad5ce12de01eef19de79e90f08d9e174a3f27b1b"
+    },
+    {
+      "path": "contracts/schemas/rule-ast.schema.json",
+      "bytes": 1233,
+      "sha256": "bd0001ad61ea649b6659579e5b68ab753aa8e7de8b80b1473c005e868e017ab9"
+    },
+    {
+      "path": "contracts/schemas/rule.schema.json",
+      "bytes": 888,
+      "sha256": "f0bd8f597546de6d01ce70b446331a1903375502bf9f96bd68659c549e128cf6"
+    },
+    {
+      "path": "docs/approved/IMPLEMENTATION_PLAN.docx",
+      "bytes": 31853,
+      "sha256": "d9dc481f5f6cd65136f56d96c86e00e8151ac79f8b504cac1c9db5f4210b471e"
+    },
+    {
+      "path": "docs/approved/IMPLEMENTATION_PLAN.md",
+      "bytes": 34472,
+      "sha256": "38d7232374e14c99669e155298df39bf9f0441579207c03391058fc7c88bb95f"
+    },
+    {
+      "path": "docs/approved/PRODUCT_SPEC.docx",
+      "bytes": 78980,
+      "sha256": "6ef769384c1b0ae9bca5c4c9241daf649909e744729c9256c7be4c4c9644ad43"
+    },
+    {
+      "path": "docs/approved/PRODUCT_SPEC.md",
+      "bytes": 72146,
+      "sha256": "05032c1dde5fd2134c5da3c1baa95379f124e2dc7d434952b7a67979db69a189"
+    },
+    {
+      "path": "docs/approved/UX_BLUEPRINT.docx",
+      "bytes": 3280677,
+      "sha256": "9d0bdae4f83c796f6c9fbd7908556fe3e672afc30cacc37be2033122715fbf29"
+    },
+    {
+      "path": "docs/approved/UX_BLUEPRINT.md",
+      "bytes": 35513,
+      "sha256": "56209435fcf3f6e17a723bab965a245b5689d48967e5367b2ca674e5ec5e029d"
+    },
+    {
+      "path": "fixtures/README.txt",
+      "bytes": 320,
+      "sha256": "a4e1777993365f6915b9cb704c759ab4153eca423256a992b82a6a0cf5d93146"
+    },
+    {
+      "path": "fixtures/component_catalog_15.json",
+      "bytes": 3059,
+      "sha256": "1bb4f9de97c93f21c8179c67e95848774b487b24ffe6080c53efe93eca791792"
+    },
+    {
+      "path": "fixtures/content_parts_30.json",
+      "bytes": 7211,
+      "sha256": "eff57c5e0d7498deddfde004b700bc7e72323bab4dc13b7052908a8241931a76"
+    },
+    {
+      "path": "fixtures/customers_100.json",
+      "bytes": 535154,
+      "sha256": "e05b3d18dcff199b3271985d7abf5d9c0b57b7efacfc9598b8aba00508efa45d"
+    },
+    {
+      "path": "fixtures/expected_scenarios.json",
+      "bytes": 59973,
+      "sha256": "b0cbb2dbe1d55305c39bdfc2a39044f43569841f6424ca5a86fd8fa91b99d78d"
+    },
+    {
+      "path": "fixtures/journeys.json",
+      "bytes": 2647,
+      "sha256": "ec010ab9b7dd434c8d04e68dbffa59dfdc8652158baede4d53380f55793070f3"
+    },
+    {
+      "path": "fixtures/make_fixtures.py",
+      "bytes": 20572,
+      "sha256": "9ff9200fe12d85d495981da59e37c6e269ab5adf3c4abac77218900432e402b7"
+    },
+    {
+      "path": "fixtures/manifest.json",
+      "bytes": 647,
+      "sha256": "49e0f4a737bfc04f9821c8b9c516861a5256c78a0722951e596fbe14bcc1ad49"
+    },
+    {
+      "path": "fixtures/personas.json",
+      "bytes": 5951,
+      "sha256": "6bc45565d00e5a3bd6ac32be5ce53bbc34b4e51645ed7640ff9c9ea95fa77e20"
+    },
+    {
+      "path": "fixtures/projects.json",
+      "bytes": 3909,
+      "sha256": "2fe6fe5e3627d07db1e146ca77c5ff6dc80c834e261ed4be3dd1a908b103e67e"
+    },
+    {
+      "path": "fixtures/rules_20.json",
+      "bytes": 7410,
+      "sha256": "4e5ff6e547a227e2ee0cfcd997d10f7df1ae931fc27d0caff8091836b9166826"
+    },
+    {
+      "path": "oracle/generate_goldens.py",
+      "bytes": 498,
+      "sha256": "0adefb0184b145c8d9d7070b0a0cb444e107bf3f9421f858014e210d6885dca4"
+    },
+    {
+      "path": "oracle/reference_resolver.py",
+      "bytes": 9863,
+      "sha256": "d3f575cefca219bb668ae6ead4156f3f3b46df4c3cf78eb8dcfd0dc5b8d4d85b"
+    },
+    {
+      "path": "reference/UX_ATLAS.html",
+      "bytes": 46881,
+      "sha256": "23969ebf00b5cff03f59d06726f92a1f83c05ba40db3687abe18d514c2f55322"
+    },
+    {
+      "path": "reference/screenshots/screen-01.png",
+      "bytes": 344478,
+      "sha256": "a25b0693b0536a4e3d3dd4597479bd6be111da63512c1928ce8cf631b84af104"
+    },
+    {
+      "path": "reference/screenshots/screen-02.png",
+      "bytes": 400347,
+      "sha256": "5753dafeb4c986662317a8b2f6ad18e7dbaa6cd66db71b2d654261b9a79153d9"
+    },
+    {
+      "path": "reference/screenshots/screen-03.png",
+      "bytes": 479665,
+      "sha256": "8b9f578d636fb61e54763481b83f82469cc2f063dd1e0db45f760b8290d2665f"
+    },
+    {
+      "path": "reference/screenshots/screen-04.png",
+      "bytes": 423169,
+      "sha256": "991186ffdcaac1c44c165660e8bb4ddf0e342cdb24417d98fc881cc39f41319f"
+    },
+    {
+      "path": "reference/screenshots/screen-05.png",
+      "bytes": 503706,
+      "sha256": "9ef649437a2046f008b962c6238ee5f3b95e66c0e30e3c097773c35d730f590a"
+    },
+    {
+      "path": "reference/screenshots/screen-06.png",
+      "bytes": 404182,
+      "sha256": "228e17d6ec71e73a5fa28e160ea2ccac9837a8ec22ef036f3879063746c64b07"
+    },
+    {
+      "path": "reference/screenshots/screen-07.png",
+      "bytes": 334414,
+      "sha256": "669d93cf8d25ee6c4453fbb0c043acd05dbfb45796954e9e8546dc8caa680371"
+    },
+    {
+      "path": "reference/screenshots/screen-08.png",
+      "bytes": 352917,
+      "sha256": "fe41b689e31b093017cf5c0e8c177769e8e80b2f1655654d611d91bfc7665f6f"
+    },
+    {
+      "path": "reference/screenshots/screen-09.png",
+      "bytes": 327315,
+      "sha256": "6f89393061ef94a48fe1cbf52db5bffa113eba9fe17aa674d1d583d62d2fe318"
+    },
+    {
+      "path": "reference/screenshots/screen-10.png",
+      "bytes": 369754,
+      "sha256": "03e7e9956ec8c2c515e08d215c6a0d89424eabd9ab459ba815ac35c683ae143b"
+    },
+    {
+      "path": "reference/screenshots/screen-11.png",
+      "bytes": 430515,
+      "sha256": "c07d42335f058ce2fcf9698c3d9398a48480c7e4504a06d7edab9d704daa6cb1"
+    },
+    {
+      "path": "reference/screenshots/screen-12.png",
+      "bytes": 327647,
+      "sha256": "8df120bc8437ee7d23faace30cff541addc127e1cac0993b1d7dc53388bb9ee4"
+    }
+  ]
+}

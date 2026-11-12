@@ -1,0 +1,171 @@
+[
+  {
+    "schemaVersion": "1.0.0",
+    "projectId": "aster-card-demo",
+    "title": "Aster Card – credit-card statement",
+    "documentType": "credit-statement",
+    "modelVersion": 1,
+    "rootNodeId": "doc-root",
+    "nodes": [
+      {
+        "id": "doc-root",
+        "type": "container",
+        "children": [
+          "billing-summary",
+          "payment-due",
+          "payment-guidance",
+          "transaction-table",
+          "sample-disclosure-set"
+        ]
+      },
+      {
+        "id": "billing-summary",
+        "type": "summary-metric",
+        "binding": "card.newBalanceCents",
+        "formatter": "usd-cents"
+      },
+      {
+        "id": "payment-due",
+        "type": "summary-metric",
+        "binding": "card.minimumDueCents",
+        "formatter": "usd-cents"
+      },
+      {
+        "id": "payment-guidance",
+        "type": "variant-set",
+        "policy": "exclusive",
+        "fallbackVariantId": "payment-standard",
+        "variantIds": [
+          "payment-standard",
+          "payment-reminder",
+          "payment-support-offer",
+          "payment-assistance-requested",
+          "payment-arrangement-active"
+        ]
+      },
+      {
+        "id": "transaction-table",
+        "type": "repeating-table",
+        "binding": "card.transactions",
+        "flowContinuation": true
+      },
+      {
+        "id": "sample-disclosure-set",
+        "type": "disclosure",
+        "required": true,
+        "contentPartId": "sample-disclosure-set"
+      }
+    ],
+    "presentationProfiles": [
+      {
+        "id": "paged-pdf",
+        "kind": "paged",
+        "paper": "US-Letter",
+        "pageMarginsMm": [
+          14,
+          14,
+          14,
+          14
+        ]
+      },
+      {
+        "id": "paged-afp-sim",
+        "kind": "afp-simulation",
+        "paper": "US-Letter",
+        "duplex": false,
+        "simulationOnly": true
+      },
+      {
+        "id": "html-responsive",
+        "kind": "responsive",
+        "breakpointsPx": [
+          600,
+          960
+        ]
+      }
+    ]
+  },
+  {
+    "schemaVersion": "1.0.0",
+    "projectId": "harborcare-demo",
+    "title": "HarborCare – explanation of benefits",
+    "documentType": "eob",
+    "modelVersion": 1,
+    "rootNodeId": "doc-root",
+    "nodes": [
+      {
+        "id": "doc-root",
+        "type": "container",
+        "children": [
+          "not-a-bill-banner",
+          "claim-identifiers",
+          "eob-claim-message",
+          "claim-table",
+          "totals-and-terms"
+        ]
+      },
+      {
+        "id": "not-a-bill-banner",
+        "type": "disclosure",
+        "required": true,
+        "contentPartId": "not-a-bill-banner"
+      },
+      {
+        "id": "claim-identifiers",
+        "type": "bound-field",
+        "binding": "claim.claimId"
+      },
+      {
+        "id": "eob-claim-message",
+        "type": "variant-set",
+        "policy": "exclusive",
+        "fallbackVariantId": "eob-processing",
+        "variantIds": [
+          "eob-processing",
+          "eob-covered",
+          "eob-review-needed",
+          "eob-appeal-status"
+        ]
+      },
+      {
+        "id": "claim-table",
+        "type": "repeating-table",
+        "binding": "claims"
+      },
+      {
+        "id": "totals-and-terms",
+        "type": "disclosure",
+        "required": true,
+        "contentPartId": "totals-and-terms"
+      }
+    ],
+    "presentationProfiles": [
+      {
+        "id": "paged-pdf",
+        "kind": "paged",
+        "paper": "US-Letter",
+        "pageMarginsMm": [
+          14,
+          14,
+          14,
+          14
+        ]
+      },
+      {
+        "id": "paged-afp-sim",
+        "kind": "afp-simulation",
+        "paper": "US-Letter",
+        "duplex": false,
+        "simulationOnly": true
+      },
+      {
+        "id": "html-responsive",
+        "kind": "responsive",
+        "breakpointsPx": [
+          600,
+          960
+        ]
+      }
+    ]
+  }
+]

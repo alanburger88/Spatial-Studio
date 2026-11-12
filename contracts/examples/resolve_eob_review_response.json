@@ -1,0 +1,64 @@
+{
+  "runId": "EXAMPLE-NONPRODUCTION-EOB-RUN-ID",
+  "result": {
+    "recordId": "EOB-0002",
+    "documentType": "eob",
+    "selectedVariants": {
+      "eob-claim-message": "eob-review-needed"
+    },
+    "matchedRuleIds": [
+      "R14",
+      "R20"
+    ],
+    "additiveRuleIds": [],
+    "requiredNodes": [
+      "claim-identifiers",
+      "not-a-bill-banner",
+      "totals-and-terms"
+    ],
+    "diagnostics": [],
+    "documentFacts": {
+      "claimId": "HC-10429",
+      "billedCents": 30000,
+      "allowedCents": 0,
+      "planPaidCents": 0,
+      "patientResponsibilityCents": 0,
+      "liabilityConfirmed": false,
+      "notABill": true
+    },
+    "resultDigest": "3261a01d3e99a8d919f834e88b76201806e23423051310f2226a63e436c04a49"
+  },
+  "trace": [
+    {
+      "ruleId": "R14",
+      "matched": true,
+      "predicateInputs": {
+        "claim.status": "denied-pending-review"
+      }
+    },
+    {
+      "ruleId": "R20",
+      "matched": true,
+      "predicateInputs": {
+        "documentType": "eob"
+      }
+    }
+  ],
+  "semanticManifest": {
+    "modelVersion": 1,
+    "requiredNodeIds": [
+      "claim-identifiers",
+      "not-a-bill-banner",
+      "totals-and-terms"
+    ],
+    "facts": {
+      "claimId": "HC-10429",
+      "billedCents": 30000,
+      "allowedCents": 0,
+      "planPaidCents": 0,
+      "patientResponsibilityCents": 0,
+      "liabilityConfirmed": false,
+      "notABill": true
+    }
+  }
+}
