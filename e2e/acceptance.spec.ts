@@ -3,7 +3,7 @@
  * (contracts/ACCEPTANCE_MATRIX.json). Every test drives the real running application.
  */
 import { test, expect } from '@playwright/test';
-import { API, EXPECTED, dragAfter, node, open, pdfText, resetAll, state } from './helpers';
+import { API, EXPECTED, dragAfter, node, open, pdfText, resetAll, state, pickRecord } from './helpers';
 import type { Page } from '@playwright/test';
 
 async function layer(page: Page, id: string) {
@@ -16,7 +16,7 @@ test.beforeEach(async ({ request }) => { await resetAll(request); });
 
 test('AT-01 open Aster and reload: same node IDs, record, selection and profile persist', async ({ page }) => {
   await open(page, 'aster-card-demo', 'design');
-  await page.getByTestId('record-selector').selectOption('CARD-0002');
+  await pickRecord(page, 'CARD-0002');
   await page.getByTestId('select-profile').selectOption('paged-afp-sim');
   await page.getByTestId('design-canvas').getByTestId('node-billing-summary').click();
   const before = await state(page);
@@ -25,7 +25,7 @@ test('AT-01 open Aster and reload: same node IDs, record, selection and profile 
   const after = await state(page);
   expect(after.nodeIds).toEqual(before.nodeIds);
   expect(after.digest).toBe(before.digest);
-  expect(await page.getByTestId('record-selector').inputValue()).toBe('CARD-0002');
+  await expect(page.getByTestId('record-selector')).toHaveAttribute('data-value', 'CARD-0002');
   expect(await page.getByTestId('select-profile').inputValue()).toBe('paged-afp-sim');
   await expect(page.getByTestId('dock-selected')).toHaveText('billing-summary');
 });
@@ -151,7 +151,7 @@ test('AT-07 create 3 variants for a Conditional Region; all appear in editor and
 test('AT-08 switch persona P01 → P04: assistance variant selected and trace explains why', async ({ page }) => {
   await open(page, 'aster-card-demo', 'exploded/payment-guidance');
   await expect(page.getByTestId('exploded-explanation')).toContainText('R01');
-  await page.getByTestId('record-selector').selectOption('CARD-0002');
+  await pickRecord(page, 'CARD-0002');
   await expect(page.getByTestId('exploded-explanation')).toContainText('R04 matched');
   await expect(page.getByTestId('exploded-explanation')).toContainText('card.assistanceRequested = true');
   await expect(page.getByTestId('variant-item-payment-assistance-requested')).toContainText('Active in this scenario');
@@ -159,7 +159,7 @@ test('AT-08 switch persona P01 → P04: assistance variant selected and trace ex
 
 test('AT-09 forced R03/R04 tie at equal priority is a blocking finding with no winner', async ({ page }) => {
   await open(page, 'aster-card-demo', 'rules-data');
-  await page.getByTestId('record-selector').selectOption('CARD-0002');
+  await pickRecord(page, 'CARD-0002');
   await page.getByTestId('inject-d01').click();
   await expect(page.getByTestId('trace-findings')).toContainText('EXCLUSIVE_PRIORITY_TIE');
   const sel = await page.evaluate(() => { const s = (window as any).__iss.store.getState(); return s.project.rules.find((r: any) => r.id === 'R03').priority; });
@@ -420,7 +420,7 @@ test('AT-29 EOB-0002 with "$300 owed" and unconfirmed liability is blocked by do
   expect(blocked.status()).toBe(422);
   // Author inserts an "amount owed" metric in the UI
   await open(page, 'harborcare-demo', 'design');
-  await page.getByTestId('record-selector').selectOption('EOB-0002');
+  await pickRecord(page, 'EOB-0002');
   await page.getByTestId('insert-summary-metric').click();
   await page.getByTestId('field-label').fill('Amount you owe');
   await page.getByTestId('field-label').press('Enter');
@@ -439,7 +439,7 @@ test('AT-30 ask AI to select the assistance persona: validated tool call; trace 
   await page.getByTestId('assistant-send').click();
   await expect(page.getByTestId('action-select_scenario')).toBeVisible();
   await page.getByTestId('action-apply').first().click();
-  await expect(page.getByTestId('record-selector')).toHaveValue('CARD-0002');
+  await expect(page.getByTestId('record-selector')).toHaveAttribute('data-value', 'CARD-0002');
   await page.getByTestId('assistant-input').fill('Explain the selected variant');
   await page.getByTestId('assistant-send').click();
   await expect(page.getByTestId('assistant-explanation').last()).toContainText('R04');

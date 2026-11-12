@@ -42,3 +42,11 @@ export async function dragAfter(page: Page, sourceTestId: string, targetTestId: 
   const box = (await target.boundingBox())!;
   await page.getByTestId(sourceTestId).dragTo(target, { targetPosition: { x: Math.min(40, box.width / 2), y: where === 'after' ? box.height - 2 : box.height / 2 } });
 }
+
+/** Choose a synthetic customer through the searchable top-bar record picker. */
+export async function pickRecord(page: Page, recordId: string) {
+  await page.getByTestId('record-selector').click();
+  await page.getByTestId('record-search').fill(recordId);
+  await page.getByTestId(`record-option-${recordId}`).click();
+  await expect(page.getByTestId('record-selector')).toHaveAttribute('data-value', recordId);
+}

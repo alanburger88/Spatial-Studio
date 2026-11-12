@@ -1,6 +1,30 @@
 import { richFromMarkup } from './rich';
 import type { ContentPart, DocNode, JourneyEvent, PresentationProfile, Project, Rule } from './types';
 
+/** Business titles for the supplied fixture rules (the pack's rules carry IDs and logic only). */
+const RULE_TITLES: Record<string, string> = {
+  R01: 'Customer is up to date',
+  R02: 'One missed payment — send a reminder',
+  R03: 'Two or more missed payments — offer support',
+  R04: 'Customer asked for payment assistance',
+  R05: 'Payment arrangement approved',
+  R06: 'Premium tier — show relationship team',
+  R07: 'Spanish-speaking customer — use approved Spanish wording',
+  R08: 'Prefers digital — interactive action with print fallback',
+  R09: 'Prefers print — print-friendly guidance',
+  R10: 'Long transaction list — repeat headings across pages',
+  R11: 'Has rewards — show rewards summary',
+  R12: 'Mandatory statement content',
+  R13: 'Claim processed and covered',
+  R14: 'Claim denied — under review',
+  R15: 'Appeal filed',
+  R16: 'Out-of-network provider — explain network',
+  R17: 'Deductible applied — explain deductible',
+  R18: 'Confirmed member responsibility — show summary',
+  R19: 'Several claims — show claim index',
+  R20: 'Mandatory EOB content',
+};
+
 /**
  * Builds the approved, editable sample projects from the supplied fixture seeds.
  * The fixture projects contain only logical placement; here we add the physical paged
@@ -186,7 +210,7 @@ export function buildSeedProjects(inputs: SeedInputs): Project[] {
       rootNodeId: fp.rootNodeId,
       nodes: isEob ? eobNodes() : cardNodes(),
       presentationProfiles: profilesFor(fp.presentationProfiles),
-      rules: inputs.rules.filter((r) => r.scope === fp.documentType).map((r) => ({ ...r, enabled: true })),
+      rules: inputs.rules.filter((r) => r.scope === fp.documentType).map((r) => ({ ...r, enabled: true, title: r.title ?? RULE_TITLES[r.id] })),
       contentParts: inputs.contentParts.map((c) => ({ ...c, approvedLocales: { ...c.approvedLocales } })),
       journey: { snapshotPolicy: 'issued-is-immutable', events: journeyFor(isEob ? 'eob' : 'card', isEob ? inputs.journeys.eob : inputs.journeys.card) },
       issuer: isEob ? { name: 'HarborCare Health', accent: '#1D5941', product: 'HarborCare Select' } : { name: 'Aster Card', accent: '#277656', product: 'Aster Card' },

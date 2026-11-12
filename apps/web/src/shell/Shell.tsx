@@ -1,9 +1,10 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 import type { ProfileId } from '@iss/model';
-import { personaLabel, useIsDirty, useResolution, useStudio } from '../state/store';
+import { personaLabel, useIsDirty, useModelChecks, useResolution, useStudio } from '../state/store';
+import { RecordPicker, recordSummary } from './RecordPicker';
 import { BrandMark, Icon } from '../ui/icons';
-import { ErrorState, Loading, Toasts } from '../ui/common';
+import { Biz, ErrorState, Loading, Tech, Toasts } from '../ui/common';
 import { DemoBanner } from '../screens/GuidedDemo';
 
 export const SCREENS = [
@@ -47,6 +48,23 @@ export function useGlobalShortcuts() {
   }, [navigate, projectId]);
 }
 
+function DisplayToggles() {
+  const viewMode = useStudio((s) => s.viewMode);
+  const theme = useStudio((s) => s.theme);
+  const { setViewMode, setTheme } = useStudio.getState();
+  return (
+    <div className="row display-toggles" style={{ gap: 6 }}>
+      <div className="seg" role="group" aria-label="Detail level">
+        <button type="button" aria-pressed={viewMode === 'business'} onClick={() => setViewMode('business')} data-testid="view-business" title="Plain-language view: engine internals collapse behind Proof">Business</button>
+        <button type="button" aria-pressed={viewMode === 'technical'} onClick={() => setViewMode('technical')} data-testid="view-technical" title="Show run IDs, hashes, raw rule expressions and JSON">Technical</button>
+      </div>
+      <button type="button" className="btn ghost icon" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'} title={theme === 'light' ? 'Dark theme' : 'Light theme'} data-testid="theme-toggle">
+        {theme === 'light' ? <Icon.moon /> : <Icon.sun />}
+      </button>
+    </div>
+  );
+}
+
 function TopBar() {
   const navigate = useNavigate();
   const projects = useStudio((s) => s.projects);
@@ -68,27 +86,28 @@ function TopBar() {
         <span className="brand-logo" aria-hidden="true" />
         <span className="brand-name">InfoSlips <span>Spatial Studio</span></span>
       </Link>
-      <span className="badge-synthetic" title="All customers, accounts, claims and organisations are fictional">Synthetic data</span>
-      <div className="spacer" />
+      <span className="badge-synthetic" title="All customers, accounts, claims and organisations are fictional. AFP output is a simulation.">Synthetic data</span>
       {project && (
-        <div className="topbar-group">
+        <nav className="crumbs" aria-label="Breadcrumb">
+          <Link to="/projects">Projects</Link><span aria-hidden="true">/</span>
           <label className="field-inline"><span className="lbl">Project</span>
-            <select className="select" aria-label="Project" value={project.projectId} onChange={(e) => { const p = e.target.value; navigate(window.location.pathname.replace(`/studio/${project.projectId}`, `/studio/${p}`)); }} data-testid="project-switcher">
+            <select className="crumb-select" aria-label="Project" value={project.projectId} onChange={(e) => { const p = e.target.value; navigate(window.location.pathname.replace(`/studio/${project.projectId}`, `/studio/${p}`)); }} data-testid="project-switcher">
               {(projects.length ? projects : [{ projectId: project.projectId, title: project.title }]).map((p) => <option key={p.projectId} value={p.projectId}>{p.title}</option>)}
             </select>
           </label>
-          <label className="field-inline"><span className="lbl">Record</span>
-            <select className="select" aria-label="Synthetic record and persona" value={ctx.recordId} onChange={(e) => setRecord(e.target.value)} data-testid="record-selector" style={{ maxWidth: 250 }}>
-              {docRecords.map((r) => <option key={r.recordId} value={r.recordId}>{r.recordId} · {r.customer.givenName} {r.customer.familyName}{r.personaId ? ` · ${personaLabel(personas, r.personaId).split(' · ')[1]}` : (r.claims?.[0] as any)?.status ? ` · ${(r.claims![0] as any).status}` : ''}</option>)}
-            </select>
-          </label>
+        </nav>
+      )}
+      <div className="spacer" />
+      {project && (
+        <div className="topbar-group">
+          <RecordPicker records={docRecords} personas={personas} value={ctx.recordId} onChange={setRecord} />
           {hasOverrides && <span className="chip variant" title={JSON.stringify(ctx.overrides).slice(0, 300)}>Scenario overrides</span>}
           {ctx.journeyCursor !== null && <span className="chip info">Journey · event {ctx.journeyCursor + 1}</span>}
           <label className="field-inline"><span className="lbl">Output</span>
             <select className="select" aria-label="Output profile" value={ctx.profileId} onChange={(e) => setProfile(e.target.value as ProfileId)} data-testid="select-profile">
-              <option value="paged-pdf">Paged · PDF</option>
+              <option value="paged-pdf">PDF</option>
               <option value="html-responsive">Interactive HTML</option>
-              <option value="paged-afp-sim">AFP (simulation)</option>
+              <option value="paged-afp-sim">AFP (simulated)</option>
             </select>
           </label>
           <div className="row" style={{ gap: 4 }}>
@@ -96,10 +115,10 @@ function TopBar() {
             <button className="btn icon" onClick={redo} disabled={!future} aria-label={`Redo (${future} available)`} title="Redo (Ctrl+Y)" data-testid="redo"><Icon.redo /></button>
             <button className={`btn${dirty ? ' primary' : ''}`} onClick={() => save()} disabled={saving} data-testid="save-project" title="Save (Ctrl+S)"><Icon.save /> {saving ? 'Saving…' : 'Save'}</button>
           </div>
-          <span className={`save-state${dirty ? ' dirty' : ''}`} data-testid="save-state" aria-live="polite" title={dirty ? 'Unsaved changes' : 'Saved'}><span className="dot" />{dirty ? 'Unsaved changes' : 'Saved'} · v{project.modelVersion}</span>
-          <Link className="btn ghost icon" to={`/studio/${project.projectId}/demo`} aria-label="Guided demo" title="Guided demo"><Icon.demo /></Link>
+          <span className={`save-state${dirty ? ' dirty' : ''}`} data-testid="save-state" aria-live="polite" title={dirty ? 'Unsaved changes' : 'Saved'}><span className="dot" />{dirty ? 'Unsaved' : 'Saved'} · v{project.modelVersion}</span>
         </div>
       )}
+      <DisplayToggles />
     </header>
   );
 }
@@ -110,17 +129,16 @@ function Nav() {
   const pid = project?.projectId ?? 'aster-card-demo';
   return (
     <nav className="nav" aria-label="Studio views">
-      <div className="nav-title">Studio views</div>
       {SCREENS.map((s, i) => {
         const to = s.path.startsWith('/') ? s.path : `/studio/${pid}/${s.path}${s.path === 'exploded' ? `/${sel ?? project?.nodes.find((n) => n.type === 'variant-set')?.id ?? 'payment-guidance'}` : ''}`;
         const Ico = s.icon;
+        const key = i >= 1 && i <= 9 ? ` (Alt+${i})` : '';
         return (
-          <NavLink key={s.id} to={to} className={({ isActive }) => (isActive || (s.path === 'exploded' && location.pathname.includes('/exploded/')) ? 'active' : '')} title={`${s.label} (Alt+${i})`} data-testid={`nav-${s.id}`}>
-            <Ico /><span>{s.label}</span><span className="num">{s.id.slice(1)}</span>
+          <NavLink key={s.id} to={to} className={({ isActive }) => (isActive || (s.path === 'exploded' && location.pathname.includes('/exploded/')) ? 'active' : '')} title={`${s.label}${key}`} data-testid={`nav-${s.id}`}>
+            <Ico /><span>{s.label}</span>
           </NavLink>
         );
       })}
-      <div className="nav-foot">All names, accounts and claims are fictional synthetic data. AFP output is simulated. <br />Alt+1…9 switches views.</div>
     </nav>
   );
 }
@@ -130,18 +148,27 @@ function Dock() {
   const ctx = useStudio((s) => s.ctx);
   const personas = useStudio((s) => s.personas);
   const records = useStudio((s) => s.records);
+  const lastValidation = useStudio((s) => s.lastValidation);
   const res = useResolution();
+  const checks = useModelChecks();
   if (!project) return <footer className="dock">No project open</footer>;
   const rec = records.find((r) => r.recordId === ctx.recordId);
-  const blocking = res?.findings.filter((f) => f.severity === 'blocking').length ?? 0;
-  const warnings = res?.findings.filter((f) => f.severity === 'warning').length ?? 0;
+  const recLabel = rec ? recordSummary(rec, personas) : null;
+  const validated = lastValidation && res && lastValidation.runId === res.runId ? lastValidation.counts : null;
+  const blocking = validated ? validated.blocking ?? 0 : checks.blocking;
+  const errors = validated ? validated.error ?? 0 : checks.errors;
+  const warnings = validated ? validated.warning ?? 0 : checks.warnings;
+  const scope = validated ? 'Full validation' : 'Rule & binding checks';
+  const matched = res?.result.matchedRuleIds ?? [];
   return (
     <footer className="dock" aria-label="Scenario status">
       <span>Selected <strong data-testid="dock-selected">{ctx.selectedNodeId ?? 'none'}</strong></span><span className="sep" />
-      <span>Record <strong>{ctx.recordId}</strong>{rec?.personaId ? ` · ${personaLabel(personas, rec.personaId)}` : ''}</span><span className="sep" />
-      <span>Run <strong className="mono">{res?.runId ?? '—'}</strong></span><span className="sep" />
-      <span>Rules <strong>{res?.result.matchedRuleIds.join(' ') || '—'}</strong></span><span className="sep" />
-      <span className={blocking ? 'sev blocking' : warnings ? 'sev warning' : 'sev ok'}>{blocking ? `${blocking} blocking` : warnings ? `${warnings} warnings` : 'No blocking issues'}</span>
+      <span>Customer <strong>{recLabel?.name ?? ctx.recordId}</strong>{recLabel?.tag ? ` · ${recLabel.tag}` : ''}<Tech> · <span className="mono">{ctx.recordId}</span>{rec?.personaId ? ` · ${personaLabel(personas, rec.personaId).split(' · ')[0]}` : ''}</Tech></span><span className="sep" />
+      <Tech><span>Run <strong className="mono">{res?.runId ?? '—'}</strong></span><span className="sep" /></Tech>
+      <span title={matched.join(' ')}>Rules applied <strong>{matched.length ? <><Tech>{matched.join(' ')}</Tech><Biz>{matched.length}</Biz></> : '—'}</strong></span><span className="sep" />
+      <Link to={`/studio/${project.projectId}/validate`} className={`dock-status ${blocking || errors ? 'sev blocking' : warnings ? 'sev warning' : 'sev ok'}`} data-testid="dock-status" title={`${scope} for this scenario — open Validate & Compare`}>
+        {scope}: {blocking ? `${blocking} blocking` : errors ? `${errors} errors` : warnings ? `${warnings} warning${warnings === 1 ? '' : 's'}` : 'no issues'}
+      </Link>
     </footer>
   );
 }
@@ -178,7 +205,7 @@ export function PlainShell({ children }: { children: ReactNode }) {
       <TopBar />
       <Nav />
       <main className="main" id="main">{children}</main>
-      <footer className="dock">InfoSlips Spatial Studio · local POC · synthetic data only · no external publication</footer>
+      <footer className="dock">InfoSlips Spatial Studio · local proof of concept</footer>
       <Toasts />
     </div>
   );

@@ -2,19 +2,52 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { useStudio } from '../state/store';
 import { Icon } from './icons';
 
+/**
+ * Compact one-line screen header: title, an "About this view" disclosure (the long description) and actions.
+ * The description stays in the DOM for assistive technology and opens on demand for sighted users.
+ */
 export function ScreenHeader(props: { id: string; title: string; subtitle: string; badge?: ReactNode; actions?: ReactNode }) {
   return (
-    <header className="screen-head">
-      <div style={{ minWidth: 0 }}>
-        <div className="screen-kicker">Screen {props.id.slice(1)} / 12 · {props.id}</div>
-        <h1>{props.title}</h1>
-        <p>{props.subtitle}</p>
-      </div>
+    <header className="screen-head" data-screen={props.id}>
+      <h1>{props.title}</h1>
+      {props.subtitle && (
+        <details className="screen-about">
+          <summary aria-label={`About ${props.title}`} title="About this view"><Icon.info /></summary>
+          <p className="screen-about-pop">{props.subtitle}</p>
+        </details>
+      )}
       <div className="actions">
         {props.badge}
         {props.actions}
       </div>
     </header>
+  );
+}
+
+/** Renders children only in Technical view (engine internals: run IDs, hashes, raw expressions). */
+export function Tech({ children }: { children: ReactNode }) {
+  const mode = useStudio((s) => s.viewMode);
+  return mode === 'technical' ? <>{children}</> : null;
+}
+
+/** Renders children only in Business view. */
+export function Biz({ children }: { children: ReactNode }) {
+  const mode = useStudio((s) => s.viewMode);
+  return mode === 'business' ? <>{children}</> : null;
+}
+
+/**
+ * Proof disclosure: technical evidence (hashes, run IDs, JSON) shown inline in Technical view and
+ * collapsed behind a "Proof" toggle in Business view. Content always stays available.
+ */
+export function Proof({ children, label = 'Proof', testId }: { children: ReactNode; label?: string; testId?: string }) {
+  const mode = useStudio((s) => s.viewMode);
+  if (mode === 'technical') return <div className="proof open" data-testid={testId}>{children}</div>;
+  return (
+    <details className="proof" data-testid={testId}>
+      <summary><Icon.info /> {label}</summary>
+      <div className="proof-body">{children}</div>
+    </details>
   );
 }
 

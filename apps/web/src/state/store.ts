@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { applyCommand, projectContentDigest, type Command, type Persona, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
 import { resolve, type Resolution } from '@iss/resolver';
 import { ScenarioEngine, type DimensionId } from '@iss/scenarios';
+import { staticRuleAnalysis, bindingAnalysis } from '@iss/validation';
 import { api, ApiFailure, type ProjectSummary } from '../api/client';
 
 /**
@@ -48,6 +49,11 @@ interface StudioState {
   toasts: Toast[];
   lastRejection: { code: string; message: string; nodeId?: string; at: number } | null;
   reducedMotion: boolean;
+  /** Presentation density: business hides engine internals (hashes, IDs, raw expressions) behind "Proof" disclosures. */
+  viewMode: ViewMode;
+  theme: Theme;
+  /** Last full server validation report, keyed by the run it validated (shared with the status dock). */
+  lastValidation: { runId: string; counts: Record<string, number> } | null;
 
   loadProjects(): Promise<void>;
   openProject(projectId: string): Promise<void>;
@@ -67,7 +73,25 @@ interface StudioState {
   toast(t: Omit<Toast, 'id'>): void;
   dismissToast(id: number): void;
   setReducedMotion(v: boolean): void;
+  setViewMode(v: ViewMode): void;
+  setTheme(v: Theme): void;
+  setLastValidation(v: { runId: string; counts: Record<string, number> } | null): void;
 }
+
+export type ViewMode = 'business' | 'technical';
+export type Theme = 'light' | 'dark';
+function readPref<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try { const v = localStorage.getItem(key) as T | null; return v && allowed.includes(v) ? v : fallback; } catch { return fallback; }
+}
+function writePref(key: string, v: string) { try { localStorage.setItem(key, v); } catch { /* storage unavailable */ } }
+function applyDocAttrs(viewMode: ViewMode, theme: Theme) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.dataset.view = viewMode;
+  document.documentElement.dataset.theme = theme;
+}
+const initialViewMode = typeof window === 'undefined' ? 'business' : readPref<ViewMode>('iss.viewMode', ['business', 'technical'], 'business');
+const initialTheme = typeof window === 'undefined' ? 'light' : readPref<Theme>('iss.theme', ['light', 'dark'], 'light');
+applyDocAttrs(initialViewMode, initialTheme);
 
 const HISTORY_LIMIT = 50;
 let toastSeq = 0;
@@ -112,6 +136,9 @@ export const useStudio = create<StudioState>((set, get) => ({
   ctx: { recordId: 'CARD-0001', overrides: {}, journeyCursor: null, profileId: 'paged-pdf', selectedNodeId: null, selectedVariantId: null, activeValidationIssue: null, cubeAxes: ['persona', 'output', 'journey'], spatialFilters: {}, activeScenarioId: null },
   toasts: [], lastRejection: null,
   reducedMotion: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+  viewMode: initialViewMode,
+  theme: initialTheme,
+  lastValidation: null,
 
   async loadProjects() {
     set({ projectsStatus: 'loading', projectsError: null });
@@ -226,6 +253,9 @@ export const useStudio = create<StudioState>((set, get) => ({
     document.documentElement.dataset.reducedMotion = String(v);
     set({ reducedMotion: v });
   },
+  setViewMode(viewMode) { writePref('iss.viewMode', viewMode); applyDocAttrs(viewMode, get().theme); set({ viewMode }); },
+  setTheme(theme) { writePref('iss.theme', theme); applyDocAttrs(get().viewMode, theme); set({ theme }); },
+  setLastValidation(lastValidation) { set({ lastValidation }); },
 }));
 
 /* ----------------------------------------------------------- derived hooks */
@@ -253,6 +283,26 @@ export function useResolution(): Resolution | null {
     if (!project || !record || record.documentType !== project.documentType) return null;
     return resolve({ project, record, overrides, journeyCursor, profileId });
   }, [project, record, overrides, journeyCursor, profileId]);
+}
+
+/**
+ * Rule & binding checks for the open model, computed in the browser with the same functions the server's
+ * "rules" and "bindings" validation suites use, so the status dock and Validate & Compare always agree.
+ */
+export function useModelChecks(): { blocking: number; errors: number; warnings: number } {
+  const project = useStudio((s) => s.project);
+  const records = useStudio((s) => s.records);
+  const res = useResolution();
+  const staticRules = useMemo(() => (project && records.length ? staticRuleAnalysis(project, records) : []), [project, records]);
+  const staticBindings = useMemo(() => (project ? bindingAnalysis(project) : []), [project]);
+  return useMemo(() => {
+    // Mirrors the server's "rules" suite (resolver + domain + static) and de-duplicated "bindings" suite exactly.
+    const rules = [...(res?.findings.filter((f) => f.source === 'resolver' || f.source === 'domain') ?? []), ...staticRules];
+    const seen = new Set<string>();
+    const bindings = [...(res?.findings.filter((f) => f.source === 'binding') ?? []), ...staticBindings].filter((f) => { const k = `${f.code}|${f.nodeId}|${f.message}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    const all = [...rules, ...bindings];
+    return { blocking: all.filter((f) => f.severity === 'blocking').length, errors: all.filter((f) => f.severity === 'error').length, warnings: all.filter((f) => f.severity === 'warning').length };
+  }, [res, staticRules, staticBindings]);
 }
 
 /** Scenario engine over all seeded records of the project's document type (memoised per model). */

@@ -64,3 +64,24 @@ The shell already renders the top bar (project/record/output switchers, undo/red
 ## Report back
 
 List: files changed, what works (verified how), test IDs present, known gaps, and any shared-file change requests.
+
+## Polish pass (v0.2) — shared infrastructure every screen must use
+
+Owned by the integrator; **do not edit** these files, request changes instead:
+`apps/web/src/state/store.ts`, `apps/web/src/shell/*`, `apps/web/src/ui/*`, `apps/web/src/styles/tokens.css`, `apps/web/src/styles/app.css`, `packages/*`, `e2e/*`.
+
+1. **Compact header.** `ScreenHeader` is now one line: `h1` + an ⓘ "About this view" disclosure holding `subtitle` + `actions`. Keep passing a good `subtitle`. Do not add your own page descriptions above panels.
+2. **One disclaimer only.** The top-bar "Synthetic data" badge and the Project Gallery statement are the only synthetic-data disclaimers. Remove per-screen "Synthetic data only" / "Synthetic counts — not market data" / "synthetic" chips, pills and footers. Keep *functional* labels that change meaning (e.g. "AFP (simulation)" tab and the simulation chip, "Offline assistant").
+3. **Business / Technical view.** `useStudio(s => s.viewMode)`; helpers in `ui/common.tsx`:
+   - `<Tech>…</Tech>` renders only in Technical view; `<Biz>…</Biz>` only in Business view.
+   - `<Proof label="…">…</Proof>` — inline in Technical view, collapsed "ⓘ Proof" disclosure in Business view. Use for run IDs, SHA-256 / content digests, model versions, raw JSON, AST.
+   - CSS utility classes `.tech-only` / `.biz-only` also work.
+   - In Business view show **plain language**: `ui/plain.ts` → `ruleTitle(project, rule)`, `ruleSentence(project, rule)` ("When missed payments is at least 2, show “Payment support” in Payment guidance."), `predicateSentence`, `fieldLabel(project, path)`, `nodeTitle(project, id)`. Rule IDs (R04) may stay as small secondary tags; raw expressions like `card.assistanceRequested = true`, priorities (P400), component codes (C11) go Technical-only.
+   - Never remove information entirely: Business view must still let a user reach the proof.
+4. **Themes.** Light is now the default; dark is a toggle (`data-theme` on `<html>`). **No hard-coded colours in screen CSS/TSX**: use tokens from `tokens.css` (`--iss-text`, `--iss-text-muted`, `--iss-surface*`, `--iss-border*`, `--iss-accent*`, `--iss-*-soft`, `--iss-*-line`, `--iss-*-fg` chip text, `--iss-overlay-1..3` for subtle tints, `--iss-row-border`, `--iss-row-hover`, `--iss-on-accent`). Status colours: `--iss-success/warning/error/info`.
+   - `.stage` (and any element with class `dark-scope`) re-scopes the **dark** tokens even in light theme, so 2.5D/3D viewports stay a deep-slate viewport. Use tokens inside stages too; they will resolve to dark values there.
+   - The document "paper" is always white (`--iss-paper`, `--iss-paper-ink`).
+   - Check contrast in **both** themes (WCAG AA 4.5:1 for text). axe runs in E2E.
+5. **Record picker.** The top-bar record control is now a searchable combobox (`shell/RecordPicker.tsx`, testid `record-selector` with `data-value`). Use `useStudio.getState().setRecord(id)` from code.
+6. **Layout budget.** Must work at **1280×720** and **1440×900** without clipped primary actions or unreadable overlap. Primary tables should show ≥ 5 rows at 1440×900. Long identifiers: truncate with ellipsis + `title`, never wrap mid-identifier into 4 lines.
+7. **Tests.** Keep every `data-testid` used by `e2e/acceptance.spec.ts` and `tests/e2e/*.spec.ts` (grep before renaming). Do **not** run the Playwright E2E suite (it resets the shared database other engineers are using); the integrator runs it. Do run `npx tsc -p tsconfig.json --noEmit` and capture screenshots with `node scripts/shot.mjs <url> <out.png> [w] [h]` (dev server: http://127.0.0.1:5173, API :3001 — already running; do not start or kill servers). Put screenshots under `/tmp/claude-0/-home-user-Spatial-Studio/60b1a659-14d2-561c-bbb9-5044a0a4d3ba/scratchpad/agents/<your-name>/`. To check the dark theme in a screenshot, set `localStorage['iss.theme']='dark'` (or click `theme-toggle`); for Technical view set `localStorage['iss.viewMode']='technical'`.
