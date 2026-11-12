@@ -115,3 +115,7 @@
 .ls25-legend { display: flex; flex-wrap: wrap; gap: 4px 20px; padding: 8px 14px; border-bottom: 1px solid var(--iss-border); font-size: 12px; color: var(--iss-text-muted); }
 .ls25-leg strong { color: var(--iss-text); margin-right: 4px; }
 .ls25-leg .ls-sevkey { margin-right: 10px; }
+
+/* chart captions wrap in full instead of being cut to two lines */
+.ls-cap { display: block; -webkit-line-clamp: unset; overflow: visible; overflow-wrap: break-word; }
+.ls-cap.mono { white-space: normal; overflow-wrap: anywhere; }

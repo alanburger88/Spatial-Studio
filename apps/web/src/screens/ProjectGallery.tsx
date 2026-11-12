@@ -443,10 +443,8 @@ export function ProjectGallery() {
   const ordered = useMemo(() => [...projects].sort((a, b) => (a.sample !== b.sample ? (a.sample ? -1 : 1) : a.sample ? (a.projectId === 'aster-card-demo' ? -1 : 1) : b.updatedAt.localeCompare(a.updatedAt))), [projects]);
   const titleOf = (id?: string) => projects.find((x) => x.projectId === id)?.title;
   const navigate = useNavigate();
-  const tryCustomer = () => {
-    navigate('/studio/aster-card-demo/design');
-    window.setTimeout(() => document.querySelector<HTMLElement>('[data-testid=record-selector]')?.focus(), 500);
-  };
+  // The studio shell highlights and focuses the customer picker once the project has actually loaded (?show=customer).
+  const tryCustomer = () => navigate('/studio/aster-card-demo/design?show=customer');
   const imported = (counts?.importedCard ?? 0) + (counts?.importedEob ?? 0);
   return (
     <section className="screen" data-testid="project-gallery">

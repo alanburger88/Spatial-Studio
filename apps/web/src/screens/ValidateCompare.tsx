@@ -300,7 +300,7 @@ export function ValidateCompare() {
                       })}
                       {!shown.length && (
                         <li className="vc-clean" data-testid="validation-clean">
-                          {groups.length ? 'No issues match the current filters.' : <><span className="sev ok">✔ clean</span> No findings from the {report.suitesRequested.length} suite(s) that ran. Automated checks are not WCAG or regulatory certification.</>}
+                          {groups.length ? 'No issues match the current filters.' : <><span className="sev ok">✔ Clean</span> No findings from the {report.suitesRequested.length} suite(s) that ran. Automated checks are not WCAG or regulatory certification.</>}
                         </li>
                       )}
                     </ul>
@@ -327,7 +327,7 @@ export function ValidateCompare() {
 /* ----------------------------------------------------------- overview/cards */
 
 const STATUS_VIEW: Record<string, { icon: string; label: string; cls: string }> = {
-  clean: { icon: '✔', label: 'clean', cls: 'ok' }, warnings: { icon: '▲', label: 'warnings', cls: 'warning' }, errors: { icon: '■', label: 'errors', cls: 'error' }, 'not-run': { icon: '–', label: 'not run', cls: '' },
+  clean: { icon: '✔', label: 'Clean', cls: 'ok' }, warnings: { icon: '▲', label: 'Warnings', cls: 'warning' }, errors: { icon: '■', label: 'Errors', cls: 'error' }, 'not-run': { icon: '–', label: 'Not run', cls: '' },
 };
 
 function Overview({ report, running, suites, stale, gCounts }: { report: Report | null; running: boolean; suites: Suite[]; stale: boolean; gCounts: Record<Sev, number> }) {
@@ -361,7 +361,7 @@ function Overview({ report, running, suites, stale, gCounts }: { report: Report 
         <tbody>
           {SUITES.map((s) => {
             const st = report?.suites?.[s.id];
-            const view = running && suites.includes(s.id) && !report ? { icon: '…', label: 'running', cls: '' } : STATUS_VIEW[st?.status ?? 'not-run'];
+            const view = running && suites.includes(s.id) && !report ? { icon: '…', label: 'Running', cls: '' } : STATUS_VIEW[st?.status ?? 'not-run'];
             const ran = st && st.status !== 'not-run';
             return (
               <tr key={s.id} className={`vc-suite ${view.cls}`} data-testid={`suite-${s.id}`}>

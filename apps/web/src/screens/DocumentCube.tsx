@@ -20,7 +20,10 @@ const DEFAULT_YAW = -32;
 const DEFAULT_TILT = -20;
 const SEP = '␟';
 /** Short tick label: "Day 45 · Assistance requested" -> "D45"; long names are cut with an ellipsis (full text stays in the title tooltip). */
-const shortLabel = (l: string, max = 12) => { const m = /^Day (\d+)\b/.exec(l); if (m) return `D${m[1]}`; return l.length > max ? `${l.slice(0, max - 1).trimEnd()}…` : l; };
+/** 3D axis ticks show the whole label (wrapped in CSS); journey stages use their short form "Day 30" — the full name is in the tooltip, legend and table. */
+const shortLabel = (l: string) => { const m = /^Day (\d+)\b/.exec(l); return m ? `Day ${m[1]}` : l; };
+/** Crowded X axis (more than three columns): a coded label such as "P03 First Missed Payment" shows its code only — never a word cut in half. */
+const tickLabel = (l: string, crowded: boolean) => { const m = crowded ? /^([A-Z]{1,3}\d{1,3})\s/.exec(l) : null; return m ? m[1] : shortLabel(l); };
 const plainCat = (l: string, technical: boolean) => (!technical && /^[a-z0-9]+(-[a-z0-9]+)+$/.test(l) ? l.replace(/-/g, ' ').replace(/^./, (m) => m.toUpperCase()) : l);
 const humanCode = (c: string) => { const t = c.replace(/[-_.]+/g, ' ').toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
 
@@ -376,9 +379,9 @@ function CubeScene(props: { cube: CubeResult; yaw: number; tilt: number; zSlice:
       {/* Data layer: same camera as the frame, separate 3D context so wireframe planes can never slice the labels or cells. */}
       <div className="cube-world" style={{ transform: `rotateX(${tilt}deg) rotateY(${yaw}deg)` }} data-testid="cube-3d-data">
         {/* tick labels + axis titles (billboards, always facing the viewer) */}
-        {ax.categories.map((c, i) => <div key={`tx${c.key}`} className="cube-tick tx" style={{ transform: bb(px(i), H / 2 + 24 + (nx > 3 && i % 2 ? 24 : 0), D / 2, 70) }} title={c.label}><span>{shortLabel(c.label)}</span></div>)}
-        {ay.categories.map((c, j) => <div key={`ty${c.key}`} className="cube-tick ty" style={{ transform: bb(-W / 2 - 12, py(j), D / 2, 70) }} title={c.label}><span>{shortLabel(c.label, 14)}</span></div>)}
-        {az.categories.map((c, k) => <div key={`tz${c.key}`} className={`cube-tick tz${sliceZ === k ? ' on' : ''}`} style={{ transform: bb(W / 2 + 14, H / 2 + 14, zPos(k), 70) }} title={c.label}><span>{shortLabel(c.label, 10)}</span></div>)}
+        {ax.categories.map((c, i) => <div key={`tx${c.key}`} className="cube-tick tx" style={{ transform: bb(px(i), H / 2 + 24 + (nx > 3 && i % 2 ? 24 : 0), D / 2, 70) }} title={c.label}><span>{tickLabel(c.label, nx > 3)}</span></div>)}
+        {ay.categories.map((c, j) => <div key={`ty${c.key}`} className="cube-tick ty" style={{ transform: bb(-W / 2 - 12, py(j), D / 2, 70) }} title={c.label}><span>{shortLabel(c.label)}</span></div>)}
+        {az.categories.map((c, k) => <div key={`tz${c.key}`} className={`cube-tick tz${sliceZ === k ? ' on' : ''}`} style={{ transform: bb(W / 2 + 14, H / 2 + 14, zPos(k), 70) }} title={c.label}><span>{shortLabel(c.label)}</span></div>)}
         <div className="cube-axis-title ax-x" style={{ transform: bb(-W / 2 + 10, H / 2 + 104, D / 2, 70) }}>X · {ax.label} →</div>
         <div className="cube-axis-title ax-y" style={{ transform: bb(-W / 2 - 4, -H / 2 - 22, D / 2, 70) }}>↑ Y · {ay.label}</div>
         <div className="cube-axis-title ax-z" style={{ transform: bb(W / 2 + 6, H / 2 + 14, D / 2, 70) }}>Z · {az.label} (front → back)</div>

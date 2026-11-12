@@ -2,19 +2,18 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { create } from 'zustand';
 import { useResolution, useStudio } from '../state/store';
 import { useDemo } from '../demo/demo';
-import { injectD01, makeTransactions, removeFallback, restoreFallback, restoreR03 } from '../screens/RulesData';
+import { injectD01, makeTransactions, removeFallback, restoreFallback, restoreR03 } from '../demo/defects';
 import { Icon } from '../ui/icons';
 import { Tech, formatMoney } from '../ui/common';
 
 /**
  * Demo tools: every deliberate-defect control in one place, out of the working screens.
- * Closed by default; opened from the status bar, and automatically while the Guided Demo runs.
+ * Closed by default and opened only from the status bar, so it never covers a screen unasked.
  * Model edits go through the command bus (undoable); scenario changes are overrides (never model edits).
  */
-export const useDemoTools = create<{ open: boolean; dismissed: boolean; setOpen(v: boolean, byUser?: boolean): void }>((set) => ({
+export const useDemoTools = create<{ open: boolean; setOpen(v: boolean): void }>((set) => ({
   open: false,
-  dismissed: false,
-  setOpen: (open, byUser) => set((s) => ({ open, dismissed: byUser && !open ? true : s.dismissed })),
+  setOpen: (open) => set({ open }),
 }));
 
 /** Which seeded defects are currently applied (derived from the live model + scenario; nothing is stored). */
@@ -52,23 +51,17 @@ function Tool({ id, title, text, on, children }: { id: string; title: string; te
 
 export function DemoToolsPanel() {
   const open = useDemoTools((s) => s.open);
-  const demoActive = useDemo((s) => s.active);
+  const bannerShown = useDemo((s) => s.active && !s.bannerHidden && s.index >= 0);
   const st = useDefectState();
   const ref = useRef<HTMLElement>(null);
   const dispatch = useStudio((s) => s.dispatch);
   const patchOverrides = useStudio((s) => s.patchOverrides);
   const clearOverrides = useStudio((s) => s.clearOverrides);
 
-  // Open automatically while the Guided Demo is running (unless the presenter closed it); close when it ends.
-  useEffect(() => {
-    const s = useDemoTools.getState();
-    if (demoActive && !s.dismissed) s.setOpen(true);
-    if (!demoActive) useDemoTools.setState({ open: false, dismissed: false });
-  }, [demoActive]);
   useEffect(() => {
     if (!open) return;
     ref.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus({ preventScroll: true });
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && ref.current?.contains(document.activeElement)) { useDemoTools.getState().setOpen(false, true); document.querySelector<HTMLElement>('[data-testid=open-demo-tools]')?.focus(); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && ref.current?.contains(document.activeElement)) { useDemoTools.getState().setOpen(false); document.querySelector<HTMLElement>('[data-testid=open-demo-tools]')?.focus(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
@@ -86,10 +79,10 @@ export function DemoToolsPanel() {
     patchOverrides({ claims: [{ ...claim0, patientResponsibilityCents: 30000, liabilityConfirmed: false, status: 'denied-pending-review' }, ...eff.claims.slice(1)] });
   };
   return (
-    <aside className={`demo-tools${demoActive ? ' with-banner' : ''}`} role="complementary" aria-label="Demo tools" data-testid="demo-tools" ref={ref}>
+    <aside className={`demo-tools${bannerShown ? ' with-banner' : ''}`} role="complementary" aria-label="Demo tools" data-testid="demo-tools" ref={ref}>
       <header>
         <Icon.warning /><h2>Demo tools</h2>
-        <button type="button" className="btn ghost sm icon" style={{ marginLeft: 'auto' }} onClick={() => useDemoTools.getState().setOpen(false, true)} aria-label="Close demo tools" data-autofocus><Icon.close /></button>
+        <button type="button" className="btn ghost sm icon" style={{ marginLeft: 'auto' }} onClick={() => useDemoTools.getState().setOpen(false)} aria-label="Close demo tools" data-autofocus><Icon.close /></button>
       </header>
       <p className="dt-intro">Break the sample on purpose to show the checks catching it. Changes to the document can be undone from the top bar; changes to the customer are temporary.</p>
       <ul className="dt-list">
@@ -126,7 +119,7 @@ export function DemoToolsButton() {
   const st = useDefectState();
   if (!st) return null;
   return (
-    <button type="button" className={`dock-btn${st.count ? ' warn' : ''}`} aria-expanded={open} aria-controls="demo-tools" onClick={() => useDemoTools.getState().setOpen(!open, true)} data-testid="open-demo-tools" title="Deliberate defects for demonstrations">
+    <button type="button" className={`dock-btn${st.count ? ' warn' : ''}`} aria-expanded={open} aria-controls="demo-tools" onClick={() => useDemoTools.getState().setOpen(!open)} data-testid="open-demo-tools" title="Deliberate defects for demonstrations">
       <Icon.warning width={13} height={13} /> Demo tools{st.count ? ` · ${st.count} applied` : ''}
     </button>
   );

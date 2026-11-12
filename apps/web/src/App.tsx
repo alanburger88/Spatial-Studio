@@ -1,25 +1,56 @@
-import { useEffect, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, type ComponentType, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useStudio } from './state/store';
 import { Loading } from './ui/common';
 import { PlainShell, StudioShell } from './shell/Shell';
 import { ProjectGallery } from './screens/ProjectGallery';
-import { DesignStudio } from './screens/DesignStudio';
-import { ExplodedDocument } from './screens/ExplodedDocument';
-import { DocumentCube } from './screens/DocumentCube';
-import { ScenarioLandscape } from './screens/ScenarioLandscape';
-import { PageStack } from './screens/PageStack';
-import { RulesData } from './screens/RulesData';
-import { JourneySimulator } from './screens/JourneySimulator';
-import { ValidateCompare } from './screens/ValidateCompare';
-import { PreviewExport } from './screens/PreviewExport';
-import { GuidedDemo } from './screens/GuidedDemo';
-import { AiAssistant } from './screens/AiAssistant';
-import { Translations } from './screens/Translations';
-import { Activity } from './screens/Activity';
 import { Login } from './screens/Login';
+import { GuidedDemo } from './screens/GuidedDemo'; // small, and the shell already needs its banner
 
-const S = (el: JSX.Element) => <StudioShell>{el}</StudioShell>;
+/**
+ * Every studio screen is its own download, fetched when first opened, so the first page loads quickly.
+ * Once the app is idle the remaining screens are fetched in the background, so moving between them stays instant.
+ */
+const loaders = {
+  DesignStudio: () => import('./screens/DesignStudio'),
+  ExplodedDocument: () => import('./screens/ExplodedDocument'),
+  DocumentCube: () => import('./screens/DocumentCube'),
+  ScenarioLandscape: () => import('./screens/ScenarioLandscape'),
+  PageStack: () => import('./screens/PageStack'),
+  RulesData: () => import('./screens/RulesData'),
+  JourneySimulator: () => import('./screens/JourneySimulator'),
+  ValidateCompare: () => import('./screens/ValidateCompare'),
+  PreviewExport: () => import('./screens/PreviewExport'),
+  AiAssistant: () => import('./screens/AiAssistant'),
+  Translations: () => import('./screens/Translations'),
+  Activity: () => import('./screens/Activity'),
+};
+const screen = <K extends keyof typeof loaders>(name: K) => lazy(() => (loaders[name]() as Promise<Record<string, ComponentType<any>>>).then((m) => ({ default: m[name] })));
+const DesignStudio = screen('DesignStudio');
+const ExplodedDocument = screen('ExplodedDocument');
+const DocumentCube = screen('DocumentCube');
+const ScenarioLandscape = screen('ScenarioLandscape');
+const PageStack = screen('PageStack');
+const RulesData = screen('RulesData');
+const JourneySimulator = screen('JourneySimulator');
+const ValidateCompare = screen('ValidateCompare');
+const PreviewExport = screen('PreviewExport');
+const AiAssistant = screen('AiAssistant');
+const Translations = screen('Translations');
+const Activity = screen('Activity') as ComponentType<{ global?: boolean }>;
+
+function usePrefetchScreens() {
+  useEffect(() => {
+    const run = () => { for (const load of Object.values(loaders)) void load().catch(() => undefined); };
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const t = ric ? ric(run, { timeout: 4000 }) : window.setTimeout(run, 2500);
+    return () => { if (ric) (window as unknown as { cancelIdleCallback?: (n: number) => void }).cancelIdleCallback?.(t); else window.clearTimeout(t); };
+  }, []);
+}
+
+
+const wait = (el: JSX.Element) => <Suspense fallback={<Loading label="Loading view…" />}>{el}</Suspense>;
+const S = (el: JSX.Element) => <StudioShell>{wait(el)}</StudioShell>;
 
 /**
  * Loads who is signed in. Auth is off by default (built-in local admin) and nothing changes; with AUTH=on an
@@ -42,13 +73,14 @@ function AuthGate({ children }: { children: ReactNode }) {
 }
 
 export function App() {
+  usePrefetchScreens();
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthGate>
       <Routes>
         <Route path="/" element={<Navigate to="/projects" replace />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/activity" element={<PlainShell><Activity global /></PlainShell>} />
+        <Route path="/activity" element={<PlainShell>{wait(<Activity global />)}</PlainShell>} />
         <Route path="/projects" element={<PlainShell><ProjectGallery /></PlainShell>} />
         <Route path="/studio" element={<Navigate to="/projects" replace />} />
         <Route path="/studio/:project" element={<Navigate to="design" replace />} />

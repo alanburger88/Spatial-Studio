@@ -13,7 +13,7 @@
 .jr-card { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 4px; width: 200px; min-height: 0; padding: 6px 12px; border-radius: 12px; background: var(--iss-surface-raised); border: 1px solid var(--iss-border-strong); transition: border-color var(--iss-motion-fast), transform var(--iss-motion-fast), box-shadow var(--iss-motion-fast); }
 .jr-card:hover { border-color: var(--iss-border-hover); transform: translateY(-1px); }
 .jr-card:focus-visible { box-shadow: var(--iss-focus); }
-.jr-day { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--iss-text-muted); font-weight: 700; }
+.jr-day { font-size: 11.5px; color: var(--iss-text-muted); font-weight: 700; }
 .jr-label { font-size: 14px; }
 .jr-type { font-size: 11px; color: var(--iss-text-muted); }
 .jr-sub { font-size: 11.5px; color: var(--iss-text-muted); }
@@ -25,7 +25,7 @@
 .jr-baseline .jr-card { border-color: var(--iss-border-strong); }
 .jr-pending .jr-card { opacity: .62; }
 .jr-selected .jr-card { box-shadow: 0 0 0 3px var(--iss-accent), var(--iss-shadow-pop); opacity: 1; }
-.jr-selected .jr-card::before { content: 'Selected'; position: absolute; margin-top: -28px; font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--iss-accent-strong); }
+.jr-selected .jr-card::before { content: 'Selected'; position: absolute; margin-top: -28px; font-size: 11.5px; font-weight: 700; color: var(--iss-accent-strong); }
 .jr-grid { display: grid; grid-template-columns: 250px minmax(0, 1fr) minmax(400px, 1.15fr); gap: 12px; align-items: start; }
 @media (max-width: 1280px) { .jr-grid { grid-template-columns: 230px minmax(0, 1fr) minmax(340px, 1fr); } }
 .jr-grid > .panel { overflow: visible; }
@@ -52,7 +52,7 @@
 .jr-hash { display: flex; flex-direction: column; gap: 6px; }
 .jr-hash.issued { border-color: var(--iss-accent-line); background: linear-gradient(180deg, var(--iss-accent-soft), var(--iss-surface-raised)); }
 .jr-hash.preview { border-style: dashed; border-color: var(--iss-variant-line); }
-.jr-hash-h { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--iss-text-muted); }
+.jr-hash-h { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--iss-text-muted); }
 .jr-digest { font-size: 11px; word-break: break-all; line-height: 1.45; color: var(--iss-text); }
 .jr-hash-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 11.5px; }
 .jr-state td, .jr-state th { font-size: 12.5px; }
@@ -92,3 +92,9 @@
 .jr-row { border: 0; border-radius: 0; background: transparent; padding: 8px 8px; }
 .jr-row:hover { background: var(--iss-row-hover); }
 .jr-row.sel { background: var(--iss-accent-soft); box-shadow: inset 3px 0 0 var(--iss-accent); }
+
+/* calm pass: timeline steps are light markers on the line, not heavy cards */
+.jr-card { background: var(--iss-surface); border-color: var(--iss-border); border-radius: 10px; }
+.jr-issued .jr-card { border-width: 1px; background: var(--iss-accent-soft); }
+.jr-skipped .jr-card { background: var(--iss-warning-soft); }
+.jr-selected .jr-card { box-shadow: 0 0 0 2px var(--iss-accent); }

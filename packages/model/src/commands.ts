@@ -350,7 +350,7 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
       if (!draft?.trim()) return reject('NO_DRAFT', `There is no ${cmd.locale} draft to approve for “${part.title}”.`);
       const tokensOf = (t: string) => [...t.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]).sort().join(',');
       const source = part.approvedLocales['en-US'];
-      if (source && tokensOf(source) !== tokensOf(draft)) return reject('TOKEN_MISMATCH', `The ${cmd.locale} text must use the same data tokens as the English text (${tokensOf(source) || 'none'}).`);
+      if (source && tokensOf(source) !== tokensOf(draft)) return reject('TOKEN_MISMATCH', `The ${cmd.locale === 'es-US' ? 'Spanish' : cmd.locale} text must use the same data tokens as the English text (${tokensOf(source) || 'none'}).`);
       return { ok: true, label: `Approve ${cmd.locale} for “${part.title}”`, project: bump(project, (d) => {
         const c = d.contentParts.find((x) => x.id === cmd.partId)!;
         c.approvedLocales = { ...c.approvedLocales, [cmd.locale]: draft };

@@ -4,8 +4,8 @@ import { CATALOG_BY_TYPE, projectFields, getPath, nodeMap, requiredNodeIds, appl
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
 import { useScenarioEngine, useStudio } from '../../state/store';
 import { Icon } from '../../ui/icons';
-import { Tech, Biz } from '../../ui/common';
-import { predicateSentence, nodeTitle, localeLabel } from '../../ui/plain';
+import { Tech, Biz, Named } from '../../ui/common';
+import { fieldLabel, predicateSentence, nodeTitle, localeLabel } from '../../ui/plain';
 import { insertToken } from './RichTextEditor';
 import { ImpactPreview, ReachLine } from '../../ui/ImpactPreview';
 import { AssetLibraryDialog, type PickedAsset } from './AssetLibrary';
@@ -442,10 +442,10 @@ function DataTab({ node, project, res }: { node: DocNode; project: Project; res:
   const findings = res.findings.filter((f) => f.nodeId === node.id);
   return (
     <div>
-      <div className="section-title">Data lineage</div>
+      <div className="section-title"><Biz>Data used</Biz><Tech>Data lineage</Tech></div>
       {rnode.dataLineage.length ? (
-        <table className="table"><thead><tr><th>Field path</th><th className="num">Value ({res.recordId})</th></tr></thead><tbody>
-          {rnode.dataLineage.map((p) => <tr key={p}><td className="mono">{p}{!known.has(p) && <span className="chip error" style={{ marginLeft: 6 }}>unknown</span>}</td><td className="num mono">{JSON.stringify(getPath(ctx, p))?.slice(0, 40) ?? 'null'}</td></tr>)}
+        <table className="table"><thead><tr><th><Biz>Field</Biz><Tech>Field path</Tech></th><th className="num"><Biz>Value for this customer</Biz><Tech>Value ({res.recordId})</Tech></th></tr></thead><tbody>
+          {rnode.dataLineage.map((p) => <tr key={p} data-path={p} data-testid="lineage-row"><td><Named name={fieldLabel(project, p)} code={p} />{!known.has(p) && <span className="chip error" style={{ marginLeft: 6 }}>unknown</span>}</td><td className="num mono">{JSON.stringify(getPath(ctx, p))?.slice(0, 40) ?? 'null'}</td></tr>)}
         </tbody></table>
       ) : <p className="muted">No data bindings.</p>}
       {rnode.field && <div className="kv" style={{ marginTop: 10 }}><dt>Resolved display</dt><dd>{rnode.field.display || '(blank)'}</dd><dt>Raw</dt><dd className="mono">{JSON.stringify(rnode.field.raw)}</dd>{rnode.field.guarded && <><dt>Domain guard</dt><dd>Liability unconfirmed — not shown as owed</dd></>}</div>}

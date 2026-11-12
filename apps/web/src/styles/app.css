@@ -127,7 +127,7 @@ a { color: var(--iss-accent-strong); }
 .tabs button[aria-selected='true'] { background: var(--iss-surface-hover); color: var(--iss-text); box-shadow: inset 0 -2px 0 var(--iss-accent); }
 
 .table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--iss-text-muted); font-weight: 700; padding: 7px 8px; border-bottom: 1px solid var(--iss-border); position: sticky; top: 0; background: var(--iss-surface); z-index: 1; }
+.table th { text-align: left; font-size: 11.5px; color: var(--iss-text-muted); font-weight: 700; padding: 7px 8px; border-bottom: 1px solid var(--iss-border); position: sticky; top: 0; background: var(--iss-surface); z-index: 1; }
 .table td { padding: 7px 8px; border-bottom: 1px solid var(--iss-row-border); vertical-align: top; }
 .table tr.selected td { background: var(--iss-accent-soft); }
 .table tbody tr:hover td { background: var(--iss-row-hover); }
@@ -145,7 +145,8 @@ a { color: var(--iss-accent-strong); }
 .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--iss-border-strong); border-top-color: var(--iss-accent); animation: spin .8s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
-.sev { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.sev { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 12px; }
+.sev-label { text-transform: capitalize; }
 .sev.blocking, .sev.error { color: var(--iss-error); }
 .sev.warning { color: var(--iss-warning); }
 .sev.info { color: var(--iss-info); }
@@ -338,3 +339,8 @@ a { color: var(--iss-accent-strong); }
 .dock-items > * { flex: none; }
 .dock-end, .dock-status { flex: none; }
 .dock .named .chip.code { margin-left: 2px; }
+
+/* "Show me where": a brief ring around the customer picker. */
+.ctx-field.spot > .rp { border-radius: 10px; box-shadow: 0 0 0 3px var(--iss-accent), 0 0 0 8px var(--iss-accent-soft); animation: spot-pulse 1.2s var(--iss-ease) 3; }
+@keyframes spot-pulse { 50% { box-shadow: 0 0 0 3px var(--iss-accent), 0 0 0 14px transparent; } }
+@media (prefers-reduced-motion: reduce) { .ctx-field.spot > .rp { animation: none; } }

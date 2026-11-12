@@ -144,3 +144,24 @@ test('U09 narrow window: side panels become drawers; below 900px the studio asks
   await page.getByTestId('small-screen-continue').click();
   await expect(page.getByTestId('small-screen-notice')).toHaveCount(0);
 });
+
+test('U10 Start here → "Show me where" opens the sample and focuses the customer picker once it has loaded', async ({ page }) => {
+  await page.goto('/projects');
+  await page.getByTestId('start-switch-customer').click();
+  await expect(page).toHaveURL(/\/studio\/aster-card-demo\/design$/);
+  await expect(page.getByTestId('record-selector')).toBeFocused();
+  await expect(page.getByTestId('ctx-customer')).toHaveClass(/spot/);
+});
+
+test('U11 Demo tools stays closed when the guided demo starts; Design fits the page width with a whole-page option', async ({ page }) => {
+  await open(page, 'aster-card-demo', 'demo');
+  await page.getByTestId('start-demo').click();
+  await expect(page.getByTestId('demo-banner')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('demo-tools')).toHaveCount(0);
+  await open(page, 'aster-card-demo', 'design');
+  await expect(page.getByTestId('fit-width')).toHaveAttribute('aria-pressed', 'true');
+  const width = parseInt(await page.getByTestId('zoom-value').innerText(), 10);
+  await page.getByTestId('fit-page').click();
+  await expect(page.getByTestId('fit-page')).toHaveAttribute('aria-pressed', 'true');
+  expect(parseInt(await page.getByTestId('zoom-value').innerText(), 10)).toBeLessThanOrEqual(width);
+});

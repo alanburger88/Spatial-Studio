@@ -90,3 +90,25 @@ describe('batch run', () => {
     expect((await inj('POST', '/api/v1/batches', { projectId: 'aster-card-demo', outputs: ['afp'] })).json().error.message).toMatch(/AFP is simulation-only/);
   }, 120_000);
 });
+
+describe('export history', () => {
+  it('rebuilding the PDF of the same document replaces the earlier export instead of adding another', async () => {
+    const body = { projectId: 'harborcare-demo', recordId: 'EOB-0001' };
+    const first = await inj('POST', '/api/v1/compose/pdf', body);
+    expect(first.statusCode).toBe(200);
+    const runId = String(first.headers['x-run-id']);
+    const second = await inj('POST', '/api/v1/compose/pdf', body);
+    expect(second.headers['x-run-id']).toBe(runId);
+    const pdfs = (await inj('GET', `/api/v1/artifacts?runId=${runId}`)).json().artifacts.filter((a: any) => a.kind === 'pdf');
+    expect(pdfs).toHaveLength(1);
+    // the entry kept is the latest build and still downloads
+    expect(pdfs[0].artifactId).toBe(second.headers['x-artifact-id']);
+    expect((await inj('GET', `/api/v1/artifacts/${pdfs[0].artifactId}`)).rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
+    // a different customer is a different document: its export is kept alongside
+    const other = await inj('POST', '/api/v1/compose/pdf', { projectId: 'harborcare-demo', recordId: 'EOB-0003' });
+    expect(other.statusCode).toBe(200);
+    expect(other.headers['x-run-id']).not.toBe(runId);
+    const all = (await inj('GET', '/api/v1/artifacts?projectId=harborcare-demo')).json().artifacts.filter((a: any) => a.kind === 'pdf');
+    expect(all).toHaveLength(2);
+  }, 120_000);
+});

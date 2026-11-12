@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type SVGProps } from 'react';
-import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ROLE_LABEL, type ProfileId } from '@iss/model';
 import { editBlockedReason, personaLabel, useIsDirty, useModelChecks, useResolution, useStudio } from '../state/store';
 import { RecordPicker, recordSummary } from './RecordPicker';
@@ -107,6 +107,23 @@ function TopBar() {
   const { pathname } = useLocation();
   const inStudio = pathname.startsWith('/studio/');
   const hasOverrides = Object.keys(ctx.overrides).length > 0;
+  // "Show me where" from the gallery: once the project and its picker exist, focus the picker and ring it briefly.
+  const [params, setParams] = useSearchParams();
+  const [spot, setSpot] = useState(false);
+  const wantSpot = params.get('show') === 'customer';
+  const pickerReady = !!project && records.length > 0;
+  useEffect(() => {
+    if (!wantSpot || !pickerReady) return;
+    const el = document.querySelector<HTMLElement>('[data-testid=record-selector]');
+    if (!el) return;
+    el.focus();
+    setSpot(true);
+    const next = new URLSearchParams(params); next.delete('show');
+    setParams(next, { replace: true });
+    const t = window.setTimeout(() => setSpot(false), 6000);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantSpot, pickerReady]);
   const docRecords = project ? records.filter((r) => r.documentType === project.documentType) : [];
   return (
     <header className="topbar">
@@ -129,7 +146,7 @@ function TopBar() {
       <div className="spacer" />
       {project && (
         <div className="topbar-group">
-          <div className="ctx-field"><span className="ctx-lbl" id="ctx-lbl-customer">Previewing as</span><RecordPicker records={docRecords} personas={personas} value={ctx.recordId} onChange={setRecord} /></div>
+          <div className={`ctx-field${spot ? ' spot' : ''}`} data-testid="ctx-customer"><span className="ctx-lbl" id="ctx-lbl-customer">Previewing as</span><RecordPicker records={docRecords} personas={personas} value={ctx.recordId} onChange={setRecord} /></div>
           {hasOverrides && <span className="chip variant" title={JSON.stringify(ctx.overrides).slice(0, 300)}>Scenario overrides</span>}
           {ctx.journeyCursor !== null && <span className="chip info">Journey · event {ctx.journeyCursor + 1}</span>}
           <label className="ctx-field"><span className="ctx-lbl">Output</span>

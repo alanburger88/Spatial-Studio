@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
@@ -267,6 +267,17 @@ export class Store {
     const artifactId = `art-${kind}-${sha.slice(0, 16)}`;
     const file = path.join(this.artifactDir, artifactId);
     if (!existsSync(file)) writeFileSync(file, bytes);
+    // PDF bytes are not reproducible (embedded timestamps), so the content hash cannot dedupe a rebuild of the same
+    // document. The run ID identifies the resolved document exactly, so a rebuild for the same run, draft state and
+    // renderer replaces the earlier export instead of adding another history entry.
+    if (kind === 'pdf') {
+      const same = (this.db.prepare("SELECT artifact_id, meta_json FROM artifacts WHERE run_id=? AND kind='pdf' AND artifact_id<>?").all(runId, artifactId) as any[])
+        .filter((r) => { const m = JSON.parse(r.meta_json); return !!m.draft === !!meta.draft && m.renderer === meta.renderer; });
+      for (const r of same) {
+        this.db.prepare('DELETE FROM artifacts WHERE artifact_id=?').run(r.artifact_id);
+        try { unlinkSync(path.join(this.artifactDir, r.artifact_id)); } catch { /* already gone */ }
+      }
+    }
     this.db.prepare('INSERT OR IGNORE INTO artifacts(artifact_id,run_id,kind,filename,sha256,size,page_count,meta_json,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
       .run(artifactId, runId, kind, filename, sha, bytes.length, pageCount ?? null, JSON.stringify(meta), new Date().toISOString());
     return { artifactId, sha256: sha, size: bytes.length, filename };

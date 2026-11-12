@@ -297,7 +297,7 @@ export function ScenarioLandscape() {
                       {g.items.map((c) => {
                         const d = diam(c), sel = selId === c.clusterId;
                         return (
-                          <div className="ls-bubble-cell" key={c.clusterId} style={{ width: Math.max(d, 84) }}>
+                          <div className="ls-bubble-cell" key={c.clusterId} style={{ width: Math.max(d, 104) }}>
                             <button
                               className={`ls-bubble sev-${c.severity}${sel ? ' selected' : ''}`}
                               style={{ width: d, height: d }}

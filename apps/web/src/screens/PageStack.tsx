@@ -142,10 +142,11 @@ function Stack({ comp, layout, separation, selected, onSelect, onDiag, focusNode
     return () => ro.disconnect();
   }, []);
   const n = comp.snapshot.pages.length;
-  const scale = n > 10 ? 0.34 : n > 4 ? 0.42 : 0.5;
+  // Fan leaves room beside the first page so the following pages show a readable strip; Stack keeps pages larger.
+  const scale = n > 10 ? 0.34 : n > 4 ? 0.4 : layout === 'fan' ? 0.42 : 0.5;
   const pw = PAGE_W * scale, ph = PAGE_H * scale;
   const maxStep = n > 1 ? Math.max(8, (w - pw - 80) / (n - 1)) : 0;
-  const step = Math.min(maxStep, 8 + (separation / 100) * 150);
+  const step = Math.min(maxStep, 8 + (separation / 100) * (layout === 'fan' ? 260 : 150));
   const total = pw + step * (n - 1);
   const x0 = Math.max(20, (w - total) / 2);
   return (
@@ -160,7 +161,7 @@ function Stack({ comp, layout, separation, selected, onSelect, onDiag, focusNode
             <div
               key={idx}
               className={'ps-card' + (selected === idx ? ' sel' : '') + (diags.length ? ' has-diag' : '')}
-              style={{ left: x0 + i * step, top: 40 + lift, width: pw, height: ph, zIndex: selected === idx ? 100 : i + 1, transform: `translateZ(${i * 4}px) rotate(${rot}deg)` }}
+              style={{ left: x0 + i * step, top: 40 + lift, width: pw, height: ph, zIndex: selected === idx ? 100 : n - i, transform: `translateZ(${(n - 1 - i) * 4}px) rotate(${rot}deg)` }}
             >
               <button className="ps-card-hit" onClick={() => onSelect(idx)} aria-label={`Open page ${idx} at full size`} aria-pressed={selected === idx} />
               <PageFrame css={comp.snapshot.css} html={html} scale={scale} highlight={focusNode} label={`Composed page ${idx} of ${n}`} />
@@ -209,7 +210,7 @@ export function PageStack() {
   const nm = (id: string) => (biz ? nodeTitle(project, id) : id);
 
   const [mode, setMode] = useState<Mode>('scenario');
-  const [layout, setLayout] = useState<Layout>('stack');
+  const [layout, setLayout] = useState<Layout>('fan');
   const [separation, setSeparation] = useState(55);
   const [selected, setSelected] = useState<number | null>(null);
   /** Page shown in the inspector. Defaults to page 1 so the inspector is never empty; independent of the full-size preview (`selected`). */

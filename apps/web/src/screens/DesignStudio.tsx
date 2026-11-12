@@ -59,6 +59,7 @@ export function DesignStudio() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [transient, setTransient] = useState<NodeInteraction['transient']>({});
   const [zoom, setZoom] = useState<number | null>(null);
+  const [fitMode, setFitMode] = useState<'width' | 'page'>('width');
   const [stylesOpen, setStylesOpen] = useState(false);
   const [grid, setGrid] = useState(false);
   const [snap, setSnap] = useState(true);
@@ -77,13 +78,10 @@ export function DesignStudio() {
     ro.observe(el);
     return () => ro.disconnect();
   }, [!!res]);
-  // Fit: whole page when that stays readable (>= 60%), otherwise page width. Recomputed from the measured canvas.
+  // Fit: page width by default (readable text, scroll vertically); "Whole page" shows the full sheet. Recomputed from the measured canvas.
   const availW = Math.max(200, box.w - 2 * SCROLL_PAD_X), availH = Math.max(200, box.h - 2 * SCROLL_PAD_Y);
   const fitW = availW / (PAGE_W_PT * PT), fitPage = availH / (PAGE_H_PT * PT);
-  // With the component list collapsed the person wants the page larger: fit the width and scroll vertically.
-  const wholePage = !paletteCollapsed && fitPage >= 0.6;
-  const fit = Math.max(0.4, Math.min(1.15, wholePage ? Math.min(fitW, fitPage) : fitW));
-  const fitsWholePage = wholePage && fitPage <= fitW;
+  const fit = Math.max(0.4, Math.min(1.15, fitMode === 'page' ? Math.min(fitW, fitPage) : fitW));
   const scale = zoom ?? fit;
   const selected = ctx.selectedNodeId;
   const map = useMemo(() => nodeMap(project), [project]);
@@ -267,7 +265,10 @@ export function DesignStudio() {
   return (
     <section className="screen design" aria-label="2D Design Studio">
       <ScreenHeader id="S02" title="2D Design Studio" subtitle="Edit accurate page geometry and responsive profiles on one semantic component tree. Every edit is a typed, undoable model command. Select a variant or conditional section and use its pull handle, or Explore variants, to open the Exploded view."
-        actions={<button className="btn primary" disabled={!canExplode} onClick={goExplode} data-testid="explore-variants" title={canExplode ? 'Open the selected section in the Exploded view' : 'Select a variant set or conditional section first'}><Icon.exploded /> Explore variants</button>}
+        actions={<>
+          <button className="btn" onClick={() => setStylesOpen(true)} data-testid="open-styles" title="Text styles and brand kit">Styles & brand</button>
+          <button className="btn primary" disabled={!canExplode} onClick={goExplode} data-testid="explore-variants" title={canExplode ? 'Open the selected section in the Exploded view' : 'Select a variant set or conditional section first'}><Icon.exploded /> Explore variants</button>
+        </>}
       />
       <div className={`screen-body workbench${paletteCollapsed ? ' no-left' : ''}`}>
         {!paletteCollapsed && (
@@ -312,9 +313,10 @@ export function DesignStudio() {
             {!isHtml && <>
               <div className="segmented ds-group" role="group" aria-label="Zoom">
                 <button aria-label="Zoom out" onClick={() => setZoom(Math.max(0.4, scale - 0.1))}>−</button>
-                <span className="ds-zoom" data-testid="zoom-value" title={zoom === null ? (fitsWholePage ? 'Fit: whole page' : 'Fit: page width') : 'Manual zoom'} aria-live="polite">{Math.round(scale * 100)}%</span>
+                <span className="ds-zoom" data-testid="zoom-value" title={zoom === null ? (fitMode === 'page' ? 'Fit: whole page' : 'Fit: page width') : 'Manual zoom'} aria-live="polite">{Math.round(scale * 100)}%</span>
                 <button aria-label="Zoom in" onClick={() => setZoom(Math.min(1.6, scale + 0.1))}>+</button>
-                <button aria-pressed={zoom === null} onClick={() => setZoom(null)} title="Fit the page to the canvas">Fit</button>
+                <button aria-pressed={zoom === null && fitMode === 'width'} onClick={() => { setFitMode('width'); setZoom(null); }} title="Fit the page width (scroll down for the rest)" data-testid="fit-width">Width</button>
+                <button aria-pressed={zoom === null && fitMode === 'page'} onClick={() => { setFitMode('page'); setZoom(null); }} title="Show the whole page" data-testid="fit-page">Page</button>
               </div>
               <div className="segmented ds-group" role="group" aria-label="Canvas options">
                 <button aria-pressed={grid} onClick={() => setGrid(!grid)}>Grid</button>
@@ -331,7 +333,6 @@ export function DesignStudio() {
                 <button className="ds-hint-x" aria-label="Dismiss hint" onClick={dismissHint}>✕</button>
               </span>
             )}
-            <button className="btn sm" onClick={() => setStylesOpen(true)} data-testid="open-styles" title="Text styles and brand kit">Styles & brand</button>
           </div>
           <div className="design-scroll" ref={scrollRef} data-testid="design-canvas" tabIndex={0} onKeyDown={onCanvasKey} aria-label="Page canvas. Arrow keys move fixed anchors (Shift = 10 pt), Alt+arrows reorder flow components, Delete removes, Enter edits text." onClick={() => { setEditingId(null); }}>
             {isHtml ? <HtmlProfileCanvas res={res} project={project} width={device} selected={selected} onSelect={(id) => select(id)} />

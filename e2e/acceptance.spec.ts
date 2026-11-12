@@ -109,8 +109,7 @@ test('AT-05 insert {{customer.givenName}} token: fixture value renders with corr
   expect(JSON.stringify(n.content).match(/customer\.givenName/g)!.length).toBe(2);
   await expect(page.getByTestId(`node-${id}`)).toContainText('Jordan');
   await page.getByTestId('insp-tab-data').click();
-  await expect(page.getByTestId('component-inspector')).toContainText('customer.givenName');
-  await expect(page.getByTestId('component-inspector')).toContainText('"Jordan"');
+  await expect(page.locator('[data-testid=lineage-row][data-path="customer.givenName"]')).toContainText('"Jordan"');
 });
 
 test('AT-06 unknown token path is caught by binding validation', async ({ page, request }) => {

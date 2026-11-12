@@ -171,7 +171,7 @@ export function Toasts() {
 
 export function SeverityLabel({ severity }: { severity: string }) {
   const icon = severity === 'info' ? '●' : severity === 'warning' ? '▲' : '■';
-  return <span className={`sev ${severity}`}><span aria-hidden="true">{icon}</span>{severity}</span>;
+  return <span className={`sev sev-label ${severity}`}><span aria-hidden="true">{icon}</span>{severity}</span>;
 }
 
 export function formatMoney(cents: number | null | undefined): string {

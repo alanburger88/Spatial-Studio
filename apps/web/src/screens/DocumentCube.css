@@ -164,3 +164,9 @@
 .cube-cell .cube-mark.sm { width: 12px; height: 12px; font-size: 8.5px; border-radius: 3px; }
 .cube-inspector .chip.code, .cube-inspector .chip.count { white-space: nowrap; flex: none; }
 .cube-bars li { grid-template-columns: 18px minmax(0, 1fr) 48px 24px; }
+
+/* 3D axis labels wrap onto as many lines as they need instead of being cut off */
+.cube-tick span, .cube-tick.tx span { display: block; -webkit-line-clamp: unset; overflow: visible; overflow-wrap: break-word; }
+.cube-tick.tx span { width: 96px; margin-left: -48px; }
+.cube-tick.ty span { width: 96px; margin-left: -96px; }
+.cube-tick.tz span { width: 96px; }
