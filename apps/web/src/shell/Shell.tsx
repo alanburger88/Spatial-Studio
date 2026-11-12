@@ -6,6 +6,9 @@ import { RecordPicker, recordSummary } from './RecordPicker';
 import { BrandMark, Icon } from '../ui/icons';
 import { Biz, ErrorState, Loading, Tech, Toasts } from '../ui/common';
 import { DemoBanner } from '../screens/GuidedDemo';
+import { CommandPalette, useShellUi } from './CommandPalette';
+import { HelpMenu, MOD, ShortcutsSheet, Tour } from './Help';
+import './shell-extras.css';
 
 export const SCREENS = [
   { id: 'S01', path: '/projects', label: 'Project Gallery', icon: Icon.gallery },
@@ -46,6 +49,24 @@ export function useGlobalShortcuts() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [navigate, projectId]);
+}
+
+/** Ctrl/Cmd+K palette and ? shortcuts sheet; mounted once per shell (works on the gallery too). */
+function useUiShortcuts() {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const ui = useShellUi.getState();
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); ui.setPalette(!ui.paletteOpen); return; }
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey && !isTyping(e.target) && !ui.paletteOpen) { e.preventDefault(); ui.setShortcuts(!ui.shortcutsOpen); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+}
+
+function Overlays() {
+  useUiShortcuts();
+  return <><CommandPalette /><ShortcutsSheet /><Tour /></>;
 }
 
 function DisplayToggles() {
@@ -118,6 +139,12 @@ function TopBar() {
           <span className={`save-state${dirty ? ' dirty' : ''}`} data-testid="save-state" aria-live="polite" title={dirty ? 'Unsaved changes' : 'Saved'}><span className="dot" />{dirty ? 'Unsaved' : 'Saved'} · v{project.modelVersion}</span>
         </div>
       )}
+      <div className="topbar-tools">
+        <button type="button" className="btn ghost palette-btn" onClick={() => useShellUi.getState().setPalette(true)} aria-label="Search (Command palette)" aria-haspopup="dialog" title={`Search everything (${MOD}+K)`} data-testid="open-palette">
+          <Icon.search /><span className="pal-btn-label">Search</span><kbd className="kbd">{MOD} K</kbd>
+        </button>
+        <HelpMenu />
+      </div>
       <DisplayToggles />
     </header>
   );
@@ -194,6 +221,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
       <Dock />
       <DemoBanner />
       <Toasts />
+      <Overlays />
     </div>
   );
 }
@@ -207,6 +235,7 @@ export function PlainShell({ children }: { children: ReactNode }) {
       <main className="main" id="main">{children}</main>
       <footer className="dock">InfoSlips Spatial Studio · local proof of concept</footer>
       <Toasts />
+      <Overlays />
     </div>
   );
 }

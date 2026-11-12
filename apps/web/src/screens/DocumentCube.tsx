@@ -20,6 +20,7 @@ const DEFAULT_TILT = -20;
 const SEP = '␟';
 /** Short tick label: "Day 45 · Assistance requested" -> "D45"; long names are cut with an ellipsis (full text stays in the title tooltip). */
 const shortLabel = (l: string, max = 12) => { const m = /^Day (\d+)\b/.exec(l); if (m) return `D${m[1]}`; return l.length > max ? `${l.slice(0, max - 1).trimEnd()}…` : l; };
+const plainCat = (l: string, technical: boolean) => (!technical && /^[a-z0-9]+(-[a-z0-9]+)+$/.test(l) ? l.replace(/-/g, ' ').replace(/^./, (m) => m.toUpperCase()) : l);
 const humanCode = (c: string) => { const t = c.replace(/[-_.]+/g, ' ').toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
 
 type SortKey = 'x' | 'y' | 'z' | 'count' | 'outcome' | 'issues';
@@ -163,7 +164,7 @@ export function DocumentCube() {
     return [...list].sort((a, b) => { const va = val(a), vb = val(b); const r = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb)); return (r || cellKey(a).localeCompare(cellKey(b))) * sort.dir; });
   })();
 
-  const labelOf = (ai: number, key: string) => cube?.axes[ai].categories.find((c) => c.key === key)?.label ?? key;
+  const labelOf = (ai: number, key: string) => plainCat(cube?.axes[ai].categories.find((c) => c.key === key)?.label ?? key, viewMode === 'technical');
 
   const nonEmpty = (cube?.cells ?? []).filter((c) => c.count > 0).length;
   const total = (cube?.cells ?? []).length;
@@ -409,6 +410,8 @@ const labelFor = (ax: CubeResult['axes'][number], key: string) => ax.categories.
 
 function CubeMatrix(props: { cube: CubeResult; activeY: string; onY: (k: string) => void; selected: string | null; onSelect: (k: string) => void; outcomeStyle: OutcomeStyleFn; outcomeName: (o: string | null) => string }) {
   const { cube, activeY, onY, selected, onSelect, outcomeStyle, outcomeName } = props;
+  const technical = useStudio((s) => s.viewMode) === 'technical';
+  const pc = (l: string) => plainCat(l, technical);
   const [ax, ay, az] = cube.axes;
   const byKey = new Map(cube.cells.map((c) => [cellKey(c), c]));
   const yTotal = (k: string) => cube.cells.filter((c) => c.y === k).reduce((n, c) => n + c.count, 0);
@@ -418,26 +421,26 @@ function CubeMatrix(props: { cube: CubeResult; activeY: string; onY: (k: string)
         <span className="cube-ytabs-l"><span className="cube-axis-dot ax-y" />{ay.label}</span>
         {ay.categories.map((c) => (
           <button key={c.key} role="tab" aria-selected={c.key === activeY} className="cube-ytab" onClick={() => onY(c.key)} title={c.label} data-testid="cube-ytab">
-            <span className="cube-ytab-t">{c.label}</span><span className="cube-ytab-n">{yTotal(c.key)}</span>
+            <span className="cube-ytab-t">{pc(c.label)}</span><span className="cube-ytab-n">{yTotal(c.key)}</span>
           </button>
         ))}
       </div>
       <div className="cube-matrix" role="grid" aria-label={`${ax.label} by ${az.label} for ${labelFor(ay, activeY)}`} style={{ gridTemplateColumns: `minmax(110px, 0.9fr) repeat(${Math.max(1, az.categories.length)}, minmax(0, 1fr))` }}>
         <div className="cube-mx-corner" role="presentation"><span><span className="cube-axis-dot ax-x" />{ax.label} ↓</span><span><span className="cube-axis-dot ax-z" />{az.label} →</span></div>
-        {az.categories.map((z) => <div key={z.key} className="cube-mx-zh" role="columnheader" title={z.label}>{z.label}</div>)}
+        {az.categories.map((z) => <div key={z.key} className="cube-mx-zh" role="columnheader" title={z.label}>{pc(z.label)}</div>)}
         {ax.categories.map((x) => (
           <div className="cube-mx-row" role="row" key={x.key}>
-            <div className="cube-mx-xh" role="rowheader" title={x.label}>{x.label}</div>
+            <div className="cube-mx-xh" role="rowheader" title={x.label}>{pc(x.label)}</div>
             {az.categories.map((z) => {
               const key = [x.key, activeY, z.key].join(SEP);
               const c = byKey.get(key);
-              if (!c) return <div key={z.key} className="cube-mx-cell empty" role="gridcell" />;
+              if (!c) return <div key={z.key} className="cube-mx-cell vacant" role="gridcell" />;
               const st = outcomeStyle(c.dominantOutcome);
               const label = `${ax.label} ${x.label}, ${ay.label} ${labelFor(ay, activeY)}, ${az.label} ${z.label}: ${c.count === 0 ? 'no matching records' : `${c.count} scenarios, dominant outcome ${outcomeName(c.dominantOutcome)}${c.blocking ? `, ${c.blocking} blocking` : ''}`}`;
               return (
                 <div key={z.key} role="gridcell" className="cube-mx-gc">
                   <button
-                    className={`cube-mx-cell${c.count === 0 ? ' empty' : ''}${selected === key ? ' selected' : ''}`}
+                    className={`cube-mx-cell${c.count === 0 ? ' vacant' : ''}${selected === key ? ' selected' : ''}`}
                     style={{ ['--mk' as string]: st.color }}
                     aria-label={label} aria-pressed={selected === key} title={label}
                     data-testid={c.count === 0 ? 'cube-cell-empty' : 'cube-cell'}

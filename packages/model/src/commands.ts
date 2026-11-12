@@ -1,8 +1,9 @@
 import { produce } from 'immer';
 import { CATALOG_BY_TYPE } from './catalog';
 import { digestOf } from './digest';
-import { isSafeUrl, sanitizeRichDoc } from './rich';
-import type { ContentPart, DocNode, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
+import { isSafeUrl, sanitizeRichDoc, tokensIn } from './rich';
+import { projectFieldIndex, validateCustomFields } from './fields';
+import type { ContentPart, CustomField, DocNode, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
 import { validatePredicate, validateRule } from './validate';
 
 /**
@@ -26,6 +27,7 @@ export type Command =
   | { type: 'SET_VARIANT_CONDITION'; nodeId: string; variantId: string; when: Predicate | null }
   | { type: 'SET_JOURNEY'; events: JourneyEvent[] }
   | { type: 'UPDATE_PROFILE'; profileId: string; patch: Partial<PresentationProfile> }
+  | { type: 'SET_CUSTOM_FIELDS'; fields: CustomField[] }
   | { type: 'RESTORE_SNAPSHOT'; project: Project; label: string };
 
 export type CommandResult =
@@ -82,8 +84,8 @@ function validateNodeShape(node: DocNode, project: Project): string | null {
   if (!CATALOG_BY_TYPE[node.type]) return `Unknown component type ${node.type}.`;
   if (node.action && !isSafeUrl(node.action.url)) return `Unsafe action URL. Only https:// links are allowed.`;
   if (node.qr && !isSafeUrl(node.qr.url)) return `Unsafe QR destination. Only https:// links are allowed.`;
-  if (node.visibleWhen) { const e = validatePredicate(node.visibleWhen, project.documentType); if (e.length) return e[0]; }
-  for (const p of Object.values(node.variantConditions ?? {})) { const e = validatePredicate(p, project.documentType); if (e.length) return e[0]; }
+  if (node.visibleWhen) { const e = validatePredicate(node.visibleWhen, projectFieldIndex(project)); if (e.length) return e[0]; }
+  for (const p of Object.values(node.variantConditions ?? {})) { const e = validatePredicate(p, projectFieldIndex(project)); if (e.length) return e[0]; }
   return null;
 }
 
@@ -233,7 +235,7 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
       if (!/^[a-z0-9][a-z0-9-]{1,63}$/.test(cmd.variantId)) return reject('INVALID_ID', `Invalid variant id ${cmd.variantId}.`);
       if (node.variantIds?.includes(cmd.variantId)) return reject('DUPLICATE_ID', `Variant ${cmd.variantId} already exists in ${node.id}.`);
       if (/<\s*\/?\s*[a-z]/i.test(cmd.text)) return reject('UNSAFE_CONTENT', 'Raw HTML is not allowed in content.');
-      if (cmd.when) { const e = validatePredicate(cmd.when, project.documentType); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
+      if (cmd.when) { const e = validatePredicate(cmd.when, projectFieldIndex(project)); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
       const partExists = project.contentParts.some((c) => c.id === cmd.variantId);
       return { ok: true, label: `Add variant ${cmd.title}`, project: bump(project, (d) => {
         const t = d.nodes.find((n) => n.id === cmd.nodeId)!;
@@ -255,7 +257,7 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
     case 'SET_VARIANT_CONDITION': {
       const node = map.get(cmd.nodeId);
       if (!node?.variantIds?.includes(cmd.variantId)) return reject('NOT_FOUND', `Variant ${cmd.variantId} not in ${cmd.nodeId}.`);
-      if (cmd.when) { const e = validatePredicate(cmd.when, project.documentType); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
+      if (cmd.when) { const e = validatePredicate(cmd.when, projectFieldIndex(project)); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
       return { ok: true, label: `Condition for ${cmd.variantId}`, project: bump(project, (d) => {
         const t = d.nodes.find((n) => n.id === cmd.nodeId)!;
         const conds = { ...(t.variantConditions ?? {}) };
@@ -279,6 +281,17 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
         d.presentationProfiles[i] = { ...d.presentationProfiles[i], ...cmd.patch, id: d.presentationProfiles[i].id };
       }) };
     }
+    case 'SET_CUSTOM_FIELDS': {
+      const errs = validateCustomFields(project.documentType, cmd.fields);
+      if (errs.length) return reject('INVALID_FIELDS', errs.join(' '));
+      const kept = new Set(cmd.fields.map((f) => `custom.${f.key}`));
+      const used = customFieldUsage(project).filter((u) => !kept.has(u.path));
+      if (used.length) return reject('FIELD_IN_USE', `${used[0].path} is still used by ${used[0].where.join(', ')}. Remove those references first.`);
+      const candidate = { ...project, customFields: cmd.fields };
+      const bad = project.rules.map((r) => validateRule(r, candidate)).find((e) => e.length);
+      if (bad) return reject('FIELD_IN_USE', `A rule no longer validates with these fields: ${bad.join(' ')}`);
+      return { ok: true, label: 'Edit data fields', project: bump(project, (d) => { d.customFields = cmd.fields.map((f) => ({ ...f })); }) };
+    }
     case 'RESTORE_SNAPSHOT': {
       return { ok: true, label: cmd.label, project: { ...cmd.project, modelVersion: project.modelVersion + 1 } };
     }
@@ -289,4 +302,22 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
 export function projectContentDigest(project: Project): string {
   const { modelVersion: _v, lastSavedAt: _s, ...rest } = project;
   return digestOf(rest);
+}
+
+/** Where each custom field is referenced (rule conditions, bindings, tokens) — used to block unsafe deletes. */
+export function customFieldUsage(project: Project): Array<{ path: string; where: string[] }> {
+  const map = new Map<string, Set<string>>();
+  const add = (path: string, where: string) => { if (!path.startsWith('custom.')) return; if (!map.has(path)) map.set(path, new Set()); map.get(path)!.add(where); };
+  const walk = (p: Predicate, where: string): void => {
+    if ('args' in p) p.args.forEach((a) => walk(a, where));
+    else if ('arg' in p) walk(p.arg, where);
+    else add(p.path, where);
+  };
+  for (const r of project.rules) walk(r.when, `rule ${r.id}`);
+  for (const n of project.nodes) {
+    if (n.binding) add(n.binding, n.name ?? n.id);
+    tokensIn(n.content).forEach((path) => add(path, n.name ?? n.id));
+  }
+  for (const c of project.contentParts) for (const t of Object.values(c.approvedLocales)) (t ?? '').replace(/\{\{\s*(custom\.[A-Za-z0-9]+)/g, (_m: string, path: string) => { add(path, c.title); return ''; });
+  return [...map].map(([path, where]) => ({ path, where: [...where] }));
 }

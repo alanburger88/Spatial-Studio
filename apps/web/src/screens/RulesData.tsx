@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  fieldIndex, fieldsFor, getPath, validatePredicate, validateRule,
+  projectFieldIndex, projectFields, getPath, validatePredicate, validateRule, applyCommand,
   type ComparisonOp, type DocNode, type DocumentType, type FieldDef, type Locale, type Predicate, type Project, type Rule, type RuleAction, type RuleMode, type Scalar, type SyntheticRecord,
 } from '@iss/model';
 import { describePredicate, resolve, type Finding, type TraceEntry } from '@iss/resolver';
-import { EDGE_CASE_PRESETS } from '@iss/scenarios';
+import { EDGE_CASE_PRESETS, impactOf } from '@iss/scenarios';
 import { ScreenHeader, Loading, Empty, SeverityLabel, formatMoney, Tech, Biz, Proof } from '../ui/common';
 import { ruleTitle, ruleSentence, predicateSentence, fieldLabel, nodeTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
+import { ImpactPreview } from '../ui/ImpactPreview';
+import { DataFieldsDialog } from './data/DataFields';
 import { useStudio, useResolution, useRecord } from '../state/store';
 import { api } from '../api/client';
 import './RulesData.css';
@@ -242,8 +244,9 @@ export function RulesData() {
 
   const techMode = useStudio((s) => s.viewMode) === 'technical';
   const docType: DocumentType = project?.documentType ?? 'credit-statement';
-  const fields = useMemo(() => fieldsFor(docType), [docType]);
-  const fieldMap = useMemo(() => fieldIndex(docType), [docType]);
+  const customFields = project?.customFields;
+  const fields = useMemo(() => projectFields({ documentType: docType, customFields }), [docType, customFields]);
+  const fieldMap = useMemo(() => projectFieldIndex({ documentType: docType, customFields }), [docType, customFields]);
 
   /* ---- rule selection + local draft (never in the model until Apply) ---- */
   const [isNew, setIsNew] = useState(false);
@@ -260,6 +263,8 @@ export function RulesData() {
   const [enableMsg, setEnableMsg] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<TestOutcome | null>(null);
   const [dock, setDock] = useState<DockTab | null>(null);
+  const [showFields, setShowFields] = useState(false);
+  const [toggleNote, setToggleNote] = useState<{ before: Project; after: Project; ruleId: string; verb: string } | null>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const openDock = (t: DockTab) => { setDock(t); setTimeout(() => dockRef.current?.scrollIntoView({ block: 'nearest', behavior: useStudio.getState().reducedMotion ? 'auto' : 'smooth' }), 30); };
 
@@ -272,7 +277,7 @@ export function RulesData() {
     setAstText(pretty(stored.when));
     setAstErrors([]);
     setEnableMsg(null);
-    if (!draft || draft.id !== stored.id) setTestResult(null);
+    if (!draft || draft.id !== stored.id) { setTestResult(null); setToggleNote(null); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ruleId, storedJson, isNew]);
 
@@ -318,6 +323,13 @@ export function RulesData() {
   const allErrors = tab === 'ast' && astErrors.length ? astErrors : ruleErrors;
   const canApply = !!draft && isDirty && allErrors.length === 0 && astErrors.length === 0;
 
+  /** The model as it would be if this (valid) draft were applied now: null when nothing to preview. */
+  const draftProject = useMemo(() => {
+    if (!project || !draft || !isDirty || allErrors.length || astErrors.length) return null;
+    const r = applyCommand(project, { type: 'UPSERT_RULE', rule: { ...draft, enabled: stored?.enabled ?? draft.enabled ?? true } });
+    return r.ok ? r.project : null;
+  }, [project, draft, isDirty, allErrors.length, astErrors.length, stored?.enabled]);
+
   const patchDraft = useCallback((p: Partial<Rule>) => setDraft((d) => (d ? { ...d, ...p } : d)), []);
   const setWhen = (when: Predicate) => { patchDraft({ when }); setAstText(pretty(when)); setAstErrors([]); };
 
@@ -325,7 +337,7 @@ export function RulesData() {
     setAstText(text);
     try {
       const parsed = JSON.parse(text) as Predicate;
-      const errs = validatePredicate(parsed, docType);
+      const errs = validatePredicate(parsed, fieldMap);
       if (errs.length) { setAstErrors(errs); return; }
       setAstErrors([]);
       patchDraft({ when: parsed });
@@ -348,15 +360,27 @@ export function RulesData() {
     if (saved) { baseRef.current = JSON.stringify(saved); setDraft(clone(saved)); setAstText(pretty(saved.when)); }
     setParams({ rule: draft.id }, { replace: true });
     setTestResult(null);
+    setToggleNote(null);
   };
   const toggleEnabled = () => {
     if (!stored) return;
+    const before = useStudio.getState().project;
     const out = dispatch({ type: 'SET_RULE_ENABLED', ruleId: stored.id, enabled: stored.enabled === false });
     setEnableMsg(out.ok ? null : out.message);
+    const after = useStudio.getState().project;
+    setToggleNote(out.ok && before && after ? { before, after, ruleId: stored.id, verb: stored.enabled === false ? 'enabled' : 'disabled' } : null);
   };
   const deleteRule = () => {
     if (!stored) return;
-    if (!window.confirm(`Delete rule ${stored.id}? You can undo this from the top bar.`)) return;
+    let effect = '';
+    if (project) {
+      const gone = applyCommand(project, { type: 'DELETE_RULE', ruleId: stored.id });
+      if (gone.ok) {
+        const imp = impactOf(project, gone.project, records);
+        effect = imp.changed.length ? ` This changes ${imp.changed.length} of ${imp.evaluated} ${docType === 'eob' ? 'members' : 'customers'}' documents${imp.newBlocking ? ` and adds ${imp.newBlocking} blocking issue${imp.newBlocking === 1 ? '' : 's'}` : ''}.` : ` No ${docType === 'eob' ? "member's" : "customer's"} document changes.`;
+      }
+    }
+    if (!window.confirm(`Delete rule ${stored.id}?${effect} You can undo this from the top bar.`)) return;
     const out = dispatch({ type: 'DELETE_RULE', ruleId: stored.id });
     if (out.ok) { baseRef.current = ''; setDraft(null); setParams({}, { replace: true }); }
     else setEnableMsg(out.message);
@@ -375,6 +399,7 @@ export function RulesData() {
     <ScreenHeader id="S07" title="Rules & Data"
       subtitle="Edit the declarative rules behind each document outcome, test them against every record, and inspect the exact inputs behind the current scenario."
       actions={<>
+        <button className="btn" onClick={() => setShowFields(true)} data-testid="open-data-fields"><Icon.list /> Data fields</button>
         <button className="btn" onClick={() => openDock('scenario')}><Icon.list /> Scenario data</button>
         <button className="btn primary" onClick={addRule} data-testid="add-rule"><Icon.plus /> Add rule</button>
       </>} />
@@ -459,6 +484,20 @@ export function RulesData() {
                     {testResult && <TestPanel result={testResult} draft={draft} onPick={(id) => useStudio.getState().setRecord(id)} />}
                   </div>
                 </div>
+                {(draftProject || (toggleNote && toggleNote.ruleId === stored?.id && !isDirty)) && (
+                  <div className="rd-impact" data-testid="rule-impact">
+                    {draftProject
+                      ? <ImpactPreview before={project} after={draftProject} />
+                      : toggleNote && (
+                        <>
+                          <div className="imp-undo" role="status"><span>Rule {toggleNote.verb}.</span>
+                            <button className="btn sm" onClick={() => { useStudio.getState().undo(); setToggleNote(null); }} data-testid="impact-undo">Undo</button>
+                            <button className="btn sm ghost" onClick={() => setToggleNote(null)}>Dismiss</button></div>
+                          <ImpactPreview before={toggleNote.before} after={toggleNote.after} />
+                        </>
+                      )}
+                  </div>
+                )}
                 <div className="rd-actions" data-testid="rule-actions">
                   <button className="btn primary" disabled={!canApply} onClick={apply} data-testid="apply-rule-change" title={canApply ? 'Commit this rule as one undoable change' : allErrors[0] ?? 'No changes to apply'}>
                     <Icon.save /> {isNew ? 'Add rule to model' : 'Apply rule change'}
@@ -493,6 +532,7 @@ export function RulesData() {
           </div>
         </div>
       </div>
+      {showFields && <DataFieldsDialog onClose={() => setShowFields(false)} />}
     </section>
   );
 }

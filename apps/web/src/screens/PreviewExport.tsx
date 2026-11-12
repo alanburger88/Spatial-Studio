@@ -1,13 +1,13 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { resolve } from '@iss/resolver';
 import type { ProfileId } from '@iss/model';
-import { api, ApiFailure, type BinaryResult, type ScenarioRequest } from '../api/client';
-import { useStudio, useScenarioRequest } from '../state/store';
-import { ScreenHeader, Empty, Proof } from '../ui/common';
+import { api, ApiFailure, type BatchDto, type BatchItemDto, type BinaryResult, type ScenarioRequest } from '../api/client';
+import { useStudio, useScenarioRequest, useIsDirty } from '../state/store';
+import { ScreenHeader, Empty, Proof, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
 import './PreviewExport.css';
 
-type Tab = 'pdf' | 'html' | 'afp';
+type Tab = 'pdf' | 'html' | 'afp' | 'batch';
 type Device = 'desktop' | 'tablet' | 'mobile';
 const DEVICES: Record<Device, { label: string; width: number }> = { desktop: { label: 'Desktop 1200', width: 1200 }, tablet: { label: 'Tablet 768', width: 768 }, mobile: { label: 'Mobile 390', width: 390 } };
 const AFP_LABEL = 'AFP simulation only — no MO:DCA / AFP print stream generated';
@@ -175,11 +175,12 @@ export function PreviewExport() {
     { id: 'pdf', label: 'PDF (real)', stale: stale.pdf },
     { id: 'html', label: 'HTML (real)', stale: stale.html },
     { id: 'afp', label: 'AFP (simulated)', stale: stale.afp, chip: <span className="chip sim">SIMULATION</span> },
+    { id: 'batch', label: 'Batch', stale: false },
   ];
   const onTabKey = (e: React.KeyboardEvent) => {
     const i = tabs.findIndex((t) => t.id === tab);
-    if (e.key === 'ArrowRight') { setTab(tabs[(i + 1) % 3].id); e.preventDefault(); }
-    if (e.key === 'ArrowLeft') { setTab(tabs[(i + 2) % 3].id); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { setTab(tabs[(i + 1) % tabs.length].id); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') { setTab(tabs[(i + tabs.length - 1) % tabs.length].id); e.preventDefault(); }
   };
 
   if (!baseReq) return <section className="screen" data-testid="outputs-view"><ScreenHeader id="S10" title="Preview & Export" subtitle="" /><Empty title="No scenario" message="No matching fixture for this project." /></section>;
@@ -205,6 +206,7 @@ export function PreviewExport() {
             {tab === 'pdf' && <PdfTab job={session.pdf} stale={stale.pdf} onRun={runPdf} onCancel={() => cancel('pdf')} isEob={isEob} />}
             {tab === 'html' && <HtmlTab job={session.html} stale={stale.html} onRun={runHtml} onCancel={() => cancel('html')} device={device} setDevice={setDevice} isEob={isEob} />}
             {tab === 'afp' && <AfpTab job={session.afp} stale={stale.afp} onRun={runAfp} onCancel={() => cancel('afp')} />}
+            {tab === 'batch' && <BatchTab />}
           </div>
         </div>
 
@@ -497,5 +499,266 @@ export function ParityRow({ c }: { c: any }) {
         </tr>
       )}
     </>
+  );
+}
+
+
+/* ======================================================================= Batch tab */
+
+const BLOCK_WORDS: Record<string, string> = {
+  BALANCE_RECONCILIATION_FAILED: 'Balances do not add up', CLAIM_RECONCILIATION_FAILED: 'Claim amounts do not add up',
+  INCONSISTENT_PAYMENT_STATE: 'Payment state is inconsistent', UNCONFIRMED_DEBT_LANGUAGE: 'Debt wording used without confirmed debt',
+  UNCONFIRMED_MEMBER_LIABILITY: 'Member liability not confirmed', REQUIRED_NODE_MISSING: 'A required section is missing',
+  REQUIRED_TRANSLATION_MISSING: 'A required translation is missing', NO_VARIANT_MATCH: 'No wording matches this customer',
+  EXCLUSIVE_PRIORITY_TIE: 'Two rules tie for the same spot', MISSING_CONTENT_PART: 'Content is missing', NULL_BINDING: 'A data field is empty',
+  INVALID_BINDING: 'A data field is invalid', IMAGE_ALT_MISSING: 'An image has no description', UNSAFE_URL: 'A link is not allowed',
+  RECORD_TYPE_MISMATCH: 'Record does not fit this document', UNKNOWN_VARIANT: 'Unknown wording variant', UNKNOWN_SECTION: 'Unknown section',
+};
+const blockWord = (c: string) => BLOCK_WORDS[c] ?? c.toLowerCase().replace(/_/g, ' ');
+const STATUS_LABEL: Record<BatchItemDto['status'], string> = { pending: 'Waiting', ok: 'Done', draft: 'Draft', blocked: 'Blocked', failed: 'Failed' };
+const STATUS_CLASS: Record<BatchItemDto['status'], string> = { pending: '', ok: 'accent', draft: 'warning', blocked: 'error', failed: 'error' };
+const fmtMb = (n: number | null | undefined) => (n == null ? '—' : n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+const fmtDur = (ms: number | null | undefined) => { if (ms == null) return '—'; const s = ms / 1000; return s < 60 ? `${s.toFixed(s < 10 ? 1 : 0)} s` : `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`; };
+type Pick = 'all' | 'filter' | 'selected';
+
+function StatusChip({ s }: { s: BatchItemDto['status'] }) {
+  return <span className={`chip ${STATUS_CLASS[s]}`} data-status={s}>{STATUS_LABEL[s]}</span>;
+}
+
+function BatchTab() {
+  const project = useStudio((s) => s.project)!;
+  const records = useStudio((s) => s.records);
+  const personas = useStudio((s) => s.personas);
+  const dirty = useIsDirty();
+  const pool = useMemo(() => records.filter((r) => r.documentType === project.documentType), [records, project.documentType]);
+  const noun = project.documentType === 'eob' ? 'members' : 'customers';
+
+  const [pick, setPick] = useState<Pick>('all');
+  const [persona, setPersona] = useState('');
+  const [claimStatus, setClaimStatus] = useState('');
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
+  const [outPdf, setOutPdf] = useState(true);
+  const [outHtml, setOutHtml] = useState(true);
+  const [drafts, setDrafts] = useState(false);
+  const [batch, setBatch] = useState<BatchDto | null>(null);
+  const [recent, setRecent] = useState<Array<Omit<BatchDto, 'items'>>>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [filter, setFilter] = useState<'all' | BatchItemDto['status']>('all');
+  const [now, setNow] = useState(Date.now());
+  const liveId = useRef<string | null>(null);
+
+  const nameOf = (r: (typeof pool)[number]) => `${r.customer.givenName} ${r.customer.familyName}`;
+  const claimStatuses = useMemo(() => [...new Set(pool.flatMap((r) => (r.claims ?? []).map((c) => String(c.status ?? ''))).filter(Boolean))].sort(), [pool]);
+  const personaIds = useMemo(() => [...new Set(pool.map((r) => r.personaId).filter((x): x is string => !!x))].sort(), [pool]);
+  const filtered = useMemo(() => pool.filter((r) => (!persona || r.personaId === persona) && (!claimStatus || (r.claims ?? []).some((c) => c.status === claimStatus))), [pool, persona, claimStatus]);
+  const visible = useMemo(() => { const q = search.trim().toLowerCase(); return q ? pool.filter((r) => `${nameOf(r)} ${r.recordId} ${r.personaId ?? ''}`.toLowerCase().includes(q)) : pool; }, [pool, search]);
+  const targets = pick === 'all' ? pool : pick === 'filter' ? filtered : pool.filter((r) => chosen.has(r.recordId));
+  const outputs = [...(outPdf ? ['pdf' as const] : []), ...(outHtml ? ['html' as const] : [])];
+
+  const refreshRecent = useCallback(() => { api.batches().then((r) => setRecent(r.batches), () => undefined); }, []);
+
+  /* poll the running batch every ~700 ms; stop when finished; clean up on unmount */
+  const running = batch?.status === 'running';
+  const batchId = batch?.batchId;
+  useEffect(() => {
+    if (!running || !batchId) return;
+    let live = true;
+    const tick = async () => {
+      try {
+        const r = await api.batch(batchId);
+        if (!live) return;
+        setBatch(r.batch);
+        if (r.batch.status !== 'running') refreshRecent();
+      } catch (e) { if (live) setError(toError(e).message); }
+    };
+    const iv = window.setInterval(() => { setNow(Date.now()); void tick(); }, 700);
+    return () => { live = false; window.clearInterval(iv); };
+  }, [running, batchId, refreshRecent]);
+
+  /* resume a batch that is still running (e.g. after switching tabs) and load history */
+  useEffect(() => {
+    let live = true;
+    api.batches().then(async (r) => {
+      if (!live) return;
+      setRecent(r.batches);
+      const run = r.batches.find((b) => b.status === 'running');
+      if (run && !liveId.current) { const full = await api.batch(run.batchId); if (live) setBatch(full.batch); }
+    }, () => undefined);
+    return () => { live = false; };
+  }, []);
+
+  const start = async () => {
+    setError(null); setStarting(true); setFilter('all');
+    try {
+      const ids = pick === 'all' ? undefined : targets.map((r) => r.recordId);
+      const r = await api.startBatch({ projectId: project.projectId, project, recordIds: ids, outputs, includeBlocked: drafts });
+      liveId.current = r.batch.batchId; setBatch(r.batch); setNow(Date.now());
+    } catch (e) { setError(toError(e).message); }
+    finally { setStarting(false); }
+  };
+  const cancelRun = async () => { if (!batch) return; try { const r = await api.cancelBatch(batch.batchId); setBatch((b) => (b ? { ...b, status: r.batch?.status ?? b.status } : b)); } catch (e) { setError(toError(e).message); } };
+  const openRecent = async (id: string) => { try { setError(null); setBatch((await api.batch(id)).batch); setFilter('all'); } catch (e) { setError(toError(e).message); } };
+
+  const canStart = !running && !starting && targets.length > 0 && outputs.length > 0;
+  const startedMs = batch ? Date.parse(batch.startedAt) : 0;
+  const elapsed = batch ? (running ? Math.max(0, now - startedMs) : batch.durationMs ?? 0) : 0;
+  const remaining = batch && running && batch.done > 0 ? (elapsed / batch.done) * (batch.total - batch.done) : null;
+  const count = (st: BatchItemDto['status']) => batch?.items.filter((i) => i.status === st).length ?? 0;
+  const totalPages = batch?.items.reduce((a, i) => a + (i.pages ?? 0), 0) ?? 0;
+  const finished = batch && batch.status !== 'running';
+  const rows = batch ? (running ? batch.items.filter((i) => i.status !== 'pending').slice(-8).reverse() : batch.items.filter((i) => filter === 'all' || i.status === filter)) : [];
+
+  return (
+    <div className="bx" data-testid="batch-tab">
+      <div className="bx-cols">
+        <section className="bx-card" aria-label="Choose what to produce">
+          <h2 className="bx-h">Which {noun}?</h2>
+          <div className="bx-radios" role="radiogroup" aria-label="Records to include">
+            <label><input type="radio" name="bx-pick" checked={pick === 'all'} onChange={() => setPick('all')} disabled={running} /> All {pool.length} {noun}</label>
+            <label><input type="radio" name="bx-pick" checked={pick === 'filter'} onChange={() => setPick('filter')} disabled={running} /> Filter by {project.documentType === 'eob' ? 'persona or claim status' : 'persona'}</label>
+            <label><input type="radio" name="bx-pick" checked={pick === 'selected'} onChange={() => setPick('selected')} disabled={running} /> Selected {noun}</label>
+          </div>
+          {pick === 'filter' && (
+            <div className="bx-filters">
+              <label className="field">Persona
+                <select className="select" value={persona} onChange={(e) => setPersona(e.target.value)} disabled={running}>
+                  <option value="">Any persona</option>
+                  {personaIds.map((id) => <option key={id} value={id}>{personas.find((p) => p.id === id)?.name ?? id}</option>)}
+                </select>
+              </label>
+              {project.documentType === 'eob' && (
+                <label className="field">Claim status
+                  <select className="select" value={claimStatus} onChange={(e) => setClaimStatus(e.target.value)} disabled={running}>
+                    <option value="">Any status</option>
+                    {claimStatuses.map((c) => <option key={c} value={c}>{c.replace(/-/g, ' ')}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
+          )}
+          {pick === 'selected' && (
+            <div className="bx-list-wrap">
+              <div className="bx-list-tools">
+                <input className="input" type="search" placeholder={`Search ${noun}…`} aria-label={`Search ${noun}`} value={search} onChange={(e) => setSearch(e.target.value)} />
+                <button className="btn sm" onClick={() => setChosen((c) => new Set([...c, ...visible.map((r) => r.recordId)]))} disabled={running}>Select shown</button>
+                <button className="btn sm ghost" onClick={() => setChosen(new Set())} disabled={running || chosen.size === 0}>Clear</button>
+              </div>
+              <ul className="bx-list" aria-label={`Select ${noun}`}>
+                {visible.map((r) => (
+                  <li key={r.recordId}>
+                    <label><input type="checkbox" checked={chosen.has(r.recordId)} disabled={running} onChange={(e) => setChosen((c) => { const n = new Set(c); if (e.target.checked) n.add(r.recordId); else n.delete(r.recordId); return n; })} />
+                      <span className="bx-nm">{nameOf(r)}</span><span className="muted bx-sub">{r.personaId ? personas.find((p) => p.id === r.personaId)?.name ?? r.personaId : ''}</span><Tech><span className="mono muted bx-sub">{r.recordId}</span></Tech></label>
+                  </li>
+                ))}
+                {visible.length === 0 && <li className="muted bx-none">No {noun} match “{search}”.</li>}
+              </ul>
+            </div>
+          )}
+          <p className="bx-count" data-testid="batch-count"><strong>{targets.length}</strong> of {pool.length} {noun} will be produced.</p>
+        </section>
+
+        <section className="bx-card" aria-label="Output options">
+          <h2 className="bx-h">What to produce</h2>
+          <label className="bx-check"><input type="checkbox" checked={outPdf} onChange={(e) => setOutPdf(e.target.checked)} disabled={running} /> PDF</label>
+          <label className="bx-check"><input type="checkbox" checked={outHtml} onChange={(e) => setOutHtml(e.target.checked)} disabled={running} /> Interactive HTML</label>
+          <p className="muted bx-note">AFP is simulation-only and is not part of batch runs.</p>
+          <label className="bx-check"><input type="checkbox" checked={drafts} onChange={(e) => setDrafts(e.target.checked)} disabled={running} /> Include blocked records as watermarked drafts</label>
+          <p className="muted bx-note">Off by default: records with blocking problems are skipped and listed in the report.</p>
+          <div className="bx-actions">
+            <button className="btn primary" onClick={start} disabled={!canStart} data-testid="batch-start">{starting && <span className="spinner" />} Start batch</button>
+            {dirty ? <span className="chip warning" data-testid="batch-dirty">Uses your current, unsaved changes</span> : <span className="chip">Uses the saved model v{project.modelVersion}</span>}
+            {outputs.length === 0 && <span className="bx-warn" role="status">Choose at least one output.</span>}
+          </div>
+        </section>
+      </div>
+
+      {error && <div className="callout error" role="alert" data-testid="batch-error">{error}</div>}
+
+      {batch && running && (
+        <section className="bx-card" data-testid="batch-progress" aria-label="Batch progress">
+          <div className="bx-prog-head">
+            <strong>Producing {batch.done} of {batch.total}</strong>
+            <span className="muted">Elapsed {fmtDur(elapsed)} · {remaining == null ? 'estimating…' : `about ${fmtDur(remaining)} left`}</span>
+            <button className="btn sm danger" onClick={cancelRun} data-testid="batch-cancel">Cancel</button>
+          </div>
+          <div className="bx-bar" role="progressbar" aria-label="Batch progress" aria-valuemin={0} aria-valuemax={batch.total} aria-valuenow={batch.done}><div style={{ width: `${batch.total ? (batch.done / batch.total) * 100 : 0}%` }} /></div>
+          <table className="table bx-table" aria-label="Latest records">
+            <thead><tr><th>Customer</th><th>Status</th><th className="num">Pages</th><th className="num">Time</th></tr></thead>
+            <tbody>{rows.map((i) => <tr key={i.recordId}><td>{i.name}</td><td><StatusChip s={i.status} /></td><td className="num">{i.pages ?? '—'}</td><td className="num">{i.ms == null ? '—' : `${i.ms} ms`}</td></tr>)}</tbody>
+          </table>
+        </section>
+      )}
+
+      {batch && finished && (
+        <section className="bx-card" data-testid="batch-summary" aria-label="Batch results">
+          <div className="bx-prog-head">
+            <strong>{batch.status === 'done' ? 'Batch finished' : batch.status === 'cancelled' ? 'Batch cancelled' : 'Batch failed'}</strong>
+            <span className="muted">{batch.done} of {batch.total} processed</span>
+            {batch.zipBytes != null && <a className="btn primary" href={api.batchZipUrl(batch.batchId)} download data-testid="batch-download"><Icon.download /> Download ZIP ({fmtMb(batch.zipBytes)})</a>}
+          </div>
+          {batch.error && <div className="callout error" role="alert">{batch.error}</div>}
+          <div className="bx-tiles">
+            <div className="bx-tile"><b>{count('ok')}</b><span>Produced</span></div>
+            <div className="bx-tile"><b>{count('blocked')}</b><span>Blocked</span></div>
+            <div className="bx-tile"><b>{count('failed')}</b><span>Failed</span></div>
+            <div className="bx-tile"><b>{count('draft')}</b><span>Drafts</span></div>
+            <div className="bx-tile"><b>{totalPages}</b><span>Total pages</span></div>
+            <div className="bx-tile"><b>{fmtDur(batch.durationMs)}</b><span>Total time</span></div>
+            <div className="bx-tile"><b>{batch.done ? fmtDur((batch.durationMs ?? 0) / batch.done) : '—'}</b><span>Average per record</span></div>
+          </div>
+          <Proof label="Proof">
+            <span className="mono">Batch {batch.batchId} · model v{batch.modelVersion} · ZIP SHA-256 {batch.zipSha256 ?? '—'}</span>
+          </Proof>
+          <div className="bx-filter-row">
+            <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>Show
+              <select className="select" value={filter} onChange={(e) => setFilter(e.target.value as any)} aria-label="Filter results by status">
+                <option value="all">All ({batch.items.length})</option>
+                {(['ok', 'draft', 'blocked', 'failed', 'pending'] as const).map((st) => count(st) > 0 && <option key={st} value={st}>{STATUS_LABEL[st]} ({count(st)})</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="bx-results">
+            <table className="table bx-table" aria-label="Per-record results">
+              <thead><tr><th>Customer</th><th>Status</th><th className="num">Pages</th><th className="num">Time</th><th>Notes</th></tr></thead>
+              <tbody>
+                {rows.map((i) => (
+                  <tr key={i.recordId} data-testid="batch-row" data-status={i.status}>
+                    <td>{i.name}<Tech><div className="mono muted bx-sub">{i.recordId}{i.runId ? ` · ${i.runId}` : ''}</div></Tech></td>
+                    <td><StatusChip s={i.status} /></td>
+                    <td className="num">{i.pages ?? '—'}</td>
+                    <td className="num">{i.ms == null ? '—' : `${i.ms} ms`}</td>
+                    <td>
+                      {i.blocking.length > 0 && <>{i.blocking.map(blockWord).join('; ')}<Tech><div className="mono bx-sub">{i.blocking.join(' ')}</div></Tech></>}
+                      {i.error && <span>{i.error}</span>}
+                      {i.warnings > 0 && i.blocking.length === 0 && !i.error && <span className="muted">{i.warnings} warning{i.warnings === 1 ? '' : 's'}</span>}
+                    </td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={5} className="muted">No records with this status.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      <section className="bx-card" aria-label="Recent batches" data-testid="batch-recent">
+        <h2 className="bx-h">Recent batches</h2>
+        {recent.length === 0 ? <p className="muted bx-note">No batches yet. Start one above.</p> : (
+          <ul className="bx-recent">
+            {recent.map((b) => (
+              <li key={b.batchId}>
+                <button className="btn sm ghost" onClick={() => openRecent(b.batchId)} aria-label={`Open batch from ${fmtTime(b.startedAt)}`}>{fmtTime(b.startedAt)}</button>
+                <span>{b.done} of {b.total} records · {b.outputs.map((o) => o.toUpperCase()).join(' + ')}</span>
+                <span className={`chip ${b.status === 'done' ? 'accent' : b.status === 'running' ? 'info' : 'warning'}`}>{b.status === 'done' ? 'Finished' : b.status === 'running' ? 'Running' : b.status === 'cancelled' ? 'Cancelled' : 'Failed'}</span>
+                <span className="muted">{fmtDur(b.durationMs)} · {fmtMb(b.zipBytes)}</span>
+                <Tech><span className="mono muted">{b.batchId}</span></Tech>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
   );
 }

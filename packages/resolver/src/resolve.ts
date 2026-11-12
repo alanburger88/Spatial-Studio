@@ -1,5 +1,5 @@
 import {
-  applyJourney, buildContext, deepPatch, digestOf, fieldIndex, getPath, inlineFromMarkup, isSafeUrl, projectContentDigest, richToPlain, shortDigest,
+  applyJourney, buildContext, deepPatch, digestOf, projectFieldIndex, getPath, inlineFromMarkup, isSafeUrl, projectContentDigest, richToPlain, shortDigest,
   type ContentPart, type DocNode, type FieldDef, type Predicate, type Project, type RichBlock, type RichDoc, type RichInline, type Rule,
 } from '@iss/model';
 import { formatCents, formatValue } from './format';
@@ -280,7 +280,7 @@ export function resolve(input: ResolveInput): Resolution {
     }
   }
 
-  const c: Ctx = { project, ctx, locale: approvedLocale ?? (effective.customer?.locale as string) ?? 'en-US', approvedLocale, fields: fieldIndex(docType), findings, parts, liabilityConfirmed };
+  const c: Ctx = { project, ctx, locale: approvedLocale ?? (effective.customer?.locale as string) ?? 'en-US', approvedLocale, fields: projectFieldIndex(project), findings, parts, liabilityConfirmed };
   const requiredSet = new Set(mandatory);
   for (const n of project.nodes) if (n.required) requiredSet.add(n.id);
 

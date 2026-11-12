@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { buildContext, fieldsFor, getPath, type DocumentType, type Project, type SyntheticRecord } from '@iss/model';
+import { buildContext, fieldsFor, getPath, parseCsv, projectFields, type DocumentType, type FieldDef, type Project, type SyntheticRecord } from '@iss/model';
 import { resolve, type Resolution } from '@iss/resolver';
 import { api, ApiFailure, type ImportResult, type ProjectSummary } from '../api/client';
 import { useStudio } from '../state/store';
@@ -127,6 +127,23 @@ function csvTemplate(documentType: DocumentType, example?: SyntheticRecord): str
   return lines.join('\r\n') + '\r\n';
 }
 
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const IGNORE = '';
+const SOURCE_ID = '__recordId';
+
+/** Best-effort automatic match of a CSV header to a data-contract path (exact path, label, or last path segment). */
+function autoMatch(header: string, fields: FieldDef[]): string {
+  const h = header.trim();
+  if (/^record ?id$|^id$|^customer ?id$/i.test(h)) return SOURCE_ID;
+  const exact = fields.find((f) => f.path === h); if (exact) return exact.path;
+  const n = norm(h);
+  const byLabel = fields.find((f) => norm(f.label) === n); if (byLabel) return byLabel.path;
+  const byLeaf = fields.filter((f) => norm(f.path.split('.').slice(-1)[0]) === n); if (byLeaf.length === 1) return byLeaf[0].path;
+  return IGNORE;
+}
+
+const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+
 function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [docType, setDocType] = useState<DocumentType>('credit-statement');
   const [format, setFormat] = useState<'json' | 'csv'>('csv');
@@ -136,6 +153,32 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const projects = useStudio((st) => st.projects);
+  const targets = projects.filter((p) => p.documentType === docType);
+  const [targetId, setTargetId] = useState<string>('');
+  const [target, setTarget] = useState<Project | null>(null);
+  useEffect(() => {
+    const id = targetId && targets.some((t) => t.projectId === targetId) ? targetId : targets[0]?.projectId ?? '';
+    if (id !== targetId) { setTargetId(id); return; }
+    if (!id) { setTarget(null); return; }
+    let live = true;
+    api.project(id).then(({ project }) => { if (live) setTarget(project); }).catch(() => undefined);
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docType, targetId, projects]);
+  const fields = useMemo(() => projectFields(target ?? { documentType: docType }).filter((f) => !f.derived && f.path !== 'documentType' && f.path !== 'recordId'), [target, docType]);
+  const csvRows = useMemo(() => (format === 'csv' && text.trim() ? parseCsv(text) : []), [format, text]);
+  const headers = csvRows[0] ?? [];
+  const [mapping, setMapping] = useState<string[]>([]);
+  useEffect(() => { setMapping(headers.map((h) => autoMatch(h.replace(/^\uFEFF/, ''), fields))); setCheck(null); }, [headers.join('\u0001'), fields]);
+  const mapped = mapping.filter((m) => m !== IGNORE).length;
+  const dupTargets = mapping.filter((m, i) => m && mapping.indexOf(m) !== i);
+  const missingRequired = fields.filter((f) => f.required && f.type !== 'array' && !mapping.includes(f.path)).map((f) => f.label);
+  /** Rewrites the CSV with mapped data-contract headers, dropping ignored columns. */
+  const mappedCsv = () => {
+    const keep = mapping.map((m, i) => [m, i] as const).filter(([m]) => m !== IGNORE);
+    return csvRows.map((row, r) => keep.map(([m, i]) => csvCell(r === 0 ? (m === SOURCE_ID ? 'recordId' : m) : row[i] ?? '')).join(',')).join('\r\n') + '\r\n';
+  };
 
   const onFile = async (f: File | undefined) => {
     if (!f) return;
@@ -146,7 +189,7 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
   const call = async (dryRun: boolean) => {
     setBusy(true); setErr(null);
     try {
-      const r = await api.importRecords({ documentType: docType, format, data: text, dryRun });
+      const r = await api.importRecords({ documentType: docType, format, data: format === 'csv' ? mappedCsv() : text, dryRun, projectId: targetId || undefined });
       if (dryRun) setCheck(r);
       else {
         useStudio.getState().toast({ kind: r.rejected.length ? 'warning' : 'success', title: `Imported ${r.imported.length} record${r.imported.length === 1 ? '' : 's'}`, message: r.rejected.length ? `${r.rejected.length} row(s) were rejected.` : `${r.imported.map((x) => x.recordId).join(', ').slice(0, 120)}` });
@@ -165,7 +208,7 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
     <Dialog title="Import scenario records" onClose={onClose} labelledBy="import-title"
       footer={<>
         <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn" onClick={() => call(true)} disabled={busy || !text.trim()} data-testid="import-check">Check file</button>
+        <button className="btn" onClick={() => call(true)} disabled={busy || !text.trim() || (format === 'csv' && (!mapped || dupTargets.length > 0))} data-testid="import-check">Check file</button>
         <button className="btn primary" onClick={() => call(false)} disabled={busy || !check || !check.imported.length} data-testid="import-commit">Import {check ? check.imported.length : ''} record{check?.imported.length === 1 ? '' : 's'}</button>
       </>}>
       <div className="imp">
@@ -185,7 +228,7 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
             <span className="muted">{fileName ?? 'No file chosen'}</span>
             <button type="button" className="btn ghost sm" onClick={downloadTemplate} style={{ marginLeft: 'auto' }}><Icon.download /> CSV template</button>
           </div>
-          <span className="hint">CSV columns are data-field paths such as <span className="mono">{docType === 'eob' ? 'claim.status' : 'card.paymentStatus'}</span>; amounts are whole cents; dates are YYYY-MM-DD. JSON uses the same shape as the sample records.</span>
+          <span className="hint">CSV: any column names — you match them to data fields below (amounts in whole cents, dates YYYY-MM-DD). JSON: the same shape as the sample records.</span>
         </div>
         <details className="imp-paste">
           <summary>…or paste data</summary>
@@ -197,6 +240,42 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
           </div>
           <textarea className="textarea mono" rows={6} value={text} onChange={(e) => { setText(e.target.value); setFileName(null); setCheck(null); }} aria-label="Pasted records" data-testid="import-text" />
         </details>
+        {targets.length > 1 && (
+          <div className="field">
+            <label htmlFor="imp-target">Use data fields of</label>
+            <select id="imp-target" className="select" value={targetId} onChange={(e) => setTargetId(e.target.value)} data-testid="import-target">
+              {targets.map((t) => <option key={t.projectId} value={t.projectId}>{t.title}</option>)}
+            </select>
+            <span className="hint">Its custom fields can be imported too. Records are shared by every {docType === 'eob' ? 'EOB' : 'credit-card'} project.</span>
+          </div>
+        )}
+        {format === 'csv' && headers.length > 0 && (
+          <div className="imp-map" data-testid="import-mapping">
+            <div className="row"><strong>Match columns</strong><span className="muted">{mapped} of {headers.length} columns used</span></div>
+            <div className="imp-map-scroll">
+              <table className="table">
+                <thead><tr><th>Your column</th><th>First value</th><th>Data field</th></tr></thead>
+                <tbody>
+                  {headers.map((h, i) => (
+                    <tr key={i}>
+                      <td><strong>{h || <em className="faint">(blank)</em>}</strong></td>
+                      <td className="faint imp-sample" title={csvRows[1]?.[i] ?? ''}>{csvRows[1]?.[i] ?? ''}</td>
+                      <td>
+                        <select className="select" value={mapping[i] ?? IGNORE} onChange={(e) => setMapping((m) => m.map((x, j) => (j === i ? e.target.value : x)))} aria-label={`Data field for column ${h}`} data-testid={`map-${i}`}>
+                          <option value={IGNORE}>— Ignore —</option>
+                          <option value={SOURCE_ID}>Your record ID (kept for reference)</option>
+                          {fields.filter((f) => f.type !== 'array').map((f) => <option key={f.path} value={f.path}>{f.label}{f.path.startsWith('custom.') ? ' (custom)' : ''}</option>)}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {dupTargets.length > 0 && <p className="callout error">Two columns are matched to the same field. Each field can be used once.</p>}
+            {missingRequired.length > 0 && <p className="callout warning">Not matched yet (required): {missingRequired.slice(0, 6).join(', ')}{missingRequired.length > 6 ? ` +${missingRequired.length - 6} more` : ''}. Rows without them will be rejected.</p>}
+          </div>
+        )}
         {err && <p className="callout error" role="alert" data-testid="import-error">{err}</p>}
         {check && (
           <div className="imp-result" data-testid="import-result" aria-live="polite">

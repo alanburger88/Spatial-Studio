@@ -83,6 +83,19 @@ export interface ComposedPages {
   transactionCount: number | null;
 }
 
+export type BatchStatus = 'running' | 'done' | 'failed' | 'cancelled';
+export interface BatchItemDto {
+  recordId: string; name: string; status: 'pending' | 'ok' | 'draft' | 'blocked' | 'failed';
+  pages: number | null; pdfBytes: number | null; htmlBytes: number | null; ms: number | null;
+  blocking: string[]; warnings: number; selectedVariants: Record<string, string | null>; error?: string; runId?: string;
+}
+export interface BatchDto {
+  batchId: string; projectId: string; projectTitle: string; modelVersion: number; outputs: Array<'pdf' | 'html'>; includeBlocked: boolean;
+  status: BatchStatus; total: number; done: number; items: BatchItemDto[];
+  startedAt: string; finishedAt: string | null; durationMs: number | null; zipBytes: number | null; zipSha256: string | null; error?: string;
+}
+export interface AssetDto { assetId: string; name: string; mime: string; size: number; sha256: string; width: number | null; height: number | null; createdAt: string }
+
 export const api = {
   health: () => json<{ status: string; ai: { mode: 'external' | 'offline'; label: string; model?: string } }>('/api/v1/health'),
   projects: () => json<{ projects: ProjectSummary[] }>('/api/v1/projects'),
@@ -92,7 +105,7 @@ export const api = {
   duplicateProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}/duplicate`, { method: 'POST', body: JSON.stringify({ title }) }),
   renameProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) }),
   deleteProject: (id: string) => json<{ deleted: boolean }>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
-  importRecords: (body: { documentType: string; format: 'json' | 'csv'; data: string; dryRun?: boolean }) => json<ImportResult>('/api/v1/records/import', { method: 'POST', body: JSON.stringify(body) }),
+  importRecords: (body: { documentType: string; format: 'json' | 'csv'; data: string; dryRun?: boolean; projectId?: string }) => json<ImportResult>('/api/v1/records/import', { method: 'POST', body: JSON.stringify(body) }),
   clearImportedRecords: (documentType?: string) => json<{ removed: number }>(`/api/v1/records/imported${documentType ? `?documentType=${documentType}` : ''}`, { method: 'DELETE' }),
   schemas: (id: string) => json<{ fields: any[]; dimensions: any[]; edgeCasePresets: Array<{ id: string; label: string; description: string }> }>(`/api/v1/projects/${id}/schemas`),
   records: (documentType: string) => json<{ records: SyntheticRecord[]; seed: string }>(`/api/v1/records?documentType=${documentType}&full=1`),
@@ -113,4 +126,14 @@ export const api = {
   assistantStatus: () => json<{ mode: 'external' | 'offline'; label: string; model?: string }>('/api/v1/assistant/status'),
   assistantMessage: (body: { message: string; context: any; project?: Project; forceOffline?: boolean }) => json<any>('/api/v1/assistant/message', { method: 'POST', body: JSON.stringify(body) }),
   decideProposal: (id: string, approved: boolean, modelVersion: number) => json<any>(`/api/v1/assistant/proposals/${id}/decision`, { method: 'POST', body: JSON.stringify({ approved, modelVersion }) }),
+  startBatch: (body: { projectId: string; project?: Project; recordIds?: string[]; outputs: Array<'pdf' | 'html'>; includeBlocked?: boolean }) => json<{ batch: BatchDto }>('/api/v1/batches', { method: 'POST', body: JSON.stringify(body) }),
+  batch: (id: string) => json<{ batch: BatchDto }>(`/api/v1/batches/${id}`),
+  cancelBatch: (id: string) => json<{ batch: BatchDto }>(`/api/v1/batches/${id}/cancel`, { method: 'POST', body: '{}' }),
+  batches: () => json<{ batches: Array<Omit<BatchDto, 'items'>> }>('/api/v1/batches'),
+  batchZipUrl: (id: string) => `/api/v1/batches/${id}/zip`,
+  assets: () => json<{ assets: AssetDto[]; maxBytes: number; types: string[] }>('/api/v1/assets'),
+  uploadAsset: (name: string, dataUri: string) => json<{ asset: AssetDto; dataUri: string }>('/api/v1/assets', { method: 'POST', body: JSON.stringify({ name, dataUri }) }),
+  asset: (id: string) => json<{ asset: AssetDto; dataUri: string }>(`/api/v1/assets/${id}`),
+  assetRawUrl: (id: string) => `/api/v1/assets/${id}/raw`,
+  deleteAsset: (id: string) => json<{ deleted: boolean; note?: string }>(`/api/v1/assets/${id}`, { method: 'DELETE' }),
 };

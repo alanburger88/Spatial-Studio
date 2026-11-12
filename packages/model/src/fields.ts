@@ -1,4 +1,4 @@
-import type { DocumentType, Formatter } from './types';
+import type { CustomField, DocumentType, Formatter, Project } from './types';
 
 /**
  * Typed data contracts. Tokens, bindings and rule predicates may only reference
@@ -110,6 +110,40 @@ export function fieldsFor(documentType: DocumentType): FieldDef[] {
 
 export function fieldIndex(documentType: DocumentType): Map<string, FieldDef> {
   return new Map(fieldsFor(documentType).map((f) => [f.path, f]));
+}
+
+export const CUSTOM_FIELD_KEY = /^[a-zA-Z][a-zA-Z0-9]{0,39}$/;
+
+/** Data contract of one project: the standard fields of its document type plus its custom fields. */
+export function projectFields(project: Pick<Project, 'documentType' | 'customFields'>): FieldDef[] {
+  return [...fieldsFor(project.documentType), ...customFieldDefs(project.customFields)];
+}
+
+export function projectFieldIndex(project: Pick<Project, 'documentType' | 'customFields'>): Map<string, FieldDef> {
+  return new Map(projectFields(project).map((f) => [f.path, f]));
+}
+
+export function customFieldDefs(custom: CustomField[] | undefined): FieldDef[] {
+  return (custom ?? []).map((c) => ({ path: `custom.${c.key}`, type: c.type, label: c.label, enumValues: c.type === 'enum' ? c.enumValues ?? [] : undefined, required: !!c.required, example: c.example, dimension: !!c.dimension }));
+}
+
+/** Validation for a set of custom fields (keys, labels, types, enum values, no clash with standard labels). */
+export function validateCustomFields(documentType: DocumentType, custom: CustomField[]): string[] {
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  const types = new Set(['string', 'int', 'cents', 'bool', 'date', 'enum']);
+  for (const c of custom) {
+    if (!CUSTOM_FIELD_KEY.test(c.key ?? '')) errors.push(`Key “${c.key}” must start with a letter and use only letters and digits (max 40).`);
+    if (seen.has(c.key)) errors.push(`Key “${c.key}” is used twice.`);
+    seen.add(c.key);
+    if (!c.label?.trim() || c.label.length > 60) errors.push(`Field “${c.key}” needs a label (max 60 characters).`);
+    if (!types.has(c.type)) errors.push(`Field “${c.key}” has an unsupported type ${c.type}.`);
+    if (c.type === 'enum' && (!Array.isArray(c.enumValues) || !c.enumValues.length || c.enumValues.some((v) => typeof v !== 'string' || !v.trim()))) errors.push(`Field “${c.key}” needs at least one allowed value.`);
+    if (c.type === 'enum' && new Set(c.enumValues).size !== (c.enumValues ?? []).length) errors.push(`Field “${c.key}” lists an allowed value twice.`);
+  }
+  const std = new Set(fieldsFor(documentType).map((f) => f.label.toLowerCase()));
+  for (const c of custom) if (std.has(c.label?.trim().toLowerCase())) errors.push(`Label “${c.label}” is already a standard field.`);
+  return errors;
 }
 
 export function defaultFormatterFor(type: FieldType): Formatter {

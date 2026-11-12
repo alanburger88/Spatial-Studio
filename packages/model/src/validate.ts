@@ -1,23 +1,24 @@
-import { fieldIndex } from './fields';
+import { fieldIndex, projectFieldIndex, type FieldDef } from './fields';
 import type { DocumentType, Predicate, Project, Rule } from './types';
 
 const COMPARE = new Set(['eq', 'ne', 'gt', 'gte', 'lt', 'lte']);
 const NUMERIC = new Set(['cents', 'int', 'points']);
 
 /** Validates a typed rule expression: allowlisted operators, known paths and type-compatible values. */
-export function validatePredicate(p: Predicate, documentType: DocumentType, depth = 0): string[] {
+/** `scope` is a document type (standard contract) or a resolved field index (e.g. a project's contract incl. custom fields). */
+export function validatePredicate(p: Predicate, scope: DocumentType | Map<string, FieldDef>, depth = 0): string[] {
   const errors: string[] = [];
   if (depth > 8) return ['Expression nesting too deep (max 8).'];
   if (!p || typeof p !== 'object' || typeof (p as any).op !== 'string') return ['Expression must be an object with an op.'];
-  const fields = fieldIndex(documentType);
+  const fields = typeof scope === 'string' ? fieldIndex(scope) : scope;
   switch (p.op) {
     case 'and':
     case 'or':
       if (!Array.isArray(p.args) || p.args.length < 1) return [`${p.op} needs at least one argument.`];
-      p.args.forEach((a) => errors.push(...validatePredicate(a, documentType, depth + 1)));
+      p.args.forEach((a) => errors.push(...validatePredicate(a, fields, depth + 1)));
       return errors;
     case 'not':
-      return validatePredicate(p.arg, documentType, depth + 1);
+      return validatePredicate(p.arg, fields, depth + 1);
     case 'isNull':
     case 'notNull':
       if (!fields.has(p.path)) errors.push(`Unknown field path “${p.path}”.`);
@@ -50,7 +51,7 @@ export function validateRule(rule: Rule, project: Project): string[] {
   if (rule.scope !== project.documentType) errors.push(`Rule scope must be ${project.documentType}.`);
   if (!['exclusive', 'additive', 'obligation'].includes(rule.mode)) errors.push('Mode must be exclusive, additive or obligation.');
   if (!Number.isInteger(rule.priority) || rule.priority < 0 || rule.priority > 10000) errors.push('Priority must be an integer 0–10000.');
-  errors.push(...validatePredicate(rule.when, project.documentType));
+  errors.push(...validatePredicate(rule.when, projectFieldIndex(project)));
   const nodes = new Map(project.nodes.map((n) => [n.id, n]));
   const parts = new Set(project.contentParts.map((c) => c.id));
   const a = rule.then;

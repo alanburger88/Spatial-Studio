@@ -1,4 +1,4 @@
-import { fieldIndex, type Predicate, type Project, type Rule } from '@iss/model';
+import { projectFieldIndex, type Predicate, type Project, type Rule } from '@iss/model';
 
 /**
  * Plain-language renderings for Business view. Pure functions over the canonical model: they never invent
@@ -8,8 +8,8 @@ import { fieldIndex, type Predicate, type Project, type Rule } from '@iss/model'
 const humanise = (s: string) => s.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[-_.]/g, ' ').toLowerCase();
 
 /** Friendly field label from the typed data contract (falls back to a humanised path). */
-export function fieldLabel(project: Pick<Project, 'documentType'>, path: string): string {
-  const f = fieldIndex(project.documentType).get(path);
+export function fieldLabel(project: Pick<Project, 'documentType' | 'customFields'>, path: string): string {
+  const f = projectFieldIndex(project).get(path);
   return f?.label ?? humanise(path.split('.').slice(-1)[0]);
 }
 
@@ -22,7 +22,7 @@ function valueText(v: unknown): string {
 }
 
 /** "Payment status is “overdue”", "Missed payments is at least 2", "Assistance requested is yes". */
-export function predicateSentence(project: Pick<Project, 'documentType'>, p: Predicate): string {
+export function predicateSentence(project: Pick<Project, 'documentType' | 'customFields'>, p: Predicate): string {
   switch (p.op) {
     case 'and': return p.args.map((a) => predicateSentence(project, a)).join(' and ');
     case 'or': return p.args.map((a) => predicateSentence(project, a)).join(' or ');

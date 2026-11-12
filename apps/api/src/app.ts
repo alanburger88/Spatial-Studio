@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import { z } from 'zod';
-import { canonicalJson, fieldsFor, projectContentDigest, validateRule, csvToRecords, prepareImport, IMPORT_LIMIT, SCHEMA_VERSION, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
+import { canonicalJson, customFieldDefs, fieldsFor, projectFields, projectContentDigest, validateRule, csvToRecords, prepareImport, IMPORT_LIMIT, SCHEMA_VERSION, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
 import { renderPagedDocument, renderInteractiveHtml, compareManifests, afpSimulation, AFP_SIMULATION_LABEL, PAGED_RENDERER_VERSION, HTML_RENDERER_VERSION } from '@iss/renderers';
@@ -13,6 +13,7 @@ import { ScenarioEngine, buildCube, buildLandscape, generateEdgeCase, replayJour
 import { staticRuleAnalysis, bindingAnalysis, modelAccessibility, axeToFindings, toIssue, type ValidationIssue, type Suite } from '@iss/validation';
 import { Composer } from './composer';
 import { Store } from './db';
+import { BatchRunner, BATCH_LIMIT, type BatchOutput } from './batch';
 import { handleMessage, providerConfig, providerStatus, type Proposal } from './assistant';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -49,6 +50,7 @@ export interface AppOptions { dataDir?: string; logger?: boolean }
 export async function buildApp(opts: AppOptions = {}) {
   const store = new Store(opts.dataDir ?? process.env.DATA_DIR ?? path.resolve(here, '../../../.data'));
   const composer = new Composer();
+  const batches = new BatchRunner(composer, path.join(opts.dataDir ?? process.env.DATA_DIR ?? path.resolve(here, '../../../.data'), 'batches'));
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 8 * 1024 * 1024 });
   await app.register(cors, { origin: (origin, cb) => cb(null, !origin || /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)), exposedHeaders: ['X-Run-Id', 'X-Artifact-Id', 'X-Page-Count', 'X-Pdf-Page-Count', 'X-Content-Digest', 'X-Sha256', 'X-Draft', 'Content-Disposition', 'X-Correlation-Id'] });
   app.addHook('onClose', async () => { await composer.close(); });
@@ -167,15 +169,110 @@ export async function buildApp(opts: AppOptions = {}) {
     return { deleted: true, projectId: req.params.projectId };
   });
 
+  /* Image asset library: PNG/JPEG/WebP only (checked by magic bytes), ≤ 280 KB so the data URI stays within the renderer's embed limit. */
+  const ASSET_MAX = 280 * 1024;
+  const sniff = (b: Buffer): string | null => {
+    if (b.length > 8 && b[0] === 0x89 && b.toString('ascii', 1, 4) === 'PNG') return 'image/png';
+    if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+    if (b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+    return null;
+  };
+  const dims = (b: Buffer, mime: string): [number | null, number | null] => {
+    try {
+      if (mime === 'image/png') return [b.readUInt32BE(16), b.readUInt32BE(20)];
+      if (mime === 'image/jpeg') {
+        for (let i = 2; i < b.length - 9;) {
+          if (b[i] !== 0xff) { i++; continue; }
+          const m = b[i + 1]; const len = b.readUInt16BE(i + 2);
+          if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return [b.readUInt16BE(i + 7), b.readUInt16BE(i + 5)];
+          i += 2 + len;
+        }
+      }
+    } catch { /* unknown */ }
+    return [null, null];
+  };
+  app.get('/api/v1/assets', async () => ({ assets: store.listAssets(), maxBytes: ASSET_MAX, types: ['image/png', 'image/jpeg', 'image/webp'] }));
+  app.post<{ Body: Record<string, any> }>('/api/v1/assets', async (req, reply) => {
+    const b = (req.body ?? {}) as { name?: string; dataUri?: string };
+    const m = /^data:([a-z/+.-]+);base64,([A-Za-z0-9+/=]+)$/.exec(b.dataUri ?? '');
+    if (!m) throw new ApiError(400, 'INVALID_ASSET', 'Send the image as a base64 data URI.');
+    const bytes = Buffer.from(m[2], 'base64');
+    const mime = sniff(bytes);
+    if (!mime) throw new ApiError(415, 'UNSUPPORTED_IMAGE', 'Only PNG, JPEG or WebP images are accepted (SVG is not, for safety).');
+    if (bytes.length > ASSET_MAX) throw new ApiError(413, 'ASSET_TOO_LARGE', `Images must be at most ${Math.round(ASSET_MAX / 1024)} KB (this one is ${Math.round(bytes.length / 1024)} KB). Export a smaller PNG/JPEG.`);
+    const name = String(b.name ?? 'image').replace(/[^\w .()-]/g, '').slice(0, 80) || 'image';
+    const [w, h] = dims(bytes, mime);
+    const asset = store.addAsset(name, mime, bytes, w, h);
+    reply.status(asset.duplicate ? 200 : 201);
+    return { asset, dataUri: `data:${mime};base64,${bytes.toString('base64')}` };
+  });
+  const assetOr404 = (id: string) => { const a = store.getAsset(id); if (!a) throw new ApiError(404, 'NOT_FOUND', `Unknown asset ${id}.`); return a; };
+  app.get<{ Params: { assetId: string } }>('/api/v1/assets/:assetId', async (req) => {
+    const a = assetOr404(req.params.assetId);
+    const bytes = store.assetBytes(a.sha256);
+    if (!bytes) throw new ApiError(410, 'ASSET_MISSING', 'Asset file is missing from the local store.');
+    return { asset: a, dataUri: `data:${a.mime};base64,${bytes.toString('base64')}` };
+  });
+  app.get<{ Params: { assetId: string } }>('/api/v1/assets/:assetId/raw', async (req, reply) => {
+    const a = assetOr404(req.params.assetId);
+    const bytes = store.assetBytes(a.sha256);
+    if (!bytes) throw new ApiError(410, 'ASSET_MISSING', 'Asset file is missing from the local store.');
+    reply.header('Content-Type', a.mime).header('Cache-Control', 'private, max-age=31536000, immutable').header('X-Content-Type-Options', 'nosniff');
+    return reply.send(bytes);
+  });
+  app.delete<{ Params: { assetId: string } }>('/api/v1/assets/:assetId', async (req) => {
+    assetOr404(req.params.assetId);
+    store.deleteAsset(req.params.assetId);
+    return { deleted: true, note: 'Documents that already use this image keep their embedded copy.' };
+  });
+
+  /* Batch production runs */
+  app.post<{ Body: Record<string, any> }>('/api/v1/batches', async (req, reply) => {
+    const b = (req.body ?? {}) as { projectId?: string; project?: unknown; recordIds?: unknown; outputs?: unknown; includeBlocked?: boolean };
+    if (typeof b.projectId !== 'string') throw new ApiError(400, 'INVALID_REQUEST', 'projectId is required.');
+    const project = b.project ? checkDraftProject(b.project, b.projectId) : projectOr404(b.projectId);
+    const pool = allRecords().filter((r) => r.documentType === project.documentType);
+    let records = pool;
+    if (Array.isArray(b.recordIds)) {
+      const want = new Set(b.recordIds.map(String));
+      records = pool.filter((r) => want.has(r.recordId));
+      const missing = [...want].filter((id) => !pool.some((r) => r.recordId === id));
+      if (missing.length) throw new ApiError(400, 'UNKNOWN_RECORDS', `Not ${project.documentType} records: ${missing.slice(0, 5).join(', ')}.`);
+    }
+    if (!records.length) throw new ApiError(400, 'EMPTY_BATCH', 'Choose at least one record.');
+    if (records.length > BATCH_LIMIT) throw new ApiError(413, 'BATCH_TOO_LARGE', `At most ${BATCH_LIMIT} records per batch.`);
+    const outputs = (Array.isArray(b.outputs) && b.outputs.length ? b.outputs : ['pdf']).filter((o): o is BatchOutput => o === 'pdf' || o === 'html');
+    if (!outputs.length) throw new ApiError(400, 'INVALID_REQUEST', 'outputs must include pdf and/or html (AFP is simulation-only).');
+    if (batches.list().some((j) => j.status === 'running')) throw new ApiError(409, 'BATCH_RUNNING', 'Another batch is still running; wait for it or cancel it.');
+    const job = batches.start(project, records, outputs, !!b.includeBlocked);
+    reply.status(202);
+    return { batch: job };
+  });
+  app.get('/api/v1/batches', async () => ({ batches: batches.list().map(({ items, ...j }) => j) }));
+  const batchOr404 = (id: string) => { const j = batches.get(id); if (!j) throw new ApiError(404, 'NOT_FOUND', `Unknown batch ${id}.`); return j; };
+  app.get<{ Params: { batchId: string } }>('/api/v1/batches/:batchId', async (req) => ({ batch: batchOr404(req.params.batchId) }));
+  app.post<{ Params: { batchId: string } }>('/api/v1/batches/:batchId/cancel', async (req) => { batchOr404(req.params.batchId); return { batch: batches.cancel(req.params.batchId) }; });
+  app.get<{ Params: { batchId: string } }>('/api/v1/batches/:batchId/zip', async (req, reply) => {
+    const j = batchOr404(req.params.batchId);
+    const zip = batches.readZip(j.batchId);
+    if (!zip) throw new ApiError(409, 'BATCH_NOT_READY', 'The batch has not finished yet.');
+    reply.header('Content-Type', 'application/zip').header('Content-Disposition', `attachment; filename="${j.projectId}-${j.batchId}.zip"`).header('X-Sha256', j.zipSha256 ?? '');
+    return reply.send(zip);
+  });
+
   /* Imported scenario records: validated against the typed data contract; stored locally only. */
   app.post<{ Body: Record<string, any> }>('/api/v1/records/import', async (req) => {
-    const b = (req.body ?? {}) as { documentType?: string; format?: string; data?: unknown; dryRun?: boolean };
+    const b = (req.body ?? {}) as { documentType?: string; format?: string; data?: unknown; dryRun?: boolean; projectId?: string };
     if (b.documentType !== 'credit-statement' && b.documentType !== 'eob') throw new ApiError(400, 'INVALID_REQUEST', 'documentType must be credit-statement or eob.');
     const documentType = b.documentType;
+    // Custom data fields of the chosen project are accepted in addition to the standard contract.
+    const target = b.projectId ? projectOr404(b.projectId) : undefined;
+    if (target && target.documentType !== documentType) throw new ApiError(400, 'RECORD_TYPE_MISMATCH', `${target.projectId} is a ${target.documentType} project.`);
+    const extra = customFieldDefs(target?.customFields);
     let items: unknown[];
     if (b.format === 'csv') {
       if (typeof b.data !== 'string') throw new ApiError(400, 'INVALID_REQUEST', 'CSV import expects data as text.');
-      const parsed = csvToRecords(b.data, documentType);
+      const parsed = csvToRecords(b.data, documentType, extra);
       if (parsed.headerErrors.length) throw new ApiError(422, 'INVALID_CSV_HEADER', parsed.headerErrors.join(' '), { errors: parsed.headerErrors });
       items = parsed.records;
     } else {
@@ -185,7 +282,7 @@ export async function buildApp(opts: AppOptions = {}) {
     }
     if (!items.length) throw new ApiError(400, 'EMPTY_IMPORT', 'No records found in the file.');
     if (items.length > IMPORT_LIMIT) throw new ApiError(413, 'IMPORT_TOO_LARGE', `At most ${IMPORT_LIMIT} records per import.`);
-    const rows = prepareImport(items, documentType, store.nextImportNumber(documentType));
+    const rows = prepareImport(items, documentType, store.nextImportNumber(documentType), extra);
     const ok = rows.filter((r) => r.record).map((r) => r.record!);
     if (!b.dryRun && ok.length) store.addImportedRecords(ok);
     return { documentType, dryRun: !!b.dryRun, imported: ok.map((r) => ({ recordId: r.recordId, sourceId: r.sourceId ?? null, name: `${r.customer.givenName} ${r.customer.familyName}` })), rejected: rows.filter((r) => !r.record).map(({ row, sourceId, errors }) => ({ row, sourceId, errors })), total: items.length };
@@ -194,7 +291,7 @@ export async function buildApp(opts: AppOptions = {}) {
 
   app.get<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/schemas', async (req) => {
     const p = projectOr404(req.params.projectId);
-    return { documentType: p.documentType, fields: fieldsFor(p.documentType), dimensions: DIMENSIONS.filter((d) => d.documentTypes.includes(p.documentType)), edgeCasePresets: EDGE_CASE_PRESETS.filter((e) => e.documentType === p.documentType) };
+    return { documentType: p.documentType, fields: projectFields(p), customFields: p.customFields ?? [], dimensions: DIMENSIONS.filter((d) => d.documentTypes.includes(p.documentType)), edgeCasePresets: EDGE_CASE_PRESETS.filter((e) => e.documentType === p.documentType) };
   });
 
   app.get<{ Querystring: { documentType?: string; full?: string } }>('/api/v1/records', async (req) => {

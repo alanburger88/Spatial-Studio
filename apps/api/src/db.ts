@@ -28,6 +28,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS artifacts(artifact_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, kind TEXT NOT NULL, filename TEXT NOT NULL, sha256 TEXT NOT NULL, size INTEGER NOT NULL, page_count INTEGER, meta_json TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS snapshots(snapshot_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, record_id TEXT NOT NULL, event_id TEXT NOT NULL, run_id TEXT NOT NULL, content_digest TEXT NOT NULL, canonical TEXT NOT NULL, sha256 TEXT NOT NULL, issued_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS imported_records(record_id TEXT PRIMARY KEY, document_type TEXT NOT NULL, source_id TEXT, json TEXT NOT NULL, imported_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS assets(asset_id TEXT PRIMARY KEY, name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL UNIQUE, width INTEGER, height INTEGER, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS proposals(proposal_id TEXT PRIMARY KEY, json TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, decided_at TEXT);
     `);
     this.ensureSeeds();
@@ -62,6 +63,26 @@ export class Store {
     const res = documentType ? this.db.prepare('DELETE FROM imported_records WHERE document_type=?').run(documentType) : this.db.prepare('DELETE FROM imported_records').run();
     return Number(res.changes);
   }
+
+  /* ---------------------------------------------------------- image asset library */
+
+  private assetFile(sha: string) { return path.join(this.artifactDir, `asset-${sha}`); }
+  listAssets() {
+    return (this.db.prepare('SELECT * FROM assets ORDER BY created_at DESC').all() as any[]).map((r) => ({ assetId: r.asset_id, name: r.name, mime: r.mime, size: r.size, sha256: r.sha256, width: r.width, height: r.height, createdAt: r.created_at }));
+  }
+  getAsset(assetId: string) { return this.listAssets().find((a) => a.assetId === assetId); }
+  assetBytes(sha: string): Buffer | null { const f = this.assetFile(sha); return existsSync(f) ? readFileSync(f) : null; }
+  /** Content-addressed: uploading identical bytes returns the existing asset. */
+  addAsset(name: string, mime: string, bytes: Buffer, width: number | null, height: number | null) {
+    const sha = sha256Hex(bytes);
+    const existing = this.listAssets().find((a) => a.sha256 === sha);
+    if (existing) return { ...existing, duplicate: true };
+    writeFileSync(this.assetFile(sha), bytes);
+    const id = `asset-${sha.slice(0, 12)}`;
+    this.db.prepare('INSERT INTO assets(asset_id,name,mime,size,sha256,width,height,created_at) VALUES (?,?,?,?,?,?,?,?)').run(id, name, mime, bytes.length, sha, width, height, new Date().toISOString());
+    return { ...this.getAsset(id)!, duplicate: false };
+  }
+  deleteAsset(assetId: string) { return Number(this.db.prepare('DELETE FROM assets WHERE asset_id=?').run(assetId).changes) > 0; }
 
   /* ---------------------------------------------------------- projects (user copies) */
 

@@ -1,4 +1,4 @@
-import { fieldIndex, richToPlain, tokensIn, tokensInText, type Project, type SyntheticRecord } from '@iss/model';
+import { projectFieldIndex, richToPlain, tokensIn, tokensInText, type Project, type SyntheticRecord } from '@iss/model';
 import { evaluatePredicate, resolve, type Finding, type Resolution } from '@iss/resolver';
 import { buildContext } from '@iss/model';
 
@@ -53,7 +53,7 @@ export function staticRuleAnalysis(project: Project, records: SyntheticRecord[])
 
 /** Validates every token and binding in the project against the typed data contract. */
 export function bindingAnalysis(project: Project): Finding[] {
-  const fields = fieldIndex(project.documentType);
+  const fields = projectFieldIndex(project);
   const out: Finding[] = [];
   const check = (nodeId: string, path: string, where: string) => { if (!fields.has(path)) out.push({ code: 'INVALID_BINDING', severity: 'blocking', nodeId, source: 'binding', message: `${where} references unknown field “${path}”.`, details: { path } }); };
   for (const n of project.nodes) {

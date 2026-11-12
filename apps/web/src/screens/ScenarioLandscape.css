@@ -14,7 +14,7 @@
 .ls-field .select { width: 112px; min-height: 30px; padding-top: 0; padding-bottom: 0; font-size: 12.5px; }
 .ls-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .ls-toggle input { accent-color: var(--iss-accent); width: 15px; height: 15px; }
-.ls-defects { margin-left: auto; }
+.ls-status-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 14px; }
 .ls-defects[aria-pressed='true'] { background: var(--iss-warning-soft); border-color: var(--iss-warning-line); color: var(--iss-warning-fg); }
 .ls-defects-n { min-width: 20px; text-align: center; padding: 0 6px; border-radius: 999px; background: var(--iss-warning-soft); color: var(--iss-warning-fg); font-size: 11.5px; }
 
@@ -32,11 +32,11 @@
 .ls-sevkey { font-weight: 700; font-size: 11.5px; white-space: nowrap; }
 .ls-sevkey.ok { color: var(--iss-success); } .ls-sevkey.warning { color: var(--iss-warning); } .ls-sevkey.blocking { color: var(--iss-error); }
 .ls-empty { min-height: 200px; display: grid; place-items: center; }
-.ls-chart { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; padding: 12px; }
-.ls-group-card { border: 1px solid var(--iss-border); border-radius: var(--iss-radius-md); background: var(--iss-surface-raised); padding: 10px 10px 12px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.ls-chart { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; }
+.ls-group-card { border: 1px solid var(--iss-border); border-radius: var(--iss-radius-md); background: var(--iss-surface-raised); padding: 8px 10px 10px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .ls-group-head { display: flex; flex-direction: column; gap: 1px; font-size: 11.5px; min-width: 0; }
 .ls-group-name { font-size: 13px; font-weight: 700; color: var(--iss-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ls-bubbles { display: flex; flex-wrap: wrap; gap: 12px 10px; align-items: flex-start; align-content: flex-start; justify-content: center; flex: 1; }
+.ls-bubbles { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: flex-start; align-content: flex-start; justify-content: center; flex: 1; }
 .ls-bubble-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .ls-cap { font-size: 11px; line-height: 1.25; color: var(--iss-text-muted); text-align: center; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 
@@ -55,7 +55,7 @@
 .ls-tip dt { color: var(--iss-text-muted); } .ls-tip dd { margin: 0; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* table */
-.ls-table-panel { flex: 1 0 290px; }
+.ls-table-panel { flex: 1 0 300px; }
 .ls-table-scroll { overflow: auto; min-height: 0; flex: 1; }
 .ls-table-scroll thead th { position: sticky; top: 0; z-index: 2; background: var(--iss-surface); }
 .ls-table-panel .panel-head { padding: 7px 12px; }
@@ -85,3 +85,4 @@
 .ls-chipwrap .chip.mono { font-size: 11px; }
 .ls-actions { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--iss-border); }
 .ls-actions .row .btn { flex: 1; }
+.ls-cap.mono { display: block; white-space: nowrap; text-overflow: ellipsis; overflow-wrap: normal; font-size: 10.5px; }

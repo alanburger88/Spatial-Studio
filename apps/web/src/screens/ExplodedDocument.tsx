@@ -58,13 +58,14 @@ function stateOf(v: RVariant, unresolved: boolean): PanelState {
 
 const STATE_LABEL: Record<PanelState, string> = { selected: 'Active in this scenario', outranked: 'Matched · outranked', tie: 'Matched · priority tie', idle: 'Not matched', 'fallback-idle': 'Fallback · standing by' };
 const STATE_SHORT: Record<PanelState, string> = { selected: 'Active', outranked: 'Outranked', tie: 'Tie', idle: 'Idle', 'fallback-idle': 'Fallback' };
-const STATE_MARK: Record<PanelState, string> = { selected: '●', outranked: '◐', tie: '⚠', idle: '○', 'fallback-idle': '◌' };
+/** Shape marker per state (shape + label, never colour alone). */
+const Mark = ({ st }: { st: PanelState }) => <span className={`ex-mark st-${st}`} aria-hidden="true" />;
 const OUTCOME_PLAIN: Record<TraceEntry['outcome'], string> = { selected: 'Chosen', outranked: 'Matched · lower priority', tie: 'Matched · tie', applied: 'Applied', required: 'Required', 'not-matched': 'Not matched', disabled: 'Switched off', 'out-of-scope': 'Not in scope' };
 const outcomeChip = (o: TraceEntry['outcome']) => (o === 'selected' || o === 'applied' ? 'accent' : o === 'tie' ? 'error' : o === 'outranked' ? 'variant' : '');
 
 /** Readable default camera: gentle tilt/turn, small depth fan. Reset camera returns here. */
-const READABLE = { tilt: 4, yaw: -12, depth: 14 } as const;
-const PAD = 16, LINK = 34, GAP = 12, EST_H = 112;
+const READABLE = { tilt: 4, yaw: -12, depth: 10 } as const;
+const PAD = 14, LINK = 34, GAP = 10, EST_H = 104;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** Business-view explanation, re-worded from the same trace the resolver produced (never invents outcomes). */
@@ -121,6 +122,7 @@ export function ExplodedDocument() {
   const panelEls = useRef(new Map<string, HTMLDivElement>());
   const [heights, setHeights] = useState<Record<string, number>>({});
   const [lines, setLines] = useState<Array<{ id: string; d: string; state: PanelState; active: boolean }>>([]);
+  const [below, setBelow] = useState(0);
 
   // Measure the scrollable scene (not the whole stage): the layout below is computed from it.
   useEffect(() => {
@@ -162,19 +164,20 @@ export function ExplodedDocument() {
   /* ------------------------------------------------------- geometry */
   const n = variants.length;
   const steps = Math.max(0, n - 1);
-  const panelW = Math.round(clamp(box.w * 0.4, 248, 330));
+  const panelW = Math.round(clamp(box.w * 0.43, 250, 340));
   const paperColW = box.w - PAD * 2 - panelW - depth * steps - LINK;
-  const paperScale = clamp(Math.min(paperColW / 816, (box.h - PAD * 2 - 24) / 1056), 0.2, 0.62);
+  const hs = variants.map((v) => heights[v.id] ?? EST_H);
+  const total = hs.reduce((a, b) => a + b, 0) + GAP * steps;
+  const moreRoom = total + PAD * 2 > box.h ? 40 : 0; // keep the "more below" pill clear of the context page
+  const paperScale = clamp(Math.min(paperColW / 816, (box.h - PAD * 2 - 24 - moreRoom) / 1056), 0.2, 0.62);
   const paperW = 816 * paperScale, paperH = 1056 * paperScale;
   const compW = paperW + LINK + panelW + depth * steps;
   const left = Math.max(PAD, (box.w - compW) / 2);
   const paperX = left, panelX0 = left + paperW + LINK;
-  const hs = variants.map((v) => heights[v.id] ?? EST_H);
-  const total = hs.reduce((a, b) => a + b, 0) + GAP * steps;
   const contentH = Math.max(box.h, total + PAD * 2);
   const y0 = (contentH - total) / 2;
   const ys = hs.reduce<number[]>((acc, h, i) => { acc.push(i === 0 ? y0 : acc[i - 1] + hs[i - 1] + GAP); return acc; }, []);
-  const paperTop = Math.max(PAD, (box.h - paperH - 24) / 2);
+  const paperTop = Math.max(PAD, (box.h - paperH - 24 - moreRoom) / 2);
 
   /* ------------------------------------------------------- connectors */
   const measure = useCallback(() => {
@@ -193,6 +196,13 @@ export function ExplodedDocument() {
       out.push({ id: p.dataset.variant!, state: p.dataset.state as PanelState, active: p.dataset.variant === activeId, d: `M${sx.toFixed(1)},${sy.toFixed(1)} C${mx.toFixed(1)},${sy.toFixed(1)} ${mx.toFixed(1)},${ty.toFixed(1)} ${tx.toFixed(1)},${ty.toFixed(1)}` });
     });
     setLines(out);
+    const sc = world.parentElement;
+    if (sc) {
+      const limit = sc.getBoundingClientRect().bottom - 24;
+      let hidden = 0;
+      world.querySelectorAll<HTMLElement>('.ex-panel').forEach((p) => { if (p.getBoundingClientRect().top + 40 > limit) hidden++; });
+      setBelow(hidden);
+    }
   }, [nodeId, activeId]);
   useLayoutEffect(() => {
     if (flat) return;
@@ -273,12 +283,9 @@ export function ExplodedDocument() {
                   <li key={v.id}>
                     <button className={`ex-list-item st-${st}${v.id === activeId ? ' focused' : ''}`} onClick={() => chooseVariant(v.id)} aria-current={v.id === activeId ? 'true' : undefined} data-testid={`variant-item-${v.id}`}
                       title={`${v.title} — ${STATE_LABEL[st]}`}>
-                      <span className="ex-z" aria-hidden="true">Z{i + 1}</span>
-                      <span className="ex-list-text">
-                        <span className="ex-list-title">{v.title}</span>
-                        <span className={`ex-list-meta st-${st}`}><span aria-hidden="true">{STATE_MARK[st]} </span>{STATE_LABEL[st]}</span>
-                      </span>
-                      <span className="ex-list-reach" aria-label={r ? `${r.count} of ${r.total} seeded records` : 'Reach not computed'}>{r ? r.count : reach ? 0 : '–'}</span>
+                      <span className="ex-list-title"><span className="ex-z" aria-hidden="true">Z{i + 1}</span> {v.title}</span>
+                      <span className={`ex-list-meta st-${st}`}><Mark st={st} />{STATE_LABEL[st]}</span>
+                      <span className="ex-list-reach">{r ? `${r.count} of ${r.total}` : reach ? `0 of ${totalSeeded}` : '—'} seeded records</span>
                     </button>
                   </li>
                 );
@@ -286,11 +293,11 @@ export function ExplodedDocument() {
             </ol>
             <div className="section-title">Key</div>
             <ul className="ex-key">
-              <li><span className="ex-key-mark st-selected" aria-hidden="true">●</span> Active — solid connector</li>
-              <li><span className="ex-key-mark st-outranked" aria-hidden="true">◐</span> Matched, lower priority</li>
-              <li><span className="ex-key-mark" aria-hidden="true">○</span> Not matched · <span aria-hidden="true">◌</span> fallback</li>
-              <li><span className="ex-key-mark ex-key-num" aria-hidden="true">#</span> Seeded records reached</li>
-              <li><span className="ex-z" aria-hidden="true">Z</span> Depth = alternative outcomes</li>
+              <li><Mark st="selected" /> Active · solid connector</li>
+              <li><Mark st="outranked" /> Matched, lower priority</li>
+              <li><Mark st="idle" /> Not matched</li>
+              <li><Mark st="fallback-idle" /> Fallback, standing by</li>
+              <li><span className="ex-key-num" aria-hidden="true">57/70</span> Seeded records reached</li>
             </ul>
             <div className="section-title">Scenario</div>
             <dl className="kv ex-kv">
@@ -319,7 +326,7 @@ export function ExplodedDocument() {
                   <label>Depth <input type="range" min={0} max={30} value={depth} onChange={(e) => setDepth(+e.target.value)} aria-label="Depth separation" /></label>
                 </div>
               </details>
-              <button className="btn sm" onClick={() => { setTilt(READABLE.tilt); setYaw(READABLE.yaw); setDepth(READABLE.depth); }} disabled={!cameraChanged} data-testid="reset-camera" title="Return to the readable default camera"><Icon.reset width={14} height={14} /> Reset camera</button>
+              <button className="btn sm" onClick={() => { setTilt(READABLE.tilt); setYaw(READABLE.yaw); setDepth(READABLE.depth); }} disabled={!cameraChanged} data-testid="reset-camera" aria-label="Reset camera" title="Reset camera to the readable default"><Icon.reset width={14} height={14} /> Reset</button>
             </>}
           </div>
 
@@ -365,6 +372,9 @@ export function ExplodedDocument() {
                   );
                 })}
               </div>
+              {below > 0 && exploded && <button className="btn sm ex-more" style={{ marginLeft: paperX }} onClick={() => scene?.scrollBy({ top: scene.clientHeight * 0.7, behavior: reducedMotion ? 'auto' : 'smooth' })}>
+                <Icon.chevron width={14} height={14} /> {below} more alternative{below === 1 ? '' : 's'} below
+              </button>}
               {n === 1 && <div className="ex-note">Single named outcome — shown without a misleading explosion.</div>}
             </div>
           )}
@@ -460,7 +470,7 @@ function VariantCard({ v, st, reach, totalSeeded, active, onChoose, project, res
       <div className="ex-card-head">
         {zIndex && <span className="ex-z" aria-hidden="true">Z{zIndex}</span>}
         <span className="ex-card-title" title={v.title}>{v.title}</span>
-        <span className={`ex-state st-${st}`}><span aria-hidden="true">{STATE_MARK[st]} </span>{STATE_SHORT[st]}</span>
+        <span className={`ex-state st-${st}`}><Mark st={st} />{STATE_SHORT[st]}</span>
       </div>
       <div className="ex-paperlet" dangerouslySetInnerHTML={{ __html: blocksHtml(v.text) }} />
       <div className="ex-chips">
@@ -474,12 +484,13 @@ function VariantCard({ v, st, reach, totalSeeded, active, onChoose, project, res
         {v.isFallback && <span className="chip">fallback</span>}
         {v.missingLocale && <span className="chip warning">translation missing</span>}
         {v.source === 'section-rule' && <span className="chip info">section rule</span>}
+        {compact && <span className="ex-reach-mini" title={`${count} of ${tot} seeded records (${pct}%)`}>{count}/{tot}</span>}
       </div>
-      <div className="ex-reach">
-        <span className="ex-reach-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
-        <span>{reach || totalSeeded ? `${count} of ${tot} seeded records · ${pct}%` : 'Reach —'}</span>
-        {tech && v.contentVersion !== null && <span className="mono faint">v{v.contentVersion}</span>}
-      </div>
+      {!compact && <div className="ex-reach">
+          <span className="ex-reach-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
+          <span>{reach || totalSeeded ? `${count} of ${tot} seeded records · ${pct}%` : 'Reach —'}</span>
+          {tech && v.contentVersion !== null && <span className="mono faint">v{v.contentVersion}</span>}
+        </div>}
     </div>
   );
 }

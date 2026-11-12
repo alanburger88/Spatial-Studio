@@ -61,8 +61,8 @@
 .cube-mx-cell:hover { background: color-mix(in srgb, var(--mk) 22%, var(--iss-surface)); }
 .cube-mx-cell:focus-visible { outline: none; box-shadow: var(--iss-focus); }
 .cube-mx-cell.selected { box-shadow: 0 0 0 2px var(--iss-text); background: color-mix(in srgb, var(--mk) 26%, var(--iss-surface)); }
-.cube-mx-cell.empty { border: 1px dashed var(--iss-border-strong); background: transparent; color: var(--iss-text-muted); justify-content: center; }
-.cube-mx-cell.empty.selected { border-style: solid; box-shadow: 0 0 0 2px var(--iss-text); }
+.cube-mx-cell.vacant { border: 1px dashed var(--iss-border-strong); background: transparent; color: var(--iss-text-muted); justify-content: center; }
+.cube-mx-cell.vacant.selected { border-style: solid; box-shadow: 0 0 0 2px var(--iss-text); }
 .cube-mx-none { font-size: 11px; font-style: italic; text-align: center; }
 .cube-mx-top { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .cube-mx-n { font-size: 16px; min-width: 18px; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -160,7 +160,7 @@
 .cube-table td { white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
 .cube-table td.num { max-width: none; }
 .cube-table td:nth-child(2) { max-width: 110px; }
-.cube-table td:nth-child(5) { max-width: 210px; }
+.cube-table td:nth-child(5) { max-width: 270px; }
 .cube-table th { white-space: nowrap; }
 .cube-table-panel .panel-head .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .cube-table-panel .panel-head { padding: 7px 12px; }

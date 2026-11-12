@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { fieldIndex, validateRule, type Project, type Rule, type SyntheticRecord } from '@iss/model';
+import { projectFieldIndex, validateRule, type Project, type Rule, type SyntheticRecord } from '@iss/model';
 import { describePredicate, explainNode, resolve, type Explanation, type Resolution } from '@iss/resolver';
 import { EDGE_CASE_PRESETS, DIMENSIONS } from '@iss/scenarios';
 import { PERSONAS } from '@iss/model/fixtures';
@@ -70,7 +70,7 @@ export interface AssistantReply {
 export function validateActions(raw: unknown[], ctx: AssistantContext): { ok: AssistantAction[]; rejected: AssistantReply['rejected'] } {
   const ok: AssistantAction[] = [];
   const rejected: AssistantReply['rejected'] = [];
-  const fields = fieldIndex(ctx.project.documentType);
+  const fields = projectFieldIndex(ctx.project);
   const nodeIds = new Set(ctx.project.nodes.map((n) => n.id));
   for (const a of raw.slice(0, 6)) {
     const parsed = ActionSchema.safeParse(a);
@@ -297,7 +297,7 @@ export async function externalInterpret(cfg: ProviderConfig, message: string, ct
   const context = {
     projectId: ctx.project.projectId, documentType: ctx.project.documentType, recordId: ctx.recordId, selectedNodeId: ctx.selectedNodeId,
     views: VIEWS, edgeCasePresets: EDGE_CASE_PRESETS.filter((p) => p.documentType === ctx.project.documentType).map((p) => p.id),
-    scenarioFields: [...fieldIndex(ctx.project.documentType).values()].filter((f) => !f.derived && f.type !== 'array').map((f) => ({ path: f.path, type: f.type, values: f.enumValues })),
+    scenarioFields: [...projectFieldIndex(ctx.project).values()].filter((f) => !f.derived && f.type !== 'array').map((f) => ({ path: f.path, type: f.type, values: f.enumValues })),
     rules: ctx.project.rules.map((r) => ({ id: r.id, mode: r.mode, priority: r.priority, condition: describePredicate(r.when), enabled: r.enabled !== false })),
     nodes: ctx.project.nodes.map((n) => ({ id: n.id, type: n.type, name: n.name })),
     records: ctx.records.filter((r) => r.documentType === ctx.project.documentType).slice(0, 40).map((r) => ({ id: r.recordId, persona: r.personaId, locale: r.customer.locale, status: (r.card as any)?.paymentStatus ?? (r.claims?.[0] as any)?.status })),

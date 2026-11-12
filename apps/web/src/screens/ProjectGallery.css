@@ -32,3 +32,9 @@
 .imp-result p { margin: 0 0 6px; }
 .imp-rejects { margin: 0; padding-left: 18px; font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow: auto; }
 @media (max-width: 1360px) { .gal-card { grid-template-columns: 220px 1fr; } .gal-card.copy { grid-template-columns: 170px 1fr; } .gal-grid { grid-template-columns: minmax(0, 1fr) 280px; } }
+.imp-map { display: flex; flex-direction: column; gap: 6px; }
+.imp-map .row { justify-content: space-between; font-size: 13px; }
+.imp-map-scroll { max-height: 260px; overflow: auto; border: 1px solid var(--iss-border); border-radius: 10px; }
+.imp-map .select { width: 100%; min-height: 28px; font-size: 12.5px; }
+.imp-sample { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dialog:has(.imp) { width: min(760px, calc(100vw - 32px)); }

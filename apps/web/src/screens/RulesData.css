@@ -192,3 +192,4 @@
 .rd-row > aside[data-testid='rule-trace'] > .panel-head { white-space: nowrap; }
 .rd-row > aside[data-testid='rule-trace'] > .panel-head .sub { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .rd-row > aside[data-testid='rule-trace'] > .panel-head .rd-check { white-space: nowrap; }
+.rd-impact { flex: none; padding: 8px 14px; border-top: 1px solid var(--iss-border); background: var(--iss-surface); max-height: 40%; overflow: auto; }

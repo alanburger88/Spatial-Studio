@@ -1,12 +1,61 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CATALOG_BY_TYPE, fieldsFor, getPath, nodeMap, requiredNodeIds, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
+import { CATALOG_BY_TYPE, projectFields, getPath, nodeMap, requiredNodeIds, applyCommand, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
 import { useScenarioEngine, useStudio } from '../../state/store';
 import { Icon } from '../../ui/icons';
 import { Tech, Biz } from '../../ui/common';
 import { predicateSentence } from '../../ui/plain';
 import { insertToken } from './RichTextEditor';
+import { ImpactPreview, ReachLine } from '../../ui/ImpactPreview';
+import { AssetLibraryDialog, type PickedAsset } from './AssetLibrary';
+
+/** Single-condition editor with a live before-you-save impact preview. */
+function ConditionEditor({ project, initial, command, onDone, label }: { project: Project; initial: Predicate | null | undefined; command: (when: Predicate | null) => Command; onDone: () => void; label: string }) {
+  const dispatch = useStudio((s) => s.dispatch);
+  const fields = projectFields(project).filter((f) => f.type !== 'array' && f.type !== 'string' && f.type !== 'date');
+  const leaf = initial && 'path' in initial && 'value' in initial && !Array.isArray((initial as any).value) ? (initial as any) : null;
+  const [path, setPath] = useState<string>(leaf?.path ?? fields[0]?.path ?? '');
+  const [op, setOp] = useState<string>(leaf?.op && ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'].includes(leaf.op) ? leaf.op : 'eq');
+  const [value, setValue] = useState<string>(leaf ? String(leaf.value) : '');
+  const [none, setNone] = useState(!initial);
+  const f: FieldDef | undefined = fields.find((x) => x.path === path);
+  const parsed: Predicate | null = useMemo(() => {
+    if (none || value === '' || !f) return null;
+    const v = f.type === 'bool' ? value === 'true' : ['int', 'cents', 'points'].includes(f.type) ? Number(value) : value;
+    if (typeof v === 'number' && Number.isNaN(v)) return null;
+    return { op: op as any, path, value: v as any };
+  }, [none, value, f, op, path]);
+  const valid = none || !!parsed;
+  const next = useMemo(() => {
+    if (!valid) return null;
+    const r = applyCommand(project, command(none ? null : parsed));
+    return r.ok ? r.project : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, valid, none, parsed]);
+  return (
+    <div className="card" style={{ marginTop: 6 }} data-testid="condition-editor" aria-label={label}>
+      <label className="row" style={{ gap: 6, fontSize: 12.5 }}><input type="checkbox" checked={none} onChange={(e) => setNone(e.target.checked)} /> No condition (always applies)</label>
+      {!none && (
+        <div className="row wrap" style={{ alignItems: 'flex-end', marginTop: 6 }}>
+          <Field label="Field"><select className="select" value={path} onChange={(e) => { setPath(e.target.value); setValue(''); }} data-testid="cond-path">{fields.map((x) => <option key={x.path} value={x.path}>{x.label} ({x.path})</option>)}</select></Field>
+          <Field label="Is"><select className="select" value={op} onChange={(e) => setOp(e.target.value)} data-testid="cond-op">{[['eq', 'equal to'], ['ne', 'not equal to'], ['gt', 'more than'], ['gte', 'at least'], ['lt', 'less than'], ['lte', 'at most']].map(([o, l]) => <option key={o} value={o}>{l}</option>)}</select></Field>
+          <Field label="Value">
+            {f?.type === 'enum' ? <select className="select" value={value} onChange={(e) => setValue(e.target.value)} data-testid="cond-value"><option value="">Choose…</option>{f.enumValues!.map((v) => <option key={v}>{v}</option>)}</select>
+              : f?.type === 'bool' ? <select className="select" value={value} onChange={(e) => setValue(e.target.value)} data-testid="cond-value"><option value="">Choose…</option><option value="true">yes</option><option value="false">no</option></select>
+              : <input className="input" value={value} onChange={(e) => setValue(e.target.value)} style={{ width: 90 }} inputMode="numeric" data-testid="cond-value" />}
+          </Field>
+        </div>
+      )}
+      {next && <div style={{ marginTop: 8 }}><ImpactPreview before={project} after={next} /></div>}
+      <div className="row" style={{ marginTop: 8 }}>
+        <button className="btn sm primary" disabled={!next} onClick={() => { if (dispatch(command(none ? null : parsed)).ok) onDone(); }} data-testid="cond-save">Save condition</button>
+        <button className="btn sm ghost" onClick={onDone}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 
 type Tab = 'content' | 'data' | 'rules' | 'layout' | 'a11y' | 'impact';
 const TAB_TITLES: Partial<Record<Tab, string>> = { a11y: 'Accessibility' };
@@ -70,9 +119,17 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
 
 function ContentTab({ node, project, res, onEditText }: { node: DocNode; project: Project; res: Resolution; onEditText: (id: string) => void }) {
   const dispatch = useStudio((s) => s.dispatch);
-  const fields = fieldsFor(project.documentType);
+  const fields = projectFields(project);
   const upd = (patch: Partial<DocNode>) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: patch as any });
   const scalarFields = fields.filter((f) => f.type !== 'array');
+  const [library, setLibrary] = useState(false);
+  const [altPrompt, setAltPrompt] = useState<string | null>(null);
+  const pick = (a: PickedAsset) => {
+    if (!node.image) return;
+    const r = upd({ image: { ...node.image, src: a.dataUri } });
+    setLibrary(false);
+    if (r.ok && !node.image.alt.trim() && !node.decorative) setAltPrompt('');
+  };
   return (
     <div>
       <Field label="Name"><CommitInput value={node.name} onCommit={(v) => upd({ name: v })} ariaLabel="Component name" /></Field>
@@ -150,6 +207,18 @@ function ContentTab({ node, project, res, onEditText }: { node: DocNode; project
               const r = new FileReader(); r.onload = () => upd({ image: { ...node.image!, src: String(r.result) } }); r.readAsDataURL(f);
             }} />
           </Field>
+          <button className="btn" onClick={() => setLibrary(true)} data-testid="choose-image"><Icon.design /> Choose from library…</button>
+          {library && <AssetLibraryDialog onClose={() => setLibrary(false)} onPick={pick} />}
+          {altPrompt !== null && !node.image.alt.trim() && !node.decorative && (
+            <div className="callout warning" style={{ marginTop: 8 }} data-testid="alt-prompt">
+              <strong>Describe this image.</strong> Alternative text is required unless the image is purely decorative.
+              <input className="input" value={altPrompt} onChange={(e) => setAltPrompt(e.target.value)} aria-label="Alternative text" placeholder="e.g. Aster Card logo" style={{ marginTop: 6 }} data-testid="alt-prompt-input" />
+              <div className="row" style={{ marginTop: 6 }}>
+                <button className="btn sm primary" disabled={!altPrompt.trim()} onClick={() => { if (upd({ image: { ...node.image!, alt: altPrompt.trim() } }).ok) setAltPrompt(null); }}>Save description</button>
+                <button className="btn sm ghost" onClick={() => { if (upd({ decorative: true }).ok) setAltPrompt(null); }}>Mark decorative</button>
+              </div>
+            </div>
+          )}
           <Field label="Fit"><select className="select" value={node.image.fit ?? 'contain'} onChange={(e) => upd({ image: { ...node.image!, fit: e.target.value as any } })}><option>contain</option><option>cover</option></select></Field>
         </>
       )}
@@ -168,7 +237,7 @@ function ContentTab({ node, project, res, onEditText }: { node: DocNode; project
 function TokenPicker({ project, res }: { project: Project; res: Resolution }) {
   const [q, setQ] = useState('');
   const ctx = { ...res.effectiveRecord, claim: (res.effectiveRecord as any).claims?.[0] };
-  const fields = fieldsFor(project.documentType).filter((f) => f.type !== 'array' && (!q || f.path.toLowerCase().includes(q.toLowerCase()) || f.label.toLowerCase().includes(q.toLowerCase())));
+  const fields = projectFields(project).filter((f) => f.type !== 'array' && (!q || f.path.toLowerCase().includes(q.toLowerCase()) || f.label.toLowerCase().includes(q.toLowerCase())));
   return (
     <div data-testid="token-picker">
       <div className="section-title">Field token picker</div>
@@ -204,7 +273,8 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
   const [cond, setCond] = useState<{ path: string; op: string; value: string }>({ path: project.documentType === 'eob' ? 'claim.status' : 'card.missedPayments', op: 'eq', value: '' });
   const [editing, setEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
-  const fields = fieldsFor(project.documentType).filter((f) => f.type !== 'array' && f.type !== 'string' && f.type !== 'date');
+  const [editCond, setEditCond] = useState<string | null>(null);
+  const fields = projectFields(project).filter((f) => f.type !== 'array' && f.type !== 'string' && f.type !== 'date');
   const parseVal = (path: string, v: string) => { const f = fields.find((x) => x.path === path); if (!f) return v; if (f.type === 'bool') return v === 'true'; if (['int', 'cents', 'points'].includes(f.type)) return Number(v); return v; };
   const add = () => {
     const id = (node.id + '-' + newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')).slice(0, 60);
@@ -231,6 +301,7 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
               {editing === vid ? (
                 <div style={{ marginTop: 6 }}>
                   <textarea className="textarea" value={editText} onChange={(e) => setEditText(e.target.value)} aria-label={`Text for ${vid}`} />
+                  <ReachLine nodeId={node.id} variantId={vid} />
                   <div className="row" style={{ marginTop: 6 }}>
                     <button className="btn sm primary" onClick={() => { if (p) { const r = dispatch({ type: 'UPSERT_CONTENT_PART', part: { ...p, approvedLocales: { ...p.approvedLocales, 'en-US': editText } } }); if (r.ok) setEditing(null); } }}>Save text (new version)</button>
                     <button className="btn sm ghost" onClick={() => setEditing(null)}>Cancel</button>
@@ -241,9 +312,11 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
               )}
               <div className="row" style={{ gap: 4, marginTop: 4 }}>
                 {editing !== vid && <button className="btn sm ghost" onClick={() => { setEditing(vid); setEditText(p?.approvedLocales['en-US'] ?? ''); }}>Edit text</button>}
+                {node.type === 'conditional-region' && editCond !== vid && <button className="btn sm ghost" onClick={() => setEditCond(vid)} data-testid={`edit-condition-${vid}`}>Edit condition</button>}
                 {node.fallbackVariantId !== vid && <button className="btn sm ghost" onClick={() => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: { fallbackVariantId: vid } })}>Make fallback</button>}
                 {(node.variantIds?.length ?? 0) > 1 && <button className="btn sm ghost" onClick={() => dispatch({ type: 'REMOVE_VARIANT', nodeId: node.id, variantId: vid })} aria-label={`Remove variant ${vid}`}><Icon.trash width={14} height={14} /></button>}
               </div>
+              {editCond === vid && <ConditionEditor project={project} label={`Condition for ${p?.title ?? vid}`} initial={node.variantConditions?.[vid]} command={(when) => ({ type: 'SET_VARIANT_CONDITION', nodeId: node.id, variantId: vid, when })} onDone={() => setEditCond(null)} />}
             </li>
           );
         })}
@@ -289,7 +362,7 @@ function DisclosureEditor({ node, project }: { node: DocNode; project: Project }
 function TableEditor({ node, project }: { node: DocNode; project: Project }) {
   const dispatch = useStudio((s) => s.dispatch);
   const upd = (patch: Partial<DocNode>) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: patch as any });
-  const arrays = fieldsFor(project.documentType).filter((f) => f.type === 'array');
+  const arrays = projectFields(project).filter((f) => f.type === 'array');
   const items = arrays.find((a) => a.path === node.binding)?.itemFields ?? [];
   return (
     <div>
@@ -321,7 +394,7 @@ function TableEditor({ node, project }: { node: DocNode; project: Project }) {
 function DataTab({ node, project, res }: { node: DocNode; project: Project; res: Resolution }) {
   const rnode = indexTree(res.root).get(node.id)!;
   const ctx = { ...res.effectiveRecord, claim: (res.effectiveRecord as any).claims?.[0] };
-  const known = new Set(fieldsFor(project.documentType).map((f) => f.path));
+  const known = new Set(projectFields(project).map((f) => f.path));
   const findings = res.findings.filter((f) => f.nodeId === node.id);
   return (
     <div>
@@ -341,6 +414,7 @@ function DataTab({ node, project, res }: { node: DocNode; project: Project; res:
 /* -------------------------------------------------------------------- rules */
 
 function RulesTab({ node, project, res }: { node: DocNode; project: Project; res: Resolution }) {
+  const [editVis, setEditVis] = useState(false);
   const rnode = indexTree(res.root).get(node.id)!;
   const related = project.rules.filter((r) => ('targetNodeId' in r.then && r.then.targetNodeId === node.id) || (r.then.op === 'requireNodes' && r.then.nodeIds.includes(node.id)));
   const traceBy = new Map(res.trace.map((t) => [t.ruleId, t]));
@@ -348,6 +422,12 @@ function RulesTab({ node, project, res }: { node: DocNode; project: Project; res
     <div>
       <div className="section-title">Why it appears</div>
       <ul className="reasons">{rnode.visibleBecause.map((r, i) => <li key={i}>{r}</li>)}{!rnode.visible && <li>Not rendered: {rnode.hiddenReason}</li>}</ul>
+      <div className="section-title">Show this component only when</div>
+      <div className="row wrap" style={{ gap: 6 }}>
+        <span className="grow" data-testid="visible-when">{node.visibleWhen ? <><Biz>{predicateSentence(project, node.visibleWhen)}</Biz><Tech><span className="mono">{describePredicate(node.visibleWhen)}</span></Tech></> : <span className="muted">Always (no condition)</span>}</span>
+        {!editVis && !node.locked && <button className="btn sm ghost" onClick={() => setEditVis(true)} data-testid="edit-visible-when">Edit condition</button>}
+      </div>
+      {editVis && <ConditionEditor project={project} label="Visibility condition" initial={node.visibleWhen} command={(when) => ({ type: 'UPDATE_NODE', nodeId: node.id, patch: { visibleWhen: when ?? undefined } })} onDone={() => setEditVis(false)} />}
       <div className="section-title">Rules targeting this component</div>
       {!related.length && <p className="muted">No rules target this component.</p>}
       {related.map((r) => {

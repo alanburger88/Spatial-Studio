@@ -1,0 +1,21 @@
+.imp { border: 1px solid var(--iss-border); border-radius: 8px; background: var(--iss-surface-2, var(--iss-surface)); font-size: 13px; }
+.imp.has-changes { border-color: var(--iss-info-line, var(--iss-border)); }
+.imp-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 12px; color: var(--iss-text); }
+.imp-none { color: var(--iss-text-muted); }
+.imp-bad { color: var(--iss-error-fg, var(--iss-error)); font-weight: 600; }
+.imp-good { color: var(--iss-success-fg, var(--iss-success)); font-weight: 600; }
+.imp-ms { font-size: 11px; }
+.imp-toggle { margin-left: auto; }
+.imp-list { list-style: none; margin: 0; padding: 0 12px 8px; max-height: 220px; overflow: auto; }
+.imp-row { padding: 8px 0; border-top: 1px solid var(--iss-row-border, var(--iss-border)); }
+.imp-row.bad .imp-row-text { color: var(--iss-error-fg, var(--iss-error)); }
+.imp-row-text { font-weight: 600; }
+.imp-count { color: var(--iss-text-muted); }
+.imp-code { margin-left: 6px; font-size: 11px; color: var(--iss-text-muted); }
+.imp-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.imp-chip, .imp-more { border: 1px solid var(--iss-border); background: var(--iss-overlay-1, transparent); color: var(--iss-text); border-radius: 999px; padding: 2px 8px; font-size: 12px; cursor: pointer; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-chip:hover, .imp-more:hover { background: var(--iss-row-hover, var(--iss-overlay-2)); }
+.imp-more { color: var(--iss-text-muted); }
+.imp-reach { font-size: 12.5px; color: var(--iss-text-muted); margin: 6px 0; }
+.imp-reach strong { color: var(--iss-text); }
+.imp-undo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }

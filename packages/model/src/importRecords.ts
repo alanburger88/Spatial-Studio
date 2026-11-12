@@ -1,4 +1,7 @@
 import { fieldsFor, type FieldDef, type FieldType } from './fields';
+
+/** Standard contract for the document type plus any extra (custom) fields of the target project. */
+const contract = (documentType: DocumentType, extra: FieldDef[] = []) => [...fieldsFor(documentType), ...extra];
 import { buildContext, getPath } from './data';
 import type { DocumentType, SyntheticRecord } from './types';
 
@@ -27,7 +30,7 @@ function checkType(f: Pick<FieldDef, 'type' | 'enumValues' | 'label'>, v: unknow
 }
 
 /** Validate one record object against the data contract. Returns human-readable errors (empty = valid). */
-export function validateRecordShape(raw: unknown, documentType: DocumentType): string[] {
+export function validateRecordShape(raw: unknown, documentType: DocumentType, extra: FieldDef[] = []): string[] {
   const errors: string[] = [];
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return ['Record must be an object.'];
   const r = raw as Record<string, any>;
@@ -38,7 +41,7 @@ export function validateRecordShape(raw: unknown, documentType: DocumentType): s
   const rec = { ...r, documentType, recordId: 'IMPORT-CHECK' } as SyntheticRecord;
   if (documentType === 'credit-statement' && !Array.isArray(rec.card!.transactions)) rec.card!.transactions = [];
   const ctx = buildContext(rec);
-  for (const f of fieldsFor(documentType)) {
+  for (const f of contract(documentType, extra)) {
     if (f.derived || f.path === 'recordId' || f.path === 'documentType') continue;
     const v = getPath(ctx, f.path);
     if (f.type === 'array') {
@@ -93,11 +96,11 @@ function coerce(type: FieldType | undefined, s: string): unknown {
  * claim.status). For EOB, claim.* columns describe the record's single claim. An optional "recordId" column
  * is kept as the source ID. Card transactions can be supplied as a JSON array in a card.transactions column.
  */
-export function csvToRecords(text: string, documentType: DocumentType): { records: Array<Record<string, any>>; headerErrors: string[] } {
+export function csvToRecords(text: string, documentType: DocumentType, extra: FieldDef[] = []): { records: Array<Record<string, any>>; headerErrors: string[] } {
   const rows = parseCsv(text);
   if (rows.length < 2) return { records: [], headerErrors: ['CSV needs a header row and at least one data row.'] };
   const header = rows[0].map((h) => h.trim().replace(/^﻿/, ''));
-  const fields = new Map(fieldsFor(documentType).map((f) => [f.path, f]));
+  const fields = new Map(contract(documentType, extra).map((f) => [f.path, f]));
   const headerErrors = header.filter((h) => h && h !== 'recordId' && h !== 'personaId' && !fields.has(h)).map((h) => `Unknown column “${h}” — use a data-contract path such as ${documentType === 'eob' ? 'claim.status' : 'card.paymentStatus'}.`);
   const derived = header.filter((h) => fields.get(h)?.derived);
   derived.forEach((h) => headerErrors.push(`Column “${h}” is calculated by the engine and cannot be imported.`));
@@ -128,13 +131,13 @@ export function csvToRecords(text: string, documentType: DocumentType): { record
 }
 
 /** Validate and re-identify a batch. `nextId` is the first free numeric suffix (≥ IMPORT_ID_BASE). */
-export function prepareImport(items: unknown[], documentType: DocumentType, nextId: number): ImportRowResult[] {
+export function prepareImport(items: unknown[], documentType: DocumentType, nextId: number, extra: FieldDef[] = []): ImportRowResult[] {
   const prefix = documentType === 'eob' ? 'EOB' : 'CARD';
   let n = Math.max(nextId, IMPORT_ID_BASE);
   return items.slice(0, IMPORT_LIMIT).map((raw, i) => {
     const r = (raw ?? {}) as Record<string, any>;
     const sourceId = typeof r.recordId === 'string' ? r.recordId : null;
-    const errors = validateRecordShape(r, documentType);
+    const errors = validateRecordShape(r, documentType, extra);
     if (errors.length) return { row: i + 1, sourceId, errors };
     if (n > 9999) return { row: i + 1, sourceId, errors: ['Import capacity reached (IDs up to 9999).'] };
     const { recordId: _drop, documentType: _dt, demonstrationOnly: _d, ...rest } = r;

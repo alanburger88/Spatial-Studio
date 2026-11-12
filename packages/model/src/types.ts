@@ -273,6 +273,8 @@ export interface Project {
   journey: { snapshotPolicy: 'issued-is-immutable'; events: JourneyEvent[] };
   issuer: { name: string; accent: string; product: string };
   lastSavedAt?: string;
+  /** Project-level data fields beyond the standard contract (paths `custom.<key>`); travel with the model for deterministic runs. */
+  customFields?: CustomField[];
 }
 
 /* ---------------------------------------------------------- Synthetic data */
@@ -316,4 +318,16 @@ export interface ComponentCatalogEntry {
   deep: boolean;
   description: string;
   canContainChildren: boolean;
+}
+
+/** A user-defined data field. Records carry its value under `custom.<key>`. */
+export interface CustomField {
+  key: string;
+  label: string;
+  type: 'string' | 'int' | 'cents' | 'bool' | 'date' | 'enum';
+  enumValues?: string[];
+  required?: boolean;
+  example?: string;
+  /** Offer as a Cube/Landscape filter dimension. */
+  dimension?: boolean;
 }

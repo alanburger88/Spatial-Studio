@@ -9,7 +9,7 @@ import './ScenarioLandscape.css';
 
 const SEV_ICON = { ok: '✓', warning: '▲', blocking: '■' } as const;
 const SEV_TEXT = { ok: 'No findings', warning: 'Warnings', blocking: 'Blocking' } as const;
-const MAX_D = 112, MIN_D = 40;
+const MAX_D = 96, MIN_D = 40;
 
 const pct = (n: number, d: number) => (d ? `${((n / d) * 100).toFixed(n / d < 0.1 ? 1 : 0)}%` : '0%');
 const humanCode = (c: string) => { const t = c.replace(/[-_.]+/g, ' ').toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
@@ -121,13 +121,6 @@ export function ScenarioLandscape() {
               </div>
             ))}
             {Object.keys(filters).length > 0 && <button className="btn sm" onClick={() => { setFilters({}); setSelectedId(null); }}>Clear filters</button>}
-            <label className="ls-toggle" title={includeJourney ? `Adds ${journeyN - 1} generated journey positions per record (${journeyN} states × seeded records); these are generated combinations, not extra fixtures.` : 'Off: one baseline scenario per seeded record.'}>
-              <input type="checkbox" checked={includeJourney} onChange={(e) => { setIncludeJourney(e.target.checked); setSelectedId(null); }} data-testid="landscape-include-journey" />
-              <span>Include journey states</span>
-            </label>
-            <button className="btn sm ls-defects" aria-pressed={defectsOnly} onClick={() => { setDefectsOnly((v) => !v); setSelectedId(null); }} data-testid="landscape-show-defects" title={defectsOnly ? `Showing the ${visible.length} of ${all.length} clusters that have recorded findings.` : 'Show only clusters with at least one recorded warning or blocking finding.'}>
-              <Icon.warning width={14} height={14} /> Defects only <span className="ls-defects-n">{defectClusters}</span>
-            </button>
           </div>
 
           <div className="ls-status" data-testid="landscape-coverage">
@@ -139,6 +132,15 @@ export function ScenarioLandscape() {
               {reconciled ? '✓' : '⚠'} Σ clusters = {sum}{reconciled ? ' reconciles' : ` does not match ${landscape.evaluated}`}
             </span>
             <Tech><span className="ls-basis" data-testid="landscape-count-basis" title={landscape.countBasis}>{landscape.countBasis}</span></Tech>
+            <span className="ls-status-actions">
+            <label className="ls-toggle" title={includeJourney ? `Adds ${journeyN - 1} generated journey positions per record (${journeyN} states × seeded records); these are generated combinations, not extra fixtures.` : 'Off: one baseline scenario per seeded record.'}>
+              <input type="checkbox" checked={includeJourney} onChange={(e) => { setIncludeJourney(e.target.checked); setSelectedId(null); }} data-testid="landscape-include-journey" />
+              <span>Include journey states</span>
+            </label>
+            <button className="btn sm ls-defects" aria-pressed={defectsOnly} onClick={() => { setDefectsOnly((v) => !v); setSelectedId(null); }} data-testid="landscape-show-defects" title={defectsOnly ? `Showing the ${visible.length} of ${all.length} clusters that have recorded findings.` : 'Show only clusters with at least one recorded warning or blocking finding.'}>
+              <Icon.warning width={14} height={14} /> Defects only <span className="ls-defects-n">{defectClusters}</span>
+            </button>
+            </span>
           </div>
 
           <div className="panel ls-chart-panel" ref={chartRef}>
@@ -154,7 +156,7 @@ export function ScenarioLandscape() {
             ) : (
               <div className="ls-chart" data-testid="landscape-chart" role="group" aria-label="Scenario clusters grouped by primary variant">
                 {groups.map((g) => (
-                  <section className="ls-group-card" key={g.id} aria-label={g.name}>
+                  <section className="ls-group-card" key={g.id} aria-label={g.name} style={{ flex: `${g.items.length} 1 ${Math.max(190, g.items.length * 86)}px` }}>
                     <header className="ls-group-head">
                       <span className={`ls-group-name${technical ? ' mono' : ''}`} title={g.name}>{g.name}</span>
                       <span className="muted">{g.items.length} {g.items.length === 1 ? 'cluster' : 'clusters'} · {g.items.reduce((s, c) => s + c.count, 0)} scenarios</span>
@@ -174,8 +176,6 @@ export function ScenarioLandscape() {
                               onClick={() => setSelectedId(c.clusterId)}
                               onMouseEnter={(ev) => showTip(c, ev.currentTarget)}
                               onMouseLeave={hideTip}
-                              onFocus={(ev) => showTip(c, ev.currentTarget)}
-                              onBlur={hideTip}
                             >
                               <span className="ls-bn" style={{ fontSize: Math.max(14, Math.min(26, d * 0.3)) }}>{c.count}</span>
                               <span className="ls-sevicon" aria-hidden="true">{SEV_ICON[c.severity]}</span>
