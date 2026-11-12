@@ -21,8 +21,8 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | Pack validation | PASS |
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
-| Unit tests | 112/112 |
-| Browser tests | 87/87 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 9 v0.4 UX tests) |
+| Unit tests | 113/113 |
+| Browser tests | 89/89 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 11 v0.4 UX tests) |
 | Build | OK |
 
 ## v0.2 additions (all verified by the tests above)
@@ -37,7 +37,7 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 ## v0.4 additions (UX pass — 11 changes approved by the user one by one)
 
 - Menu grouped by job (Build / Explore / Check & publish / Help & admin); labelled top bar (*Previewing as*, *Output*, *Saved · vN* always readable) with one settings menu for detail level, theme, tour and shortcuts.
-- Demo-only defect controls moved out of Rules & Data and Validate into one status-bar *Demo tools* panel (closed by default; opens during the Guided Demo).
+- Demo-only defect controls moved out of Rules & Data and Validate into one status-bar *Demo tools* panel (opens only when clicked).
 - Validate & Compare and Preview & Export run automatically and show whether the result is up to date; automatic previews do not add export-history entries.
 - Detail panels never open empty (Cube, Landscape, Page Stack, Validate, Design inspector pre-select the most relevant item); Cube cells no longer truncate.
 - Design inspector: four tabs (Content, Data & rules, Layout, Review); collapsible component list.
@@ -46,7 +46,15 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 - Content & Translations: drafts save as you type, actions only on the active row, progress bar summary.
 - Calmer visuals: rows instead of nested cards, three chip styles, sentence-case headings.
 - Narrow windows: side panels become drawers at 900–1100 px; a notice below 900 px. Activity log groups repeated entries under day headings.
-- Verified by `e2e/ux.spec.ts` (U01–U09) plus the existing suites; test IDs required by `contracts/SCREEN_CONTRACT.json` are unchanged.
+- Verified by `e2e/ux.spec.ts` (U01–U11) plus the existing suites; test IDs required by `contracts/SCREEN_CONTRACT.json` are unchanged.
+
+### v0.4 follow-up
+
+- Remaining capital-letter labels removed (Validate, Journey timeline, table headers); the inspector's data section and the translation error use names instead of codes in Business view; 3D Cube axis labels and Landscape captions are no longer cut off.
+- The gallery's "Show me where" link highlights the customer picker once the project has really loaded (no timer).
+- Design Studio fits the page width by default with a *Page* option; Page Composition Stack opens in Fan view with page 1 on top.
+- Screens are separate downloads: first download 1,258 kB → 483 kB (387 kB → 157 kB compressed), measured from the production build.
+- Export history keeps one PDF per distinct document (a rebuild replaces the earlier entry).
 
 ## Not verified / open
 
@@ -55,6 +63,8 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 - **Assistive technology:** screen-reader manual pass not run.
 - **Deployment:** none; not authorised.
 - **Brand logo:** official artwork to be supplied by InfoSlips (slot ready).
+- **Load time:** the size reduction is measured from the build output; no timing was taken on a slow network or a hosted server.
+- **Design Studio page size:** at a 1440 px window the page is still about 69% because the panel width limits it; it reaches about 100% only with the component list collapsed.
 - **UX pass:** checked in Chromium at 1440×900, 1280×720 and 1000×700, light and dark; not every screen was inspected by eye in every theme/size/view combination, and no usability test with real users has been run.
 - **Windows:** scripts made cross-platform but not executed on Windows here; Docker image built and smoke-tested on Linux.
 - **Live AI:** still unverified (needs your API key in a local `.env`).

@@ -16,6 +16,8 @@ export async function open(page: Page, project: string, view: string) {
   await page.goto(`/studio/${project}/${view}`);
   await expect(page.getByRole('main')).toBeVisible();
   await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
+  // Screens are separate downloads: wait until the requested one has actually rendered.
+  await expect(page.locator('#main section.screen').first()).toBeVisible();
 }
 
 export const state = (page: Page) => page.evaluate(() => {
