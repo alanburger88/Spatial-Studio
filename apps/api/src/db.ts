@@ -262,7 +262,7 @@ export class Store {
     return r ? { request: JSON.parse(r.request_json), summary: JSON.parse(r.summary_json), createdAt: r.created_at } : undefined;
   }
 
-  saveArtifact(runId: string, kind: 'pdf' | 'html' | 'afp-sim' | 'manifest', filename: string, bytes: Buffer, meta: Record<string, unknown>, pageCount?: number) {
+  saveArtifact(runId: string, kind: 'pdf' | 'html' | 'afp-sim' | 'manifest' | 'email', filename: string, bytes: Buffer, meta: Record<string, unknown>, pageCount?: number) {
     const sha = sha256Hex(new Uint8Array(bytes));
     const artifactId = `art-${kind}-${sha.slice(0, 16)}`;
     const file = path.join(this.artifactDir, artifactId);

@@ -20,7 +20,7 @@ export function registerChannelRoutes(app: FastifyInstance, deps: RouteDeps): vo
     const parity = checkChannelParity(res, email, sms);
     const filename = `${project.projectId}-${res.recordId}-${res.runId.slice(4, 12)}-email.html`.toLowerCase();
     // The db accepts any lowercase kind; the artifact route serves it by id (see report: it labels non-pdf/html kinds as JSON).
-    const art = store.saveArtifact(res.runId, 'email' as any, filename, Buffer.from(email.html, 'utf8'), { contentDigest: res.contentDigest, subject: email.subject, renderer: EMAIL_RENDERER_VERSION, contentType: 'text/html; charset=utf-8', parityOk: parity.ok });
+    const art = store.saveArtifact(res.runId, 'email', filename, Buffer.from(email.html, 'utf8'), { contentDigest: res.contentDigest, subject: email.subject, renderer: EMAIL_RENDERER_VERSION, contentType: 'text/html; charset=utf-8', parityOk: parity.ok });
     return { runId: res.runId, recordId: res.recordId, contentDigest: res.contentDigest, locale: res.locale, subject: email.subject, preheader: email.preheader, html: email.html, text: email.text, warnings: email.warnings, parity, artifactId: art.artifactId, sha256: art.sha256, filename: art.filename };
   });
 

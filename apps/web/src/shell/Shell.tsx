@@ -1,14 +1,22 @@
-import { useEffect, type ReactNode } from 'react';
-import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
-import type { ProfileId } from '@iss/model';
-import { personaLabel, useIsDirty, useModelChecks, useResolution, useStudio } from '../state/store';
+import { useEffect, useRef, useState, type ReactNode, type SVGProps } from 'react';
+import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ROLE_LABEL, type ProfileId } from '@iss/model';
+import { editBlockedReason, personaLabel, useIsDirty, useModelChecks, useResolution, useStudio } from '../state/store';
 import { RecordPicker, recordSummary } from './RecordPicker';
 import { BrandMark, Icon } from '../ui/icons';
 import { Biz, ErrorState, Loading, Tech, Toasts } from '../ui/common';
 import { DemoBanner } from '../screens/GuidedDemo';
 import { CommandPalette, useShellUi } from './CommandPalette';
 import { HelpMenu, MOD, ShortcutsSheet, Tour } from './Help';
+import { HistoryPanel, useDrawers } from './History';
+import { ReviewPanel, WorkflowChip } from './Review';
 import './shell-extras.css';
+import './collab.css';
+
+/** Activity (audit log) nav icon: a pulse line. */
+const ActivityIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}><path d="M3 12h4l3-7 4 14 3-7h4" /></svg>
+);
 
 export const SCREENS = [
   { id: 'S01', path: '/projects', label: 'Project Gallery', icon: Icon.gallery },
@@ -24,6 +32,7 @@ export const SCREENS = [
   { id: 'S11', path: 'demo', label: 'Guided Demo', icon: Icon.demo },
   { id: 'S12', path: 'assistant', label: 'AI Assistant', icon: Icon.ai },
   { id: 'S13', path: 'content', label: 'Content & Translations', icon: Icon.list },
+  { id: 'S14', path: 'activity', label: 'Activity', icon: ActivityIcon },
 ] as const;
 
 function isTyping(el: EventTarget | null) {
@@ -99,6 +108,10 @@ function TopBar() {
   const saving = useStudio((s) => s.saving);
   const { undo, redo, save, setRecord, setProfile } = useStudio.getState();
   const dirty = useIsDirty();
+  const session = useStudio((s) => s.session);
+  const readOnly = editBlockedReason(session);
+  const { pathname } = useLocation();
+  const inStudio = pathname.startsWith('/studio/');
   const hasOverrides = Object.keys(ctx.overrides).length > 0;
   const docRecords = project ? records.filter((r) => r.documentType === project.documentType) : [];
   return (
@@ -133,21 +146,61 @@ function TopBar() {
             </select>
           </label>
           <div className="row" style={{ gap: 4 }}>
-            <button className="btn icon" onClick={undo} disabled={!past} aria-label={`Undo (${past} available)`} title="Undo (Ctrl+Z)" data-testid="undo"><Icon.undo /></button>
-            <button className="btn icon" onClick={redo} disabled={!future} aria-label={`Redo (${future} available)`} title="Redo (Ctrl+Y)" data-testid="redo"><Icon.redo /></button>
-            <button className={`btn${dirty ? ' primary' : ''}`} onClick={() => save()} disabled={saving} data-testid="save-project" title="Save (Ctrl+S)"><Icon.save /> {saving ? 'Saving…' : 'Save'}</button>
+            <button className="btn icon" onClick={undo} disabled={!past || !!readOnly} aria-label={`Undo (${past} available)`} title={readOnly ?? 'Undo (Ctrl+Z)'} data-testid="undo"><Icon.undo /></button>
+            <button className="btn icon" onClick={redo} disabled={!future || !!readOnly} aria-label={`Redo (${future} available)`} title={readOnly ?? 'Redo (Ctrl+Y)'} data-testid="redo"><Icon.redo /></button>
+            <button className={`btn${dirty ? ' primary' : ''}`} onClick={() => save()} disabled={saving || !!readOnly} data-testid="save-project" title={readOnly ?? 'Save (Ctrl+S)'}><Icon.save /> <span className="save-label">{saving ? 'Saving…' : 'Save'}</span></button>
           </div>
-          <span className={`save-state${dirty ? ' dirty' : ''}`} data-testid="save-state" aria-live="polite" title={dirty ? 'Unsaved changes' : 'Saved'}><span className="dot" />{dirty ? 'Unsaved' : 'Saved'} · v{project.modelVersion}</span>
+          <button type="button" className="save-state-btn" onClick={() => useDrawers.getState().show('history')} data-testid="open-history" aria-haspopup="dialog" title={`${dirty ? 'Unsaved changes' : 'Saved'} — open version history`}>
+            <span className={`save-state${dirty ? ' dirty' : ''}`} data-testid="save-state" aria-live="polite"><span className="dot" />{dirty ? 'Unsaved' : 'Saved'} · v{project.modelVersion}</span>
+          </button>
+          <WorkflowChip />
+          {readOnly && <span className="chip warning readonly-chip" title={`${readOnly}.`} data-testid="read-only"><Icon.lock width={13} height={13} /><span className="ro-text">Read-only</span></span>}
         </div>
       )}
       <div className="topbar-tools">
+        {!inStudio && pathname !== '/activity' && <Link to="/activity" className="btn ghost sm" data-testid="open-activity" title="Activity: who changed what, when"><ActivityIcon width={16} height={16} /> Activity</Link>}
         <button type="button" className="btn ghost palette-btn" onClick={() => useShellUi.getState().setPalette(true)} aria-label="Search (Command palette)" aria-haspopup="dialog" title={`Search everything (${MOD}+K)`} data-testid="open-palette">
           <Icon.search /><span className="pal-btn-label">Search</span><kbd className="kbd">{MOD} K</kbd>
         </button>
         <HelpMenu />
       </div>
       <DisplayToggles />
+      <UserChip />
     </header>
+  );
+}
+
+/** Signed-in user + Sign out (only when AUTH=on; local mode shows nothing). Compact avatar that opens an account menu. */
+function UserChip() {
+  const session = useStudio((s) => s.session);
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); ref.current?.querySelector<HTMLElement>('button')?.focus(); } };
+    document.addEventListener('mousedown', onDown); document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+  if (!session?.authEnabled || !session.user) return null;
+  const u = session.user;
+  const initials = u.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  return (
+    <div className="userchip" ref={ref} data-testid="current-user" data-role={u.role}>
+      <button type="button" className="user-avatar-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} title={`${u.name} · ${ROLE_LABEL[u.role]}`}>
+        <span className="user-avatar" aria-hidden="true">{initials}</span>
+        <span className="user-name"><strong>{u.name}</strong><span className="role-text">{ROLE_LABEL[u.role]}</span></span>
+        <span className="sr-only">Account: {u.name}, {ROLE_LABEL[u.role]}</span>
+      </button>
+      {open && (
+        <div className="user-menu" role="menu" aria-label="Account">
+          <div className="user-menu-head"><strong>{u.name}</strong>{u.email && <span className="muted">{u.email}</span>}<span className="chip accent">{ROLE_LABEL[u.role]}</span></div>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); navigate('/activity'); }}>Activity{u.role === 'admin' ? ' & users' : ''}</button>
+          <button type="button" role="menuitem" onClick={async () => { setOpen(false); await useStudio.getState().signOut(); navigate('/login'); }} data-testid="sign-out">Sign out</button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -223,6 +276,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
       <DemoBanner />
       <Toasts />
       <Overlays />
+      {ready && <><HistoryPanel /><ReviewPanel /></>}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { seedProjects } from '../src/fixtures';
-import { applyCommand, checkTestCase, diffProjects, layoutText, predicateText, sanitizeCommentBody, transitionProblem, roleCan, richFromMarkup, type Project } from '../src/index';
+import { applyCommand, diffProjects, layoutText, predicateText, sanitizeCommentBody, transitionProblem, roleCan, richFromMarkup, type Project } from '../src/index';
 
 const aster = () => structuredClone(seedProjects().find((p) => p.projectId === 'aster-card-demo')!) as Project;
 
@@ -109,14 +109,6 @@ describe('helpers', () => {
   it('predicateText and layoutText', () => {
     expect(predicateText({ op: 'and', args: [{ op: 'eq', path: 'a.b', value: true }, { op: 'isNull', path: 'c' }] })).toBe('a.b = true AND c is empty');
     expect(layoutText({ paged: { mode: 'fixed', xPt: 10, yPt: 20, wPt: 100, hPt: 30, pages: 'first' } })).toBe('fixed at x 10 y 20 · 100×30 pt · first page');
-  });
-
-  it('checkTestCase compares variants, visibility, locale and blocking', () => {
-    const tc = { id: 't', name: 'T', recordId: 'CARD-0001', expect: { selectedVariants: { pg: 'v1' }, visibleNodeIds: ['a'], hiddenNodeIds: ['b'], approvedLocale: 'en-US', noBlocking: true } };
-    expect(checkTestCase(tc, { selectedVariants: { pg: 'v1' }, visibleNodeIds: ['a'], locale: 'en-US', blockingCount: 0 }).passed).toBe(true);
-    const bad = checkTestCase(tc, { selectedVariants: { pg: 'v2' }, visibleNodeIds: ['b'], locale: 'es-US', blockingCount: 2 });
-    expect(bad.passed).toBe(false);
-    expect(bad.failures.map((f) => f.kind)).toEqual(['selectedVariant', 'visible', 'hidden', 'approvedLocale', 'noBlocking']);
   });
 
   it('workflow transitions and role permissions', () => {

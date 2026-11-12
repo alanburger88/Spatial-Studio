@@ -8,6 +8,7 @@ import { ruleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { recordSummary } from './RecordPicker';
 import { SCREENS } from './Shell';
+import { useDrawers } from './History';
 
 /** Tiny UI-only store for the overlays owned by the shell (palette, shortcuts sheet, tour). */
 interface ShellUi {
@@ -132,7 +133,10 @@ export function CommandPalette() {
       act('save', 'Save project', () => { void st.save(); }, 'Ctrl+S');
       if (past) act('undo', 'Undo', () => st.undo(), 'Ctrl+Z');
       if (future) act('redo', 'Redo', () => st.redo(), 'Ctrl+Y');
+      act('history', 'Open version history', () => useDrawers.getState().show('history'), undefined, 'versions compare restore diff changes saved');
+      act('review', 'Open review & approval', () => useDrawers.getState().show('review'), undefined, 'workflow submit approve publish comments status');
     }
+    act('activity', 'Open activity log', () => navigate(inStudio && pid ? `/studio/${pid}/activity` : '/activity'), undefined, 'audit log who changed what when');
     act('shortcuts', 'Open keyboard shortcuts', () => useShellUi.getState().setShortcuts(true), '?', 'help keys');
     act('tour', 'Take the tour', () => useShellUi.getState().setTour(true), undefined, 'help onboarding walkthrough');
     act('demo', 'Start guided demo', () => { void useDemo.getState().start((to: string) => navigate(to)); }, undefined, 'walkthrough narrative');

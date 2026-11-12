@@ -404,3 +404,13 @@ export function personaLabel(personas: Persona[], id?: string | null): string {
   const p = personas.find((x) => x.id === id);
   return p ? `${p.id} · ${p.name}` : id ?? '—';
 }
+
+// Re-check the session when any API call reports 401 (expired session with AUTH=on). Debounced.
+if (typeof window !== 'undefined') {
+  let pending = false;
+  window.addEventListener('iss:unauthenticated', () => {
+    if (pending) return;
+    pending = true;
+    setTimeout(() => { pending = false; void useStudio.getState().loadSession(); }, 300);
+  });
+}

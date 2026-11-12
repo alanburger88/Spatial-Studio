@@ -1,0 +1,52 @@
+/* S14 Activity (audit log) + user admin. Tokens only. */
+.act-tabs { padding: 0 20px 4px; border-bottom: 0; }
+.act-body { grid-template-rows: minmax(0, 1fr); }
+.act-panel { min-height: 0; }
+.act-filters { flex-wrap: wrap; gap: 10px; font-weight: 500; }
+.act-filter { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--iss-text-muted); font-weight: 600; }
+.act-filter .select { min-height: 28px; font-size: 12.5px; max-width: 220px; }
+.act-table-wrap { padding: 0; }
+.act-table { table-layout: fixed; }
+.act-table .c-when { width: 150px; white-space: nowrap; color: var(--iss-text-muted); }
+.act-table .c-who { width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-table .c-proj { width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-table .c-proof { width: 96px; }
+.act-table td.c-proof { white-space: nowrap; }
+.act-table .c-what { overflow-wrap: anywhere; }
+.act-table .proof.open { white-space: normal; }
+.act-table td.c-proof .proof:not(.open)[open] { position: relative; }
+.act-table td.c-proof .proof-body { position: absolute; right: 0; z-index: 5; width: min(420px, 60vw); padding: 8px 10px; background: var(--iss-surface); border: 1px solid var(--iss-border-strong); border-radius: 8px; box-shadow: var(--iss-shadow-pop); white-space: normal; }
+.act-proof { font-size: 11px; color: var(--iss-text-muted); overflow-wrap: anywhere; }
+.act-code { display: block; font-family: var(--iss-font-mono); font-size: 11px; color: var(--iss-text); }
+/* Technical view: keep rows compact — detail JSON clamps to two lines, full text in the tooltip. */
+:root[data-view='technical'] .act-table .proof.open .act-proof { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.act-more { display: flex; justify-content: center; padding: 10px; }
+
+/* Technical view: the detail column shows its proof inline, so give it room. */
+:root[data-view='technical'] .act-table .c-proof { width: 34%; }
+:root[data-view='technical'] .act-table td.c-proof { white-space: normal; }
+
+.act-users { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; min-height: 0; align-items: start; }
+.act-users .table td { vertical-align: middle; }
+.act-users .select { min-height: 28px; font-size: 12.5px; }
+.act-email { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-user-actions .input { min-height: 28px; width: 150px; }
+.act-newuser .input, .act-newuser .select { width: 100%; }
+@media (max-width: 1360px) {
+  .act-users { grid-template-columns: 1fr; }
+  .act-table .c-when { width: 120px; }
+  .act-table .c-who { width: 130px; }
+  .act-table .c-proj { width: 150px; }
+}
+
+/* Sign-in page (AUTH=on) */
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--iss-main-bg, var(--iss-shell)); color: var(--iss-text); }
+.login-card { width: min(380px, 100%); display: grid; gap: 4px; padding: 26px 26px 20px; background: var(--iss-surface); border: 1px solid var(--iss-border-strong); border-radius: 16px; box-shadow: var(--iss-shadow-pop); }
+.login-card h1 { margin: 10px 0 0; font-size: 22px; letter-spacing: -.02em; }
+.login-card > p.muted { margin: 2px 0 14px; font-size: 13px; }
+.login-card .input { width: 100%; }
+.login-brand { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--iss-text-muted); }
+.login-brand strong { color: var(--iss-text); }
+.login-submit { margin-top: 6px; min-height: 38px; }
+.login-card .callout { margin-bottom: 4px; }
+.login-note { margin: 12px 0 0; font-size: 11.5px; color: var(--iss-text-muted); text-align: center; }

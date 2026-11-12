@@ -38,7 +38,8 @@ export function registerTemplateRoutes(app: FastifyInstance, deps: RouteDeps): v
     if (id.length < 3) id = `${id}-project`;
     for (let i = 2; store.getProject(id); i++) id = `${slug(title).slice(0, 36)}-${i}`;
     const project = checkDraftProject(projectFromTemplate(t.id, { projectId: id, title, documentType: docTypeOf(body.documentType) }), id);
-    const saved = store.putProject(project, projectContentDigest(project));
+    const user = (req as { user?: { id: string; name: string } }).user;
+    const saved = store.putProject(project, projectContentDigest(project), { by: user ? { id: user.id, name: user.name } : null, label: `Created from template ${t.title}` });
     reply.status(201);
     return { project: saved, createdFrom: t.id };
   });

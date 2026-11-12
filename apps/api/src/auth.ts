@@ -100,6 +100,9 @@ const ROUTES: Record<string, Need> = {
   'POST /api/v1/analysis/cube': 'any',
   'POST /api/v1/analysis/landscape': 'any',
   'POST /api/v1/assistant/message': 'any',
+  'POST /api/v1/compose/email': 'any',
+  'POST /api/v1/compose/sms': 'any',
+  'POST /api/v1/projects/:projectId/translations/import': 'any',
   'POST /api/v1/assistant/proposals/:id/decision': 'any',
 };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

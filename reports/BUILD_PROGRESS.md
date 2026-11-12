@@ -1,6 +1,6 @@
 # Autonomous implementation checkpoint
 
-**Status:** POC v0.2 (polish pass + "Now" bundle) built and verified locally (2026-11-12). Branch `claude/magical-franklin-aonsol`.
+**Status:** POC v0.3 (polish pass + "Now" and "Next" bundles) built and verified locally (2026-11-12). Branch `claude/magical-franklin-aonsol`.
 
 ## Gate log
 
@@ -21,14 +21,18 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | Pack validation | PASS |
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
-| Unit tests | 53/53 |
-| Browser tests | 58/58 (49 acceptance/pack + 9 v0.2 feature tests) |
+| Unit tests | 112/112 |
+| Browser tests | 78/78 (49 acceptance/pack + 29 v0.2/v0.3 feature tests) |
 | Build | OK |
 
 ## v0.2 additions (all verified by the tests above)
 
 - Review polish: compact headers, Business/Technical view, light theme (default) + dark, searchable customer picker, consistent status dock, reworked Exploded/Cube/Landscape/Design/Rules/Outputs/Validate/Assistant/Journey/Page Stack/Demo screens.
 - Project duplicate/rename/delete; CSV/JSON record import with column matching; custom data fields; impact preview; batch runs to ZIP; image library; Ctrl+K command palette; shortcuts sheet, help menu and first-visit tour; Docker one-command run; Windows-friendly scripts.
+
+## v0.3 additions
+
+- Version history & compare, review/approval workflow with component comments, optional sign-in with roles and an activity log, templates + text styles + brand kit, decision-table view with tie/shadow/gap analysis, regression test cases, Content & Translations (S13), email and SMS channels, 2.5D Landscape restored.
 
 ## Not verified / open
 

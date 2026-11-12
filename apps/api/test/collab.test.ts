@@ -105,7 +105,8 @@ describe('collaboration (auth off: local admin)', () => {
     const blocked = await inj('POST', '/api/v1/projects/harborcare-demo/workflow', { action: 'approve' });
     expect(blocked.statusCode).toBe(422);
     expect(blocked.json().error.readiness).toMatchObject({ testsRun: 1, testsFailed: 1, blocking: [] });
-    expect(blocked.json().error.readiness.tests[0].failures[0]).toMatchObject({ kind: 'selectedVariant', nodeId: vs.id, expected: 'no-such-variant' });
+    expect(blocked.json().error.readiness.tests[0]).toMatchObject({ testId: 'tc-wrong', pass: false });
+    expect(blocked.json().error.readiness.tests[0].diffs[0]).toMatchObject({ kind: 'variant', nodeId: vs.id });
 
     // Fix the test (still in review: saving does not change the state), then approve and publish.
     const cur = await get('harborcare-demo');

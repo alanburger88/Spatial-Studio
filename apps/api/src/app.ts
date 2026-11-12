@@ -6,11 +6,11 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import { z } from 'zod';
 import { canonicalJson, customFieldDefs, fieldsFor, projectFields, projectContentDigest, validateRule, csvToRecords, prepareImport, IMPORT_LIMIT, SCHEMA_VERSION, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
-import { diffProjects, checkTestCase, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_MAX, WORKFLOW_ACTIONS, WORKFLOW_LABEL, WORKFLOW_TRANSITIONS, ACTION_LABEL, type TestCaseResult, type WorkflowAction } from '@iss/model';
+import { diffProjects, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_MAX, WORKFLOW_ACTIONS, WORKFLOW_LABEL, WORKFLOW_TRANSITIONS, ACTION_LABEL, type WorkflowAction } from '@iss/model';
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
 import { renderPagedDocument, renderInteractiveHtml, compareManifests, afpSimulation, AFP_SIMULATION_LABEL, PAGED_RENDERER_VERSION, HTML_RENDERER_VERSION } from '@iss/renderers';
-import { ScenarioEngine, buildCube, buildLandscape, generateEdgeCase, replayJourney, EDGE_CASE_PRESETS, DIMENSIONS, type DimensionId } from '@iss/scenarios';
+import { ScenarioEngine, buildCube, buildLandscape, generateEdgeCase, replayJourney, runTestCases, EDGE_CASE_PRESETS, DIMENSIONS, type DimensionId } from '@iss/scenarios';
 import { staticRuleAnalysis, bindingAnalysis, modelAccessibility, axeToFindings, toIssue, type ValidationIssue, type Suite } from '@iss/validation';
 import { Composer } from './composer';
 import { Store } from './db';
@@ -246,14 +246,10 @@ export async function buildApp(opts: AppOptions = {}) {
     };
     for (const record of records) for (const f of resolve({ project, record }).findings) if (f.severity === 'blocking') add(f, record.recordId);
     for (const f of [...staticRuleAnalysis(project, allRecords()), ...bindingAnalysis(project)]) if (f.severity === 'blocking') add(f, null);
-    const tests: Array<TestCaseResult & { error?: string }> = (project.testCases ?? []).map((tc) => {
-      const record = allRecords().find((r) => r.recordId === tc.recordId);
-      if (!record || record.documentType !== project.documentType) return { id: tc.id, name: tc.name, recordId: tc.recordId, passed: false, failures: [], error: `Record ${tc.recordId} is not available.` };
-      const res = resolve({ project, record, overrides: tc.overrides ?? {}, journeyCursor: tc.journeyCursor ?? null });
-      return checkTestCase(tc, { selectedVariants: res.result.selectedVariants, visibleNodeIds: res.semanticManifest.visibleNodeIds, locale: res.locale, blockingCount: blocking(res).length });
-    });
+    // Same runner as Rules & Data → Tests, so "passes" means the same thing everywhere.
+    const tests = runTestCases(project, allRecords());
     const issues = [...groups.values()];
-    const failedTests = tests.filter((t) => !t.passed);
+    const failedTests = tests.filter((t) => !t.pass);
     return { ready: issues.length === 0 && failedTests.length === 0, modelVersion: project.modelVersion, recordsChecked: records.length, blocking: issues, tests, testsRun: tests.length, testsFailed: failedTests.length };
   }
 
@@ -298,6 +294,8 @@ export async function buildApp(opts: AppOptions = {}) {
   });
 
   /* Comments pinned to components (plain text only). */
+  /** Component display name for audit entries (a label, never a content body). */
+  const nodeNameOf = (p: Project, nodeId: string) => { const n = p.nodes.find((x) => x.id === nodeId); return n?.name ?? n?.label ?? null; };
   const commentOr404 = (projectId: string, id: string) => { const c = store.getComment(id); if (!c || c.projectId !== projectId) throw new ApiError(404, 'NOT_FOUND', 'Unknown comment.'); return c; };
   app.get<{ Params: { projectId: string }; Querystring: { nodeId?: string; status?: string } }>('/api/v1/projects/:projectId/comments', async (req) => {
     const p = projectOr404(req.params.projectId);
@@ -322,7 +320,7 @@ export async function buildApp(opts: AppOptions = {}) {
       nodeId = parent.nodeId;
     } else if (!p.nodes.some((n) => n.id === nodeId)) throw new ApiError(400, 'UNKNOWN_NODE', `No component ${nodeId || '(none)'} in ${p.projectId}.`);
     const c = store.addComment({ id: `cmt-${randomUUID().slice(0, 12)}`, projectId: p.projectId, nodeId, parentId, body, author: req.user?.id ?? 'unknown', authorName: req.user?.name ?? 'Unknown', modelVersion: p.modelVersion });
-    audit(store, req, parentId ? 'comment.reply' : 'comment.create', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { commentId: c.id, nodeId, parentId, length: body.length } });
+    audit(store, req, parentId ? 'comment.reply' : 'comment.create', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { commentId: c.id, nodeId, nodeName: nodeNameOf(p, nodeId), parentId, length: body.length } });
     reply.status(201);
     return { comment: { ...c, mine: true } };
   });
@@ -332,7 +330,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const root = c.parentId ? commentOr404(p.projectId, c.parentId) : c;
     const resolved = (req.body as any)?.resolved !== false;
     const out = store.setCommentResolved(root.id, resolved, req.user?.name ?? null);
-    audit(store, req, resolved ? 'comment.resolve' : 'comment.reopen', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { commentId: root.id, nodeId: root.nodeId } });
+    audit(store, req, resolved ? 'comment.resolve' : 'comment.reopen', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { commentId: root.id, nodeId: root.nodeId, nodeName: nodeNameOf(p, root.nodeId) } });
     return { comment: { ...out, mine: out.author === req.user?.id } };
   });
   app.delete<{ Params: { projectId: string; commentId: string } }>('/api/v1/projects/:projectId/comments/:commentId', async (req) => {
@@ -340,7 +338,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const c = commentOr404(p.projectId, req.params.commentId);
     if (c.author !== req.user?.id && req.user?.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'You can only delete your own comments.');
     const removed = store.deleteComment(c.id);
-    audit(store, req, 'comment.delete', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { commentId: c.id, nodeId: c.nodeId, removed } });
+    audit(store, req, 'comment.delete', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { commentId: c.id, nodeId: c.nodeId, nodeName: nodeNameOf(p, c.nodeId), removed } });
     return { deleted: true, removed };
   });
 
@@ -638,7 +636,7 @@ export async function buildApp(opts: AppOptions = {}) {
   app.get<{ Params: { artifactId: string } }>('/api/v1/artifacts/:artifactId', async (req, reply) => {
     const a = store.getArtifact(req.params.artifactId);
     if (!a) throw new ApiError(404, 'NOT_FOUND', 'Unknown artifact.');
-    const type = a.kind === 'pdf' ? 'application/pdf' : a.kind === 'html' ? 'text/html; charset=utf-8' : 'application/json';
+    const type = a.kind === 'pdf' ? 'application/pdf' : a.kind === 'html' || a.kind === 'email' ? 'text/html; charset=utf-8' : 'application/json';
     reply.header('Content-Type', type).header('Content-Disposition', `${(req.query as any)?.inline ? 'inline' : 'attachment'}; filename="${a.filename}"`).header('X-Sha256', a.sha256).header('X-Run-Id', a.run_id);
     return reply.send(a.bytes);
   });

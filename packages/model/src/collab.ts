@@ -1,8 +1,7 @@
-import type { TestCase } from './types';
-
 /**
  * Collaboration rules shared by the API (enforcement) and the studio (role-aware UI):
- * roles and permissions, the review/approval workflow state machine and the pure test-case checker.
+ * roles and permissions, the review/approval workflow state machine and comment sanitising.
+ * (Pinned test cases are evaluated by `runTestCases` in @iss/scenarios — the same runner Rules & Data uses.)
  */
 
 export type Role = 'author' | 'reviewer' | 'approver' | 'admin';
@@ -53,47 +52,6 @@ export function transitionProblem(state: WorkflowState, action: WorkflowAction):
 
 /** States in which saving a changed model sends the document back to draft. */
 export const DEMOTE_ON_SAVE: readonly WorkflowState[] = ['approved', 'published', 'changes_requested'];
-
-/* ---------------------------------------------------------------- test cases */
-
-/** The observable outcome of resolving one scenario, as compared by a pinned test case. */
-export interface TestOutcome {
-  selectedVariants: Record<string, string | null>;
-  visibleNodeIds: string[];
-  /** Locale the resolver used for approved wording. */
-  locale: string | null;
-  blockingCount: number;
-}
-
-export interface TestFailure { kind: 'selectedVariant' | 'visible' | 'hidden' | 'approvedLocale' | 'noBlocking'; nodeId?: string; expected: string | null; actual: string | null }
-export interface TestCaseResult { id: string; name: string; recordId: string; passed: boolean; failures: TestFailure[] }
-
-/** Pure check of one test case's expectations against an actual outcome. */
-export function checkTestCase(tc: TestCase, outcome: TestOutcome): TestCaseResult {
-  const failures: TestFailure[] = [];
-  const e = tc.expect ?? {};
-  for (const [nodeId, want] of Object.entries(e.selectedVariants ?? {})) {
-    const got = outcome.selectedVariants[nodeId] ?? null;
-    if ((want ?? null) !== got) failures.push({ kind: 'selectedVariant', nodeId, expected: want ?? null, actual: got });
-  }
-  const visible = new Set(outcome.visibleNodeIds);
-  for (const id of e.visibleNodeIds ?? []) if (!visible.has(id)) failures.push({ kind: 'visible', nodeId: id, expected: 'visible', actual: 'hidden' });
-  for (const id of e.hiddenNodeIds ?? []) if (visible.has(id)) failures.push({ kind: 'hidden', nodeId: id, expected: 'hidden', actual: 'visible' });
-  if (e.approvedLocale !== undefined && (e.approvedLocale ?? null) !== (outcome.locale ?? null)) failures.push({ kind: 'approvedLocale', expected: e.approvedLocale ?? null, actual: outcome.locale ?? null });
-  if (e.noBlocking && outcome.blockingCount > 0) failures.push({ kind: 'noBlocking', expected: '0 blocking issues', actual: `${outcome.blockingCount} blocking` });
-  return { id: tc.id, name: tc.name, recordId: tc.recordId, passed: failures.length === 0, failures };
-}
-
-/** Plain sentence for one failure: "Payment guidance shows “Payment due” instead of “Payment support”". */
-export function testFailureSentence(f: TestFailure, title: (id: string | null) => string = (id) => id ?? 'nothing'): string {
-  switch (f.kind) {
-    case 'selectedVariant': return `${title(f.nodeId ?? null)} shows ${f.actual ? `“${title(f.actual)}”` : 'nothing'} instead of ${f.expected ? `“${title(f.expected)}”` : 'nothing'}`;
-    case 'visible': return `${title(f.nodeId ?? null)} should be shown but is hidden`;
-    case 'hidden': return `${title(f.nodeId ?? null)} should be hidden but is shown`;
-    case 'approvedLocale': return `wording language is ${f.actual ?? 'not set'} instead of ${f.expected ?? 'not set'}`;
-    case 'noBlocking': return `expected no blocking issues but found ${f.actual}`;
-  }
-}
 
 /* ------------------------------------------------------------------ comments */
 

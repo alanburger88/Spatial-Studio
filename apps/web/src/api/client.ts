@@ -1,4 +1,5 @@
-import type { Permission, Persona, Project, ProjectDiff, Role, SyntheticRecord, TestCaseResult, WorkflowAction, WorkflowState } from '@iss/model';
+import type { Permission, Persona, Project, ProjectDiff, Role, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
+import type { TestResult } from '@iss/scenarios';
 
 /** Typed client for the local Spatial Studio API (/api/v1, proxied by Vite). */
 
@@ -16,6 +17,8 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const text = await res.text();
   const body = text ? JSON.parse(text) : {};
+  // An expired/missing session (AUTH=on): let the store re-check who is signed in (it shows the login page).
+  if (res.status === 401 && typeof window !== 'undefined') window.dispatchEvent(new Event('iss:unauthenticated'));
   if (!res.ok) throw new ApiFailure(res.status, body?.error?.code ?? 'HTTP_' + res.status, body?.error?.message ?? res.statusText, body);
   return body as T;
 }
@@ -110,7 +113,7 @@ export interface WorkflowStep { action: string; from: WorkflowState; to: Workflo
 export interface VersionDto { modelVersion: number; contentDigest: string; savedAt: string; savedBy: string | null; label: string | null; bytes: number; current: boolean; workflow: WorkflowStep[] }
 export interface VersionMeta { modelVersion: number; contentDigest: string; savedAt: string; savedBy: string | null; label: string | null; title: string }
 export interface BlockingGroup { code: string; severity: string; nodeId: string | null; locale: string | null; message: string; source: string; recordIds: string[] }
-export interface Readiness { ready: boolean; modelVersion: number; recordsChecked: number; blocking: BlockingGroup[]; tests: Array<TestCaseResult & { error?: string }>; testsRun: number; testsFailed: number }
+export interface Readiness { ready: boolean; modelVersion: number; recordsChecked: number; blocking: BlockingGroup[]; tests: TestResult[]; testsRun: number; testsFailed: number }
 export interface WorkflowEventDto { id: number; action: string; from: WorkflowState; to: WorkflowState; comment: string | null; user: string | null; userId: string | null; at: string; modelVersion: number }
 export interface WorkflowDto {
   projectId: string; modelVersion: number; state: WorkflowState; label: string; stateVersion: number | null; updatedAt: string | null; updatedBy: string | null;

@@ -55,6 +55,14 @@ Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the 
 - **Impact preview**: before a rule or text change is applied, the studio shows how many customers' documents change, what changes, and whether new blocking issues appear.
 - **Image library**: upload PNG/JPEG/WebP images once (they are downscaled in the browser to fit the 280 KB limit) and reuse them in any Image component. The chosen image is embedded in the document so exports stay self-contained. SVG is not accepted, for safety.
 - **Batch run** (Preview & Export → *Batch*): compose every customer (or a filtered selection) into one ZIP with PDFs and/or interactive HTML, a `manifest.json` and a `run-report.csv` (pages, timings, blocked and failed records). Records with blocking issues are skipped unless you ask for watermarked drafts.
+- **Version history** (click *Saved · vN* in the top bar): every save is kept; see what changed between any two versions in plain words and restore an older one.
+- **Review & approval** (status chip in the top bar): Draft → In review → Approved → Published, with comments pinned to components (Inspector → *Comments*). Approval is refused while any synthetic record has a blocking issue or a pinned test fails; editing an approved document returns it to Draft.
+- **Users, roles and activity log**: off by default for local use. Set `AUTH=on`, `ADMIN_EMAIL` and `ADMIN_PASSWORD` (e.g. in `.env`) to require sign-in with Author / Reviewer / Approver / Admin roles; the **Activity** screen lists who did what, when.
+- **New project from a template** (Gallery → *New project*): credit-card statement, explanation of benefits or a blank letter. **Styles & brand** (2D Design toolbar): named text styles and a brand kit (colours, document font, logo) applied identically to the studio, PDF, HTML and email.
+- **Decision table** and **regression tests** (Rules & Data → *Table* / *Tests*): see each rule group as a grid, with ties, never-winning rules and uncovered combinations flagged; pin scenarios as tests that re-run on every change and show which tests a draft would break.
+- **Content & Translations**: every text with its Spanish translation status; draft, approve (data tokens must match the English) and exchange CSV files with translators. Approving the mandatory texts clears the Spanish customers' blocking issue.
+- **Email and SMS** (Preview & Export): email-safe HTML (600 px, inline styles, plain-text part, subject and preheader) and SMS with GSM-7/UCS-2 and segment counting — both from the same resolved document, with parity checks.
+- **Scenario Landscape** has a *Flat | 2.5D* switch; 2.5D shows clusters on a tilted plane with height = rule complexity or exception count.
 - The status bar always shows the same rule & binding check counts as **Validate & Compare** (or the full validation result once you have run it for the current scenario); click it to open Validate.
 
 ## Verify
@@ -104,6 +112,8 @@ pnpm verify
 | `/studio/:project/outputs` | S10 Preview & Export — real PDF, interactive HTML, AFP simulation, parity |
 | `/studio/:project/demo` | S11 Guided Demo — 12 real, self-verifying steps |
 | `/studio/:project/assistant` | S12 AI Assistant — typed actions, trace-sourced explanations, approval |
+| `/studio/:project/content` | S13 Content & Translations — translation status, drafts, approval, CSV exchange |
+| `/studio/:project/activity` | S14 Activity — audit log (who did what), users when sign-in is on |
 
 ## Architecture
 
