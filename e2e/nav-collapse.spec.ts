@@ -15,18 +15,19 @@ test('N01 the left menu collapses to icons and expands again; the choice is reme
   await expect(toggle).toBeVisible();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(toggle).toContainText('Collapse menu');
-  await expect(page.getByTestId('nav-S02').locator('span')).toBeVisible();
+  await expect(page.getByTestId('nav-section-design').locator('.nav-label')).toBeVisible();
   const wideNav = await navWidth(page);
   const wideMain = await mainWidth(page);
   expect(wideNav).toBeGreaterThan(180);
 
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByTestId('nav-S02').locator('span')).toBeHidden();
+  await expect(page.getByTestId('nav-section-design').locator('.nav-label')).toBeHidden();
   await expect.poll(() => navWidth(page)).toBe(64);
   expect(await mainWidth(page)).toBe(wideMain + (wideNav - 64));
   // every item keeps its name for hover and for screen readers, and still navigates
-  await expect(page.getByTestId('nav-S09')).toHaveAttribute('title', /Validate & Compare/);
+  await expect(page.getByTestId('nav-section-check')).toHaveAttribute('title', /^Check — /);
+  await page.getByTestId('nav-section-check').click();
   await page.getByTestId('nav-S09').click();
   await expect(page).toHaveURL(/\/validate/);
   await expect.poll(() => navWidth(page)).toBe(64);

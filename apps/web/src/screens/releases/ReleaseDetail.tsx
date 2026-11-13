@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { RELEASE_NOTE_MAX, RELEASE_STAGE_LABEL, RELEASE_STAGE_STATUS_LABEL, cleanReleaseNote, promoteProblem, releaseRoleProblem, supersededByPromotion, withdrawProblem, type ReleaseEvent, type ReleaseInfo, type ReleaseStage, type Role } from '@iss/model';
 import { ApiFailure, api, type ReleaseDetailDto } from '../../api/client';
 import { useStudio } from '../../state/store';
@@ -26,6 +27,7 @@ export function ReleaseDetail({ detail, releases, role, onChanged }: DetailProps
         <h2 className="rel-detail-title">Release {r.number}</h2>
         <span className={`chip ${st.cls}`} data-testid="rel-detail-standing">{st.label}</span>
         <Tech><span className="chip code">{r.id}</span></Tech>
+        <Link className="btn sm" style={{ marginLeft: 'auto' }} data-testid="rel-compare" to={`/studio/${r.documentId}/compare?before=r${r.number}`} title={`See what customers would see differently between release ${r.number} and another version`}>Compare with…</Link>
       </header>
       <StageStates r={r} />
       {r.documentRemoved && <div className="callout warning" role="status">The document this release came from was deleted{r.documentRemovedAt ? ` on ${fmtAbs(r.documentRemovedAt)}` : ''}. The release is kept as it was.</div>}

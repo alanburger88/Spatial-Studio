@@ -368,7 +368,7 @@ function Nav() {
           return (
             <li key={sec.id}>
               <Link to={to} className={current ? 'active' : ''} aria-current={current ? (single ? 'page' : 'true') : undefined} title={`${sec.label} — ${sec.hint} (Alt+${i + 1})`} data-testid={testId} data-section={sec.id}>
-                <Ico /><span className="nav-text"><span className="nav-label">{sec.label}</span><span className="nav-hint">{sec.hint}</span></span>
+                <Ico /><span className="nav-text"><span className="nav-label">{sec.label}</span><span className="nav-hint" aria-hidden="true">{sec.hint}</span></span>
               </Link>
             </li>
           );

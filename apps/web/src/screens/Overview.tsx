@@ -216,7 +216,7 @@ export function Overview() {
   const nextKey = nextIdx >= 0 && steps[nextIdx].state !== 'working' ? steps[nextIdx].key : null;
   const remaining = steps.filter((s) => s.state !== 'done' && s.state !== 'not-needed').length;
 
-  const stageText = (r: ReleaseInfo | null): string => (r ? `Release ${r.number} (version ${r.modelVersion})` : 'Nothing');
+  const stageText = (r: ReleaseInfo | null): string => (r ? `Release ${r.number} (version ${r.modelVersion})` : 'None yet');
   const goTo = (a: Step['action']) => (a.run ? a.run() : a.to && navigate(a.to));
 
   return (

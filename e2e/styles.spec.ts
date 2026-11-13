@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { API } from './helpers';
+import { gotoScreen } from './nav-helper';
 
 test('A4: new project from the Blank letter template, text style applied on the canvas, brand reaches exported HTML', async ({ page, request }) => {
   await page.goto('/projects');
@@ -11,7 +12,8 @@ test('A4: new project from the Blank letter template, text style applied on the 
   await page.getByTestId('new-project-title').fill('Styles e2e letter');
   await page.getByTestId('create-project').click();
 
-  await page.waitForURL(/\/studio\/[^/]+\/design/);
+  await page.waitForURL(/\/studio\/[^/]+\/overview/);
+  await gotoScreen(page, 'S02');
   const projectId = page.url().split('/studio/')[1].split('/')[0];
   try {
     await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');

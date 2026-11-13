@@ -313,4 +313,6 @@ export const api = {
   },
   packageDownloadUrl: (releaseId: string) => `/api/v1/releases/${releaseId}/package`,
   releaseTemplateUrl: (releaseId: string) => `/api/v1/releases/${releaseId}/template`,
+  /** The frozen project of a release (approved wording only, the same content as `template.json` in its package). It keeps the document's id, so it can be sent as `project` to the compose routes. */
+  releaseProject: (releaseId: string) => json<Project>(`/api/v1/releases/${releaseId}/template`),
 };

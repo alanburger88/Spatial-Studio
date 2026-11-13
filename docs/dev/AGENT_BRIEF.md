@@ -148,3 +148,15 @@ Verify with `npx tsc -p tsconfig.json --noEmit`, screenshots in light + dark (`T
 - **Format changes follow `docs/design/RELEASE_PACKAGE.md` ("Versioning"):** additions need no version change and readers ignore what they do not know; anything a reader could misread raises `PACKAGE_FORMAT_VERSION`. Change that document with the code.
 - **Composition is slow.** Tests replace it with `releasePackage: { composer }` in `buildApp`; build real PDFs in one test only.
 - Routes and shapes: `docs/api/RELEASES.md`.
+
+
+## Navigation (v0.11) — rules
+
+- **The left menu has eight entries by stage of work** (`SECTIONS` in `apps/web/src/shell/Shell.tsx`): Projects, Overview, Design, Rules & data, Explore, Check, Releases, Help & activity. The screens of a stage are **tabs** across the top of the main area (`shell/SectionTabs.tsx`). A screen keeps its id (S01–S21), its address and its page heading; only the menu changed.
+- **Test IDs.** A tab link carries the ID its old menu link had: `nav-S02`, `nav-S09`, … Menu entries are `nav-S01` (Projects), `nav-S19` (Overview) and `nav-section-<design|rules-data|explore|check|releases|help>`. A tab is only on the page while its section is current: from another section, open the section first (`e2e/nav-helper.ts` → `gotoScreen(page, 'S09')`).
+- **Adding a screen:** add it to `SCREENS` (next free id), to a section's `screens` list and to `TAB_LABEL` in `Shell.tsx`, and add its route in `App.tsx` with the same lazy pattern. Do not add a ninth menu entry without the product owner.
+- **Tab labels are short; the page heading stays the screen's own name** (for example tab "Layout", heading "Design Studio").
+- **Last-used tab:** a section opens on the tab last used there in this browser session (`useSectionMemory`, session storage), otherwise on its first tab.
+- **Alt+1 … Alt+8** open the 1st to 8th menu entry (on the remembered tab). Every screen is also in the command palette (Ctrl/Cmd+K).
+- **Opening a document lands on Overview** (`/studio/:project/overview`): from the gallery, after creating from a template, a setup or an import.
+- **Overview shows nothing invented.** Every count and sentence comes from the project in the store, the pure engines (coverage, blockers, translation status, pinned tests) or the API (releases, activity). A step that cannot be known says so; a step that does not apply says "Not needed" and why.

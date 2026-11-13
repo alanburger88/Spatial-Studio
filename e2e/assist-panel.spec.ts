@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { demoTool, open, pickRecord, resetAll } from './helpers';
+import { gotoScreen } from './nav-helper';
 
 /**
  * The assistant side panel ("Ask AI" on every studio screen), "Explain this", the change summary in history and review,
@@ -64,7 +65,7 @@ test('A01 "Ask AI" is on every studio screen but the assistant screen; Escape cl
   await expect(ask).toBeFocused();
   // the panel keeps following the screen: Rules & Data offers its own actions
   await ask.click();
-  await page.getByTestId('nav-S07').click();
+  await gotoScreen(page, 'S07');
   await expect(page.getByTestId('assist-sees')).toContainText('Rules & Data');
   await expect(page.locator('[data-testid="assist-action"][data-action="describe"]')).toBeVisible();
   await expect(page.locator('[data-testid="assist-action"][data-action="coverage"]')).toBeVisible();
@@ -104,13 +105,13 @@ test('A03 the Ask tab shares its conversation with the AI Assistant screen', asy
   await page.getByTestId('assistant-input').fill('What rules apply?');
   await page.getByTestId('assistant-send').click();
   await expect(panel(page).getByTestId('assistant-reply').first()).toBeVisible();
-  await page.getByTestId('nav-S12').click();
+  await gotoScreen(page, 'S12');
   await expect(page.getByTestId('assistant-view')).toBeVisible();
   await expect(panel(page)).toHaveCount(0); // the screen is the full-size version of the panel
   await expect(page.getByText('What rules apply?').first()).toBeVisible();
   await expect(page.getByTestId('assistant-reply').first()).toBeVisible();
   // and back: the panel (still open) shows the same single exchange
-  await page.getByTestId('nav-S02').click();
+  await gotoScreen(page, 'S02');
   await expect(panel(page)).toBeVisible();
   await page.getByTestId('assist-tab-chat').click();
   await expect(panel(page).getByTestId('assistant-reply')).toHaveCount(1);

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { API, open } from './helpers';
+import { gotoScreen } from './nav-helper';
 
 /**
  * Collaboration features with auth OFF (the default local mode): version history + restore, review workflow,
@@ -112,7 +113,7 @@ test('review: submit → approve → publish on a clean project, comments add/re
   await page.getByTestId('save-project').click();
   await expect(chip).toHaveAttribute('data-state', 'draft');
 
-  await page.getByTestId('nav-S14').click();
+  await gotoScreen(page, 'S14');
   await expect(page.getByTestId('activity-screen')).toBeVisible();
   const saveRow = page.getByTestId('activity-row').and(page.locator('[data-action="project.save"]')).first();
   await expect(saveRow).toContainText('Saved v');

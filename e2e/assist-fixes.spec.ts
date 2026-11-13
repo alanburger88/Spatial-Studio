@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { demoTool, open, resetAll } from './helpers';
+import { gotoScreen } from './nav-helper';
 
 test.beforeEach(async ({ request }) => { await resetAll(request); });
 
@@ -14,7 +15,7 @@ test('F01 a blocking priority tie gets a proposal whose effect is shown first; A
   await demoTool(page, 'seed-d01');
   await expect(dockText(page)).toContainText('blocking');
   await page.evaluate(() => localStorage.setItem('iss.validateScope', 'this'));
-  await page.getByTestId('nav-S09').click(); // in-app navigation keeps the unsaved defect
+  await gotoScreen(page, 'S09'); // in-app navigation keeps the unsaved defect
   await ready(page);
   const tie = page.locator('[data-testid^="issue-"][data-testid*="TIE"]').first();
   await tie.click();
@@ -40,7 +41,7 @@ test('F02 "No message matches": the fallback proposal resolves it', async ({ pag
   await demoTool(page, 'no-match-scenario');
   await page.getByTestId('demo-tools').getByRole('button', { name: 'Close demo tools' }).click();
   await page.evaluate(() => localStorage.setItem('iss.validateScope', 'this'));
-  await page.getByTestId('nav-S09').click(); // in-app navigation keeps the unsaved defect
+  await gotoScreen(page, 'S09'); // in-app navigation keeps the unsaved defect
   await ready(page);
   const issue = page.locator('[data-testid^="issue-"][data-testid*="MATCH"], [data-testid^="issue-"][data-testid*="FALLBACK"]').first();
   await issue.click();
@@ -56,7 +57,7 @@ test('F03 table overflow: the proposal is low risk, Fix all safe issues lists it
   await open(page, 'aster-card-demo', 'rules-data');
   await demoTool(page, 'seed-d03');
   await page.evaluate(() => localStorage.setItem('iss.validateScope', 'this'));
-  await page.getByTestId('nav-S09').click(); // in-app navigation keeps the unsaved defect
+  await gotoScreen(page, 'S09'); // in-app navigation keeps the unsaved defect
   await ready(page);
   await page.locator('[data-testid^="issue-"][data-testid*="FLOW_OVERFLOW"], [data-testid^="issue-"][data-testid*="TABLE_TOTAL"]').first().click();
   const card = page.getByTestId('fix-panel').getByTestId('assist-proposal').first();
@@ -103,7 +104,7 @@ test('F04 a missing translation offers a link to Content & Translations and no A
 test('F05 All customers shows proposals for a group, with the effect across the synthetic population', async ({ page }) => {
   await open(page, 'aster-card-demo', 'rules-data');
   await demoTool(page, 'seed-d01');
-  await page.getByTestId('nav-S09').click();
+  await gotoScreen(page, 'S09');
   await page.getByTestId('scope-all').click();
   await expect(page.getByTestId('blocker-group').first()).toBeVisible({ timeout: 60_000 });
   await page.locator('[data-testid="blocker-group"][data-code="EXCLUSIVE_PRIORITY_TIE"]').first().click();

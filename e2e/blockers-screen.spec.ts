@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { API, demoTool, open, resetAll } from './helpers';
+import { gotoScreen } from './nav-helper';
 
 const P = 'aster-card-demo';
 const H = 'harborcare-demo';
@@ -35,7 +36,7 @@ async function seedTieAndOpen(page: Page) {
   await open(page, P, 'rules-data');
   await demoTool(page, 'seed-d01');
   await page.getByTestId('demo-tools').getByRole('button', { name: 'Close demo tools' }).click();
-  await page.getByTestId('nav-S17').click();
+  await gotoScreen(page, 'S17');
   await expect(page.getByTestId('blockers-screen')).toBeVisible();
   await expect(page.getByTestId(`bl-row-${TIE}`)).toBeVisible({ timeout: 30_000 });
 }
@@ -45,7 +46,7 @@ async function seedOverflow(page: Page, request: APIRequestContext) {
   const id = await ownCopy(request, (card) => ({ ...card, transactions: many }));
   await open(page, P, 'rules-data');
   await store(page, `window.__iss.store.getState().dispatch({ type: 'UPDATE_NODE', nodeId: 'transaction-table', patch: { flowContinuation: false } })`);
-  await page.getByTestId('nav-S17').click();
+  await gotoScreen(page, 'S17');
   await expect(page.getByTestId('blockers-screen')).toBeVisible();
   return id;
 }
@@ -163,7 +164,7 @@ test('B05 the status bar opens the screen; Resolve in Blockers from Validate & C
 
   // 2. Validate & Compare, This customer
   await page.evaluate(() => localStorage.setItem('iss.validateScope', 'this'));
-  await page.getByTestId('nav-S09').click();
+  await gotoScreen(page, 'S09');
   await expect(page.getByTestId('validation-list')).toBeVisible({ timeout: 90_000 });
   await expect(page.getByTestId('validate-view')).toContainText(/up to date/, { timeout: 90_000 });
   await page.locator('[data-testid^="issue-"][data-testid*="TIE"]').first().click();
@@ -173,7 +174,7 @@ test('B05 the status bar opens the screen; Resolve in Blockers from Validate & C
   await expect(page.getByTestId('bl-detail')).toHaveAttribute('data-blocker', TIE);
 
   // 3. Validate & Compare, All customers: a link on each row
-  await page.getByTestId('nav-S09').click();
+  await gotoScreen(page, 'S09');
   await page.getByTestId('scope-all').click();
   const group = page.locator('[data-testid="blocker-group"][data-code="EXCLUSIVE_PRIORITY_TIE"]').first();
   await expect(group).toBeVisible({ timeout: 60_000 });

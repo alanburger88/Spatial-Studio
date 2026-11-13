@@ -9,13 +9,16 @@ import { API, demoTool, open, pickRecord, resetAll, setView } from './helpers';
 
 test.beforeEach(async ({ request }) => { await resetAll(request); });
 
-test('U01 menu is grouped by job and keeps every screen; top bar controls are labelled', async ({ page }) => {
+test('U01 menu follows the stage of work (eight entries, screens as tabs); top bar controls are labelled', async ({ page }) => {
   await open(page, 'aster-card-demo', 'design');
   const nav = page.getByRole('navigation', { name: 'Studio views' });
-  for (const g of ['Build', 'Explore', 'Check & publish', 'Help & admin']) await expect(nav.getByRole('group', { name: g })).toBeVisible();
-  await expect(nav.getByRole('link')).toHaveCount(18);
-  await expect(nav.getByRole('group', { name: 'Build' }).getByRole('link')).toHaveText(['Design Studio', 'Rules & Data', 'Data Explorer', 'Content & Translations', 'Email & SMS']);
-  await expect(nav.getByRole('group', { name: 'Check & publish' }).getByRole('link')).toHaveText(['Validate & Compare', 'Blockers', 'Preview & Export', 'Releases']);
+  await expect(nav.getByRole('link')).toHaveCount(8);
+  await expect(nav.locator('.nav-label')).toHaveText(['Projects', 'Overview', 'Design', 'Rules & data', 'Explore', 'Check', 'Releases', 'Help & activity']);
+  await expect(nav.getByRole('link', { name: 'Design' })).toHaveAttribute('aria-current', 'true');
+  await expect(page.getByRole('navigation', { name: 'Design screens' }).getByRole('link')).toHaveText(['Layout', 'Wording & translations', 'Email & SMS']);
+  await expect(page.getByTestId('nav-S02')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('nav-section-check')).toHaveAttribute('title', /What stops this document going out/);
+  await page.getByTestId('nav-section-check').click();
   await expect(page.getByTestId('nav-S09')).toHaveAttribute('title', /Check the document for problems/);
   const bar = page.getByRole('banner');
   await expect(bar.getByText('Previewing as')).toBeVisible();

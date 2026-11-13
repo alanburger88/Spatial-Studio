@@ -5,6 +5,7 @@
 import { test, expect } from '@playwright/test';
 import { API, EXPECTED, cardAction, demoTool, dragAfter, node, open, pdfText, resetAll, state, pickRecord, showLeftPanel } from './helpers';
 import type { Page } from '@playwright/test';
+import { gotoScreen } from './nav-helper';
 
 async function layer(page: Page, id: string) {
   await showLeftPanel(page);
@@ -167,7 +168,7 @@ test('AT-09 forced R03/R04 tie at equal priority is a blocking finding with no w
   await expect(page.getByTestId('trace-findings')).toContainText('EXCLUSIVE_PRIORITY_TIE');
   const sel = await page.evaluate(() => { const s = (window as any).__iss.store.getState(); return s.project.rules.find((r: any) => r.id === 'R03').priority; });
   expect(sel).toBe(400);
-  await page.getByTestId('nav-S03').click();
+  await gotoScreen(page, 'S03');
   await expect(page.getByRole('alert').filter({ hasText: 'Unresolved' }).first()).toBeVisible();
 });
 
@@ -531,7 +532,7 @@ test('AT-36 Guided demo start → finish → reset twice: no stale state, determ
       await page.getByTestId('banner-next').click();
     }
     await expect(page.getByTestId('banner-next')).toHaveText('Finish', { timeout: 90000 });
-    await page.getByTestId('nav-S11').click();
+    await gotoScreen(page, 'S11');
     await expect(page.locator('[data-testid^="checkpoint-"]')).toHaveCount(12);
     await expect(page.locator('[data-testid^="checkpoint-"]').filter({ hasText: 'failed' })).toHaveCount(0);
   }

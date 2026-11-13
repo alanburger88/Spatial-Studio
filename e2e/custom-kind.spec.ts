@@ -6,6 +6,7 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { API } from './helpers';
 import { gymProject } from '../packages/model/test/helpers/customProject';
+import { gotoScreen } from './nav-helper';
 
 const created: string[] = [];
 test.beforeEach(() => { created.length = 0; });
@@ -114,7 +115,8 @@ test('C01 New project, Blank project: issuer name and colour, an empty page, a g
   await page.getByTestId('blank-accent').fill('#1f4e79');
   await expect(page.getByTestId('blank-accent-hex')).toHaveValue('#1f4e79');
   await page.getByTestId('create-project').click();
-  await page.waitForURL(/\/studio\/membership-notice-c01\/design/);
+  await page.waitForURL(/\/studio\/membership-notice-c01\/overview/);
+  await gotoScreen(page, 'S02');
   created.push(idFromUrl(page));
   await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
 
@@ -436,7 +438,7 @@ test('C07 save it as a template, start a project from it (it gets its own custom
   await card.click();
   await page.getByTestId('new-project-title').fill('From template C07');
   await page.getByTestId('create-project').click();
-  await page.waitForURL(/\/studio\/from-template-c07\/design/);
+  await page.waitForURL(/\/studio\/from-template-c07\/overview/);
   created.push(idFromUrl(page));
   await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
   const fromTemplate = await customersOf(request, 'from-template-c07');
@@ -455,7 +457,7 @@ test('C07 save it as a template, start a project from it (it gets its own custom
   await expect(page.getByTestId('import-project-report')).toBeVisible();
   await page.getByTestId('import-project-title').fill('Imported C07');
   await page.getByTestId('import-project-confirm').click();
-  await page.waitForURL(/\/studio\/imported-c07\/design/);
+  await page.waitForURL(/\/studio\/imported-c07\/overview/);
   created.push(idFromUrl(page));
   await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
   expect(await store(page, (s) => s.project.documentType)).toBe('custom');
@@ -487,7 +489,7 @@ test('C08 the two sample projects are unaffected: their customers, and New proje
   await page.getByTestId('blank-letter-data').selectOption('eob');
   await page.getByTestId('new-project-title').fill('Letter C08');
   await page.getByTestId('create-project').click();
-  await page.waitForURL(/\/studio\/letter-c08\/design/);
+  await page.waitForURL(/\/studio\/letter-c08\/overview/);
   created.push(idFromUrl(page));
   await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
   expect(await store(page, (s) => s.project.documentType)).toBe('eob');

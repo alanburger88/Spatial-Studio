@@ -65,7 +65,7 @@ async function draftFromData(page: Page, title: string, data = MEMBERS_JSON) {
 }
 async function createAndOpen(page: Page) {
   await page.getByTestId('setup-create').click();
-  await page.waitForURL(/\/studio\/[^/]+\/design/);
+  await page.waitForURL(/\/studio\/[^/]+\/overview/);
   created.push(idFromUrl(page));
   await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
   return idFromUrl(page);

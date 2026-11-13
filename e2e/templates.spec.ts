@@ -53,7 +53,7 @@ test('T01 save as template, start a project from it, and the card says where it 
   await expect(page.getByTestId('template-version')).toHaveCount(0);
   await page.getByTestId('new-project-title').fill('Spring statement e2e');
   await page.getByTestId('create-project').click();
-  await expect(page).toHaveURL(/\/studio\/spring-statement-e2e\/design/);
+  await expect(page).toHaveURL(/\/studio\/spring-statement-e2e\/overview/);
   created.push(idFromUrl(page));
 
   await gallery(page);
@@ -80,7 +80,7 @@ test('T02 a second save adds version 2; the older version stays usable', async (
   await expect(page.getByTestId('template-detail')).toContainText('Version 1 saved by');
   await page.getByTestId('new-project-title').fill('From first version');
   await page.getByTestId('create-project').click();
-  await expect(page).toHaveURL(/\/studio\/from-first-version\/design/);
+  await expect(page).toHaveURL(/\/studio\/from-first-version\/overview/);
   created.push(idFromUrl(page));
   const p = (await (await request.get(`${API}/projects/from-first-version`)).json()).project;
   expect(p.issuer.product).toBe(original);
@@ -140,7 +140,7 @@ test('T05 import a project file as a new draft; the original is unchanged', asyn
   await expect(page.getByTestId('import-project-title')).toHaveValue(file.title);
   await page.getByTestId('import-project-title').fill('Imported aster e2e');
   await page.getByTestId('import-project-confirm').click();
-  await expect(page).toHaveURL(/\/studio\/imported-aster-e2e\/design/);
+  await expect(page).toHaveURL(/\/studio\/imported-aster-e2e\/overview/);
   created.push(idFromUrl(page));
 
   await gallery(page);

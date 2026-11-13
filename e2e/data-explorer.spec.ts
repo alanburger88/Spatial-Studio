@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { API, open, resetAll } from './helpers';
+import { gotoScreen } from './nav-helper';
 
 const P = 'aster-card-demo';
 const H = 'harborcare-demo';
@@ -37,7 +38,7 @@ async function ownCopy(request: APIRequestContext, sampleId = 'CARD-0001') {
 
 test('D01 opens from the menu; customers are grouped; a sample shows nested sections and its transactions, read-only', async ({ page }) => {
   await open(page, P, 'rules-data');
-  await page.getByTestId('nav-S16').click();
+  await gotoScreen(page, 'S16');
   await expect(page.getByTestId('data-explorer')).toBeVisible();
   await expect(page).toHaveURL(/\/studio\/aster-card-demo\/data/);
   await expect(page.getByTestId('dx-list')).toBeVisible();
@@ -390,7 +391,7 @@ test('D09 unsaved edits: switching customer or leaving the screen asks first', a
   await expect(page.getByTestId('dx-f-customer.givenName')).toHaveValue('Changed');
 
   // the menu asks too
-  await page.getByTestId('nav-S02').click();
+  await gotoScreen(page, 'S02');
   await expect(page.getByTestId('dx-leave-dialog')).toBeVisible();
   await page.getByTestId('dx-leave-stay').click();
   await expect(page).toHaveURL(/\/data/);
