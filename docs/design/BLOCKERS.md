@@ -31,6 +31,21 @@ Status: **design agreed in a workshop with the product owner on 2026-11-13 (eigh
 - **"Fixed" is earned, not claimed.** Nobody can set it by hand. A fixed blocker stays listed under "Fixed" until the document's next approval, then drops off.
 - **Sample customers stay read-only.** For a data problem in a sample customer the choices are: mark it as a known data problem, or make an editable copy in Data Explorer.
 
+## Every place that shows a blocker links to resolving it
+
+Asked by the product owner on 2026-11-13; the answer is yes, and it is part of phase 1. Wherever the studio mentions a blocker, one click opens the Blockers screen on that blocker, ready to resolve:
+
+- the status bar count (every screen);
+- Validate & Compare: each blocking issue, and the "All customers" list;
+- the Review panel's "Ready to approve?" list;
+- Content & Translations: "N customers are blocked until these are approved";
+- Data Explorer: blocking issues in "What this customer gets";
+- Preview & Export and batch runs: a customer who cannot be issued the document;
+- Generate test customers: a generated customer that is blocked;
+- the Design Studio inspector's Review tab for a component.
+
+Existing links that jump straight to where a fix is made (a rule, a message, a field) stay; the link to Blockers is added beside them.
+
 ## The screen (sketch)
 
 1. **Summary bar:** customers who can be issued the document, customers stopped, blockers by kind, time of the last full check, "Run full check", "Resolve one by one".
