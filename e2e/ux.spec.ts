@@ -23,6 +23,31 @@ test('U01 menu is grouped by job and keeps every screen; top bar controls are la
   await expect(page.getByTestId('save-state')).toHaveText(/Saved · v\d+/);
 });
 
+test('U12 official InfoSlips logo: icon on a laptop-sized window, full logo on a wide one, artwork follows the theme', async ({ page }) => {
+  const shown = () => page.locator('header.topbar img.brand-img').evaluateAll((els) => els.filter((e) => (e as HTMLElement).offsetParent).map((e) => ({ src: (e as HTMLImageElement).src, natural: (e as HTMLImageElement).naturalWidth, w: Math.round(e.getBoundingClientRect().width), h: Math.round(e.getBoundingClientRect().height) })));
+  await open(page, 'aster-card-demo', 'design');
+  let imgs = await shown();
+  expect(imgs).toHaveLength(1);
+  expect(imgs[0].src).toContain('infoslips-icon');
+  expect(imgs[0].natural).toBeGreaterThan(0);
+  expect(imgs[0].w).toBeGreaterThanOrEqual(24); // brand minimum for the icon
+  await page.setViewportSize({ width: 1700, height: 900 });
+  await expect(page.getByTestId('brand-logo')).toBeVisible();
+  imgs = await shown();
+  expect(imgs).toHaveLength(1);
+  expect(imgs[0].src).toContain('infoslips-logo-on-light');
+  expect(imgs[0].w).toBeGreaterThanOrEqual(120); // brand minimum for the full logo
+  expect(Math.abs(imgs[0].w / imgs[0].h - 576 / 136)).toBeLessThan(0.1); // never stretched
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('theme-dark').click();
+  imgs = await shown();
+  expect(imgs).toHaveLength(1);
+  expect(imgs[0].src).toContain('infoslips-logo-on-dark');
+  expect(imgs[0].natural).toBeGreaterThan(0);
+  expect(await page.locator('link[rel=icon]').getAttribute('href')).toBe('/favicon.png');
+  expect((await page.request.get('/favicon.png')).ok()).toBeTruthy();
+});
+
 test('U02 settings menu holds detail level, theme, tour and shortcuts; choices persist', async ({ page }) => {
   await open(page, 'aster-card-demo', 'design');
   await page.getByTestId('open-settings').click();

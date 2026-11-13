@@ -65,13 +65,3 @@ export const C = {
   'qr-code': P('M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2'),
   'expandable-explanation': P('M4 6h16M4 12h10M4 18h7M17 15l3 3-3 3'),
 } as Record<string, (p: SVGProps<SVGSVGElement>) => JSX.Element>;
-
-export function BrandMark() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M6 22l10-5 10 5-10 5z" fill="#4EAF60" />
-      <path d="M6 16l10-5 10 5-10 5z" fill="#80D100" opacity=".85" />
-      <path d="M6 10l10-5 10 5-10 5z" fill="#DBE64C" opacity=".75" />
-    </svg>
-  );
-}

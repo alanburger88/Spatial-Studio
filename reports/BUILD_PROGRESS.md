@@ -22,7 +22,7 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
 | Unit tests | 114/114 |
-| Browser tests | 89/89 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 11 v0.4 UX tests) |
+| Browser tests | 90/90 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 12 v0.4 UX tests) |
 | Build | OK |
 
 ## v0.2 additions (all verified by the tests above)
@@ -61,7 +61,7 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 - Design Studio: the component list starts closed on windows under 1500 px, so the page shows at 100% at 1440×900 (was about 69%).
 - 3D Cube: a crowded X axis shows full persona names, slanted; a wireframe plane no longer hides labels.
 - Export history: a rebuilt PDF hides the earlier entry but its file and link keep working.
-- Logo: the brand guidance available to the build has no logo files, so the wordmark slot stays.
+- Logo: the official InfoSlips artwork was supplied afterwards and is now in the top bar, the sign-in page and the browser tab (D53). Exported documents keep the issuer's own brand.
 
 ## Not verified / open
 
@@ -69,7 +69,6 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 - **Firefox/Safari:** smoke test not run.
 - **Assistive technology:** screen-reader manual pass not run.
 - **Deployment:** none; not authorised.
-- **Brand logo:** not bundled. The InfoSlips brand guidance available to the build has no logo files and forbids redrawing; official PNG artwork is still needed (slot ready).
 - **Load time:** the size reduction is measured from the build output; no timing was taken on a slow network or a hosted server.
 - **UX pass:** checked in Chromium at 1440×900, 1280×720 and 1000×700, light and dark; not every screen was inspected by eye in every theme/size/view combination, and no usability test with real users has been run.
 - **Windows:** scripts made cross-platform but not executed on Windows here; Docker image built and smoke-tested on Linux.

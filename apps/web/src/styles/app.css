@@ -24,10 +24,14 @@ a { color: var(--iss-accent-strong); }
 .shell.nav-collapsed { --nav-w: 64px; }
 .topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 14px; background: var(--iss-topbar-bg); border-bottom: 1px solid var(--iss-border); min-width: 0; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--iss-text); white-space: nowrap; }
-.brand-mark { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--iss-slate-1); border: 1px solid var(--iss-border-strong); }
-.brand-name { font-weight: 800; letter-spacing: -.01em; font-size: 16px; }
-.brand-name span { font-weight: 400; color: var(--iss-text-muted); }
-.brand-logo { height: 22px; width: 92px; background: var(--iss-logo-url) left center / contain no-repeat; display: none; }
+.brand-name { font-weight: 500; font-size: 14px; color: var(--iss-text-muted); padding-left: 10px; border-left: 1px solid var(--iss-border-strong); }
+/* Official InfoSlips artwork (ui/Brand.tsx): shown as supplied, switching between the light- and dark-background versions with the theme. */
+.brand-img { display: block; height: auto; max-width: none; }
+.brand-img-full { display: inline-flex; }
+.brand-img.on-dark, :root[data-theme='dark'] .brand-img.on-light { display: none; }
+:root[data-theme='dark'] .brand-img.on-dark { display: block; }
+.brand-wide, .brand-narrow { display: inline-flex; align-items: center; padding: 4px 2px; }
+.brand-narrow { display: none; }
 .topbar .spacer { flex: 1; }
 .topbar-group { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .topbar label.field-inline { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--iss-text-muted); }
@@ -221,7 +225,6 @@ a { color: var(--iss-accent-strong); }
 :root[data-view='technical'] .biz-only { display: none !important; }
 
 @media (max-width: 1440px) {
-  .topbar .brand-name span { display: none; }
   .rp-trigger { min-width: 0; max-width: 280px; }
   .rp-trigger .rp-id { display: none; }
 }
@@ -240,7 +243,8 @@ a { color: var(--iss-accent-strong); }
 .rp > .rp-trigger { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; }
 /* Narrow desktops: drop secondary text first so the customer and output controls keep their room. */
 @media (max-width: 1520px) {
-  .topbar .brand-name { display: none; }
+  .topbar .brand-name, .topbar .brand-wide { display: none; }
+  .topbar .brand-narrow { display: inline-flex; }
   .crumbs > a, .crumbs > span { display: none; }
 }
 

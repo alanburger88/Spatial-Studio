@@ -1,7 +1,7 @@
 /*
  * InfoSlips Spatial Studio design tokens.
  * Brand palette and typography from the InfoSlips brand system (greens, slate scale, Inter).
- * Logo artwork is not bundled in this environment: the shell uses a replaceable wordmark slot (--iss-logo-url).
+ * Logo artwork: official InfoSlips PNGs in src/assets/brand, rendered by ui/Brand.tsx.
  * Functional status colours (warning amber, error coral) are retained for unambiguous diagnostics.
  */
 :root {
@@ -18,7 +18,6 @@
   --iss-slate-5: #CBD5E1;
   --iss-slate-6: #E2E8F0;
   --iss-slate-7: #F1F5F9;
-  --iss-logo-url: none;
 
   /* Workstation surfaces (dark slate shell, bright paper) */
   --iss-shell: #0A1120;

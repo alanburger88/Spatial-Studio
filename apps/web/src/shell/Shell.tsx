@@ -3,7 +3,8 @@ import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } f
 import { ROLE_LABEL, type ProfileId } from '@iss/model';
 import { editBlockedReason, personaLabel, useIsDirty, useModelChecks, useResolution, useStudio } from '../state/store';
 import { RecordPicker, recordSummary } from './RecordPicker';
-import { BrandMark, Icon } from '../ui/icons';
+import { Icon } from '../ui/icons';
+import { BrandLogo } from '../ui/Brand';
 import { Biz, ErrorState, Loading, Named, Tech, Toasts } from '../ui/common';
 import { nodeTitle } from '../ui/plain';
 import { DemoBanner } from '../screens/GuidedDemo';
@@ -128,9 +129,9 @@ function TopBar() {
   return (
     <header className="topbar">
       <Link to="/projects" className="brand" aria-label="InfoSlips Spatial Studio — project gallery">
-        <span className="brand-mark"><BrandMark /></span>
-        <span className="brand-logo" aria-hidden="true" />
-        <span className="brand-name">InfoSlips <span>Spatial Studio</span></span>
+        <span className="brand-wide"><BrandLogo height={30} /></span>
+        <span className="brand-narrow"><BrandLogo variant="icon" height={30} /></span>
+        <span className="brand-name">Spatial Studio</span>
       </Link>
       <span className="badge-synthetic" title="All customers, accounts, claims and organisations are fictional. AFP output is a simulation.">Synthetic<span className="badge-more"> data</span></span>
       {project && (

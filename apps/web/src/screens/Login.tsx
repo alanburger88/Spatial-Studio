@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiFailure } from '../api/client';
 import { useStudio } from '../state/store';
-import { BrandMark } from '../ui/icons';
+import { BrandLogo } from '../ui/Brand';
 import './Activity.css';
 
 /** Sign-in page (only reachable/needed when the API runs with AUTH=on). */
@@ -34,7 +34,7 @@ export function Login() {
   return (
     <main className="login-page" id="main">
       <form className="login-card" onSubmit={submit} aria-labelledby="login-title" data-testid="login-form">
-        <div className="login-brand"><BrandMark /> <span>InfoSlips <strong>Spatial Studio</strong></span></div>
+        <div className="login-brand"><BrandLogo height={34} alt="InfoSlips" /> <strong>Spatial Studio</strong></div>
         <h1 id="login-title">Sign in</h1>
         <p className="muted">Use the account your studio admin created for you.</p>
         <label className="field"><span className="label">Email</span>
