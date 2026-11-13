@@ -235,7 +235,7 @@ export function Grid({ table, onChange, rowProblems, locale, disabled, onPaste, 
         <button type="button" className="btn sm danger" disabled={disabled || n === 0} onClick={() => removeRow(r)} data-testid="lk-remove-row"><Icon.trash /> Remove row {n ? r + 1 : ''}</button>
         <span className="muted lk-count" data-testid="lk-rowcount">{n.toLocaleString('en-US')} row{n === 1 ? '' : 's'} of at most 5,000</span>
       </div>
-      <div ref={box} className="lk-grid" role="grid" aria-label={`Rows of ${table.title}`} aria-rowcount={n + 1} aria-colcount={cols.length + 1} data-testid="lk-grid"
+      <div ref={box} className={`lk-grid${disabled ? ' lk-readonly' : ''}`} role="grid" aria-readonly={disabled || undefined} aria-label={`Rows of ${table.title}`} aria-rowcount={n + 1} aria-colcount={cols.length + 1} data-testid="lk-grid"
         onScroll={(e) => setScrollTop((e.target as HTMLElement).scrollTop)} onKeyDown={onKeyDown}
         onPaste={(e) => { const t = e.clipboardData.getData('text'); if (!editing && t && !disabled) { e.preventDefault(); onPaste(t); } }}>
         <div role="row" aria-rowindex={1} className="lk-row lk-headrow" style={{ height: ROW_HEIGHT }}>
