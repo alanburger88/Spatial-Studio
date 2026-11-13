@@ -107,7 +107,7 @@ export function CommandPalette() {
     const sel = st.ctx.selectedNodeId;
     for (const s of SCREENS) {
       if (s.path !== '/projects' && !(inStudio && pid)) continue;
-      const to = s.path.startsWith('/') ? s.path : `/studio/${pid}/${s.path}${s.path === 'exploded' ? `/${sel ?? project?.nodes.find((n) => n.type === 'variant-set')?.id ?? 'payment-guidance'}` : ''}`;
+      const to = s.path.startsWith('/') ? s.path : `/studio/${pid}/${s.path}${s.path === 'exploded' ? `/${sel ?? project?.nodes.find((n) => n.type === 'variant-set')?.id ?? (project?.documentType === 'custom' ? '' : 'payment-guidance')}`.replace(/\/$/, '') : ''}`;
       const idx = SCREENS.indexOf(s);
       out.push({ kind: 'view', id: s.id, label: s.label, tag: s.id, hint: inStudio && idx >= 1 && idx <= 9 ? `Alt+${idx}` : undefined, haystack: `${s.label} ${s.id} view go to`.toLowerCase(), run: go(to) });
     }
@@ -139,7 +139,7 @@ export function CommandPalette() {
     act('activity', 'Open activity log', () => navigate(inStudio && pid ? `/studio/${pid}/activity` : '/activity'), undefined, 'audit log who changed what when');
     act('shortcuts', 'Open keyboard shortcuts', () => useShellUi.getState().setShortcuts(true), '?', 'help keys');
     act('tour', 'Take the tour', () => useShellUi.getState().setTour(true), undefined, 'help onboarding walkthrough');
-    act('demo', 'Start guided demo', () => { void useDemo.getState().start((to: string) => navigate(to)); }, undefined, 'walkthrough narrative');
+    if (project?.documentType !== 'custom') act('demo', 'Start guided demo', () => { void useDemo.getState().start((to: string) => navigate(to)); }, undefined, 'walkthrough narrative');
     return out;
   }, [open, inStudio, project, records, personas, projects, theme, viewMode, past, future, navigate]);
 

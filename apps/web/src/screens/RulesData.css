@@ -209,3 +209,11 @@
 .rd-finding { border-width: 0 0 0 4px; border-radius: 6px; margin-bottom: 6px; }
 .rd-cond { border-radius: 8px; background: var(--iss-surface-sunken); border-color: transparent; }
 @media (max-width: 1100px) { .rd-row { grid-template-columns: minmax(0, 1fr); } }
+
+/* A document with its own data: no data fields yet, and where its customers come from. */
+.rd-nofields { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; justify-content: space-between; }
+.rd-nofields span { color: var(--iss-text-muted); }
+.rd-owncust { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-left: auto; font-size: 12.5px; }
+.rd-owncust-lbl { color: var(--iss-text-muted); font-weight: 600; }
+.rd-owncust-confirm { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rd-owncust-note { max-width: 360px; }

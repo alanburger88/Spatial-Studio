@@ -3,11 +3,15 @@ import type { Persona, SyntheticRecord } from '@iss/model';
 import { Icon } from '../ui/icons';
 import './RecordPicker.css';
 
+/** A customer that was supplied (imported or added) for one document, as opposed to a sample or a generated one. */
+export const isSupplied = (r: SyntheticRecord) => !!r.projectId && !r.generated;
+
 /** Human label for a record: name plus persona (card) or claim status (EOB). */
 export function recordSummary(r: SyntheticRecord, personas: Persona[]) {
   const name = `${r.customer.givenName} ${r.customer.familyName}`;
   const persona = r.personaId ? personas.find((p) => p.id === r.personaId)?.name ?? r.personaId : null;
   const claim = (r.claims?.[0] as { status?: string } | undefined)?.status ?? null;
+  // A document with its own data has no persona or claim status: a generated customer is described by why it exists (shown beside it), a supplied one by its name.
   return { name, tag: persona ?? (claim ? claim.replace(/-/g, ' ') : null), locale: r.customer.locale };
 }
 
@@ -33,7 +37,7 @@ export function RecordPicker({ records, personas, value, onChange }: { records: 
       const s = recordSummary(r, personas);
       return `${r.recordId} ${s.name} ${s.tag ?? ''} ${s.locale ?? ''} ${r.generated?.label ?? ''}`.toLowerCase().includes(needle);
     });
-    // Samples and imported customers first, then the ones generated for this document (own group).
+    // Samples, imported and supplied customers first, then the ones generated for this document (own group).
     return [...hit.filter((r) => !r.generated), ...hit.filter((r) => r.generated)];
   }, [records, personas, q]);
 
@@ -59,9 +63,9 @@ export function RecordPicker({ records, personas, value, onChange }: { records: 
   return (
     <div className="rp" ref={root}>
       <button type="button" className="rp-trigger select" data-testid="record-selector" data-value={value} aria-haspopup="listbox" aria-expanded={open}
-        aria-label={`Synthetic customer: ${cur ? `${cur.name}${cur.tag ? `, ${cur.tag}` : ''}${current?.generated ? ', generated test customer' : ''} (${value})` : value}. Change customer`}
+        aria-label={`Synthetic customer: ${cur ? `${cur.name}${cur.tag ? `, ${cur.tag}` : ''}${current?.generated ? ', generated test customer' : current && isSupplied(current) ? ', supplied customer' : ''} (${value})` : value}. Change customer`}
         onClick={() => setOpen((o) => !o)} onKeyDown={(e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); } }}>
-        <span className="rp-name">{cur?.name ?? value}</span>
+        <span className="rp-name">{cur?.name ?? (value || 'No customer')}</span>
         {cur?.tag && <span className="rp-tag">{cur.tag}</span>}
         <span className="rp-id mono">{value}</span>
       </button>
@@ -84,6 +88,7 @@ export function RecordPicker({ records, personas, value, onChange }: { records: 
                   {s.tag && <span className="rp-tag">{s.tag}</span>}
                   {s.locale && s.locale !== 'en-US' && <span className="rp-tag lang">{s.locale}</span>}
                   {r.generated && <span className="rp-tag gen" data-testid="record-generated-chip">Generated</span>}
+                  {isSupplied(r) && <span className="rp-tag" data-testid="record-supplied-chip">Supplied</span>}
                   {r.generated ? <span className="rp-why" title={r.generated.label}>{r.generated.label}</span> : null}
                   <span className="rp-id mono">{r.recordId}</span>
                 </li>

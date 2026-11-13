@@ -61,6 +61,7 @@ export function ScenarioLandscape() {
 
   const facetDims = useMemo<Array<{ dim: DimensionId; label: string }>>(() => {
     if (!project) return [];
+    if (project.documentType === 'custom') return [{ dim: 'persona', label: 'Customer' }, { dim: 'language', label: 'Language' }];
     return project.documentType === 'eob'
       ? [{ dim: 'claimStatus', label: 'Claim status' }, { dim: 'networkStatus', label: 'Network' }, { dim: 'language', label: 'Language' }]
       : [{ dim: 'persona', label: 'Persona' }, { dim: 'paymentStatus', label: 'Payment' }, { dim: 'language', label: 'Language' }, { dim: 'accountTier', label: 'Tier' }];

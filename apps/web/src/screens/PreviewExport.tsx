@@ -896,7 +896,7 @@ function BatchTab() {
           <h2 className="bx-h">Which {noun}?</h2>
           <div className="bx-radios" role="radiogroup" aria-label="Records to include">
             <label><input type="radio" name="bx-pick" checked={pick === 'all'} onChange={() => setPick('all')} disabled={running} /> All {pool.length} {noun}</label>
-            <label><input type="radio" name="bx-pick" checked={pick === 'filter'} onChange={() => setPick('filter')} disabled={running} /> Filter by {project.documentType === 'eob' ? 'persona or claim status' : 'persona'}</label>
+            {project.documentType !== 'custom' && <label><input type="radio" name="bx-pick" checked={pick === 'filter'} onChange={() => setPick('filter')} disabled={running} /> Filter by {project.documentType === 'eob' ? 'persona or claim status' : 'persona'}</label>}
             <label><input type="radio" name="bx-pick" checked={pick === 'selected'} onChange={() => setPick('selected')} disabled={running} /> Selected {noun}</label>
           </div>
           {pick === 'filter' && (
@@ -928,7 +928,7 @@ function BatchTab() {
                 {visible.map((r) => (
                   <li key={r.recordId}>
                     <label><input type="checkbox" checked={chosen.has(r.recordId)} disabled={running} onChange={(e) => setChosen((c) => { const n = new Set(c); if (e.target.checked) n.add(r.recordId); else n.delete(r.recordId); return n; })} />
-                      <span className="bx-nm">{nameOf(r)}</span><span className="muted bx-sub">{r.personaId ? personas.find((p) => p.id === r.personaId)?.name ?? r.personaId : ''}</span><Tech><span className="mono muted bx-sub">{r.recordId}</span></Tech></label>
+                      <span className="bx-nm">{nameOf(r)}</span><span className="muted bx-sub">{r.personaId ? personas.find((p) => p.id === r.personaId)?.name ?? r.personaId : r.generated?.label ?? ''}</span><Tech><span className="mono muted bx-sub">{r.recordId}</span></Tech></label>
                   </li>
                 ))}
                 {visible.length === 0 && <li className="muted bx-none">No {noun} match “{search}”.</li>}

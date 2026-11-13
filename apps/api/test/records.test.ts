@@ -42,7 +42,8 @@ describe('data explorer: customers that belong to a document', () => {
     expect(copiedFrom).toBe('CARD-0002');
     expect(copyId).toMatch(/^CARD-6\d{4}$/);
     expect(record).toMatchObject({ projectId: P, documentType: 'credit-statement', customer: sample.customer });
-    expect(record.personaId).toBeUndefined();
+    // the kind of customer (persona) carries over, so the copy is still described the same way
+    expect(record.personaId).toBe(sample.personaId);
     expect(record.card.transactions).toEqual(sample.card.transactions);
     expect(outcome.messages.find((m: any) => m.nodeId === 'payment-guidance').variant).toBe('Assistance requested');
     expect((await records(P)).find((r) => r.recordId === copyId)).toBeTruthy();

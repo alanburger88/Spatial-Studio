@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CATALOG_BY_TYPE, projectFields, getPath, nodeMap, requiredNodeIds, applyCommand, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
+import { CATALOG_BY_TYPE, projectFields, tableColumnsFor, defaultFormatterFor, getPath, nodeMap, requiredNodeIds, applyCommand, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
 import { useScenarioEngine, useStudio } from '../../state/store';
 import { Icon } from '../../ui/icons';
@@ -16,10 +16,20 @@ import { api } from '../../api/client';
 import { NeedsAi, useBusy } from '../../assist/common';
 import { GuardedSuggestion, WritingHelp, recordAssist, useReadOnlyReason } from '../../assist/WritingHelp';
 
+/**
+ * The fields a one-line condition can test. The two sample kinds keep their numbers, amounts, choices and yes/no fields;
+ * a document with its own data also offers its text and date fields (and the calculated row counts of its lists), since
+ * those are most of what it has.
+ */
+function conditionFields(project: Project): FieldDef[] {
+  const own = project.documentType === 'custom';
+  return projectFields(project).filter((f) => f.type !== 'array' && f.path !== 'documentType' && f.path !== 'recordId' && (own || (f.type !== 'string' && f.type !== 'date')));
+}
+
 /** Single-condition editor with a live before-you-save impact preview. */
 function ConditionEditor({ project, initial, command, onDone, label }: { project: Project; initial: Predicate | null | undefined; command: (when: Predicate | null) => Command; onDone: () => void; label: string }) {
   const dispatch = useStudio((s) => s.dispatch);
-  const fields = projectFields(project).filter((f) => f.type !== 'array' && f.type !== 'string' && f.type !== 'date');
+  const fields = conditionFields(project);
   const leaf = initial && 'path' in initial && 'value' in initial && !Array.isArray((initial as any).value) ? (initial as any) : null;
   const [path, setPath] = useState<string>(leaf?.path ?? fields[0]?.path ?? '');
   const [op, setOp] = useState<string>(leaf?.op && ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'].includes(leaf.op) ? leaf.op : 'eq');
@@ -49,6 +59,7 @@ function ConditionEditor({ project, initial, command, onDone, label }: { project
           <Field label="Value">
             {f?.type === 'enum' ? <select className="select" value={value} onChange={(e) => setValue(e.target.value)} data-testid="cond-value"><option value="">Choose…</option>{f.enumValues!.map((v) => <option key={v}>{v}</option>)}</select>
               : f?.type === 'bool' ? <select className="select" value={value} onChange={(e) => setValue(e.target.value)} data-testid="cond-value"><option value="">Choose…</option><option value="true">yes</option><option value="false">no</option></select>
+              : f?.type === 'string' || f?.type === 'date' ? <input className="input" type={f.type === 'date' ? 'date' : 'text'} value={value} onChange={(e) => setValue(e.target.value)} style={{ width: 130 }} data-testid="cond-value" />
               : <input className="input" value={value} onChange={(e) => setValue(e.target.value)} style={{ width: 90 }} inputMode="numeric" data-testid="cond-value" />}
           </Field>
         </div>
@@ -194,9 +205,12 @@ function ContentTab({ node, project, res, onEditText }: { node: DocNode; project
         <>
           <Field label="Label"><CommitInput value={node.label} onCommit={(v) => upd({ label: v })} ariaLabel="Label" testId="field-label" /></Field>
           <Field label="Bound field (allowlisted schema path)" hint={`Current value: ${JSON.stringify(getPath({ ...res.effectiveRecord, claim: (res.effectiveRecord as any).claims?.[0] }, node.binding ?? '')) ?? 'null'}`}>
-            <select className="select" value={node.binding} onChange={(e) => { const f = fields.find((x) => x.path === e.target.value); upd({ binding: e.target.value, formatter: f?.type === 'cents' ? 'usd-cents' : f?.type === 'date' ? 'date' : f?.type === 'int' ? 'int' : f?.type === 'points' ? 'points' : 'text' }); }} data-testid="binding-select">
+            <select className="select" value={node.binding} onChange={(e) => { const f = fields.find((x) => x.path === e.target.value);
+              // A document with its own data names the field by its label: the label follows the choice unless the person has written their own.
+              const was = fields.find((x) => x.path === node.binding);
+              upd({ binding: e.target.value, formatter: f ? defaultFormatterFor(f.type) : 'text', ...(project.documentType === 'custom' && f && (!node.label || node.label === was?.label) ? { label: f.label } : {}) }); }} data-testid="binding-select">
               {!fields.some((f) => f.path === node.binding) && <option value={node.binding}>{node.binding} (unknown!)</option>}
-              {scalarFields.map((f) => <option key={f.path} value={f.path}>{f.path} · {f.type}</option>)}
+              {scalarFields.map((f) => <option key={f.path} value={f.path}>{project.documentType === 'custom' ? `${f.label} · ${f.path}` : `${f.path} · ${f.type}`}</option>)}
             </select>
           </Field>
           <div className="row">
@@ -217,6 +231,7 @@ function ContentTab({ node, project, res, onEditText }: { node: DocNode; project
             <Field label="Kind"><select className="select" value={node.chart.kind} onChange={(e) => upd({ chart: { ...node.chart!, kind: e.target.value as any } })}><option value="bar">bar</option><option value="donut">donut</option></select></Field>
             {node.chart.groupBy && <Field label="Top N"><CommitInput type="number" value={node.chart.limit ?? 5} onCommit={(v) => upd({ chart: { ...node.chart!, limit: Math.max(1, Math.min(10, Number(v) || 5)) } })} /></Field>}
           </div>
+          {project.documentType === 'custom' && <ChartDataEditor node={node} project={project} />}
           <p className="muted" style={{ fontSize: 12 }}>Chart style changes never alter financial values (content digest of amounts is unchanged).</p>
         </>
       )}
@@ -248,7 +263,11 @@ function ContentTab({ node, project, res, onEditText }: { node: DocNode; project
       )}
       {node.type === 'image' && node.image && (
         <>
+          {project.documentType === 'custom' ? (
+            <Field label="Picture"><select className="select" value={node.image.src.startsWith('data:') ? 'upload' : ''} onChange={(e) => e.target.value === '' && upd({ image: { ...node.image!, src: '' } })} data-testid="image-source"><option value="">No picture yet (a neutral placeholder)</option>{node.image.src.startsWith('data:') && <option value="upload">Uploaded image</option>}</select></Field>
+          ) : (
           <Field label="Image source"><select className="select" value={node.image.src.startsWith('data:') ? 'upload' : node.image.src} onChange={(e) => e.target.value !== 'upload' && upd({ image: { ...node.image!, src: e.target.value } })}><option value="asset:aster-mark">Aster Card mark (sample)</option><option value="asset:harborcare-mark">HarborCare mark (sample)</option>{node.image.src.startsWith('data:') && <option value="upload">Uploaded image</option>}</select></Field>
+          )}
           <Field label="Upload PNG/JPEG (≤ 280 KB)">
             <input className="input" type="file" accept="image/png,image/jpeg" onChange={(e) => {
               const f = e.target.files?.[0];
@@ -280,6 +299,36 @@ function ContentTab({ node, project, res, onEditText }: { node: DocNode; project
         </div>
       )}
       {node.type === 'container' && <p className="muted">Section with {node.children?.length ?? 0} children. Set row/column flow in Layout. Drop components onto it to nest them.</p>}
+    </div>
+  );
+}
+
+/** What a chart of a document with its own data draws: one bar (or slice) per value of a text column, sized by an amount or whole-number column of the same list. */
+function ChartDataEditor({ node, project }: { node: DocNode; project: Project }) {
+  const dispatch = useStudio((s) => s.dispatch);
+  const ch = node.chart!;
+  const lists = projectFields(project).filter((f) => f.type === 'array');
+  const list = lists.find((l) => l.path === node.binding);
+  const cols = list?.itemFields ?? [];
+  const groups = cols.filter((c) => c.type === 'string' || c.type === 'date');
+  const values = cols.filter((c) => c.type === 'cents' || c.type === 'int');
+  const upd = (patch: Partial<DocNode>) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: patch as any });
+  const bind = (path: string) => {
+    const next = lists.find((l) => l.path === path);
+    const g = next?.itemFields?.find((c) => c.type === 'string' || c.type === 'date');
+    const v = next?.itemFields?.find((c) => c.type === 'cents') ?? next?.itemFields?.find((c) => c.type === 'int');
+    upd({ binding: path || undefined, chart: { ...ch, series: undefined, groupBy: g?.key, valueKey: v?.key } });
+  };
+  if (!lists.length) return <div className="callout warning" data-testid="chart-no-list">A chart needs a list field to draw from. Add one in <Link to={`/studio/${project.projectId}/rules-data`}>Rules &amp; Data</Link> (Data fields, type “List”) with a text column and an amount or number column.</div>;
+  return (
+    <div data-testid="chart-data">
+      <Field label="Draw from the list"><select className="select" value={node.binding ?? ''} onChange={(e) => bind(e.target.value)} data-testid="chart-list"><option value="">Choose a list…</option>{lists.map((l) => <option key={l.path} value={l.path}>{l.label}</option>)}</select></Field>
+      {list && (
+        <div className="row wrap">
+          <Field label="One bar for each"><select className="select" value={ch.groupBy ?? ''} onChange={(e) => upd({ chart: { ...ch, groupBy: e.target.value || undefined } })} data-testid="chart-group">{!groups.length && <option value="">No text column</option>}{groups.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}</select></Field>
+          <Field label="Sized by"><select className="select" value={ch.valueKey ?? ''} onChange={(e) => upd({ chart: { ...ch, valueKey: e.target.value || undefined } })} data-testid="chart-value">{!values.length && <option value="">No amount or number column</option>}{values.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}</select></Field>
+        </div>
+      )}
     </div>
   );
 }
@@ -320,12 +369,13 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
   const parts = new Map(project.contentParts.map((c) => [c.id, c]));
   const [newTitle, setNewTitle] = useState('');
   const [newText, setNewText] = useState('');
-  const [cond, setCond] = useState<{ path: string; op: string; value: string }>({ path: project.documentType === 'eob' ? 'claim.status' : 'card.missedPayments', op: 'eq', value: '' });
+  const fields = conditionFields(project);
+  // The first field to test: a claim or card field for the sample kinds; for a document with its own data, its first own field.
+  const [cond, setCond] = useState<{ path: string; op: string; value: string }>({ path: project.documentType === 'custom' ? fields.find((f) => f.path.startsWith('custom.'))?.path ?? fields[0]?.path ?? '' : project.documentType === 'eob' ? 'claim.status' : 'card.missedPayments', op: 'eq', value: '' });
   const [editing, setEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [editCond, setEditCond] = useState<string | null>(null);
   const [addedAi, setAddedAi] = useState<string | null>(null);
-  const fields = projectFields(project).filter((f) => f.type !== 'array' && f.type !== 'string' && f.type !== 'date');
   const parseVal = (path: string, v: string) => { const f = fields.find((x) => x.path === path); if (!f) return v; if (f.type === 'bool') return v === 'true'; if (['int', 'cents', 'points'].includes(f.type)) return Number(v); return v; };
   const slugId = (title: string) => (node.id + '-' + title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')).slice(0, 60);
   /** The suggested version of the assistant goes through the same ADD_VARIANT command as "Add variant", with an id that is free. */
@@ -531,28 +581,50 @@ function DisclosureEditor({ node, project }: { node: DocNode; project: Project }
 function TableEditor({ node, project }: { node: DocNode; project: Project }) {
   const dispatch = useStudio((s) => s.dispatch);
   const upd = (patch: Partial<DocNode>) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: patch as any });
+  const own = project.documentType === 'custom';
   const arrays = projectFields(project).filter((f) => f.type === 'array');
-  const items = arrays.find((a) => a.path === node.binding)?.itemFields ?? [];
+  const list = arrays.find((a) => a.path === node.binding);
+  const items = list?.itemFields ?? [];
+  const typeOf = (key: string) => items.find((it) => it.key === key)?.type;
+  const canTotal = (key: string) => typeOf(key) === 'cents' || typeOf(key) === 'int';
+  /** Choosing another list of a document with its own data starts it with that list's own columns. */
+  const bindTo = (path: string) => {
+    const next = arrays.find((a) => a.path === path);
+    upd(own && next ? { binding: path, columns: tableColumnsFor(next), caption: node.caption && node.caption !== 'Table' && node.caption !== list?.label ? node.caption : next.label } : { binding: path });
+  };
+  /** At most one column is totalled. */
+  const setTotal = (i: number, on: boolean) => upd({ columns: node.columns!.map((x, j) => { const { total: _t, ...rest } = x; return j === i && on ? { ...rest, total: true } : rest; }) });
   return (
     <div>
       <Field label="Caption"><CommitInput value={node.caption} onCommit={(v) => upd({ caption: v })} /></Field>
-      <Field label="Bound collection"><select className="select" value={node.binding} onChange={(e) => upd({ binding: e.target.value })}>{arrays.map((a) => <option key={a.path}>{a.path}</option>)}</select></Field>
+      <Field label={own ? 'List shown in the table' : 'Bound collection'}>
+        <select className="select" value={node.binding ?? ''} onChange={(e) => bindTo(e.target.value)} data-testid="table-binding">
+          {!list && <option value={node.binding ?? ''}>{own ? 'Choose a list…' : node.binding ?? ''}</option>}
+          {arrays.map((a) => <option key={a.path} value={a.path}>{own ? a.label : a.path}</option>)}
+        </select>
+      </Field>
+      {own && !arrays.length && <div className="callout warning" data-testid="table-no-list">This document has no list field yet, so there is nothing for the table to show. Add one in <Link to={`/studio/${project.projectId}/rules-data`}>Rules &amp; Data</Link> (Data fields, type “List”).</div>}
       <div className="row wrap">
         <label className="row" style={{ gap: 6, fontSize: 12.5 }}><input type="checkbox" checked={node.flowContinuation !== false} onChange={(e) => upd({ flowContinuation: e.target.checked })} data-testid="toggle-continuation" /> Continue across pages</label>
-        <Field label="Repeat heading"><select className="select" value={node.repeatHeader ?? 'always'} onChange={(e) => upd({ repeatHeader: e.target.value as any })}><option value="always">always</option><option value="when-hinted">when rule R10 hints</option><option value="never">never</option></select></Field>
+        <Field label="Repeat heading"><select className="select" value={node.repeatHeader ?? 'always'} onChange={(e) => upd({ repeatHeader: e.target.value as any })}><option value="always">always</option><option value="when-hinted">{own ? 'when a rule says so' : 'when rule R10 hints'}</option><option value="never">never</option></select></Field>
       </div>
       {node.flowContinuation === false && <div className="callout warning">Continuation disabled: rows that do not fit the flow region produce a real composer overflow diagnostic.</div>}
       <div className="section-title">Columns</div>
       {(node.columns ?? []).map((c, i) => (
-        <div key={c.key + i} className="row" style={{ marginBottom: 4 }}>
-          <span className="mono" style={{ width: 90 }}>{c.key}</span>
+        <div key={c.key + i} className="row wrap" style={{ marginBottom: 4 }}>
+          {!own && <span className="mono" style={{ width: 90 }}>{c.key}</span>}
           <CommitInput value={c.label} onCommit={(v) => upd({ columns: node.columns!.map((x, j) => (j === i ? { ...x, label: v } : x)) })} ariaLabel={`Label for column ${c.key}`} />
+          {own && canTotal(c.key) && (
+            <label className="row" style={{ gap: 6, fontSize: 12.5 }}>
+              <input type="checkbox" role="switch" checked={!!c.total} onChange={(e) => setTotal(i, e.target.checked)} aria-label={`Show a total for ${c.label}`} data-testid={`column-total-${c.key}`} /> Show a total
+            </label>
+          )}
           <button className="btn sm ghost icon" aria-label={`Remove column ${c.key}`} onClick={() => upd({ columns: node.columns!.filter((_, j) => j !== i) })}><Icon.trash width={14} height={14} /></button>
         </div>
       ))}
-      <select className="select" value="" onChange={(e) => { const f = items.find((x) => x.key === e.target.value); if (f) upd({ columns: [...(node.columns ?? []), { key: f.key, label: f.label, format: f.type === 'cents' ? 'usd-cents' : f.type === 'date' ? 'date' : 'text', align: f.type === 'cents' ? 'right' : 'left' }] }); }} aria-label="Add column">
+      <select className="select" value="" onChange={(e) => { const f = items.find((x) => x.key === e.target.value); if (f) upd({ columns: [...(node.columns ?? []), own ? tableColumnsFor({ itemFields: [f] })[0] : { key: f.key, label: f.label, format: f.type === 'cents' ? 'usd-cents' : f.type === 'date' ? 'date' : 'text', align: f.type === 'cents' ? 'right' : 'left' }] }); }} aria-label="Add column">
         <option value="">+ Add column…</option>
-        {items.filter((f) => !(node.columns ?? []).some((c) => c.key === f.key)).map((f) => <option key={f.key} value={f.key}>{f.label} ({f.key})</option>)}
+        {items.filter((f) => !(node.columns ?? []).some((c) => c.key === f.key)).map((f) => <option key={f.key} value={f.key}>{own ? f.label : `${f.label} (${f.key})`}</option>)}
       </select>
     </div>
   );

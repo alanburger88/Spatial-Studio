@@ -10,7 +10,7 @@ import { ScreenHeader, Loading, Empty, SeverityLabel, formatMoney, Tech, Biz, Pr
 import { ruleTitle, ruleSentence, predicateSentence, fieldLabel, nodeTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { ImpactPreview } from '../ui/ImpactPreview';
-import { DataFieldsDialog } from './data/DataFields';
+import { DataFieldsEditor } from './rules/DataFieldsEditor';
 import { useStudio, useResolution, useRecord, editBlockedReason } from '../state/store';
 import type { CoverageGap } from '@iss/scenarios';
 import { api } from '../api/client';
@@ -19,6 +19,7 @@ import { DraftTestImpact, TestsPanel, TestsSummary } from './rules/TestCases';
 import { DescribeRuleDialog, ReviewRulesDialog } from './rules/RuleAssist';
 import { CoverageDialog, stepLabelOf } from './rules/Coverage';
 import { TestDataDialog } from './rules/TestData';
+import { OwnCustomers } from './rules/OwnCustomers';
 import { makeTransactions } from '../demo/defects';
 import './RulesData.css';
 
@@ -273,7 +274,9 @@ export function RulesData() {
   const addRule = () => {
     if (!project || !confirmDiscard()) return;
     const id = nextRuleId(project.rules);
-    const first = fields.find((f) => f.type === 'enum' && !f.derived && f.path !== 'documentType') ?? fields[0];
+    // A document with its own data starts a rule on one of its own fields (a choice first), never on a standard customer field.
+    const ownFields = fields.filter((f) => f.path.startsWith('custom.') && f.type !== 'array');
+    const first = (project.documentType === 'custom' ? ownFields.find((f) => f.type === 'enum') ?? ownFields.find((f) => !f.derived) ?? ownFields[0] : undefined) ?? fields.find((f) => f.type === 'enum' && !f.derived && f.path !== 'documentType') ?? fields[0];
     setIsNew(true);
     baseRef.current = '';
     setDraft({ id, scope: project.documentType, mode: 'additive', priority: 30, when: { op: 'eq', path: first.path, value: first.enumValues?.[0] ?? '' }, then: { op: 'setPresentationHint', hint: `custom-${id.toLowerCase()}` }, version: 1, enabled: true, title: 'New rule' });
@@ -417,6 +420,12 @@ export function RulesData() {
     <section className="screen" data-testid="rules-data-view">
       {header}
       <div className="screen-body rd-body">
+        {project.documentType === 'custom' && !(project.customFields?.length) && (
+          <div className="callout accent rd-nofields" data-testid="no-data-fields">
+            <div><strong>This document has no data fields yet.</strong> <span>Every customer has a name and a language. Add the data your document is about (an amount, a date, a choice, a list of rows) and use it in components and rules.</span></div>
+            <button className="btn primary" onClick={() => setShowFields(true)} data-testid="no-data-fields-open"><Icon.plus /> Add data fields</button>
+          </div>
+        )}
         {view === 'table' && <DecisionTable project={project} records={records} onOpenRule={(id) => { if (selectRule(id)) setView('editor'); }} />}
         {view === 'tests' && <TestsPanel project={project} />}
         {previewed && ctx.recordId === previewed.recordId && JSON.stringify(ctx.overrides) === previewed.overrides && (ctx.journeyCursor ?? null) === previewed.cursor && (
@@ -497,7 +506,7 @@ export function RulesData() {
                       </div>
                     )}
 
-                    <p className="hint rd-note">Apply is one undo step (top bar). Test runs the real resolver on all {records.length} {docType === 'eob' ? 'EOB' : 'statement'} records using a temporary copy of the project.</p>
+                    <p className="hint rd-note">Apply is one undo step (top bar). Test runs the real resolver on all {records.length} {docType === 'eob' ? 'EOB' : docType === 'custom' ? 'customer' : 'statement'} records using a temporary copy of the project.</p>
                     {testResult && <TestPanel result={testResult} draft={draft} onPick={(id) => useStudio.getState().setRecord(id)} />}
                   </div>
                 </div>
@@ -542,6 +551,7 @@ export function RulesData() {
                 </button>
               ))}
             </div>
+            {project.documentType === 'custom' && <OwnCustomers project={project} />}
           </div>
           <div className="rd-drawer" hidden={!dock}>
             <div id="rd-dock-scenario" role="tabpanel" aria-labelledby="rd-dock-tab-scenario" hidden={dock !== 'scenario'}><RecordEditor project={project} fields={fields} fieldMap={fieldMap} /></div>
@@ -549,7 +559,7 @@ export function RulesData() {
           </div>
         </div>
       </div>
-      {showFields && <DataFieldsDialog onClose={() => setShowFields(false)} />}
+      {showFields && <DataFieldsEditor onClose={() => setShowFields(false)} />}
       {assist === 'describe' && <DescribeRuleDialog project={project} blockedReason={blockedReason} onClose={() => setAssist(null)} onOpenDraft={openDraft} />}
       {assist === 'review' && <ReviewRulesDialog project={project} onClose={() => setAssist(null)} onSelectRule={(id) => { setView('editor'); return selectRule(id); }} />}
       {assist === 'coverage' && <CoverageDialog project={project} onClose={() => setAssist(null)} onPreview={previewGap} onGenerate={() => setAssist('testdata')} />}
@@ -1030,7 +1040,7 @@ function RecordEditor({ project, fields, fieldMap }: { project: Project; fields:
                 </div>
               </>)}
 
-              <h3 className="section-title">Edge-case generator</h3>
+              {project.documentType !== 'custom' && <><h3 className="section-title">Edge-case generator</h3>
               <div className="card" data-testid="edge-case-generator">
                 <div className="field"><label htmlFor="rd-preset">Preset</label>
                   <select id="rd-preset" className="select" value={preset} onChange={(e) => { setPreset(e.target.value); setGen(null); }} data-testid="edge-preset">
@@ -1047,7 +1057,8 @@ function RecordEditor({ project, fields, fieldMap }: { project: Project; fields:
                     <p className="hint">Shown before applying. Applying replaces the current scenario overrides; Reset scenario undoes it.</p>
                   </div>
                 )}
-              </div>
+              </div></>}
+              {project.documentType === 'custom' && <p className="hint" data-testid="own-data-edge-note">To try values just below, on and above a limit your rules use, generate test customers: the “Generate test customers” button in the rule list makes one customer for each edge.</p>}
             </div>
           </div>
         )}
@@ -1102,6 +1113,9 @@ function derivedValue(rec: SyntheticRecord | undefined, path: string): unknown {
   const v = getPath(rec, path);
   if (v !== null && v !== undefined) return v;
   const card = rec.card as { transactions?: Array<{ amountCents: number }>; creditLimitCents?: number; newBalanceCents?: number } | undefined;
+  // The calculated number of rows of a list field.
+  const listPath = /^(custom\.[A-Za-z0-9]+)\.count$/.exec(path)?.[1];
+  if (listPath) { const rows = getPath(rec, listPath); return Array.isArray(rows) ? rows.length : undefined; }
   if (path === 'card.transactionsTotalCents') return card?.transactions?.reduce((s, t) => s + t.amountCents, 0);
   if (path === 'card.availableCreditCents' && card) return (card.creditLimitCents ?? 0) - (card.newBalanceCents ?? 0);
   return undefined;

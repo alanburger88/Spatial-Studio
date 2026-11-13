@@ -115,3 +115,10 @@
 /* Long dialogs scroll inside, so the footer buttons stay in view */
 .dialog:has(.np-root, .tpl-form) { display: flex; flex-direction: column; overflow: hidden; }
 .dialog:has(.np-root, .tpl-form) .body { overflow: auto; min-height: 0; }
+
+/* Blank project: who the document is from + brand colour. */
+.np-blank .field { margin: 0; }
+.np-accent { gap: 8px; align-items: center; }
+.np-swatch { width: 44px; height: 34px; padding: 2px; border: 1px solid var(--iss-border); border-radius: 8px; background: var(--iss-surface); cursor: pointer; }
+.np-hex { width: 110px; }
+.np-bad { color: var(--iss-error-fg, var(--iss-error)); }

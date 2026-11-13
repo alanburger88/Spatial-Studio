@@ -1,7 +1,8 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { DEMO_STEPS, useDemo } from '../demo/demo';
-import { ScreenHeader, Proof, Tech } from '../ui/common';
+import { Empty, ScreenHeader, Proof, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
+import { useStudio } from '../state/store';
 import './GuidedDemo.css';
 
 export function GuidedDemo() {
@@ -11,9 +12,23 @@ export function GuidedDemo() {
   const done = DEMO_STEPS.filter((s) => demo.results[s.id]).length;
   const passed = DEMO_STEPS.filter((s) => demo.results[s.id]?.ok).length;
   const finished = demo.index >= DEMO_STEPS.length - 1 && done === DEMO_STEPS.length;
+  const project = useStudio((s) => s.project);
   const deterministic = demo.previousRun && finished
     ? DEMO_STEPS.every((s) => (demo.previousRun![s.id]?.digest ?? null) === (demo.results[s.id]?.digest ?? null))
     : null;
+  // The narrated walkthrough runs on the two sample projects. A document with its own data has nothing for it to show.
+  if (project?.documentType === 'custom') {
+    return (
+      <section className="screen" data-testid="demo-view">
+        <ScreenHeader id="S11" title="Guided Demo" subtitle="A narrated walkthrough that runs on the two sample projects." />
+        <div className="screen-body">
+          <Empty title="The guided demo is for the sample projects" message="It walks through the two sample documents that ship with the studio, and it resets them when it starts. This document has its own data, so it does not take part. Open a sample from the project gallery to run the demo.">
+            <Link className="btn primary" to="/projects" data-testid="demo-to-gallery">Go to the project gallery</Link>
+          </Empty>
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="screen" data-testid="demo-view">
       <ScreenHeader id="S11" title="Guided Demo" subtitle="An eight-minute stakeholder narrative. Every step performs real commands, scenario changes and exports, then verifies a checkpoint against live state."

@@ -24,6 +24,7 @@ export function useDefectState() {
   if (!project) return null;
   const eff = res?.effectiveRecord;
   const isCard = project.documentType === 'credit-statement';
+  const isEob = project.documentType === 'eob';
   const r3 = project.rules.find((r) => r.id === 'R03');
   const table = project.nodes.find((n) => n.id === 'transaction-table');
   const guidance = project.nodes.find((n) => n.id === 'payment-guidance');
@@ -33,10 +34,10 @@ export function useDefectState() {
     d01: isCard && r3?.priority === 400,
     d02: eff?.customer.locale === 'es-US' && (overrides as { customer?: { locale?: string } }).customer?.locale === 'es-US',
     d03: isCard && table?.flowContinuation === false && txCount >= 250,
-    d04: !isCard && claim0?.patientResponsibilityCents === 30000 && claim0?.liabilityConfirmed === false,
+    d04: isEob && claim0?.patientResponsibilityCents === 30000 && claim0?.liabilityConfirmed === false,
     d05: isCard && !!guidance && guidance.fallbackVariantId === undefined,
   };
-  return { project, eff, isCard, table, claim0, active, overrideCount: Object.keys(overrides).length, count: Object.values(active).filter(Boolean).length };
+  return { project, eff, isCard, isEob, table, claim0, active, overrideCount: Object.keys(overrides).length, count: Object.values(active).filter(Boolean).length };
 }
 
 function Tool({ id, title, text, on, children }: { id: string; title: string; text: string; on: boolean; children: ReactNode }) {
@@ -67,7 +68,8 @@ export function DemoToolsPanel() {
   }, [open]);
 
   if (!open || !st) return null;
-  const { isCard, eff, table, claim0, active, overrideCount } = st;
+  const { isCard, isEob, eff, table, claim0, active, overrideCount } = st;
+  const own = st.project.documentType === 'custom';
   const cardOnly = 'Credit-card statement project only.';
   const d03 = () => {
     const purchases = typeof eff?.card?.purchasesCents === 'number' ? (eff.card.purchasesCents as number) : 0;
@@ -86,25 +88,26 @@ export function DemoToolsPanel() {
       </header>
       <p className="dt-intro">Break the sample on purpose to show the checks catching it. Changes to the document can be undone from the top bar; changes to the customer are temporary.</p>
       <ul className="dt-list">
-        <Tool id="d01" title="Two rules tie" on={active.d01} text={isCard ? 'Gives two “choose one” rules the same priority and loads a customer who matches both.' : cardOnly}>
+        {!own && <Tool id="d01" title="Two rules tie" on={active.d01} text={isCard ? 'Gives two “choose one” rules the same priority and loads a customer who matches both.' : cardOnly}>
           <button className="btn danger sm" onClick={() => { if (injectD01()) useStudio.getState().setRecord('CARD-0002'); }} disabled={!isCard || active.d01} data-testid="seed-d01">Apply</button>
           <button className="btn sm" onClick={() => restoreR03()} disabled={!isCard || !active.d01} data-testid="restore-r03">Put back</button>
-        </Tool>
+        </Tool>}
         <Tool id="d02" title="Spanish wording missing" on={!!active.d02} text="Switches this customer to Spanish, which has no approved translation yet.">
           <button className="btn danger sm" onClick={() => patchOverrides({ customer: { locale: 'es-US' } })} disabled={!!active.d02} data-testid="seed-d02">Apply</button>
         </Tool>
-        <Tool id="d03" title="Table too long for the page" on={active.d03} text={isCard ? 'Loads 250 transactions and stops the table continuing onto the next page.' : cardOnly}>
+        {!own && <Tool id="d03" title="Table too long for the page" on={active.d03} text={isCard ? 'Loads 250 transactions and stops the table continuing onto the next page.' : cardOnly}>
           <button className="btn danger sm" onClick={d03} disabled={!isCard || active.d03} data-testid="seed-d03">Apply</button>
           <button className="btn sm" disabled={!isCard || table?.flowContinuation !== false} onClick={() => dispatch({ type: 'UPDATE_NODE', nodeId: 'transaction-table', patch: { flowContinuation: true } })} data-testid="restore-continuation">Put back</button>
-        </Tool>
-        <Tool id="d04" title="Unconfirmed amount shown as owed" on={!!active.d04} text={isCard ? 'Healthcare EOB project only.' : `Sets ${formatMoney(30000)} member liability on a claim that is not confirmed.`}>
-          <button className="btn danger sm" onClick={d04} disabled={isCard || !claim0 || !!active.d04} data-testid="seed-d04">Apply</button>
-        </Tool>
-        <Tool id="d05" title="No message matches" on={active.d05} text={isCard ? 'Removes the fallback message, then loads a customer no rule matches.' : cardOnly}>
+        </Tool>}
+        {!own && <Tool id="d04" title="Unconfirmed amount shown as owed" on={!!active.d04} text={isCard ? 'Healthcare EOB project only.' : `Sets ${formatMoney(30000)} member liability on a claim that is not confirmed.`}>
+          <button className="btn danger sm" onClick={d04} disabled={!isEob || !claim0 || !!active.d04} data-testid="seed-d04">Apply</button>
+        </Tool>}
+        {!own && <Tool id="d05" title="No message matches" on={active.d05} text={isCard ? 'Removes the fallback message, then loads a customer no rule matches.' : cardOnly}>
           <button className="btn danger sm" disabled={!isCard || active.d05} onClick={() => removeFallback()} data-testid="remove-fallback">Remove fallback</button>
           <button className="btn sm" disabled={!isCard} onClick={() => patchOverrides({ card: { paymentStatus: 'overdue', missedPayments: 0 } })} data-testid="no-match-scenario">Load customer</button>
           <button className="btn sm" disabled={!isCard || !active.d05} onClick={() => restoreFallback()} data-testid="restore-fallback">Put back</button>
-        </Tool>
+        </Tool>}
+        {own && <li className="dt-tool" data-testid="defects-sample-only"><p className="dt-tool-text">The other demonstration defects (tied rules, a table too long for the page, an unconfirmed amount, a missing fallback message) are written for the two sample projects. Open Aster Card or HarborCare to use them.</p></li>}
       </ul>
       <footer>
         <button className="btn sm" onClick={() => clearOverrides()} disabled={!overrideCount} data-testid="clear-overrides"><Icon.reset /> Reset this customer{overrideCount ? ` (${overrideCount})` : ''}</button>

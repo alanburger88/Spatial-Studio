@@ -92,3 +92,7 @@
 .rte-content p { margin: 0 0 3pt; } .rte-content h2 { font-size: 15pt; margin: 0 0 3pt; color: var(--iss-paper-ink); } .rte-content h3 { font-size: 11.5pt; margin: 0 0 3pt; }
 .rte-token { background: color-mix(in srgb, var(--iss-green-medium) 14%, var(--iss-paper)); color: var(--iss-green-dark); border: 1px solid color-mix(in srgb, var(--iss-green-medium) 45%, transparent); border-radius: 4px; padding: 0 3px; font-family: var(--iss-font-mono); font-size: 8pt; }
 
+
+/* Empty page: a card over the blank sheet that opens the component list. */
+.ds-empty { position: absolute; z-index: 3; top: 96px; left: 50%; transform: translateX(-50%); width: min(340px, calc(100% - 32px)); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 16px; border-radius: 12px; background: var(--iss-surface); border: 1px solid var(--iss-border); box-shadow: var(--iss-shadow-2, 0 6px 20px rgba(0, 0, 0, .18)); color: var(--iss-text); }
+.ds-empty span { font-size: 13px; color: var(--iss-text-muted); line-height: 1.45; }

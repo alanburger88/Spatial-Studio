@@ -39,7 +39,9 @@ function useVariantReach(nodeId: string | undefined): Map<string, Reach> | null 
       for (const v of sel) {
         const e = out.get(v) ?? { count: 0, total: scen.length, recordIds: [], personas: [] };
         e.count++; e.recordIds.push(s.recordId);
-        const pid = (r.effectiveRecord as any).personaId ?? (r.effectiveRecord as any).claims?.[0]?.status ?? '—';
+        const eff: any = r.effectiveRecord;
+        // A document with its own data has no personas or claim statuses: its customers are told apart by name.
+        const pid = eff.personaId ?? eff.claims?.[0]?.status ?? (engine.project.documentType === 'custom' ? `${eff.customer?.givenName ?? ''} ${eff.customer?.familyName ?? ''}`.trim() || '—' : '—');
         const pe = e.personas.find((p) => p[0] === pid); if (pe) pe[1]++; else e.personas.push([pid, 1]);
         out.set(v, e);
       }
@@ -248,7 +250,7 @@ export function ExplodedDocument() {
   if (!node || !rnode) return (
     <section className="screen" data-testid="exploded-view">
       <ScreenHeader id="S03" title="Exploded Document" subtitle="Select a Conditional Region or Variant Set in the designer, then choose Explore variants." />
-      <Empty title="Nothing to explode" message={`Component “${nodeId}” does not exist in ${project.title}.`}><button className="btn" onClick={() => navigate(`/studio/${project.projectId}/design`)}>Back to designer</button></Empty>
+      <Empty title="Nothing to explode" message={nodeId ? `Component “${nodeId}” does not exist in ${project.title}.` : 'This document has no message with alternative versions yet. Add a Message in the Design Studio, then open it here.'}><button className="btn" onClick={() => navigate(`/studio/${project.projectId}/design`)}>Back to designer</button></Empty>
     </section>
   );
   const explodable = node.type === 'variant-set' || node.type === 'conditional-region';
@@ -304,7 +306,7 @@ export function ExplodedDocument() {
             <div className="section-title">Scenario</div>
             <dl className="kv ex-kv">
               <dt>Customer</dt><dd title={res.recordId}>{`${(res.effectiveRecord as any).customer?.givenName ?? ''} ${(res.effectiveRecord as any).customer?.familyName ?? ''}`.trim() || res.recordId}{tech && <> <span className="chip code">{res.recordId}</span></>}</dd>
-              <dt>Persona</dt><dd>{personaLabel(personas, (res.effectiveRecord as any).personaId)}</dd>
+              {project.documentType !== 'custom' && <><dt>Persona</dt><dd>{personaLabel(personas, (res.effectiveRecord as any).personaId)}</dd></>}
               <dt>Journey</dt><dd>{ctx.journeyCursor === null ? 'Baseline' : project.journey.events[ctx.journeyCursor]?.label}</dd>
               <dt>Language</dt><dd data-testid="exploded-language">{languageName(res.locale)}</dd>
               <dt>Output</dt><dd>Same for every output</dd>
@@ -454,7 +456,7 @@ export function ExplodedDocument() {
               <div className="section-title">Synthetic reach</div>
               <dl className="kv ex-kv">
                 <dt>Seeded records</dt><dd>{activeReach?.count ?? 0} of {totalSeeded}</dd>
-                <dt>Top personas</dt><dd className="ex-prose">{activeReach?.personas.slice(0, 3).map(([p, c]) => `${personaShort(p)} (${c})`).join(', ') || 'None'}</dd>
+                <dt>{project.documentType === 'custom' ? 'Top customers' : 'Top personas'}</dt><dd className="ex-prose">{activeReach?.personas.slice(0, 3).map(([p, c]) => `${personaShort(p)} (${c})`).join(', ') || 'None'}</dd>
               </dl>
               {previewRecord && <button className="btn sm ex-preview" onClick={() => setRecord(previewRecord)} title={`Switch the scenario to ${previewRecord}`}><Icon.eye width={14} height={14} /> Preview as {previewRecord}</button>}
             </>}

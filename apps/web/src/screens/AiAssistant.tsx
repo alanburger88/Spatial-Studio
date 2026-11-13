@@ -1,3 +1,4 @@
+import type { Project } from '@iss/model';
 import { ScreenHeader } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { useStudio } from '../state/store';
@@ -18,6 +19,16 @@ const PROMPT_GROUPS: Record<string, Array<{ title: string; prompts: string[] }>>
   ],
 };
 
+/** What a document with its own data can be asked: only questions about its own messages, rules and views, never a card or claim sample. */
+function ownPrompts(project: Project): Array<{ title: string; prompts: string[] }> {
+  const rule = project.rules.find((r) => r.mode !== 'obligation' && r.enabled !== false);
+  const hasMessage = project.nodes.some((n) => n.type === 'variant-set' || n.type === 'conditional-region');
+  return [
+    { title: 'Explain', prompts: [...(hasMessage ? ['Why is this message showing?'] : []), 'What rules apply?'] },
+    ...(rule ? [{ title: 'Edit (needs approval)', prompts: [`Change ${rule.id} priority to ${Math.min(10000, rule.priority + 20)}`] }] : []),
+    { title: 'Navigate', prompts: ['Run validation', 'Open cube', 'Open landscape', 'Translate this document', 'Edit the email wording'] },
+  ];
+}
 
 /* ------------------------------------------------------------------ screen */
 
@@ -58,7 +69,7 @@ export function AiAssistant() {
           <div className="panel">
             <div className="panel-head">Suggested prompts</div>
             <div className="panel-body ai-chips">
-              {(PROMPT_GROUPS[project.documentType] ?? PROMPT_GROUPS.eob).map((g) => (
+              {(project.documentType === 'custom' ? ownPrompts(project) : PROMPT_GROUPS[project.documentType] ?? PROMPT_GROUPS.eob).map((g) => (
                 <div className="ai-chip-group" key={g.title}>
                   <div className="ai-ba-h">{g.title}</div>
                   <div className="ai-chip-wrap">{g.prompts.map((p) => <button key={p} type="button" className="ai-chip" title={p} onClick={() => pickPrompt(p)} data-testid="prompt-chip">{p}</button>)}</div>

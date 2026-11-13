@@ -121,12 +121,8 @@ export function defaultRecordId(project: Project, records: SyntheticRecord[] = [
   return project.documentType === 'eob' ? 'EOB-0001' : 'CARD-0001';
 }
 
-/** Cube axes that exist for the kind of document: a document with its own data has no persona or claim status, so it starts on its language. */
+/** Cube axes that exist for the kind of document. A document with its own data has no payment or claim dimensions: it compares customers, output and journey state. */
 export function defaultCubeAxes(project: Project): StudioContext['cubeAxes'] {
-  if (project.documentType === 'custom') {
-    const own = (project.customFields ?? []).find((f) => f.dimension && f.type !== 'list');
-    return [own ? (`custom.${own.key}` as DimensionId) : 'locale', 'output', 'journey'] as StudioContext['cubeAxes'];
-  }
   return project.documentType === 'eob' ? ['claimStatus', 'output', 'journey'] : ['persona', 'output', 'journey'];
 }
 

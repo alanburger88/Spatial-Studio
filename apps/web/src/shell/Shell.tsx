@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { ROLE_LABEL, languageName, languageShortName, projectLanguages, type ProfileId } from '@iss/model';
 import { editBlockedReason, personaLabel, setPreviewLanguage, useIsDirty, useModelChecks, usePreviewLanguage, useRecord, useResolution, useStudio } from '../state/store';
 import { RecordPicker, recordSummary } from './RecordPicker';
+import { NoCustomers } from './NoCustomers';
 import { Icon } from '../ui/icons';
 import { BrandLogo } from '../ui/Brand';
 import { Biz, ErrorState, Loading, Named, Tech, Toasts } from '../ui/common';
@@ -104,7 +105,7 @@ export function useGlobalShortcuts() {
       else if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); s.redo(); }
       else if (e.altKey && /^[1-9]$/.test(e.key) && projectId) {
         const sc = SCREENS[Number(e.key)];
-        if (sc) { e.preventDefault(); navigate(sc.path.startsWith('/') ? sc.path : `/studio/${projectId}/${sc.path}${sc.path === 'exploded' ? `/${s.ctx.selectedNodeId ?? 'payment-guidance'}` : ''}`); }
+        if (sc) { e.preventDefault(); navigate(sc.path.startsWith('/') ? sc.path : `/studio/${projectId}/${sc.path}${sc.path === 'exploded' ? `/${s.ctx.selectedNodeId ?? (s.project?.documentType === 'custom' ? '' : 'payment-guidance')}`.replace(/\/$/, '') : ''}`); }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -283,7 +284,7 @@ function Nav() {
           {g.screens.map((sid) => {
             const i = SCREENS.findIndex((x) => x.id === sid);
             const s = SCREENS[i];
-            const to = s.path.startsWith('/') ? s.path : `/studio/${pid}/${s.path}${s.path === 'exploded' ? `/${sel ?? project?.nodes.find((n) => n.type === 'variant-set')?.id ?? 'payment-guidance'}` : ''}`;
+            const to = s.path.startsWith('/') ? s.path : `/studio/${pid}/${s.path}${s.path === 'exploded' ? `/${sel ?? project?.nodes.find((n) => n.type === 'variant-set')?.id ?? (project?.documentType === 'custom' ? '' : 'payment-guidance')}`.replace(/\/$/, '') : ''}`;
             const Ico = s.icon;
             const key = i >= 1 && i <= 9 ? ` (Alt+${i})` : '';
             return (
@@ -345,16 +346,19 @@ export function StudioShell({ children }: { children: ReactNode }) {
   const error = useStudio((s) => s.projectError);
   const project = useStudio((s) => s.project);
   const projectsStatus = useStudio((s) => s.projectsStatus);
+  const records = useStudio((s) => s.records);
   useEffect(() => { if (projectsStatus === 'idle') useStudio.getState().loadProjects(); }, [projectsStatus]);
   useEffect(() => { if (projectId) useStudio.getState().openProject(projectId); }, [projectId]);
   const ready = project && project.projectId === projectId && status === 'ready';
+  const recordsStatus = useStudio((s) => s.recordsStatus);
+  const noCustomers = !!ready && project.documentType === 'custom' && recordsStatus === 'ready' && records.length === 0;
   const navCollapsed = useNavCollapsed((s) => s.collapsed);
   return (
     <div className={shellClass(navCollapsed)}>
       <TopBar />
       <Nav />
       <main className="main" id="main">
-        {status === 'error' ? <ErrorState title="Project could not be loaded" message={error ?? ''} onRetry={() => projectId && useStudio.getState().openProject(projectId)} /> : ready ? children : <Loading label="Loading project model…" />}
+        {status === 'error' ? <ErrorState title="Project could not be loaded" message={error ?? ''} onRetry={() => projectId && useStudio.getState().openProject(projectId)} /> : ready ? (noCustomers ? <NoCustomers /> : children) : <Loading label="Loading project model…" />}
       </main>
       <Dock />
       <DemoBanner />

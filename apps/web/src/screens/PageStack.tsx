@@ -333,7 +333,7 @@ export function PageStack() {
               <div className="field" style={{ marginTop: 10 }}>
                 <label htmlFor="ps-rec">Compare current record with</label>
                 <select id="ps-rec" className="select" value={effCmpRecord} onChange={(e) => setCmpRecord(e.target.value)}>
-                  {otherRecords.map((r) => <option key={r.recordId} value={r.recordId}>{biz ? recordSummary(r, personas).name : r.recordId} · {personaLabel(personas, r.personaId)}</option>)}
+                  {otherRecords.map((r) => <option key={r.recordId} value={r.recordId}>{biz ? recordSummary(r, personas).name : r.recordId} · {r.personaId || project.documentType !== 'custom' ? personaLabel(personas, r.personaId) : r.generated?.label ?? 'Customer'}</option>)}
                 </select>
               </div>
             )}

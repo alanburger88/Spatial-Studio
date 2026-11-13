@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fieldsFor, type DocumentType, type JourneyEvent, type Scalar } from '@iss/model';
+import { projectFields, type DocumentType, type JourneyEvent, type Project, type Scalar } from '@iss/model';
 import { explainNode, resolve } from '@iss/resolver';
 import { replayJourney, type JourneySnapshot } from '@iss/scenarios';
 import { renderInteractiveHtml } from '@iss/renderers';
@@ -40,6 +40,11 @@ const TEMPLATES: Record<string, Record<string, Template>> = {
     'appeal.filed': { label: 'Appeal filed', day: 35, effects: [{ path: 'claim.status', value: 'appeal-filed' }] },
     'appeal.resolved': { label: 'Appeal resolved', day: 50, effects: [{ path: 'claim.status', value: 'appeal-resolved' }] },
   },
+  // A document with its own data has no events of its own: an event changes whichever of its data fields the person chooses.
+  custom: {
+    'document.issued': { label: 'Document issued', day: 1, effects: [], issue: true },
+    'data.changed': { label: 'Data changed', day: 30, effects: [] },
+  },
 };
 
 const fmt = (v: unknown) => (v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
@@ -67,7 +72,8 @@ function toDraft(e: JourneyEvent | null, type: string, docType: string): Draft {
 
 /* ---------------------------------------------------------- O05 event editor */
 
-function EventEditor({ docType, initial, existingIds, existingEvent, onSave, onClose }: {
+function EventEditor({ project, docType, initial, existingIds, existingEvent, onSave, onClose }: {
+  project: Project;
   docType: DocumentType;
   initial: Draft;
   existingIds: Set<string>;
@@ -78,7 +84,7 @@ function EventEditor({ docType, initial, existingIds, existingEvent, onSave, onC
   const [d, setD] = useState<Draft>(initial);
   const [errors, setErrors] = useState<string[]>([]);
   const prefix = docType === 'eob' ? 'claim.' : docType === 'custom' ? 'custom.' : 'card.';
-  const fields = useMemo(() => fieldsFor(docType).filter((f) => f.path.startsWith(prefix) && !f.derived && f.type !== 'array'), [docType, prefix]);
+  const fields = useMemo(() => projectFields(project).filter((f) => f.path.startsWith(prefix) && !f.derived && f.type !== 'array'), [project, prefix]);
   const fieldOf = (p: string) => fields.find((f) => f.path === p);
   const types = Object.keys(TEMPLATES[docType] ?? {});
   const patch = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
@@ -147,10 +153,11 @@ function EventEditor({ docType, initial, existingIds, existingEvent, onSave, onC
             <button className="btn ghost icon" aria-label={`Remove effect ${i + 1}`} onClick={() => setD((s) => ({ ...s, effects: s.effects.filter((_, j) => j !== i) }))}><Icon.trash /></button>
           </div>
         ))}
-        <button className="btn sm" onClick={() => setD((s) => ({ ...s, effects: [...s.effects, { path: fields[0].path, value: fields[0].type === 'enum' ? fields[0].enumValues![0] : '' }] }))}><Icon.plus /> Add effect</button>
+        {fields.length === 0 && <p className="callout warning" data-testid="event-no-fields">This document has no data fields an event could change. Add some in Rules &amp; Data first.</p>}
+        <button className="btn sm" disabled={!fields.length} onClick={() => setD((s) => ({ ...s, effects: [...s.effects, { path: fields[0].path, value: fields[0].type === 'enum' ? fields[0].enumValues![0] : fields[0].type === 'bool' ? true : ['int', 'cents', 'points'].includes(fields[0].type) ? 0 : '' }] }))}><Icon.plus /> Add effect</button>
 
         <div className="section-title">Precondition (optional)</div>
-        <label className="jr-check"><input type="checkbox" checked={d.pre.enabled} onChange={(e) => patch({ pre: { ...d.pre, enabled: e.target.checked, path: d.pre.path || fields[0].path } })} /> Only apply when the prior state satisfies a condition; otherwise the event is skipped</label>
+        <label className="jr-check"><input type="checkbox" checked={d.pre.enabled} disabled={!fields.length} onChange={(e) => patch({ pre: { ...d.pre, enabled: e.target.checked, path: d.pre.path || fields[0]?.path || '' } })} /> Only apply when the prior state satisfies a condition; otherwise the event is skipped</label>
         {d.pre.enabled && (
           <div className="jr-effect">
             <select className="select" aria-label="Precondition field" value={d.pre.path} onChange={(e) => { const f = fieldOf(e.target.value); setD((s) => ({ ...s, pre: { ...s.pre, path: e.target.value, value: f?.type === 'bool' ? true : f?.type === 'enum' ? f.enumValues![0] : 0 } })); }}>
@@ -333,7 +340,7 @@ export function JourneySimulator() {
         <div className="sr-only" role="status" aria-live="polite">{announce}</div>
 
         <div className="jr-banner" data-testid="issued-notice">
-          <Icon.lock /> <span><strong>The issued {eob ? 'EOB' : 'statement'} is never rewritten.</strong> <span className="muted">Later events create new previews.</span></span>
+          <Icon.lock /> <span><strong>The issued {eob ? 'EOB' : project.documentType === 'custom' ? 'document' : 'statement'} is never rewritten.</strong> <span className="muted">Later events create new previews.</span></span>
           <Tech><span className="muted jr-banner-rec">Record <span className="mono">{record.recordId}</span></span></Tech>
         </div>
 
@@ -536,6 +543,7 @@ export function JourneySimulator() {
 
       {editor && (
         <EventEditor
+          project={project}
           key={editor.mode === 'edit' ? `e${editor.index}` : `a${editor.type}`}
           docType={project.documentType}
           existingIds={new Set(events.map((e) => e.eventId))}

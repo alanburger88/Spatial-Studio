@@ -71,14 +71,16 @@ export function DocumentCube() {
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'count', dir: -1 });
 
   const docType = project?.documentType ?? 'credit-statement';
-  const validDims = useMemo(() => DIMENSIONS.filter((d) => d.documentTypes.includes(docType)), [docType]);
+  // A document with its own data has no personas: the "persona" dimension compares its customers.
+  const dimName = (id: DimensionId, label: string) => (docType === 'custom' && id === 'persona' ? 'Customer' : label);
+  const validDims = useMemo(() => DIMENSIONS.filter((d) => d.documentTypes.includes(docType)).map((d) => ({ ...d, label: dimName(d.id, d.label) })), [docType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cubeAxes = useMemo<[DimensionId, DimensionId, DimensionId]>(() => (axes.every((a) => validDims.some((d) => d.id === a)) ? axes : ['persona', 'output', 'journey']) as [DimensionId, DimensionId, DimensionId], [axes, validDims]);
 
   const cube: CubeResult | null = useMemo(() => {
     if (!engine) return null;
-    try { return buildCube(engine, cubeAxes, { offsets, filters, journeyCursor, profileId }); } catch { return null; }
-  }, [engine, cubeAxes, offsets, filters, journeyCursor, profileId]);
+    try { const c = buildCube(engine, cubeAxes, { offsets, filters, journeyCursor, profileId }); return docType === 'custom' ? { ...c, axes: c.axes.map((a) => ({ ...a, label: dimName(a.dim, a.label) })) as CubeResult['axes'] } : c; } catch { return null; }
+  }, [engine, cubeAxes, offsets, filters, journeyCursor, profileId, docType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter facets: every valid dimension not currently on an axis. Options come from resolved scenarios, never invented.
   const facets = useMemo(() => {

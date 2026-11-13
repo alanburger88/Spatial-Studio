@@ -100,13 +100,13 @@ export function DesignStudio() {
   /* -------------------------------------------------------- insertion */
   const insert = useCallback((type: ComponentType, parentId: string, index?: number, fixedAt?: { x: number; y: number }) => {
     const id = newNodeId(type, new Set(map.keys()));
-    const node: DocNode = defaultNode(type, id, project.documentType);
+    const node: DocNode = defaultNode(type, id, project.documentType, project);
     if (fixedAt) node.layout = { ...node.layout, paged: { mode: 'fixed', xPt: Math.round(Math.min(612 - 170, Math.max(0, fixedAt.x))), yPt: Math.round(Math.min(792 - 50, Math.max(0, fixedAt.y))), wPt: 160, hPt: 40, pages: 'first' } };
     const r = dispatch({ type: 'INSERT_NODE', node, parentId, index });
     if (r.ok) { select(id); toast({ kind: 'success', title: `${CATALOG_BY_TYPE[type].label} inserted`, message: `${id} added to ${parentId}. One undo step.` }); }
     else setReject({ nodeId: parentId, reason: r.message });
     return r;
-  }, [map, project.documentType, dispatch, select, toast]);
+  }, [map, project, dispatch, select, toast]);
 
   const insertViaKeyboard = (type: ComponentType) => {
     // Keyboard alternative to drag: insert after the selected flow node (or into a selected section).
@@ -258,6 +258,13 @@ export function DesignStudio() {
   let hiddenCount = 0;
   const countHidden = (n: RNode, parentVisible: boolean) => { if (!n.visible && parentVisible) hiddenCount++; n.children.forEach((c) => countHidden(c, n.visible)); };
   countHidden(res.root, true);
+  const emptyPage = (map.get(project.rootNodeId)?.children?.length ?? 0) === 0;
+  /** "Add your first component": opens the component list (and puts the cursor in its search). */
+  const openComponentList = () => {
+    setLeftTab('palette');
+    if (paletteCollapsed) { setPaletteCollapsed(false); lsSet(LS_PALETTE, '0'); }
+    setTimeout(() => document.querySelector<HTMLElement>('[data-testid="component-palette"] input')?.focus(), 60);
+  };
   const togglePalette = () => { const v = !paletteCollapsed; setPaletteCollapsed(v); lsSet(LS_PALETTE, v ? '1' : '0'); };
   const toggleHidden = () => { const v = !showHidden; setShowHidden(v); lsSet(LS_HIDDEN, v ? '1' : '0'); };
   const dismissHint = () => { setHintSeen(true); lsSet(LS_HINT, '1'); };
@@ -336,6 +343,13 @@ export function DesignStudio() {
             )}
           </div>
           <div className="design-scroll" ref={scrollRef} data-testid="design-canvas" tabIndex={0} onKeyDown={onCanvasKey} aria-label="Page canvas. Arrow keys move fixed anchors (Shift = 10 pt), Alt+arrows reorder flow components, Delete removes, Enter edits text." onClick={() => { setEditingId(null); }}>
+            {emptyPage && (
+              <div className="ds-empty" data-testid="design-empty" role="status" onClick={(e) => e.stopPropagation()}>
+                <strong>This page is empty</strong>
+                <span>Add a heading, a field with your customer’s data, a table or a message. Everything you add can use the data fields of this document.</span>
+                <button className="btn primary" onClick={openComponentList} data-testid="design-empty-add"><Icon.plus /> Add your first component</button>
+              </div>
+            )}
             {isHtml ? <HtmlProfileCanvas res={res} project={project} width={device} selected={selected} onSelect={(id) => select(id)} />
               : <PagePreview res={res} project={project} scale={scale} ia={ia} showGrid={grid} onPageDragOver={onPageDragOver} onPageDrop={onPageDrop} onBackgroundClick={() => { setEditingId(null); }} />}
           </div>

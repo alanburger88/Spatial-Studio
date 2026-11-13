@@ -7,7 +7,7 @@ import type { RouteDeps } from './deps';
 const PREFIX: Record<string, string> = { 'credit-statement': 'CARD', eob: 'EOB' };
 const MAX_BYTES = 400_000;
 /** Bookkeeping the studio owns; never taken from what a person sends. */
-const OWNED = ['recordId', 'documentType', 'projectId', 'generated', 'imported', 'sourceId', 'personaId', 'demonstrationOnly'] as const;
+const OWNED = ['recordId', 'documentType', 'projectId', 'generated', 'imported', 'sourceId', 'demonstrationOnly'] as const;
 
 /**
  * Data Explorer: a project's own customers as whole nested records.

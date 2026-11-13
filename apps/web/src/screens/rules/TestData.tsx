@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project } from '@iss/model';
-import { api, type TestDataResult, type TestDataTargetDto } from '../../api/client';
+import { api, type RemovalResult, type TestDataResult, type TestDataTargetDto } from '../../api/client';
 import { SourceChip } from '../../assist/common';
 import { Dialog, Loading, Tech } from '../../ui/common';
 import { localeLabel } from '../../ui/plain';
@@ -34,6 +34,8 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
   const [done, setDone] = useState<Done | null>(null);
   const [tab, setTab] = useState<'customers' | 'covers'>('customers');
   const [confirmClear, setConfirmClear] = useState(false);
+  const [removal, setRemoval] = useState<RemovalResult | null>(null);
+  const own = project.documentType === 'custom';
   const [showAll, setShowAll] = useState(false);
   const seq = useRef(0);
   const projectRef = useRef(project);
@@ -71,7 +73,7 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
     try {
       const r = await api.generateTestData(pid, { project: projectRef.current, outcomes, edges });
       await useStudio.getState().refreshRecords();
-      setDone(r); setTab('customers'); setConfirmClear(false);
+      setDone(r); setTab('customers'); setConfirmClear(false); setRemoval(null);
       await loadExisting();
     } catch (e) { setError(e instanceof Error ? e.message : 'The customers could not be generated.'); }
     setBusy(null);
@@ -79,9 +81,9 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
   const clear = async () => {
     setBusy('clear'); setError(null);
     try {
-      await api.clearTestData(pid);
+      const r = await api.clearTestData(pid);
       await useStudio.getState().refreshRecords();
-      setDone(null); setConfirmClear(false);
+      setDone(null); setConfirmClear(false); setRemoval(r);
       await loadExisting();
     } catch (e) { setError(e instanceof Error ? e.message : 'The customers could not be removed.'); }
     setBusy(null);
@@ -94,7 +96,7 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
     <>
       {existingCount > 0 && (confirmClear ? (
         <span className="td-confirm" role="group" aria-label="Confirm removing the generated customers">
-          <span>Remove {plural(existingCount, 'generated customer', 'generated customers')}? Sample and imported customers stay.</span>
+          <span>Remove {plural(existingCount, 'generated customer', 'generated customers')}? {own ? 'Customers you supplied stay, and the document always keeps one customer.' : 'Sample and imported customers stay.'}</span>
           <button type="button" className="btn sm danger" onClick={clear} disabled={busy !== null || !!blocked} data-testid="testdata-clear-confirm">{busy === 'clear' ? 'Removing…' : 'Yes, remove'}</button>
           <button type="button" className="btn sm ghost" onClick={() => setConfirmClear(false)}>Keep them</button>
         </span>
@@ -111,7 +113,7 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
   return (
     <Dialog title={<>Generate test customers <SourceChip source="builtin" /></>} onClose={onClose} labelledBy="testdata-title" footer={footer}>
       <div className="ra-wide td-wide" data-testid="testdata-dialog">
-        {!done && <p className="td-intro">Make customers for this document only, so every rule, message version, optional section and language is tried. They are marked “Generated” and never touch the sample or imported customers.</p>}
+        {!done && <p className="td-intro">Make customers for this document only, so every rule, message version, optional section and language is tried. They are marked “Generated” and never touch {own ? 'the customers you supplied' : 'the sample or imported customers'}.{own && ' Generate them again after you change the data fields or the rules.'}</p>}
         <fieldset className="td-options">
           <legend className="sr-only">What to generate</legend>
           <label className="td-opt"><input type="checkbox" checked={outcomes} onChange={() => toggle('outcomes')} aria-disabled={outcomes && !edges} data-testid="testdata-outcomes" />
@@ -161,6 +163,13 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
           </section>
         )}
 
+        {removal && !done && (
+          <p className="callout accent" role="status" data-testid="testdata-removed">
+            {plural(removal.removed, 'generated customer', 'generated customers')} removed.
+            {removal.note && <span data-testid="testdata-kept-note"> {removal.note}</span>}
+            {removal.kept && <span data-testid="testdata-kept"> Kept: {removal.kept.name} ({removal.kept.label}).</span>}
+          </p>
+        )}
         {blocked && <p className="hint" data-testid="testdata-blocked">{blocked}, so customers cannot be generated or removed. You can still see what would be created.</p>}
         {error && <p className="callout error" role="alert" data-testid="testdata-error">{error}</p>}
 
