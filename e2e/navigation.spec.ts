@@ -13,7 +13,7 @@ const SECTIONS: Array<{ id: string; label: string; tabs: string[]; ids: string[]
   { id: 'explore', label: 'Explore', tabs: ['Exploded', 'Cube', 'Landscape', 'Page stack'], ids: ['S03', 'S04', 'S05', 'S06'] },
   { id: 'check', label: 'Check', tabs: ['Blockers', 'Validate & compare', 'Preview & export'], ids: ['S17', 'S09', 'S10'] },
   { id: 'releases', label: 'Releases', tabs: ['Releases', 'Before & after', 'Proof'], ids: ['S18', 'S20', 'S21'] },
-  { id: 'help', label: 'Help & activity', tabs: ['Tour', 'Assistant', 'Activity'], ids: ['S11', 'S12', 'S14'] },
+  { id: 'help', label: 'Help & activity', tabs: ['Guided demo', 'Assistant', 'Activity'], ids: ['S11', 'S12', 'S14'] },
 ];
 
 /** Every screen: its tab test ID, address segment and the heading it has always had. */

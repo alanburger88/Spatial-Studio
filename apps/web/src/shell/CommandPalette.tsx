@@ -139,7 +139,7 @@ export function CommandPalette() {
       act('review', 'Open review & approval', () => useDrawers.getState().show('review'), undefined, 'workflow submit approve publish comments status');
     }
     act('activity', 'Open activity log', () => navigate(inStudio && pid ? `/studio/${pid}/activity` : '/activity'), undefined, 'audit log who changed what when');
-    act('shortcuts', 'Open keyboard shortcuts', () => useShellUi.getState().setShortcuts(true), '?', 'help keys');
+    act('shortcuts', 'Open help and keyboard shortcuts', () => useShellUi.getState().setShortcuts(true), '?', 'help keys');
     act('tour', 'Take the tour', () => useShellUi.getState().setTour(true), undefined, 'help onboarding walkthrough');
     if (project?.documentType !== 'custom') act('demo', 'Start guided demo', () => { void useDemo.getState().start((to: string) => navigate(to)); }, undefined, 'walkthrough narrative');
     return out;

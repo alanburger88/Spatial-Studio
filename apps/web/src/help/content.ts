@@ -227,14 +227,14 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     actions: [
       'Read the summary: customers who can be issued, customers stopped, and the time of the last full check.',
       'Choose a blocker to see what is wrong, who is affected and the fixes to choose from, each with its effect.',
-      'Apply a suggested fix, or open the place where it is fixed by hand.',
-      'Run the full check to compose pages and compare PDF and web output.',
+      'Apply a suggested fix, or open the place where it is fixed by hand. Run the full check to compose pages and compare PDF and web output.',
+      'For a problem in one customer\'s data: open it in Data Explorer with the fields highlighted, or have an approver mark it a known data problem with a reason.',
+      'Use "Resolve one by one" to walk through the open blockers, most customers first, and pin a test for each one fixed.',
     ],
     next: [
       { screen: 'S09', why: 'run the checks and compare outputs' },
       { screen: 'S18', why: 'release the document once nothing is blocked' },
     ],
-    building: 'Being built, following docs/design/BLOCKERS.md: a blocker caused by one customer\'s data will open in Data Explorer with the fields highlighted, and an approver will be able to mark it a known data problem with a reason. "Resolve one by one" will walk through the open blockers, most customers first, and offer to pin a test for each one fixed.',
   },
   S09: {
     purpose: 'Check the document for problems before it goes out: rules, data links, pagination, PDF and web agreement, and accessibility. The checks run on their own for the current customer and scenario.',
@@ -298,18 +298,18 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S21: {
-    purpose: 'Answers "what was this customer given, from which approved version, and why?" using a proof record.',
+    purpose: 'Answers "what was this customer given, from which approved version, and why?" using a proof record. A proof record keeps fingerprints and decisions, not the customer\'s data. It shows what was produced, not that it was delivered, and it is not an archive.',
     actions: [
       'Search for a record by customer reference, release, date, proof number or run number.',
       'Read what was produced and when, and the release it came from.',
       'See, for each part of the document, the message shown and the rule that chose it.',
-      'Supply the customer\'s data again to re-create the document and check that it matches.',
+      'Supply the customer\'s data again to re-create the document and check that it matches. The data is not stored.',
+      'Add proof records written by a runnable package, or produce documents from a release on the Releases tab to make new ones.',
     ],
     next: [
       { screen: 'S18', why: 'open the release a record came from' },
       { screen: 'S20', why: 'compare releases' },
     ],
-    building: 'Being built, following "Proof for any customer" in docs/design/BEFORE_AFTER_AND_PROOF.md. A proof record keeps fingerprints and decisions, not the customer\'s data. It shows what was produced, not that it was delivered, and it is not an archive.',
   },
   S11: {
     purpose: 'A narrated demonstration on the two sample documents. It is a demonstration, not help: it performs real changes and checks as it goes, and resets the samples when it starts.',
@@ -360,10 +360,10 @@ export interface GlossaryEntry {
 
 export const GLOSSARY: GlossaryEntry[] = [
   { term: 'Blocker', screen: 'S17', means: 'A problem that stops a document being issued to a customer, such as missing approved wording, rules that tie, values that do not add up, a broken data link or content that runs off the page. The studio lists one blocker for each cause and says how many customers it stops. Fix the cause and they are all cleared.' },
-  { term: 'Known data problem', screen: 'S17', means: 'The only exception to "a blocker must be fixed", and a narrow one. It applies to one customer and one problem caused by that customer\'s own data, is set aside by an approver with a reason, and never applies to a blocker in the document itself. It is listed on the approval screen and in every release. Being built; see the Blockers help.' },
+  { term: 'Known data problem', screen: 'S17', means: 'The only exception to "a blocker must be fixed", and a narrow one. It applies to one customer and one problem caused by that customer\'s own data, is set aside by an approver with a reason, and never applies to a blocker in the document itself. It is listed on the approval screen and in every release.' },
   { term: 'Release', screen: 'S18', means: 'An approved, numbered, frozen version of a document. Approving the document makes the next release; nothing can change a release afterwards, so a change is always a new release. The receiving team gets a release, never a draft.' },
   { term: 'Test and Production', screen: 'S18', means: 'The two stages a release moves through. A new release starts in Test. Moving it to Production is for administrators, and each move is recorded with who and when.' },
-  { term: 'Proof record', screen: 'S21', means: 'A record of what was produced for one customer, which release it came from and which alternative each part showed and why. It keeps fingerprints and decisions, not the customer\'s data. Being built.' },
+  { term: 'Proof record', screen: 'S21', means: 'A record of what was produced for one customer, which release it came from and which alternative each part showed and why. It keeps fingerprints and decisions, not the customer\'s data.' },
   { term: 'Pinned test', screen: 'S07', means: 'A customer and the outcome you expect for them, saved with the document ("Pin as a test" in Rules). The studio runs it again after every change, so a fix that later breaks shows up straight away.' },
   { term: 'Synthetic customer', screen: 'S16', means: 'A made-up customer the document is tested with. Every customer, account and claim in the studio is fictional, and counts of customers say "synthetic" so you do not read them as real people.' },
   { term: 'Alternative (variant)', screen: 'S03', means: 'One of the named versions a section or message can show, for example a standard reminder or a payment support message. Rules choose which alternative a customer gets.' },
