@@ -185,7 +185,13 @@ export function Overview() {
     else if (full.ranAtMs && full.digest === digest) {
       const found = new Set(full.findings.map((f) => f.recordId)).size;
       state = full.error ? 'attention' : 'done';
-      why = `Run at ${clockTime(full.ranAtMs)} on this version of the document, across ${customers(full.total)}${found ? `; it found blocking problems for ${plural(found, 'customer')}` : '; it found no blocking problems'}.${full.error ? ` ${full.error}` : ''}`;
+      // PDF accessibility (the studio's own checks, not PDF/UA validation): how many customers' PDFs passed them.
+      const pdf = full.pdf;
+      const pdfWords = !pdf ? '' : pdf.failed
+        ? ` PDF accessibility, checked by the studio: the PDFs of ${plural(pdf.failed, 'customer')} failed a check${pdf.required ? ' (an accessible PDF is required, so they are blockers)' : ' (warnings: an accessible PDF is not required)'}.`
+        : pdf.notChecked ? ` PDF accessibility, checked by the studio: no check failed, but some could not be done for ${plural(pdf.notChecked, 'customer')}.`
+        : ` PDF accessibility, checked by the studio: every customer’s PDF passed the studio’s checks.`;
+      why = `Run at ${clockTime(full.ranAtMs)} on this version of the document, across ${customers(full.total)}${found ? `; it found blocking problems for ${plural(found, 'customer')}` : '; it found no blocking problems'}.${pdfWords}${full.error ? ` ${full.error}` : ''}`;
     } else if (full.ranAtMs) { state = 'todo'; why = `The document has changed since the last full check (run at ${clockTime(full.ranAtMs)}). Run it again.`; }
     else { state = 'todo'; why = 'No full check has been run in this browser session. The studio keeps the result for this session only, so it cannot tell whether one was run earlier.'; }
     steps.push({ key: 'full-check', title: 'Full check since the last change', state, why, action: { label: 'Open blockers to run it', to: `${base}/blockers` } });

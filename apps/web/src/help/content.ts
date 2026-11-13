@@ -238,11 +238,12 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S09: {
-    purpose: 'Check the document for problems before it goes out: rules, data links, pagination, PDF and web agreement, and accessibility. The checks run on their own for the current customer and scenario.',
+    purpose: 'Check the document for problems before it goes out: rules, data links, pagination, PDF and web agreement, and accessibility, including the PDF itself. The checks run on their own for the current customer and scenario.',
     actions: [
       'Read the issues for this customer, or switch to all customers.',
       'Choose an issue to see its cause, who it reaches and a suggested fix with its effect.',
       'Choose which suites to run, and read the result for each.',
+      'Read the PDF accessibility checks and open a failure where it is fixed.',
       'Open an issue in Blockers to resolve it.',
     ],
     next: [
@@ -252,6 +253,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     read: [
       { what: 'The freshness note', means: 'Says whether the result is up to date or is being re-run after a change.' },
       { what: 'Accessibility results', means: 'Automated checks only. They are not a certification.' },
+      { what: 'PDF accessibility', means: '“Checked by the studio” means the studio read its own PDF; it is not validation against PDF/UA. “Validated by veraPDF” appears only when veraPDF is installed on this machine and ran. A failure blocks the document only when an accessible PDF is required (Design, Page setup).' },
     ],
   },
   S10: {

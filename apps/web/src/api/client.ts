@@ -268,6 +268,14 @@ export const api = {
   afpSim: (req: ScenarioRequest) => json<any>('/api/v1/compose/afp-sim', { method: 'POST', body: JSON.stringify(req) }),
   parity: (req: ScenarioRequest) => json<any>('/api/v1/parity', { method: 'POST', body: JSON.stringify(req) }),
   validate: (req: ScenarioRequest & { suites?: string[] }) => json<any>('/api/v1/validate', { method: 'POST', body: JSON.stringify(req) }),
+  /** Validation with the PDF accessibility options: `verapdf` asks for a veraPDF run when it is installed; `accessibilityScope: 'pdf'` runs only the PDF part of the accessibility suite. */
+  validateChecks: (req: ScenarioRequest & { suites?: string[]; verapdf?: boolean; accessibilityScope?: 'pdf' }) => json<any>('/api/v1/validate', { method: 'POST', body: JSON.stringify(req) }),
+  /** Whether veraPDF is installed on the studio's machine (the studio never installs it). */
+  verapdfStatus: () => json<{ installed: boolean; version?: string | null; message?: string }>('/api/v1/pdf-accessibility/verapdf'),
+  /** The latest PDF accessibility record of a release (made on demand), or null. */
+  releasePdfAccessibility: (releaseId: string) => json<{ record: ReleasePdfRecordDto | null; verapdf: { installed: boolean; version?: string | null; message?: string } }>(`/api/v1/releases/${releaseId}/pdf-accessibility`),
+  /** Composes the release's PDF for a sample customer, checks it and records the level of proof reached. */
+  checkReleasePdfAccessibility: (releaseId: string) => json<{ record: ReleasePdfRecordDto }>(`/api/v1/releases/${releaseId}/pdf-accessibility`, { method: 'POST', body: '{}' }),
   replayJourney: (req: { projectId: string; recordId: string; overrides?: Record<string, unknown>; project?: Project; journeyCursor?: number | null }) => json<any>('/api/v1/journeys/replay', { method: 'POST', body: JSON.stringify(req) }),
   snapshots: (projectId: string, recordId?: string) => json<{ snapshots: any[] }>(`/api/v1/snapshots?projectId=${projectId}${recordId ? `&recordId=${recordId}` : ''}`),
   resetSnapshots: (projectId: string) => json<{ cleared: boolean }>('/api/v1/snapshots/reset', { method: 'POST', body: JSON.stringify({ projectId, confirm: true }) }),
@@ -333,3 +341,33 @@ export const api = {
   prepareRuntime: (releaseId: string, body: { wait?: boolean; verify?: boolean } = {}) => json<{ runtime: RuntimePackageStatus; started: boolean }>(`/api/v1/releases/${releaseId}/runtime`, { method: 'POST', body: JSON.stringify(body) }),
   runtimeDownloadUrl: (releaseId: string) => `/api/v1/releases/${releaseId}/runtime`,
 };
+
+/* ------------------------------------------------------------------ accessible PDF (wave 2) */
+
+export type PdfCheckStatus = 'passed' | 'failed' | 'not-checked';
+export interface PdfCheckDto { id: string; label: string; status: PdfCheckStatus; detail: string; failures: number }
+/** veraPDF's part: its verdict and failed rules, or why it did not run. */
+export type VeraPdfDto =
+  | { status: 'not-installed' | 'not-run'; message: string }
+  | { status: 'ran'; version: string | null; profile: string; compliant: boolean; failedRules: Array<{ id: string; description: string; count: number; knownLimit?: string }>; passedRules: number | null; failedChecks: number | null; ranAt: string; durationMs: number }
+  | { status: 'error' | 'timeout'; version: string | null; message: string; ranAt: string; durationMs: number };
+/** The PDF accessibility result of one validation (apps/api/src/pdfAccessibility.ts). */
+export interface PdfAccessibilityDto {
+  checkedAt: string;
+  recordId: string;
+  studio: {
+    level: 'studio'; checker: string; reader: string; pageCount: number; title: string | null; language: string | null; required: boolean;
+    checks: PdfCheckDto[];
+    findings: Array<{ code: string; severity: string; message: string; nodeId?: string; page?: number; suggestion?: string; details: { check: string; title: string; fix: string } & Record<string, unknown> }>;
+    summary: { ran: number; passed: number; failed: number; notChecked: number };
+    knownLimits: Array<{ id: string; text: string }>;
+  };
+  verapdf: VeraPdfDto;
+}
+/** What a release records about its PDF (on demand). */
+export interface ReleasePdfRecordDto {
+  id: number; releaseId: string; at: string; by: string | null; recordId: string;
+  level: 'studio' | 'verapdf'; levelLabel: string;
+  studio: { checker: string; pageCount: number; summary: { ran: number; passed: number; failed: number; notChecked: number }; checks: Array<{ id: string; label: string; status: PdfCheckStatus }>; findings: number };
+  verapdf: { status: string; version?: string | null; compliant?: boolean; failedRules?: Array<{ id: string; description: string; count: number; knownLimit?: string }>; message?: string };
+}

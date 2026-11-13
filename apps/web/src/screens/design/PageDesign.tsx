@@ -273,6 +273,16 @@ export function PagePanel({ project, template, onTemplate, onSelectNode, onClose
           ) : <p className="muted">None. Set a fixed item’s pages in the Inspector, Layout.</p>}
         </section>
 
+        <section className="pg-sec" aria-labelledby="pg-a11y-h">
+          <h3 className="insp-h" id="pg-a11y-h">Accessible PDF</h3>
+          <label className="row pg-check"><input type="checkbox" checked={!!project.accessiblePdfRequired} data-testid="accessible-pdf-required"
+            onChange={(e) => dispatch({ type: 'SET_ACCESSIBLE_PDF_REQUIRED', required: e.target.checked })} />
+            Accessible PDF is required</label>
+          <p className="muted pg-hint">{project.accessiblePdfRequired
+            ? 'A PDF that fails one of the studio’s accessibility checks stops the document: the full check lists it on the Blockers screen.'
+            : 'Off: the studio’s PDF accessibility checks still run (Validate & Compare, and the full check), but what they find is a warning.'} The studio’s checks are not validation against PDF/UA; veraPDF does that when it is installed.</p>
+        </section>
+
         {findings.length > 0 && (
           <section className="pg-sec" aria-label="Page design problems">
             {findings.map((f, i) => <div key={i} className={`callout ${f.severity === 'blocking' ? 'error' : 'warning'}`} data-testid="page-finding">{f.message}</div>)}
