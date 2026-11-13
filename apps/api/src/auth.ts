@@ -115,6 +115,9 @@ const ROUTES: Record<string, Need> = {
   'POST /api/v1/projects/:projectId/test-data/plan': 'any',
   'POST /api/v1/projects/:projectId/records/check': 'any',
   'POST /api/v1/assistant/proposals/:id/decision': 'any',
+  // Known data problems: setting one aside (or removing one) is an approver's decision, like approving the document.
+  'POST /api/v1/projects/:projectId/known-data-problems': 'approve',
+  'DELETE /api/v1/projects/:projectId/known-data-problems/:id': 'approve',
   // Releases: approvers and admins create them and keep the handover log; only admins move one between stages.
   'POST /api/v1/projects/:projectId/releases': 'approve',
   'POST /api/v1/releases/:releaseId/handover': 'approve',

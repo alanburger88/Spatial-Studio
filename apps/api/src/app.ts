@@ -10,7 +10,7 @@ import { diffProjects, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
 import { renderPagedDocument, renderInteractiveHtml, compareManifests, afpSimulation, AFP_SIMULATION_LABEL, PAGED_RENDERER_VERSION, HTML_RENDERER_VERSION } from '@iss/renderers';
-import { ScenarioEngine, buildCube, buildLandscape, generateEdgeCase, replayJourney, runTestCases, EDGE_CASE_PRESETS, DIMENSIONS, type DimensionId } from '@iss/scenarios';
+import { ScenarioEngine, blockerIdOf, buildCube, buildLandscape, generateEdgeCase, replayJourney, runTestCases, EDGE_CASE_PRESETS, DIMENSIONS, type DimensionId } from '@iss/scenarios';
 import { staticRuleAnalysis, bindingAnalysis, modelAccessibility, axeToFindings, toIssue, type ValidationIssue, type Suite } from '@iss/validation';
 import { Composer } from './composer';
 import { Store } from './db';
@@ -23,6 +23,7 @@ import { registerTestDataRoutes } from './routes/testData';
 import { registerRecordRoutes } from './routes/records';
 import { registerSetupRoutes } from './routes/setup';
 import { registerReleaseRoutes } from './routes/releases';
+import { knownDataProblemsInForce, registerKnownDataRoutes } from './routes/knownData';
 import { ReleasePackages, createRelease, releaseInfo } from './releases';
 import { chromiumPackageComposer, type PackageComposer } from './releasePackage';
 import type { RouteDeps } from './routes/deps';
@@ -178,11 +179,14 @@ export async function buildApp(opts: AppOptions = {}) {
     // Restoring a sample that is already identical to the approved seed is a no-op: no new version, no audit noise.
     if (projectContentDigest(current) === projectContentDigest(seed)) {
       if ((req.body as any)?.clearSnapshots !== false) store.clearSnapshots(req.params.projectId);
+      store.clearKnownDataProblems(req.params.projectId);
       req.audited = true;
       return { project: current, reset: true, unchanged: true, seedDigest: projectContentDigest(seed) };
     }
     const reset = store.putProject({ ...seed, modelVersion: current.modelVersion + 1 }, projectContentDigest(seed), { by: by(req), label: 'Restored approved sample' });
     if ((req.body as any)?.clearSnapshots !== false) store.clearSnapshots(req.params.projectId);
+    // Restoring the approved sample starts afresh: no customer's data problem stays set aside.
+    store.clearKnownDataProblems(req.params.projectId);
     audit(store, req, 'project.reset', { projectId: reset.projectId, modelVersion: reset.modelVersion, detail: { fromVersion: current.modelVersion, seedDigest: projectContentDigest(seed) } });
     return { project: reset, reset: true, seedDigest: projectContentDigest(seed) };
   });
@@ -231,6 +235,7 @@ export async function buildApp(opts: AppOptions = {}) {
   registerRecordRoutes(app, deps);
   registerSetupRoutes(app, deps);
   registerReleaseRoutes(app, deps);
+  registerKnownDataRoutes(app, deps);
 
   /* ------------------------------------------------ version history, review workflow, comments, audit */
 
@@ -271,8 +276,14 @@ export async function buildApp(opts: AppOptions = {}) {
     return { project: saved, restored: true, restoredVersion: v.n, contentDigest: projectContentDigest(saved), workflow: { state: store.getWorkflow(saved.projectId).state } };
   });
 
-  /** Everything that must be true before the saved model can be approved: no blocking issue for any seeded or imported record, every pinned test passing. */
-  function approvalReadiness(project: Project) {
+  /**
+   * Everything that must be true before the saved model can be approved: no blocking issue for any seeded or imported
+   * record, every pinned test passing. A customer-data blocker an approver set aside for one customer (a known data
+   * problem in force) does not count for that customer; every known data problem is listed with its reason.
+   */
+  function approvalReadiness(project: Project, req: FastifyRequest | null = null) {
+    const known = knownDataProblemsInForce(store, req, project, allRecords(project.projectId));
+    const excused = new Set(known.active.map((k) => `${k.blockerId}|${k.recordId}`));
     const records = allRecords(project.projectId).filter((r) => r.documentType === project.documentType);
     const groups = new Map<string, { code: string; severity: string; nodeId: string | null; locale: string | null; message: string; source: string; recordIds: string[] }>();
     const add = (f: { code: string; severity: string; nodeId?: string; locale?: string; message: string; source: string }, recordId: string | null) => {
@@ -281,18 +292,18 @@ export async function buildApp(opts: AppOptions = {}) {
       if (recordId && !g.recordIds.includes(recordId)) g.recordIds.push(recordId);
       groups.set(key, g);
     };
-    for (const record of records) for (const f of resolve({ project, record }).findings) if (f.severity === 'blocking') add(f, record.recordId);
+    for (const record of records) for (const f of resolve({ project, record }).findings) if (f.severity === 'blocking' && !(excused.size && excused.has(`${blockerIdOf(f)}|${record.recordId}`))) add(f, record.recordId);
     for (const f of [...staticRuleAnalysis(project, allRecords(project.projectId)), ...bindingAnalysis(project)]) if (f.severity === 'blocking') add(f, null);
     // Same runner as Rules & Data → Tests, so "passes" means the same thing everywhere.
     const tests = runTestCases(project, allRecords(project.projectId));
     const issues = [...groups.values()];
     const failedTests = tests.filter((t) => !t.pass);
-    return { ready: issues.length === 0 && failedTests.length === 0, modelVersion: project.modelVersion, recordsChecked: records.length, blocking: issues, tests, testsRun: tests.length, testsFailed: failedTests.length };
+    return { ready: issues.length === 0 && failedTests.length === 0, modelVersion: project.modelVersion, recordsChecked: records.length, blocking: issues, tests, testsRun: tests.length, testsFailed: failedTests.length, knownDataProblems: known.list, knownDataNote: known.lapsedNote };
   }
 
   function workflowView(project: Project, req: FastifyRequest, withChecks: boolean) {
     const wf = store.getWorkflow(project.projectId);
-    const readiness = withChecks ? approvalReadiness(project) : null;
+    const readiness = withChecks ? approvalReadiness(project, req) : null;
     const role = req.user?.role ?? null;
     const actions = WORKFLOW_ACTIONS.map((action) => {
       const t = WORKFLOW_TRANSITIONS[action];
@@ -321,7 +332,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const problem = transitionProblem(wf.state, action);
     if (problem) throw new ApiError(409, 'INVALID_TRANSITION', problem, { state: wf.state });
     if (action === 'approve') {
-      const readiness = approvalReadiness(p);
+      const readiness = approvalReadiness(p, req);
       if (!readiness.ready) throw new ApiError(422, 'APPROVAL_BLOCKED', `Cannot approve: ${readiness.blocking.length} blocking issue${readiness.blocking.length === 1 ? '' : 's'} and ${readiness.testsFailed} failing test${readiness.testsFailed === 1 ? '' : 's'} in the saved model (v${p.modelVersion}).`, { readiness });
     }
     if (action === 'request_changes' && !comment) throw new ApiError(400, 'COMMENT_REQUIRED', 'Say what needs to change.');

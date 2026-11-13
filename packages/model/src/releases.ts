@@ -117,6 +117,24 @@ export interface ReleaseInfo {
   documentRemovedAt: string | null;
   package: ReleasePackageStatus;
   handover: { received: boolean; live: boolean; entries: number };
+  /** The known data problems in force when the release was made. Absent on releases made before they were recorded. */
+  knownDataProblems?: ReleaseKnownDataProblem[];
+}
+
+/**
+ * A known data problem as a release records it (and its package's manifest lists it). Never customer data: a built-in
+ * sample or engine-generated customer is named by id only; any other customer (imported, supplied or edited) has no id
+ * and no name, only that one such customer was set aside.
+ */
+export interface ReleaseKnownDataProblem {
+  blockerId: string;
+  /** The blocker in plain words. */
+  blocker: string;
+  customer: { kind: 'sample' | 'generated'; id: string } | { kind: 'imported' | 'supplied' };
+  /** The approver's reason. For a customer that is not synthetic, the customer's own name is replaced by “the customer”. */
+  reason: string;
+  markedBy: string | null;
+  markedAt: string;
 }
 
 export type ReleaseEventKind = 'created' | 'reapproved' | 'promoted' | 'superseded' | 'withdrawn' | 'document-removed';
