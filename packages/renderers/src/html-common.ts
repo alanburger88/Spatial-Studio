@@ -209,7 +209,9 @@ function nodeInnerHtmlBase(n: RNode, mode: RenderMode, renderChild: (c: RNode) =
     }
     case 'qr-code': {
       const q = n.qr!;
-      return `<figure class="iss-qrblock">${qrSvg(q.url, mode.target === 'paged' ? 64 : 96)}<figcaption>${esc(q.caption)}<br/><span class="iss-url">${esc(q.url.replace(/^https:\/\//, ''))}</span></figcaption></figure>`;
+      // Paged: the <figure> is a group (no figure of its own in the PDF tags), so the QR picture is the one tagged figure
+      // and carries the description; a figure without a description would fail the PDF accessibility checks.
+      return `<figure class="iss-qrblock"${mode.target === 'paged' ? ' role="group"' : ''}>${qrSvg(q.url, mode.target === 'paged' ? 64 : 96)}<figcaption>${esc(q.caption)}<br/><span class="iss-url">${esc(q.url.replace(/^https:\/\//, ''))}</span></figcaption></figure>`;
     }
     case 'expandable-explanation': {
       const e = n.explanation!;
@@ -217,12 +219,14 @@ function nodeInnerHtmlBase(n: RNode, mode: RenderMode, renderChild: (c: RNode) =
       return `<details class="iss-expl"><summary><span class="iss-expl-title">${esc(e.title)}</span><span class="iss-expl-summary">${esc(e.summary)}</span></summary><p>${esc(e.details)}</p></details>`;
     }
     case 'chart':
-      return `<figure class="iss-figure"><figcaption class="iss-chart-title">${esc(n.chart!.title)}</figcaption>${chartSvg(n, mode.target === 'html')}<p class="iss-sr">${esc(n.chart!.summary)}</p></figure>`;
+      // Paged: as for the QR code, the chart drawing is the tagged figure and its description is the chart summary.
+      return `<figure class="iss-figure"${mode.target === 'paged' ? ' role="group"' : ''}><figcaption class="iss-chart-title">${esc(n.chart!.title)}</figcaption>${chartSvg(n, mode.target === 'html')}<p class="iss-sr">${esc(n.chart!.summary)}</p></figure>`;
     case 'image': {
       const brand = mode.project.brand;
       const useBrandLogo = !!brand?.logoDataUri && n.image!.src.startsWith('asset:');
       const src = imageSrc(useBrandLogo ? brand!.logoDataUri! : n.image!.src, accent);
-      const alt = useBrandLogo ? (brand!.logoAlt ?? n.image!.alt) : n.image!.alt;
+      // Paged: a picture marked as decoration has an empty description, so the browser leaves it out of the PDF tags.
+      const alt = mode.target === 'paged' && n.decorative ? '' : useBrandLogo ? (brand!.logoAlt ?? n.image!.alt) : n.image!.alt;
       // No picture chosen yet (a freshly inserted image in a project that has no built-in mark): a neutral empty frame.
       if (!src && !n.image!.src) return `<div class="iss-img-missing iss-img-empty" ${alt ? `role="img" aria-label="${esc(alt)}"` : 'aria-hidden="true"'} style="box-sizing:border-box;min-height:32pt;border:1px dashed #94A3B8;border-radius:4px;background:#F8FAFC"></div>`;
       return src ? `<img class="iss-img" src="${src}" alt="${esc(alt)}" style="object-fit:${esc(n.image!.fit)}"/>` : `<div class="iss-img-missing">${esc(modeText(mode, 'imageUnavailable'))}</div>`;
@@ -256,7 +260,8 @@ export function tableHtml(n: RNode, mode: RenderMode): string {
   const foot = t.totalCents !== undefined && amountCol >= 0
     ? `<tfoot><tr><th scope="row" colspan="${amountCol}">${esc(modeText(mode, t.rows.length === 1 ? 'tableTotalOne' : 'tableTotalMany', { label: t.columns[amountCol].label.toLowerCase(), count: t.rows.length }))}</th><td class="num" data-table-total-cents="${t.totalCents}">${esc(formatCents(t.totalCents))}</td>${t.columns.length - amountCol - 1 > 0 ? `<td colspan="${t.columns.length - amountCol - 1}"></td>` : ''}</tr></tfoot>`
     : '';
-  return `<div class="iss-table-wrap"><div class="iss-table-caption">${esc(t.caption)}</div><table class="iss-table" data-table-id="${esc(n.id)}">${head}<tbody>${body}${empty}</tbody>${foot}</table></div>`;
+  // Paged: the table title is a real heading in the PDF tags (its level is set by `renderPagedDocument`).
+  return `<div class="iss-table-wrap"><div class="iss-table-caption"${mode.target === 'paged' ? ' role="heading" aria-level="2"' : ''}>${esc(t.caption)}</div><table class="iss-table" data-table-id="${esc(n.id)}">${head}<tbody>${body}${empty}</tbody>${foot}</table></div>`;
 }
 
 /** Data attributes carried by the outer wrapper of every rendered semantic node (lineage + parity facts). */
