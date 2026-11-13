@@ -79,7 +79,10 @@ export function ImportDialog({ onClose, onDone, projectId }: { onClose: () => vo
       return m?.path && usable.has(m.path) && (m.confidence === 'exact' || m.confidence === 'likely') ? m.path : IGNORE;
     }));
     setCheck(null);
-  }, [headers.join('\u0001'), fields, matches]);
+    // Keyed by what the columns and fields ARE, not by object identity: the document is re-read in the background
+    // (for example when the project list refreshes), and that must not throw away a match the person chose by hand.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headers.join('\u0001'), fields.map((f) => `${f.path}:${f.type}`).join('\u0001'), matches.map((m) => `${m.path ?? ''}:${m.confidence}`).join('\u0001')]);
   const downloadMapped = () => {
     const url = URL.createObjectURL(new Blob([mappedCsv()], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a'); a.href = url; a.download = 'customers-renamed.csv'; document.body.appendChild(a); a.click(); a.remove();
