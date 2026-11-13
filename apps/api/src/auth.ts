@@ -123,6 +123,8 @@ const ROUTES: Record<string, Need> = {
   'POST /api/v1/releases/reset': 'manage_users',
   // Preparing a package changes no document or release; anyone who may download it may ask for it (the handler records who did).
   'POST /api/v1/releases/:releaseId/package': 'any',
+  // The runnable package (phase 7) follows the release package: anyone who may download it may ask for it.
+  'POST /api/v1/releases/:releaseId/runtime': 'any',
 };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Routes not listed above: reads need a session; anything that writes needs edit rights (safe default for new modules). */

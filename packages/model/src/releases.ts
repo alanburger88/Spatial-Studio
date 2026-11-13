@@ -178,6 +178,30 @@ export function parseReleaseId(id: string): { documentId: string; number: number
 }
 export const releasePackageName = (documentId: string, number: number): string => `${releaseId(documentId, number)}.zip`;
 
+/* ------------------------------------------------------------------ the runnable package (phase 7) */
+
+/** `<document-id>-r<release>-runtime.zip`; it unpacks into a folder of the same name without `.zip`. */
+export const runtimePackageName = (documentId: string, number: number): string => `${releaseId(documentId, number)}-runtime.zip`;
+
+/** The runnable package of a release: the release plus the pinned engine, a data contract and a proof pack. Built on request, kept once built. */
+export interface RuntimePackageStatus {
+  status: ReleasePackageState;
+  fileName: string;
+  /** Ready only. */
+  sha256: string | null;
+  bytes: number | null;
+  files: number | null;
+  builtAt: string | null;
+  progress: { step: string; done: number; total: number } | null;
+  error: string | null;
+  /** The last time it was built again to check it (it is never replaced once built). */
+  verified: ReleasePackageCheck | null;
+  /** Ready only: the engine inside it, by version and the SHA-256 of its one file. */
+  engine: { version: string; sha256: string } | null;
+  /** Ready only: synthetic customers in its proof pack. */
+  proofCases: number | null;
+}
+
 /* ------------------------------------------------------------------ creating */
 
 /** What the rules need to know about a release. */

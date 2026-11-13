@@ -7,6 +7,8 @@ export default defineConfig({
     '@iss/renderers': r('packages/renderers/src/index.ts'),
     '@iss/scenarios': r('packages/scenarios/src/index.ts'),
     '@iss/validation': r('packages/validation/src/index.ts'),
+    '@iss/runtime/build': r('packages/runtime/src/build.ts'),
+    '@iss/runtime': r('packages/runtime/src/index.ts'),
     '@iss/model/fixtures': r('packages/model/src/fixtures.ts'),
     '@iss/model': r('packages/model/src/index.ts'),
   } },

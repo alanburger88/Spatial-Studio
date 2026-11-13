@@ -23,6 +23,7 @@ import { registerTestDataRoutes } from './routes/testData';
 import { registerRecordRoutes } from './routes/records';
 import { registerSetupRoutes } from './routes/setup';
 import { registerReleaseRoutes } from './routes/releases';
+import { registerRuntimeRoutes } from './routes/runtime';
 import { ReleasePackages, createRelease, releaseInfo } from './releases';
 import { chromiumPackageComposer, type PackageComposer } from './releasePackage';
 import type { RouteDeps } from './routes/deps';
@@ -231,6 +232,7 @@ export async function buildApp(opts: AppOptions = {}) {
   registerRecordRoutes(app, deps);
   registerSetupRoutes(app, deps);
   registerReleaseRoutes(app, deps);
+  registerRuntimeRoutes(app, deps, opts.releasePackage?.composer ?? chromiumPackageComposer(composer));
 
   /* ------------------------------------------------ version history, review workflow, comments, audit */
 
