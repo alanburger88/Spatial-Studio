@@ -8,7 +8,12 @@ import { isStringId, translatableStrings } from './strings';
 import { tokensOfText } from './translations';
 import { CHANNEL_TEXT_LIMITS, CHANNEL_TOKENS, EMAIL_SECTION_IDS } from './channels';
 import { RECORD_ID_PATTERN } from './types';
-import type { ChannelConfig, GlossaryEntry, TranslationOrigin } from './types';
+import type { CalculatedField, ChannelConfig, DocumentDateSource, EffectivePeriod, GlossaryEntry, LookupTable, TranslationOrigin } from './types';
+import { CALC_MAX, exprDependencies, predicateLeafPaths, validateCalculatedFields } from './expressions';
+import { documentDateUse, isConditionalSection, periodProblem } from './effective';
+import { CALC_PREFIX } from './fields';
+import { isIsoDay } from './isoDate';
+import { LOOKUP_TABLES_MAX, validateLookupTable } from './lookup';
 import type { BrandKit, ContentPart, CustomField, DocNode, Locale, TestCase, TextStyle, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
 import { validatePredicate, validateRule } from './validate';
 
@@ -49,6 +54,20 @@ export type Command =
   | { type: 'REMOVE_LANGUAGE'; locale: Locale }
   | { type: 'SET_CHANNELS'; channels: ChannelConfig }
   | { type: 'SET_GLOSSARY'; locale: Locale; entries: GlossaryEntry[] }
+  /** Where the document's date comes from (null: the document does not use dates; refused while anything does). */
+  | { type: 'SET_DOCUMENT_DATE'; source: DocumentDateSource | null }
+  /** Adds a calculated field (at `index`, default the end) or changes the one with the same key. */
+  | { type: 'UPSERT_CALCULATED_FIELD'; field: CalculatedField; index?: number }
+  | { type: 'DELETE_CALCULATED_FIELD'; key: string }
+  | { type: 'MOVE_CALCULATED_FIELD'; key: string; index: number }
+  /** Adds a lookup table (at `index`, default the end) or replaces the one with the same id (rows included). */
+  | { type: 'UPSERT_LOOKUP_TABLE'; table: LookupTable; index?: number }
+  | { type: 'DELETE_LOOKUP_TABLE'; tableId: string }
+  | { type: 'MOVE_LOOKUP_TABLE'; tableId: string; index: number }
+  /** In effect from/until (null: always). The document must say where its date comes from first. */
+  | { type: 'SET_RULE_PERIOD'; ruleId: string; period: EffectivePeriod | null }
+  | { type: 'SET_VARIANT_PERIOD'; nodeId: string; variantId: string; period: EffectivePeriod | null }
+  | { type: 'SET_SECTION_PERIOD'; nodeId: string; period: EffectivePeriod | null }
   /** Several commands applied in order as ONE undoable step (assistant fixes). All or nothing: the first rejection rejects the batch. */
   | { type: 'BATCH'; label: string; commands: Command[] }
   | { type: 'RESTORE_SNAPSHOT'; project: Project; label: string };
@@ -110,8 +129,26 @@ function validateNodeShape(node: DocNode, project: Project): string | null {
   if (node.qr && !isSafeUrl(node.qr.url)) return `Unsafe QR destination. Only https:// links are allowed.`;
   if (node.visibleWhen) { const e = validatePredicate(node.visibleWhen, projectFieldIndex(project)); if (e.length) return e[0]; }
   for (const p of Object.values(node.variantConditions ?? {})) { const e = validatePredicate(p, projectFieldIndex(project)); if (e.length) return e[0]; }
+  if (node.effective !== undefined || node.variantPeriods !== undefined) {
+    if (!project.documentDate) return 'Choose where the document’s date comes from before giving anything a period.';
+    if (node.effective !== undefined) {
+      const bad = periodProblem(node.effective); if (bad) return bad;
+      if (!isConditionalSection(node) || node.id === project.rootNodeId) return 'Only a conditional section can be in effect for a period.';
+      if (requiredNodeIds(project).has(node.id)) return 'A required section is always shown, so it cannot be limited to a period.';
+    }
+    for (const [v, p] of Object.entries(node.variantPeriods ?? {})) {
+      if (!(node.variantIds ?? []).includes(v)) return `${v} is not an alternative of ${node.name ?? node.id}.`;
+      const bad = periodProblem(p); if (bad) return bad;
+    }
+  }
+  if (node.totalFrom !== undefined) {
+    if (node.type !== 'repeating-table') return 'Only a table has a total in its footer.';
+    const f = projectFieldIndex(project).get(node.totalFrom);
+    if (!f || f.type !== 'cents') return `The footer total must be an amount field; ${node.totalFrom} is not one.`;
+  }
   return null;
 }
+
 
 export function applyCommand(project: Project, cmd: Command): CommandResult {
   const map = nodeMap(project);
@@ -279,6 +316,7 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
         const t = d.nodes.find((n) => n.id === cmd.nodeId)!;
         t.variantIds = t.variantIds!.filter((v) => v !== cmd.variantId);
         if (t.variantConditions) delete t.variantConditions[cmd.variantId];
+        if (t.variantPeriods?.[cmd.variantId]) { const all = { ...t.variantPeriods }; delete all[cmd.variantId]; if (Object.keys(all).length) t.variantPeriods = all; else delete t.variantPeriods; }
       }) };
     }
     case 'SET_VARIANT_CONDITION': {
@@ -318,6 +356,10 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
       const candidate = { ...project, customFields: cmd.fields };
       const bad = project.rules.map((r) => validateRule(r, candidate)).find((e) => e.length);
       if (bad) return reject('FIELD_IN_USE', `A rule no longer validates with these fields: ${bad.join(' ')}`);
+      if (project.calculatedFields?.length) {
+        const calcBad = validateCalculatedFields(candidate, project.calculatedFields);
+        if (calcBad.length) return reject('FIELD_IN_USE', `A calculation no longer works with these fields: ${calcBad[0]}`);
+      }
       return { ok: true, label: 'Edit data fields', project: bump(project, (d) => { d.customFields = cmd.fields.map((f) => ({ ...f })); }) };
     }
     case 'SET_STYLES': {
@@ -342,6 +384,7 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
       if (!/^[A-Za-z0-9-]{1,40}$/.test(t.id ?? '')) return reject('INVALID_TEST', 'Test case id must be letters, digits or dashes.');
       if (!t.name?.trim()) return reject('INVALID_TEST', 'Give the test case a name.');
       if (!RECORD_ID_PATTERN.test(t.recordId ?? '')) return reject('INVALID_TEST', 'Test case needs a record ID.');
+      if (t.issueDate !== undefined && !isIsoDay(t.issueDate)) return reject('INVALID_TEST', 'The test’s “as issued on” date must be a date (YYYY-MM-DD).');
       const existing = (project.testCases ?? []).some((x) => x.id === t.id);
       return { ok: true, label: `${existing ? 'Edit' : 'Add'} test “${t.name}”`, project: bump(project, (d) => {
         d.testCases = [...(d.testCases ?? []).filter((x) => x.id !== t.id), { ...t }];
@@ -453,6 +496,125 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
         const all = { ...(d.glossary ?? {}) };
         if (clean.length) all[cmd.locale] = clean; else delete all[cmd.locale];
         if (Object.keys(all).length) d.glossary = all; else delete d.glossary;
+      }) };
+    }
+    case 'SET_DOCUMENT_DATE': {
+      const src = cmd.source;
+      if (src === null) {
+        const use = documentDateUse(project);
+        if (use.uses) return reject('DATE_IN_USE', `The document’s date is still used (${[use.periods ? `${use.periods} period${use.periods === 1 ? '' : 's'}` : '', use.calcs.length ? `${use.calcs.length} calculation${use.calcs.length === 1 ? '' : 's'}` : '', use.referenced ? 'conditions or wording' : ''].filter(Boolean).join(', ')}). Remove those first.`);
+        if (!project.documentDate) return reject('NOT_FOUND', 'The document does not have a date source.');
+        return { ok: true, label: 'Stop using the document’s date', project: bump(project, (d) => { delete d.documentDate; }) };
+      }
+      if (!src || (src.source !== 'run' && src.source !== 'field')) return reject('INVALID', 'The document’s date comes from a date field of the customer’s data, or is given for the run.');
+      if (src.source === 'field') {
+        const f = projectFieldIndex(project).get(src.path);
+        if (!f) return reject('INVALID', `${src.path} is not a data field of this document.`);
+        if (f.type !== 'date') return reject('INVALID', `“${f.label}” is not a date, so it cannot be the document’s date.`);
+        if (f.derived) return reject('INVALID', `“${f.label}” is worked out by the studio; choose a date field from the customer’s data.`);
+      }
+      const clean: DocumentDateSource = src.source === 'field' ? { source: 'field', path: src.path } : { source: 'run' };
+      return { ok: true, label: src.source === 'field' ? 'The document’s date comes from a data field' : 'The document’s date is given for each run', project: bump(project, (d) => { d.documentDate = clean; }) };
+    }
+    case 'UPSERT_CALCULATED_FIELD': {
+      const list = project.calculatedFields ?? [];
+      const field = cmd.field;
+      if (!field || typeof field !== 'object') return reject('INVALID_CALCULATION', 'The calculated field cannot be read.');
+      const existing = list.findIndex((c) => c.key === field.key);
+      if (existing < 0 && list.length >= CALC_MAX) return reject('TOO_MANY', `A document can have at most ${CALC_MAX} calculated fields.`);
+      const clean: CalculatedField = { key: field.key, label: typeof field.label === 'string' ? field.label.trim() : field.label, type: field.type, ...(typeof field.description === 'string' && field.description.trim() ? { description: field.description.trim() } : {}), expr: field.expr };
+      let next = existing >= 0 ? list.map((c, i) => (i === existing ? clean : c)) : [...list, clean];
+      if (existing < 0 && cmd.index !== undefined) { next = [...list]; next.splice(Math.max(0, Math.min(cmd.index, list.length)), 0, clean); }
+      const errors = validateCalculatedFields(project, next);
+      if (errors.length) return reject('INVALID_CALCULATION', errors.join(' '));
+      const broken = referenceProblems({ ...project, calculatedFields: next });
+      if (broken) return reject('CALCULATION_IN_USE', `This change would break ${broken}.`);
+      return { ok: true, label: `${existing >= 0 ? 'Edit' : 'Add'} calculation “${clean.label}”`, project: bump(project, (d) => { d.calculatedFields = next; }) };
+    }
+    case 'DELETE_CALCULATED_FIELD': {
+      const list = project.calculatedFields ?? [];
+      const c = list.find((x) => x.key === cmd.key);
+      if (!c) return reject('NOT_FOUND', `There is no calculated field ${cmd.key}.`);
+      const used = calculationUsage(project).find((u) => u.key === cmd.key);
+      if (used) return reject('CALCULATION_IN_USE', `“${c.label}” is still used by ${used.where.slice(0, 3).join(', ')}${used.where.length > 3 ? ` and ${used.where.length - 3} more` : ''}. Remove those uses first.`);
+      return { ok: true, label: `Delete calculation “${c.label}”`, project: bump(project, (d) => { const rest = list.filter((x) => x.key !== cmd.key); if (rest.length) d.calculatedFields = rest; else delete d.calculatedFields; }) };
+    }
+    case 'MOVE_CALCULATED_FIELD': {
+      const list = project.calculatedFields ?? [];
+      const i = list.findIndex((x) => x.key === cmd.key);
+      if (i < 0) return reject('NOT_FOUND', `There is no calculated field ${cmd.key}.`);
+      if (!Number.isInteger(cmd.index)) return reject('INVALID', 'Say where to move it.');
+      const next = [...list]; const [it] = next.splice(i, 1); next.splice(Math.max(0, Math.min(cmd.index, next.length)), 0, it);
+      return { ok: true, label: `Move calculation “${it.label}”`, project: bump(project, (d) => { d.calculatedFields = next; }) };
+    }
+    case 'UPSERT_LOOKUP_TABLE': {
+      const tables = project.lookupTables ?? [];
+      const t = cmd.table;
+      const existing = tables.findIndex((x) => x.id === t?.id);
+      if (existing < 0 && tables.length >= LOOKUP_TABLES_MAX) return reject('TOO_MANY', `A document can have at most ${LOOKUP_TABLES_MAX} lookup tables.`);
+      const errors = validateLookupTable(t);
+      if (errors.length) return reject('INVALID_TABLE', errors.slice(0, 5).join(' ') + (errors.length > 5 ? ` (${errors.length - 5} more problems)` : ''));
+      const clean: LookupTable = JSON.parse(JSON.stringify({ id: t.id, title: t.title.trim(), ...(t.description?.trim() ? { description: t.description.trim() } : {}), keys: t.keys, columns: t.columns, rows: t.rows, ...(t.defaultRow ? { defaultRow: t.defaultRow } : {}) }));
+      let next = existing >= 0 ? tables.map((x, i) => (i === existing ? clean : x)) : [...tables, clean];
+      if (existing < 0 && cmd.index !== undefined) { next = [...tables]; next.splice(Math.max(0, Math.min(cmd.index, tables.length)), 0, clean); }
+      const calcErrors = validateCalculatedFields({ ...project, lookupTables: next }, project.calculatedFields ?? []);
+      if (calcErrors.length) return reject('TABLE_IN_USE', `A calculation that reads this table would no longer work: ${calcErrors[0]}`);
+      return { ok: true, label: `${existing >= 0 ? 'Edit' : 'Add'} lookup table “${clean.title}”`, project: bump(project, (d) => { d.lookupTables = next; }) };
+    }
+    case 'DELETE_LOOKUP_TABLE': {
+      const tables = project.lookupTables ?? [];
+      const t = tables.find((x) => x.id === cmd.tableId);
+      if (!t) return reject('NOT_FOUND', `There is no lookup table ${cmd.tableId}.`);
+      const users = (project.calculatedFields ?? []).filter((c) => exprDependencies(c.expr).tables.includes(t.id));
+      if (users.length) return reject('TABLE_IN_USE', `“${t.title}” is still read by ${users.map((c) => `“${c.label}”`).join(', ')}. Remove those uses first.`);
+      return { ok: true, label: `Delete lookup table “${t.title}”`, project: bump(project, (d) => { const rest = tables.filter((x) => x.id !== cmd.tableId); if (rest.length) d.lookupTables = rest; else delete d.lookupTables; }) };
+    }
+    case 'MOVE_LOOKUP_TABLE': {
+      const tables = project.lookupTables ?? [];
+      const i = tables.findIndex((x) => x.id === cmd.tableId);
+      if (i < 0) return reject('NOT_FOUND', `There is no lookup table ${cmd.tableId}.`);
+      if (!Number.isInteger(cmd.index)) return reject('INVALID', 'Say where to move it.');
+      const next = [...tables]; const [it] = next.splice(i, 1); next.splice(Math.max(0, Math.min(cmd.index, next.length)), 0, it);
+      return { ok: true, label: `Move lookup table “${it.title}”`, project: bump(project, (d) => { d.lookupTables = next; }) };
+    }
+    case 'SET_RULE_PERIOD': {
+      const r = project.rules.find((x) => x.id === cmd.ruleId);
+      if (!r) return reject('NOT_FOUND', `Unknown rule ${cmd.ruleId}.`);
+      if (cmd.period) {
+        if (!project.documentDate) return reject('NO_DOCUMENT_DATE', 'Choose where the document’s date comes from before giving a rule a period.');
+        const bad = periodProblem(cmd.period); if (bad) return reject('INVALID_PERIOD', bad);
+        if (r.mode === 'obligation') return reject('PROTECTED_OBLIGATION', `${r.id} enforces mandatory content and cannot be limited to a period.`);
+      } else if (!r.effective) return reject('NOT_FOUND', `${r.id} has no period.`);
+      const period = cmd.period ? cleanPeriod(cmd.period) : null;
+      return { ok: true, label: period ? `Rule ${r.id} in effect ${periodLabel(period)}` : `Rule ${r.id} always in effect`, project: bump(project, (d) => {
+        const t = d.rules.find((x) => x.id === cmd.ruleId)!; if (period) t.effective = period; else delete t.effective; t.version += 1;
+      }) };
+    }
+    case 'SET_VARIANT_PERIOD': {
+      const node = map.get(cmd.nodeId);
+      if (!node?.variantIds?.includes(cmd.variantId)) return reject('NOT_FOUND', `Variant ${cmd.variantId} not in ${cmd.nodeId}.`);
+      if (cmd.period) {
+        if (!project.documentDate) return reject('NO_DOCUMENT_DATE', 'Choose where the document’s date comes from before giving an alternative a period.');
+        const bad = periodProblem(cmd.period); if (bad) return reject('INVALID_PERIOD', bad);
+      } else if (!node.variantPeriods?.[cmd.variantId]) return reject('NOT_FOUND', `${cmd.variantId} has no period.`);
+      const period = cmd.period ? cleanPeriod(cmd.period) : null;
+      return { ok: true, label: period ? `Alternative ${cmd.variantId} in effect ${periodLabel(period)}` : `Alternative ${cmd.variantId} always in effect`, project: bump(project, (d) => {
+        const t = d.nodes.find((n) => n.id === cmd.nodeId)!;
+        const all = { ...(t.variantPeriods ?? {}) };
+        if (period) all[cmd.variantId] = period; else delete all[cmd.variantId];
+        if (Object.keys(all).length) t.variantPeriods = all; else delete t.variantPeriods;
+      }) };
+    }
+    case 'SET_SECTION_PERIOD': {
+      const node = map.get(cmd.nodeId);
+      if (!node) return reject('NOT_FOUND', `Unknown node ${cmd.nodeId}.`);
+      if (cmd.period) {
+        const shape = validateNodeShape({ ...node, effective: cmd.period }, project);
+        if (shape) return reject(project.documentDate ? 'INVALID_PERIOD' : 'NO_DOCUMENT_DATE', shape, cmd.nodeId);
+      } else if (!node.effective) return reject('NOT_FOUND', `${node.name ?? node.id} has no period.`);
+      const period = cmd.period ? cleanPeriod(cmd.period) : null;
+      return { ok: true, label: period ? `${node.name ?? node.id} in effect ${periodLabel(period)}` : `${node.name ?? node.id} always in effect`, project: bump(project, (d) => {
+        const t = d.nodes.find((n) => n.id === cmd.nodeId)!; if (period) t.effective = period; else delete t.effective;
       }) };
     }
     case 'BATCH': {
@@ -569,7 +731,49 @@ export function customFieldUsage(project: Project): Array<{ path: string; where:
     tokensIn(n.content).forEach((path) => add(path, n.name ?? n.id));
   }
   for (const c of project.contentParts) for (const t of Object.values(c.approvedLocales)) (t ?? '').replace(/\{\{\s*(custom\.[A-Za-z0-9]+)/g, (_m: string, path: string) => { add(path, c.title); return ''; });
+  for (const c of project.calculatedFields ?? []) { const deps = exprDependencies(c.expr); for (const path of [...deps.fields, ...deps.lists]) add(path, `calculation “${c.label}”`); }
+  if (project.documentDate?.source === 'field') add(project.documentDate.path, 'the document’s date');
   return [...map].map(([path, where]) => ({ path, where: [...where] }));
+}
+
+/* ------------------------------------------------------------ calculations, tables, periods */
+
+const cleanPeriod = (p: EffectivePeriod): EffectivePeriod => ({ ...(p.from ? { from: p.from } : {}), ...(p.until ? { until: p.until } : {}) });
+const periodLabel = (p: EffectivePeriod): string => (p.from && p.until ? `from ${p.from} until ${p.until}` : p.from ? `from ${p.from}` : `until ${p.until}`);
+
+/** Where each calculated field is used (other calculations, rule conditions, conditions on components, bindings, wording, footers). */
+export function calculationUsage(project: Project): Array<{ key: string; where: string[] }> {
+  const map = new Map<string, Set<string>>();
+  const add = (path: string | undefined, where: string) => { if (!path?.startsWith(CALC_PREFIX)) return; const k = path.slice(CALC_PREFIX.length); if (!map.has(k)) map.set(k, new Set()); map.get(k)!.add(where); };
+  for (const c of project.calculatedFields ?? []) for (const k of exprDependencies(c.expr).calcs) add(`${CALC_PREFIX}${k}`, `calculation “${c.label}”`);
+  for (const r of project.rules) predicateLeafPaths(r.when).forEach((p) => add(p, `rule ${r.id}`));
+  for (const n of project.nodes) {
+    const name = n.name ?? n.id;
+    predicateLeafPaths(n.visibleWhen).forEach((p) => add(p, name));
+    Object.values(n.variantConditions ?? {}).forEach((pr) => predicateLeafPaths(pr).forEach((p) => add(p, name)));
+    add(n.binding, name);
+    add(n.totalFrom, name);
+    (n.chart?.series ?? []).forEach((s) => add(s.path, name));
+    tokensIn(n.content).forEach((p) => add(p, name));
+  }
+  const text = (t: string | undefined, where: string) => { for (const m of (t ?? '').matchAll(/\{\{\s*(calc\.[A-Za-z0-9]+)\s*\}\}/g)) add(m[1], where); };
+  for (const c of project.contentParts) for (const t of Object.values(c.approvedLocales)) text(t, c.title);
+  for (const st of translatableStrings(project)) text(st.source, st.title);
+  return [...map].map(([key, where]) => ({ key, where: [...where] }));
+}
+
+/**
+ * Whether the project's rules, conditions, bindings and footers still work after a change to its calculated fields
+ * (a calculation removed or giving another kind of value). Null when they do; otherwise what breaks, in plain words.
+ */
+function referenceProblems(candidate: Project): string | null {
+  const fields = projectFieldIndex(candidate);
+  for (const r of candidate.rules) { const e = validatePredicate(r.when, fields); if (e.length) return `rule ${r.id} (${e[0]})`; }
+  for (const n of candidate.nodes) {
+    for (const p of [n.visibleWhen, ...Object.values(n.variantConditions ?? {})]) if (p) { const e = validatePredicate(p, fields); if (e.length) return `${n.name ?? n.id} (${e[0]})`; }
+    if (n.totalFrom && fields.get(n.totalFrom)?.type !== 'cents') return `the footer total of ${n.name ?? n.id} (it must be an amount)`;
+  }
+  return null;
 }
 
 /** Validation for named text styles. */

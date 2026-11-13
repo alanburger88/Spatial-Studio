@@ -184,6 +184,7 @@ const FORMAT_OF: Record<FieldDef['type'], string> = {
   enum: 'One of the allowed values',
   array: 'List of rows',
   points: 'Whole number of points',
+  number: 'Number (may have decimals; calculated fields only)',
 };
 
 interface FieldUse { rules: Map<string, string>; conditions: Set<string>; bindings: Set<string>; tokens: Set<string>; journey: Set<string>; columns: Set<string> }

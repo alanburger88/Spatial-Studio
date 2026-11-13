@@ -1,9 +1,10 @@
 import { isSupportedLanguage } from './languages';
+import { periodProblem } from './effective';
 import { fieldIndex, projectFieldIndex, type FieldDef } from './fields';
 import type { DocumentType, Predicate, Project, Rule } from './types';
 
 const COMPARE = new Set(['eq', 'ne', 'gt', 'gte', 'lt', 'lte']);
-const NUMERIC = new Set(['cents', 'int', 'points']);
+const WHOLE = new Set(['cents', 'int', 'points']);
 
 /** Validates a typed rule expression: allowlisted operators, known paths and type-compatible values. */
 /** `scope` is a document type (standard contract) or a resolved field index (e.g. a project's contract incl. custom fields). */
@@ -36,7 +37,8 @@ export function validatePredicate(p: Predicate, scope: DocumentType | Map<string
       const f = fields.get((p as any).path);
       if (!f) return [`Unknown field path “${(p as any).path}”.`];
       const v = (p as any).value;
-      if (NUMERIC.has(f.type) && (typeof v !== 'number' || !Number.isInteger(v))) errors.push(`${f.label} compares to an integer${f.type === 'cents' ? ' (cents)' : ''}.`);
+      if (WHOLE.has(f.type) && (typeof v !== 'number' || !Number.isInteger(v))) errors.push(`${f.label} compares to an integer${f.type === 'cents' ? ' (cents)' : ''}.`);
+      if (f.type === 'number' && (typeof v !== 'number' || !Number.isFinite(v))) errors.push(`${f.label} compares to a number.`);
       if (f.type === 'bool' && typeof v !== 'boolean') errors.push(`${f.label} compares to true/false.`);
       if (f.type === 'enum' && !f.enumValues!.includes(String(v))) errors.push(`“${v}” is not a valid ${f.label} value (${f.enumValues!.join(', ')}).`);
       if ((f.type === 'enum' || f.type === 'bool' || f.type === 'string') && ['gt', 'gte', 'lt', 'lte'].includes(p.op)) errors.push(`${p.op} is not valid for ${f.type} field ${f.label}.`);
@@ -53,6 +55,11 @@ export function validateRule(rule: Rule, project: Project): string[] {
   if (!['exclusive', 'additive', 'obligation'].includes(rule.mode)) errors.push('Mode must be exclusive, additive or obligation.');
   if (!Number.isInteger(rule.priority) || rule.priority < 0 || rule.priority > 10000) errors.push('Priority must be an integer 0–10000.');
   errors.push(...validatePredicate(rule.when, projectFieldIndex(project)));
+  if (rule.effective !== undefined) {
+    if (!project.documentDate) errors.push('Choose where the document’s date comes from before giving a rule a period.');
+    else { const bad = periodProblem(rule.effective); if (bad) errors.push(bad); }
+    if (rule.mode === 'obligation') errors.push('A rule that requires mandatory content cannot be limited to a period.');
+  }
   const nodes = new Map(project.nodes.map((n) => [n.id, n]));
   const parts = new Set(project.contentParts.map((c) => c.id));
   const a = rule.then;
