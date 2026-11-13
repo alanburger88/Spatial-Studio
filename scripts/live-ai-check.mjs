@@ -48,6 +48,22 @@ const checkSetup = async () => {
       + `${(j.outline?.lines ?? []).map((l) => clip(l, 170)).join('\n      ')}\n      notes (${(j.notes ?? []).length}): ${(j.notes ?? []).map((n) => clip(n, 200)).join(' | ') || 'none'}`);
 };
 if (process.env.LIVE_ONLY === 'setup') { await checkSetup(); finish(); }
+// Only on request (LIVE_ONLY=setup-data, one call): the same with sample data. The model is told the shape of the data
+// only, so what is checked here is that it kept the field names, so that every row is matched and accepted as a customer.
+if (process.env.LIVE_ONLY === 'setup-data') {
+  const data = ['first_name,last_name,plan,renewal_date,monthly_fee,payment_failed', 'Ana,Silva,Flex,2026-12-01,49.00,no', 'Ben,Okoro,Max,2026-12-15,120.00,yes', 'Cy,Lee,Flex,2026-12-20,49.00,no'].join('\n');
+  const r = await post('/projects/setup/draft', { description: 'A gym membership renewal notice: greet the member, show the plan, the renewal date and the monthly fee, and give members whose payment failed a different message asking them to update their payment details.', sampleData: { format: 'csv', data } });
+  const j = r.json;
+  const s = j.customers?.supplied;
+  const conditional = (j.spec?.sections ?? []).filter((x) => x.type === 'messages').flatMap((m) => m.versions).filter((v) => v.when);
+  const ok = r.status === 200 && j.mode === 'proposal' && j.source === 'ai' && s?.accepted === 3 && s?.rejectedCount === 0 && s.matching.every((m) => m.field) && conditional.length >= 1 && j.preview?.customer?.origin === 'supplied' && j.preview.blocking.length === 0;
+  record('Set a new document up from a description and sample data', ok, j.mode !== 'proposal'
+    ? `status=${r.status} mode=${j.mode} ${r.ms} ms · ${clip(j.message ?? j.error?.message ?? j, 300)}`
+    : `source=${j.source} ${r.ms} ms · fields: ${j.spec.fields.map((f) => `${f.label} (${f.type})`).join(', ')}\n      rows accepted: ${s?.accepted} of ${s?.total}; rejected: ${clip(s?.rejected ?? [], 300)}\n      `
+      + `columns: ${(s?.matching ?? []).map((m) => `${m.column} → ${m.field ?? 'not used'}`).join('; ')}\n      first customer: ${j.preview?.customer?.name} gets ${clip(j.preview?.messages ?? [], 200)} · blocking: ${j.preview?.blocking?.length}\n      `
+      + `versions: ${(j.outline?.sections ?? []).flatMap((x) => x.versions ?? []).map((v) => `“${v.title}” ${v.shownWhen}`).join(' ')}\n      notes (${(j.notes ?? []).length}): ${(j.notes ?? []).map((n) => clip(n, 200)).join(' | ') || 'none'}`);
+  finish();
+}
 
 // 1. Assistant chat: the question from the first live run. The reply must not disclaim who the customer is.
 {
