@@ -71,14 +71,14 @@ export const TAB_LABEL: Record<string, string> = {
  * main area (SectionTabs). Order of `screens` is the tab order; the first is the default tab.
  */
 export const SECTIONS = [
-  { id: 'projects', label: 'Projects', icon: Icon.gallery, hint: 'All projects and samples', screens: ['S01'] },
-  { id: 'overview', label: 'Overview', icon: OverviewIcon, hint: 'Where this document stands and what to do next', screens: ['S19'] },
-  { id: 'design', label: 'Design', icon: Icon.design, hint: 'Layout, wording and translations, email and text messages', screens: ['S02', 'S13', 'S15'] },
-  { id: 'rules-data', label: 'Rules & data', icon: Icon.rules, hint: 'Who sees what, the customers to test with, and how it plays out over time', screens: ['S07', 'S16', 'S08'] },
-  { id: 'explore', label: 'Explore', icon: Icon.exploded, hint: 'See the document from different angles', screens: ['S03', 'S04', 'S05', 'S06'] },
-  { id: 'check', label: 'Check', icon: Icon.validate, hint: 'What stops this document going out, and what it looks like', screens: ['S17', 'S09', 'S10'] },
-  { id: 'releases', label: 'Releases', icon: ReleaseIcon, hint: 'Approved versions, what changed, and proof of what customers got', screens: ['S18', 'S20', 'S21'] },
-  { id: 'help', label: 'Help & activity', icon: Icon.info, hint: 'Take the tour, ask the assistant, see who changed what', screens: ['S11', 'S12', 'S14'] },
+  { id: 'projects', label: 'Projects', icon: Icon.gallery, short: 'All documents', hint: 'All projects and samples', screens: ['S01'] },
+  { id: 'overview', label: 'Overview', icon: OverviewIcon, short: 'Status and next steps', hint: 'Where this document stands and what to do next', screens: ['S19'] },
+  { id: 'design', label: 'Design', icon: Icon.design, short: 'Layout and wording', hint: 'Layout, wording and translations, email and text messages', screens: ['S02', 'S13', 'S15'] },
+  { id: 'rules-data', label: 'Rules & data', icon: Icon.rules, short: 'Rules and customers', hint: 'Who sees what, the customers to test with, and how it plays out over time', screens: ['S07', 'S16', 'S08'] },
+  { id: 'explore', label: 'Explore', icon: Icon.exploded, short: 'Every angle', hint: 'See the document from different angles', screens: ['S03', 'S04', 'S05', 'S06'] },
+  { id: 'check', label: 'Check', icon: Icon.validate, short: 'Blockers and previews', hint: 'What stops this document going out, and what it looks like', screens: ['S17', 'S09', 'S10'] },
+  { id: 'releases', label: 'Releases', icon: ReleaseIcon, short: 'Versions and proof', hint: 'Approved versions, what changed, and proof of what customers got', screens: ['S18', 'S20', 'S21'] },
+  { id: 'help', label: 'Help & activity', icon: Icon.info, short: 'Tour and history', hint: 'Take the tour, ask the assistant, see who changed what', screens: ['S11', 'S12', 'S14'] },
 ] as const;
 export type SectionId = (typeof SECTIONS)[number]['id'];
 type Section = (typeof SECTIONS)[number];
@@ -368,7 +368,7 @@ function Nav() {
           return (
             <li key={sec.id}>
               <Link to={to} className={current ? 'active' : ''} aria-current={current ? (single ? 'page' : 'true') : undefined} title={`${sec.label} — ${sec.hint} (Alt+${i + 1})`} data-testid={testId} data-section={sec.id}>
-                <Ico /><span className="nav-text"><span className="nav-label">{sec.label}</span><span className="nav-hint" aria-hidden="true">{sec.hint}</span></span>
+                <Ico /><span className="nav-text"><span className="nav-label">{sec.label}</span><span className="nav-hint" aria-hidden="true">{sec.short}</span></span>
               </Link>
             </li>
           );

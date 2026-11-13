@@ -14,7 +14,7 @@ const stepState = (page: Page, key: string) => page.getByTestId(`overview-step-$
 const settled = async (page: Page) => { for (const k of STEPS) await expect(page.getByTestId(`overview-step-${k}`)).not.toHaveAttribute('data-state', 'working', { timeout: 60_000 }); };
 const store = <T,>(page: Page, fn: (s: any) => T) => page.evaluate((src) => (0, eval)(`(${src})`)((window as any).__iss.store.getState()), fn.toString());
 
-test('OV01 the status strip and the seven next steps come from the open document', async ({ page }) => {
+test('OV01 the status strip and the seven next steps come from the open document', async ({ page, request }) => {
   await open(page, 'aster-card-demo', 'overview');
   await expect(page.locator('#main h1').first()).toHaveText('Overview');
   await settled(page);
@@ -23,7 +23,9 @@ test('OV01 the status strip and the seven next steps come from the open document
   await expect(page.getByTestId('overview-kind')).toHaveText('Credit-card statement');
   await expect(page.getByTestId('overview-version')).toHaveText(`Version ${s.version}`);
   await expect(page.getByTestId('overview-saved')).toHaveText(/All changes saved/);
-  await expect(page.getByTestId('overview-workflow')).toContainText('Draft');
+  // the review state is whatever the workflow API says (other specs may have left the sample in review)
+  const wf = await (await request.get(`${API}/projects/aster-card-demo/workflow?checks=0`)).json();
+  await expect(page.getByTestId('overview-workflow')).toContainText(wf.label);
   await expect(page.getByTestId('overview-test')).toHaveText('None yet');
   await expect(page.getByTestId('overview-production')).toHaveText('None yet');
 

@@ -80,7 +80,7 @@ export function GuidedDemo() {
               <li>AFP is always presented as a simulation.</li>
             </ul>
             <div className="section-title">Keyboard</div>
-            <p className="muted" style={{ fontSize: 12.5 }}>Alt+1…9 jumps between views.</p>
+            <p className="muted" style={{ fontSize: 12.5 }}>Alt+1 to Alt+8 open the menu entries, from Projects to Help & activity.</p>
           </div>
         </aside>
       </div>

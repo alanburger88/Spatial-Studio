@@ -7,6 +7,7 @@
 import { test, expect } from '@playwright/test';
 import { deflateSync } from 'node:zlib';
 import { API, cardAction, demoTool, open, pickRecord, resetAll, setView } from './helpers';
+import { gotoScreen } from './nav-helper';
 
 test.beforeEach(async ({ request }) => {
   await resetAll(request);
@@ -57,6 +58,8 @@ test('F03 Duplicate, rename and delete a project from the gallery; samples canno
   await page.getByTestId('confirm-title').click();
   await expect(card).toContainText('Spanish pilot v2');
   await page.getByTestId('open-spanish-pilot').click();
+  await expect(page).toHaveURL(/\/studio\/spanish-pilot\/overview$/);
+  await gotoScreen(page, 'S02');
   await expect(page.getByTestId('design-canvas')).toBeVisible();
   await page.goto('/projects');
   await cardAction(page, 'delete', 'spanish-pilot');

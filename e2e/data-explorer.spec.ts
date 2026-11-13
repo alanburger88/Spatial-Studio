@@ -391,7 +391,7 @@ test('D09 unsaved edits: switching customer or leaving the screen asks first', a
   await expect(page.getByTestId('dx-f-customer.givenName')).toHaveValue('Changed');
 
   // the menu asks too
-  await gotoScreen(page, 'S02');
+  await page.getByTestId('nav-section-design').click();
   await expect(page.getByTestId('dx-leave-dialog')).toBeVisible();
   await page.getByTestId('dx-leave-stay').click();
   await expect(page).toHaveURL(/\/data/);

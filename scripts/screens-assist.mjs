@@ -32,6 +32,7 @@ await p.getByTestId('open-demo-tools').click();
 await p.getByTestId('seed-d01').click();
 await p.getByTestId('demo-tools').getByRole('button', { name: 'Close demo tools' }).click();
 await p.evaluate(() => localStorage.setItem('iss.validateScope', 'this'));
+await p.getByTestId('nav-section-check').click();
 await p.getByTestId('nav-S09').click();
 await p.getByTestId('validation-list').waitFor({ timeout: 90000 });
 await p.locator('[data-testid^="issue-"][data-testid*="TIE"]').first().click();

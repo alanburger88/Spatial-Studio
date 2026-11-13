@@ -458,6 +458,7 @@ test('C07 save it as a template, start a project from it (it gets its own custom
   await page.getByTestId('import-project-title').fill('Imported C07');
   await page.getByTestId('import-project-confirm').click();
   await page.waitForURL(/\/studio\/imported-c07\/overview/);
+  await gotoScreen(page, 'S02');
   created.push(idFromUrl(page));
   await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
   expect(await store(page, (s) => s.project.documentType)).toBe('custom');
