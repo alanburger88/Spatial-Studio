@@ -324,6 +324,16 @@ describe('lookup tables', () => {
     const ok = { ...big, rows: big.rows.slice(0, LOOKUP_TABLE_MAX_ROWS) };
     expect(run(p, { type: 'UPSERT_LOOKUP_TABLE', table: ok }).lookupTables![0].rows).toHaveLength(5000);
   });
+  it('a large table is searched through an index that finds exactly the row a row-by-row search finds', () => {
+    const bands: LookupTable = { id: 'bands', title: 'Bands', keys: [{ key: 'tier', label: 'Tier', match: 'text' }, { key: 'fee', label: 'Fee', match: 'number-range', unit: 'money' }], columns: [{ key: 'points', label: 'Points', type: 'number' }],
+      rows: ['basic', 'plus'].flatMap((tier) => Array.from({ length: 500 }, (_, i) => ({ keys: { tier, fee: i === 0 ? { until: 10 } : i === 499 ? { from: i * 10 } : { from: i * 10, until: (i + 1) * 10 } }, values: { points: i } }))) };
+    // a gap: values 1000 to 1009 of "plus" match nothing
+    bands.rows = bands.rows.filter((r) => !(r.keys.tier === 'plus' && (r.keys.fee as { from?: number }).from === 1000));
+    expect(validateLookupTable(bands)).toEqual([]);
+    const linear = (keys: unknown[]) => bands.rows.find((r) => r.keys.tier === keys[0] && ((r.keys.fee as { from?: number }).from ?? -Infinity) <= (keys[1] as number) && (keys[1] as number) < ((r.keys.fee as { until?: number }).until ?? Infinity)) ?? null;
+    for (const tier of ['basic', 'plus', 'pro']) for (const fee of [-5, 0, 9, 10, 999, 1000, 1005, 1010, 4989, 4990, 4999, 5000, 99999]) expect(lookupRowFor(bands, [tier, fee])).toBe(linear([tier, fee]));
+    expect(lookupRowFor(bands, ['plus', '10'])).toBeNull();
+  });
   it('read a paste from a spreadsheet, with problems by row and column', () => {
     const tsv = 'Membership tier\tLate fee\tNote\nbasic\t15.00\tBasic\nplus\t$1,000\t\npro\ttwelve\tPro';
     const r = parseLookupPaste(FEE_BY_TIER, tsv);

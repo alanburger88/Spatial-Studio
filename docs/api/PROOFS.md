@@ -55,6 +55,12 @@ Every document is visible to everyone signed in, so "anyone who can see the docu
 
 Errors: `409 RELEASE_NOT_CURRENT` (only a release that is current at Test or Production may be produced from; the message says whether it was withdrawn or replaced, or its document deleted), `400 CUSTOMERS_REQUIRED`, `400 INVALID_OUTPUTS`, `404 NOT_FOUND` (release, or not a test customer of this document), `404 NO_CUSTOMERS`, `413 TOO_MANY_CUSTOMERS` (with `limit`), `409 PRODUCE_RUNNING`, `502 PRODUCE_FAILED`.
 
+### The document's date
+
+`POST /api/v1/releases/:releaseId/produce` accepts `"issueDate": "YYYY-MM-DD"` (the document's date given for the run,
+for a document that uses dates; `400 INVALID_ISSUE_DATE` when it is not a date). It is part of each run ID and the record
+keeps it as `issueDate`.
+
 ## Add proof records from a file
 
 `POST /api/v1/proofs/import` — body `{ "text": "<the text of proof.jsonl>", "dryRun": true }`. **`dryRun` defaults to true**: send `false` to add.
@@ -131,6 +137,14 @@ The server resolves the release template on that data, produces the outputs the 
 **The supplied data is never stored and never logged.** It is used for this one answer. Errors raised while reading it are answered with fixed words (`422 CANNOT_RECREATE`); the shape check (`422 INVALID_DATA`, with `problems`) may quote the supplied values back to the caller, and to no one else. The audit entry records that a check happened and its verdict, not the data. The PDF itself is not returned (its page count is).
 
 Errors: `400 DATA_REQUIRED`, `404 NOT_FOUND`, `409 RELEASE_NOT_KNOWN` (the record's release is not here and no `releaseId` was given), `413 DATA_TOO_LARGE` (1 MB), `422 INVALID_DATA`, `422 CANNOT_RECREATE`.
+
+### Records with a date
+
+`ProofRecord.issueDate` (optional) is set only when the document's date was given for the run; a date taken from the
+customer's data is not kept (it is part of `dataFingerprint`). `proofRecordProblems` allows it and checks it is an ISO
+day; records without it stay valid. `POST /api/v1/proofs/:proofId/verify` re-creates the document as issued on the
+record's own `issueDate`; `"issueDate"` in the request checks another day instead, and a different day is reported as
+a difference of kind `date` ("The document was produced as issued on 2 Jan 2027; it is checked as issued on 3 Jan 2027.").
 
 ## Reset (tests and demos only)
 

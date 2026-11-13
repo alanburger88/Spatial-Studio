@@ -289,6 +289,18 @@ Reasons and notes a person typed are kept on the release (history and handover l
 - `GET /api/v1/session`: admins have the extra permission `promote_release`.
 - Approving (and creating a release from the approved version) records the known data problems in force for that version on the release, frozen like the rest (`knownDataProblems`).
 
+## The document's date and calculated fields
+
+- `POST /api/v1/resolve` (and every route that takes a resolve request, such as `/api/v1/compose/*`) accepts
+  `"issueDate": "YYYY-MM-DD"`: the document's date for this run or preview ("as issued on"). It is used only by a
+  document that says where its date comes from, takes precedence over its date field, is stored with the run (so a
+  stored run reproduces) and is part of the run ID. Not a calendar day: `400`. `POST /api/v1/journeys/replay` accepts it too.
+- A draft project sent with a request is refused (`422 INVALID_PROJECT`, plain words) when a calculated field, lookup
+  table, date source or period in it is not valid (the same checks as a project file).
+- Approval readiness of a document whose date is given for each run checks every customer on each date boundary and the
+  day before the first: what is approved is the whole dated behaviour.
+- The release package lists calculated fields, lookup tables and date boundaries (see `docs/design/RELEASE_PACKAGE.md`).
+
 ## How releases relate to "Publish"
 
 The review workflow still has its `publish` step (approved → published). It is a state of the document only: it creates nothing, moves no release and is not required for anything here. Releases answer the questions "publish" was a placeholder for (what was handed over, what is live). They are deliberately **not linked**: that is a product decision (see the report of this phase).
