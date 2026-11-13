@@ -1,6 +1,6 @@
 # Autonomous implementation checkpoint
 
-**Status:** POC v0.7 (templates phase 1: saved templates with versions, project file import; on top of the v0.6 assistant) built and verified locally (2026-11-13). Branch `claude/magical-franklin-aonsol`.
+**Status:** POC v0.8 (generated test customers per project, assistant panel fixes, live AI checked; on top of v0.7 templates phase 1) built and verified locally (2026-11-13). Branch `claude/magical-franklin-aonsol`.
 
 ## Gate log
 
@@ -21,8 +21,8 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | Pack validation | PASS |
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
-| Unit tests | 389/389 |
-| Browser tests | 161/161 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests + 36 v0.5 tests + 25 v0.6 assistant tests + 9 v0.7 tests: templates and project files 7, left menu 2 v0.7 template tests) |
+| Unit tests | 443/443 |
+| Browser tests | 172/172 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests + 36 v0.5 tests + 25 v0.6 assistant tests + 9 v0.7 tests + 11 v0.8 tests: generated test customers 8, assistant explanation and panel resize 3) |
 | Build | OK |
 
 ## v0.2 additions (all verified by the tests above)
@@ -97,8 +97,17 @@ Engines are pure functions in `packages/scenarios/src/assist/`; model-backed fea
 - **Project files:** export as one JSON file; import as a new draft after the file's shape, every rule and resolvability are checked. An import never replaces an existing document.
 - **Design record:** phases 2 to 7 are agreed and not built. Phase 7 is the runnable package per release (D72). AFP direction: PDF now through the print side's own transform, a native writer later.
 
+## v0.8 additions (D75, D76)
+
+- **Generate test customers** (Rules & Data): every outcome once plus edge values, made for one project only, marked *Generated* in the customer picker, replaced on regenerate, removable in one click. The dialog shows what would be created and anything no customer can reach before generating. A customer may prefer any language the studio supports.
+- **Assistant panel:** the engine's explanation is one block per rule in plain words; the panel is resizable (drag the left edge or arrow keys) and remembers its width; top-bar menus open above it.
+- **Live AI:** the model is told who the current customer is and the names of sample and generated customers (never names from imported records). `scripts/live-ai-check.mjs` checks every model-backed feature against the live model on purpose; automated tests always force the built-in assistant.
+- **Menu:** "2D Design Studio" is "Design Studio" in the menu; the screen heading keeps the contract's title.
+- **In progress, not in this build:** a blank project with its own data fields (a third kind of document, with list fields), and setting up a template from a description.
+
 ## Not verified / open
 
+- **Generated test customers (v0.8):** three states were never triggered in a test or screenshot: the collapse of more than five unreachable items, the "limit reached" note, and the "document has changed since" note. Nothing larger than the two samples plus a few added rules was generated for, so timing on a large document is unknown.
 - **Templates (v0.7):** roles are enforced and tested on the server (author, reviewer, approver, admin). In the browser only the "not allowed" state was checked, by simulating an author's session; no browser run was made with sign-in switched on. Moving a template between two installations was not tried (the project file route was: export, then import into the same installation). A template version cannot be deleted, only superseded or retired.
 - **Phases 2 to 7 of the template work** (releases and packages, data dictionary and mappings, shared library, assisted import, first CCM adapter, runnable package) are **not built**.
 - **Live AI, checked on purpose (2026-11-13):** with a key supplied by the product owner, `scripts/live-ai-check.mjs` made one call per model-backed feature against Claude Opus 5.5 and all 11 checks passed: the assistant recognises the current customer by name and finds another by name; translation drafts (3 texts, data fields intact); rewrite (plainer); SMS fit in one message; a new message version; subject lines; a rule from a free-form sentence; image description of an uploaded picture (and an honest decline for a built-in mark); the translation meaning check flagged a deliberately wrong draft. These checks call the **server**; the same results were **not looked at in the browser** with live AI on, so on-screen rendering of live results is still unverified. Automated tests always force the built-in assistant and never use the key.
