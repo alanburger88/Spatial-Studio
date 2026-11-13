@@ -551,7 +551,7 @@ export function resolve(input: ResolveInput): Resolution {
   const manifest = buildResolverManifest(project, effective, root, result, c.locale);
   const projectDigest = projectContentDigest(project);
   const rulesDigest = digestOf(project.rules);
-  const runId = 'run-' + shortDigest({ projectDigest, recordId: effective.recordId, overrides: input.overrides ?? {}, journeyCursor, claimIndex, profileId, engine: ENGINE_VERSION, ...(input.includeDrafts === true ? { includeDrafts: true } : {}) }, 16);
+  const runId = 'run-' + shortDigest({ projectDigest, recordId: effective.recordId, overrides: input.overrides ?? {}, journeyCursor, claimIndex, profileId, engine: ENGINE_VERSION, ...(localized.draftsShown.length ? { includeDrafts: true } : {}) }, 16);
   // Content digest is content-addressed: excludes producer and the model version counter.
   const { producer: _p, modelVersion: _mv, ...manifestCore } = manifest;
 

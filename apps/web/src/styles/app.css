@@ -242,7 +242,8 @@ a { color: var(--iss-accent-strong); }
 .topbar-group > .rp { max-width: 300px; }
 .rp > .rp-trigger { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; }
 /* Narrow desktops: drop secondary text first so the customer and output controls keep their room. */
-@media (max-width: 1520px) {
+@media (max-width: 1900px) {
+  .rp-trigger .rp-id { display: none; }
   .topbar .brand-name, .topbar .brand-wide { display: none; }
   .topbar .brand-narrow { display: inline-flex; }
   .crumbs > a, .crumbs > span { display: none; }
@@ -252,6 +253,14 @@ a { color: var(--iss-accent-strong); }
 .ctx-field { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .topbar-group > .ctx-field { flex: 0 1 auto; }
 .topbar-group > label.ctx-field { flex: none; }
+.ctx-language .select { max-width: 150px; }
+/* The language and output labels give way before the customer label: their controls already say what they are. */
+@media (max-width: 1600px) {
+  .topbar-group > label.ctx-field > .ctx-lbl, .topbar .save-ver { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .ctx-language .select { max-width: 124px; }
+  .topbar [data-testid='select-profile'] { max-width: 128px; }
+}
+@media (max-width: 1100px) { .ctx-language .select { max-width: 100px; } }
 .ctx-lbl { font-size: 11.5px; color: var(--iss-text-muted); white-space: nowrap; flex: none; }
 .ctx-field > .rp { flex: 0 1 auto; min-width: 140px; max-width: 280px; }
 @media (max-width: 1240px) {

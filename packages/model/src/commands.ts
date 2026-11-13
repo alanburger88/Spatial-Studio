@@ -41,6 +41,8 @@ export type Command =
   | { type: 'APPROVE_TRANSLATION'; partId: string; locale: Locale }
   /** Many drafts in one undoable step (AI first pass, bundled samples, CSV). Never approves anything. */
   | { type: 'SET_TRANSLATION_DRAFTS'; locale: Locale; items: Array<{ id: string; text: string }>; origin?: TranslationOrigin }
+  /** Approve several drafts in one undoable step. Drafts whose data tokens differ from the English text are refused as a whole. */
+  | { type: 'APPROVE_TRANSLATIONS'; locale: Locale; ids: string[] }
   | { type: 'ADD_LANGUAGE'; locale: Locale }
   | { type: 'REMOVE_LANGUAGE'; locale: Locale }
   | { type: 'SET_CHANNELS'; channels: ChannelConfig }
@@ -367,24 +369,21 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
       const tokensOf = (t: string) => [...t.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]).sort().join(',');
       const source = target.source;
       if (source && tokensOf(source) !== tokensOf(draft)) return reject('TOKEN_MISMATCH', `The ${languageShortName(cmd.locale)} text must use the same data tokens as the English text (${tokensOf(source) || 'none'}).`);
-      return { ok: true, label: `Approve ${cmd.locale} for “${target.title}”`, project: bump(project, (d) => {
-        if (isStringId(cmd.partId)) {
-          const all = { ...(d.strings ?? {}) };
-          const t = { ...(all[cmd.partId] ?? {}) };
-          t.approved = { ...(t.approved ?? {}), [cmd.locale]: draft };
-          t.basedOn = { ...(t.basedOn ?? {}), [cmd.locale]: source };
-          const drafts = { ...(t.draft ?? {}) }; delete drafts[cmd.locale];
-          if (Object.keys(drafts).length) t.draft = drafts; else delete t.draft;
-          all[cmd.partId] = t; d.strings = all;
-        } else {
-          const c = d.contentParts.find((x) => x.id === cmd.partId)!;
-          c.approvedLocales = { ...c.approvedLocales, [cmd.locale]: draft };
-          c.version += 1;
-          const drafts = { ...(c.draftLocales ?? {}) }; delete drafts[cmd.locale];
-          if (Object.keys(drafts).length) c.draftLocales = drafts; else delete c.draftLocales;
-        }
-        clearOrigin(d, cmd.locale, cmd.partId);
-      }) };
+      return { ok: true, label: `Approve ${cmd.locale} for “${target.title}”`, project: bump(project, (d) => { writeApproval(d, cmd.partId, cmd.locale, draft, source); }) };
+    }
+    case 'APPROVE_TRANSLATIONS': {
+      if (!cmd.ids.length) return reject('EMPTY', 'There is nothing to approve.');
+      const tokensOf = (t: string) => [...t.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]).sort().join(',');
+      const todo: Array<{ id: string; draft: string; source: string }> = [];
+      for (const id of [...new Set(cmd.ids)]) {
+        const target = translationTarget(project, id);
+        if (!target) return reject('NOT_FOUND', `Unknown text ${id}.`);
+        const draft = target.draft(cmd.locale);
+        if (!draft?.trim()) return reject('NO_DRAFT', `There is no ${cmd.locale} draft to approve for “${target.title}”.`);
+        if (target.source && tokensOf(target.source) !== tokensOf(draft)) return reject('TOKEN_MISMATCH', `“${target.title}”: the ${languageShortName(cmd.locale)} text must use the same data tokens as the English text. Nothing was approved.`);
+        todo.push({ id, draft, source: target.source });
+      }
+      return { ok: true, label: `Approve ${todo.length} ${languageShortName(cmd.locale)} translation${todo.length === 1 ? '' : 's'}`, project: bump(project, (d) => { for (const t of todo) writeApproval(d, t.id, cmd.locale, t.draft, t.source); }) };
     }
     case 'ADD_LANGUAGE': {
       if (cmd.locale === SOURCE_LANGUAGE) return reject('INVALID_LOCALE', 'English is the source language of every project.');
@@ -455,6 +454,26 @@ function clearOrigin(d: Project, locale: string, id: string) {
   if (!d.translationOrigins || !(key in d.translationOrigins)) return;
   const o = { ...d.translationOrigins }; delete o[key];
   if (Object.keys(o).length) d.translationOrigins = o; else delete d.translationOrigins;
+}
+
+/** Moves one draft to approved text (and records the English it was made from, for strings). */
+function writeApproval(d: Project, id: string, locale: string, draft: string, source: string) {
+  if (isStringId(id)) {
+    const all = { ...(d.strings ?? {}) };
+    const t = { ...(all[id] ?? {}) };
+    t.approved = { ...(t.approved ?? {}), [locale]: draft };
+    t.basedOn = { ...(t.basedOn ?? {}), [locale]: source };
+    const drafts = { ...(t.draft ?? {}) }; delete drafts[locale];
+    if (Object.keys(drafts).length) t.draft = drafts; else delete t.draft;
+    all[id] = t; d.strings = all;
+  } else {
+    const c = d.contentParts.find((x) => x.id === id)!;
+    c.approvedLocales = { ...c.approvedLocales, [locale]: draft };
+    c.version += 1;
+    const drafts = { ...(c.draftLocales ?? {}) }; delete drafts[locale];
+    if (Object.keys(drafts).length) c.draftLocales = drafts; else delete c.draftLocales;
+  }
+  clearOrigin(d, locale, id);
 }
 
 /** Writes (or with null/blank, discards) one draft. A draft typed by a person carries no origin. */

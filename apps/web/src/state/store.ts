@@ -362,8 +362,24 @@ export function useResolution(): Resolution | null {
   const profileId = useStudio((s) => s.ctx.profileId);
   return useMemo(() => {
     if (!project || !record || record.documentType !== project.documentType) return null;
-    return resolve({ project, record, overrides, journeyCursor, profileId });
+    // The studio is a preview surface: unapproved translation drafts are shown (and reported as a finding). Exports never include them.
+    return resolve({ project, record, overrides, journeyCursor, profileId, includeDrafts: true });
   }, [project, record, overrides, journeyCursor, profileId]);
+}
+
+/** The language the previewed document is switched to, or null when it follows the customer's own preference. */
+export function usePreviewLanguage(): string | null {
+  return useStudio((s) => ((s.ctx.overrides as { customer?: { locale?: string } }).customer?.locale ?? null));
+}
+
+/** Switch the previewed document to a language (a scenario override, like any other what-if), or back to the customer's own. */
+export function setPreviewLanguage(locale: string | null) {
+  const st = useStudio.getState();
+  const o = { ...(st.ctx.overrides as Record<string, any>) };
+  const customer = { ...(o.customer ?? {}) };
+  if (locale) customer.locale = locale; else delete customer.locale;
+  if (Object.keys(customer).length) o.customer = customer; else delete o.customer;
+  st.setOverrides(o);
 }
 
 /**

@@ -13,8 +13,8 @@ test('U01 menu is grouped by job and keeps every screen; top bar controls are la
   await open(page, 'aster-card-demo', 'design');
   const nav = page.getByRole('navigation', { name: 'Studio views' });
   for (const g of ['Build', 'Explore', 'Check & publish', 'Help & admin']) await expect(nav.getByRole('group', { name: g })).toBeVisible();
-  await expect(nav.getByRole('link')).toHaveCount(14);
-  await expect(nav.getByRole('group', { name: 'Build' }).getByRole('link')).toHaveText(['2D Design Studio', 'Rules & Data', 'Content & Translations']);
+  await expect(nav.getByRole('link')).toHaveCount(15);
+  await expect(nav.getByRole('group', { name: 'Build' }).getByRole('link')).toHaveText(['2D Design Studio', 'Rules & Data', 'Content & Translations', 'Email & SMS']);
   await expect(nav.getByRole('group', { name: 'Check & publish' }).getByRole('link')).toHaveText(['Validate & Compare', 'Preview & Export']);
   await expect(page.getByTestId('nav-S09')).toHaveAttribute('title', /Check the document for problems/);
   const bar = page.getByRole('banner');
@@ -31,7 +31,7 @@ test('U12 official InfoSlips logo: icon on a laptop-sized window, full logo on a
   expect(imgs[0].src).toContain('infoslips-icon');
   expect(imgs[0].natural).toBeGreaterThan(0);
   expect(imgs[0].w).toBeGreaterThanOrEqual(24); // brand minimum for the icon
-  await page.setViewportSize({ width: 1700, height: 900 });
+  await page.setViewportSize({ width: 1920, height: 900 });
   await expect(page.getByTestId('brand-logo')).toBeVisible();
   imgs = await shown();
   expect(imgs).toHaveLength(1);

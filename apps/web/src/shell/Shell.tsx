@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type SVGProps } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ROLE_LABEL, type ProfileId } from '@iss/model';
-import { editBlockedReason, personaLabel, useIsDirty, useModelChecks, useResolution, useStudio } from '../state/store';
+import { ROLE_LABEL, languageName, languageShortName, projectLanguages, type ProfileId } from '@iss/model';
+import { editBlockedReason, personaLabel, setPreviewLanguage, useIsDirty, useModelChecks, usePreviewLanguage, useRecord, useResolution, useStudio } from '../state/store';
 import { RecordPicker, recordSummary } from './RecordPicker';
 import { Icon } from '../ui/icons';
 import { BrandLogo } from '../ui/Brand';
@@ -36,16 +36,48 @@ export const SCREENS = [
   { id: 'S12', path: 'assistant', label: 'AI Assistant', icon: Icon.ai, group: 'help', hint: 'Ask questions and get proposed edits to approve' },
   { id: 'S13', path: 'content', label: 'Content & Translations', icon: Icon.list, group: 'build', hint: 'Manage wording and approved translations' },
   { id: 'S14', path: 'activity', label: 'Activity', icon: ActivityIcon, group: 'help', hint: 'Who changed what, and when' },
+  { id: 'S15', path: 'channels', label: 'Email & SMS', icon: MailIcon, group: 'build', hint: 'Edit the email and text-message wording and choose what the email shows' },
 ] as const;
 
 /** Menu groups, in working order. Screen IDs and Alt+N shortcuts are unchanged; only the menu order is grouped. */
 export const NAV_GROUPS = [
   { id: 'home', label: null, screens: ['S01'] },
-  { id: 'build', label: 'Build', screens: ['S02', 'S07', 'S13'] },
+  { id: 'build', label: 'Build', screens: ['S02', 'S07', 'S13', 'S15'] },
   { id: 'explore', label: 'Explore', screens: ['S03', 'S04', 'S05', 'S06', 'S08'] },
   { id: 'check', label: 'Check & publish', screens: ['S09', 'S10'] },
   { id: 'help', label: 'Help & admin', screens: ['S11', 'S12', 'S14'] },
 ] as const;
+
+function MailIcon(p: SVGProps<SVGSVGElement>) {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>;
+}
+
+/**
+ * Top-bar language switch for the previewed document. "Customer's language" follows the customer's own preference;
+ * any project language can be forced as a what-if (a scenario override, so every preview and export request follows it).
+ */
+function LanguageSelect() {
+  const project = useStudio((s) => s.project);
+  const record = useRecord();
+  const res = useResolution();
+  const forced = usePreviewLanguage();
+  if (!project) return null;
+  const langs = ['en-US', ...projectLanguages(project)];
+  const own = (record?.customer?.locale as string | undefined) ?? 'en-US';
+  const shown = res?.locale ?? own;
+  const options = forced && !langs.includes(forced) ? [...langs, forced] : langs;
+  // Short names keep the bar compact; the region is added only when two project languages share a name.
+  const short = (l: string) => (options.filter((o) => languageShortName(o) === languageShortName(l)).length > 1 ? languageName(l) : languageShortName(l));
+  return (
+    <label className="ctx-field ctx-language" title={`The document is shown in ${languageName(shown)}. ${forced ? 'Switched for this preview only.' : 'Auto follows the language this customer prefers.'}`}>
+      <span className="ctx-lbl">Language</span>
+      <select className="select" aria-label="Document language" value={forced ?? ''} onChange={(e) => setPreviewLanguage(e.target.value || null)} data-testid="select-language" data-language={shown}>
+        <option value="">{`Auto · ${languageShortName(own)}`}</option>
+        {options.map((l) => <option key={l} value={l}>{short(l)}</option>)}
+      </select>
+    </label>
+  );
+}
 
 function isTyping(el: EventTarget | null) {
   const t = el as HTMLElement | null;
@@ -107,7 +139,8 @@ function TopBar() {
   const readOnly = editBlockedReason(session);
   const { pathname } = useLocation();
   const inStudio = pathname.startsWith('/studio/');
-  const hasOverrides = Object.keys(ctx.overrides).length > 0;
+  // A language switch has its own control in the bar; the chip is for every other what-if change.
+  const hasOverrides = Object.keys(ctx.overrides).some((k) => k !== 'customer') || Object.keys((ctx.overrides as { customer?: Record<string, unknown> }).customer ?? {}).some((k) => k !== 'locale');
   // "Show me where" from the gallery: once the project and its picker exist, focus the picker and ring it briefly.
   const [params, setParams] = useSearchParams();
   const [spot, setSpot] = useState(false);
@@ -150,6 +183,7 @@ function TopBar() {
           <div className={`ctx-field${spot ? ' spot' : ''}`} data-testid="ctx-customer"><span className="ctx-lbl" id="ctx-lbl-customer">Previewing as</span><RecordPicker records={docRecords} personas={personas} value={ctx.recordId} onChange={setRecord} /></div>
           {hasOverrides && <span className="chip variant" title={JSON.stringify(ctx.overrides).slice(0, 300)}>Scenario overrides</span>}
           {ctx.journeyCursor !== null && <span className="chip info">Journey · event {ctx.journeyCursor + 1}</span>}
+          <LanguageSelect />
           <label className="ctx-field"><span className="ctx-lbl">Output</span>
             <select className="select" aria-label="Output profile" value={ctx.profileId} onChange={(e) => setProfile(e.target.value as ProfileId)} data-testid="select-profile">
               <option value="paged-pdf">PDF</option>
@@ -163,7 +197,7 @@ function TopBar() {
             <button className={`btn${dirty ? ' primary' : ''}`} onClick={() => save()} disabled={saving || !!readOnly} data-testid="save-project" title={readOnly ?? 'Save (Ctrl+S)'}><Icon.save /> <span className="save-label">{saving ? 'Saving…' : 'Save'}</span></button>
           </div>
           <button type="button" className="save-state-btn" onClick={() => useDrawers.getState().show('history')} data-testid="open-history" aria-haspopup="dialog" title={`${dirty ? 'Unsaved changes' : 'Saved'} — open version history`}>
-            <span className={`save-state${dirty ? ' dirty' : ''}`} data-testid="save-state" aria-live="polite"><span className="dot" />{dirty ? 'Unsaved' : 'Saved'} · v{project.modelVersion}</span>
+            <span className={`save-state${dirty ? ' dirty' : ''}`} data-testid="save-state" aria-live="polite"><span className="dot" />{dirty ? 'Unsaved' : 'Saved'}<span className="save-ver"> · v{project.modelVersion}</span></span>
           </button>
           <WorkflowChip />
           {readOnly && <span className="chip warning readonly-chip" title={`${readOnly}.`} data-testid="read-only"><Icon.lock width={13} height={13} /><span className="ro-text">Read-only</span></span>}
@@ -267,7 +301,10 @@ function Dock() {
       <Tech><span>Run <strong className="mono">{res?.runId ?? '—'}</strong></span><span className="sep" /></Tech>
       <span title={matched.join(' ')}>Rules applied <strong>{matched.length ? <><Tech>{matched.join(' ')}</Tech><Biz>{matched.length}</Biz></> : '—'}</strong></span><span className="sep" />
       </div>
-      <span className="dock-end"><DemoToolsButton /></span>
+      <span className="dock-end">
+        {(res?.translation.draftsShown.length ?? 0) > 0 && <Link to={`/studio/${project.projectId}/content`} className="dock-btn warn" data-testid="dock-drafts" title="This preview shows translations that are not approved yet. Exports use approved text only. Open Content & Translations to review them.">{res!.translation.draftsShown.length} unapproved translation{res!.translation.draftsShown.length === 1 ? '' : 's'} shown</Link>}
+        <DemoToolsButton />
+      </span>
       <Link to={`/studio/${project.projectId}/validate`} className={`dock-status ${blocking || errors ? 'sev blocking' : warnings ? 'sev warning' : 'sev ok'}`} data-testid="dock-status" title={`${scope} for this scenario — open Validate & Compare`}>
         {scope}: {blocking ? `${blocking} blocking` : errors ? `${errors} errors` : warnings ? `${warnings} warning${warnings === 1 ? '' : 's'}` : 'no issues'}
       </Link>

@@ -38,6 +38,8 @@ const ResolveBody = z.object({
   claimIndex: z.number().int().min(0).max(50).optional().default(0),
   project: z.any().optional(),
   allowDraft: z.boolean().optional(),
+  /** Previews only, and only honoured together with allowDraft: also show unapproved translation drafts. */
+  includeDrafts: z.boolean().optional(),
   includeTree: z.boolean().optional(),
 });
 type ResolveBodyT = z.infer<typeof ResolveBody>;
@@ -85,7 +87,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const project = body.project ? checkDraftProject(body.project, body.projectId) : projectOr404(body.projectId);
     const record = recordOr404(body.recordId);
     if (record.documentType !== project.documentType) throw new ApiError(400, 'RECORD_TYPE_MISMATCH', `${record.recordId} is a ${record.documentType} record; ${project.projectId} expects ${project.documentType}.`);
-    const res = resolve({ project, record, overrides: body.overrides, journeyCursor: body.journeyCursor, claimIndex: body.claimIndex, profileId: (body.outputContext?.profileId ?? 'paged-pdf') as ProfileId });
+    const res = resolve({ project, record, overrides: body.overrides, journeyCursor: body.journeyCursor, claimIndex: body.claimIndex, profileId: (body.outputContext?.profileId ?? 'paged-pdf') as ProfileId, includeDrafts: body.includeDrafts === true && body.allowDraft === true });
     store.saveRun(res.runId, project.projectId, record.recordId, { ...body, project }, { result: res.result, contentDigest: res.contentDigest, modelVersion: project.modelVersion, projectDigest: res.projectDigest, rulesDigest: res.rulesDigest, engine: ENGINE_VERSION });
     return { res, project, request: body };
   }
@@ -95,7 +97,7 @@ export async function buildApp(opts: AppOptions = {}) {
     if (b && typeof b.runId === 'string') {
       const run = store.getRun(b.runId);
       if (!run) throw new ApiError(404, 'NOT_FOUND', `Unknown run ${b.runId}.`);
-      const r = runFor(ResolveBody.parse({ ...run.request, allowDraft: b.allowDraft ?? run.request.allowDraft, outputContext: b.outputContext ?? run.request.outputContext }));
+      const r = runFor(ResolveBody.parse({ ...run.request, allowDraft: b.allowDraft ?? run.request.allowDraft, includeDrafts: b.includeDrafts ?? run.request.includeDrafts, outputContext: b.outputContext ?? run.request.outputContext }));
       if (r.res.runId !== b.runId && !b.outputContext) throw new ApiError(409, 'RUN_NOT_REPRODUCIBLE', 'Stored run no longer reproduces deterministically.');
       return r;
     }
@@ -109,7 +111,7 @@ export async function buildApp(opts: AppOptions = {}) {
   }
 
   async function composePdf(res: Resolution, project: Project, draft: boolean) {
-    const html = renderPagedDocument(res, project, { profileId: 'paged-pdf', watermark: draft ? 'DRAFT — BLOCKING ISSUES' : '' });
+    const html = renderPagedDocument(res, project, { profileId: 'paged-pdf', watermark: res.translation.draftsShown.length ? 'DRAFT — UNAPPROVED TRANSLATIONS' : draft ? 'DRAFT — BLOCKING ISSUES' : '' });
     const comp = await composer.composePaged(html, { pdf: true });
     const art = store.saveArtifact(res.runId, 'pdf', `${fileBase(project, res)}.pdf`, comp.pdf!, { contentDigest: res.contentDigest, metrics: comp.metrics, extracted: { ...comp.extracted, text: undefined }, draft, renderer: PAGED_RENDERER_VERSION }, comp.metrics.pageCount);
     return { comp, art };

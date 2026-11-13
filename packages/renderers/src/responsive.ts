@@ -225,7 +225,7 @@ a{color:#1D5941}
 .iss-menu a[aria-current]{background:#0F172A;color:#fff;border-color:#0F172A;box-shadow:inset 0 -3px 0 #4EAF60}
 .iss-menu a[aria-current]::before{content:"\\25CF";font-size:9px;margin-right:6px;color:#DBE64C}
 /* sections */
-.iss-sec{margin-top:16px;scroll-margin-top:calc(var(--iss-bar-h,120px) + 8px)}
+.iss-sec{margin-top:16px}
 .iss-sec-title{font-size:18px;margin:0;color:#0F172A}
 .iss-sec>.iss-sec-title{margin:0 0 10px}
 .iss-secd>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;cursor:default;list-style:none;margin:0 0 10px}
@@ -349,10 +349,10 @@ export function renderInteractiveHtml(res: Resolution, project: Project, opts?: 
       const cat = t.columns.find((c) => CAT_KEYS.includes(c.key));
       const values = cat ? [...new Set(t.rows.map((r) => r.cells[cat.key]?.display ?? '').filter(Boolean))].sort((a, b) => a.localeCompare(b)) : [];
       const quick = cat && values.length > 1
-        ? `<label class="iss-js-only" hidden>${esc(cat.label)} <select data-table-quick="${id}"><option value="">${T('tableQuickAll')}</option>${values.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select></label>`
+        ? `<label class="iss-js-only">${esc(cat.label)} <select data-table-quick="${id}"><option value="">${T('tableQuickAll')}</option>${values.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select></label>`
         : '';
       const chip = cat ? `<span class="iss-chip iss-js-only" data-table-chip="${id}" hidden><span data-chip-text></span><button type="button" class="iss-btn">${T('tableClearFilter')}</button></span>` : '';
-      const tools = `<div class="iss-table-tools" data-table-tools="${id}"${cat ? ` data-cat-key="${esc(cat.key)}" data-cat-label="${esc(cat.label)}"` : ''}>${t.filterable ? `<label class="iss-js-only" hidden>${T('tableFilterLabel')} <input type="search" data-table-filter="${id}" aria-label="${T('tableFilterAria', { caption: t.caption })}" placeholder="${T('tableFilterPlaceholder')}"/></label>` : ''}${quick}${chip}<span class="iss-table-status" data-table-status="${id}" aria-live="polite"></span></div>`;
+      const tools = `<div class="iss-table-tools" data-table-tools="${id}"${cat ? ` data-cat-key="${esc(cat.key)}" data-cat-label="${esc(cat.label)}"` : ''}>${t.filterable ? `<label class="iss-js-only">${T('tableFilterLabel')} <input type="search" data-table-filter="${id}" aria-label="${T('tableFilterAria', { caption: t.caption })}" placeholder="${T('tableFilterPlaceholder')}"/></label>` : ''}${quick}${chip}<span class="iss-table-status" data-table-status="${id}" aria-live="polite"></span></div>`;
       const more = `<div class="iss-table-more iss-js-only" data-table-more-bar="${id}" hidden><button type="button" class="iss-btn" data-table-more="${id}">${T('tableShowMore')}</button><button type="button" class="iss-btn" data-table-all="${id}">${T('tableShowAll')}</button></div>`;
       const scroll = `<div class="iss-table-scroll" tabindex="0" role="region" aria-label="${esc(t.caption)}">`;
       return nodeInnerHtml(n, mode, renderNested).replace('<table', () => `${tools}${scroll}<table`).replace('</table>', () => `</table></div>${more}`);
@@ -420,7 +420,7 @@ export function renderInteractiveHtml(res: Resolution, project: Project, opts?: 
   const sectionHtml = (d: (typeof defs)[number]): string => {
     const sid = `sec-${d.key}`;
     const protectedSection = nodes[d.key].some((n) => has(n, (x) => x.type === 'disclosure'));
-    const expand = d.key === 'notices' && hasExpl ? `<div class="iss-tools iss-js-only" hidden><button class="iss-btn" type="button" data-action="expand-all" aria-expanded="false">${T('expandAll')}</button></div>` : '';
+    const expand = d.key === 'notices' && hasExpl ? `<div class="iss-tools iss-js-only"><button class="iss-btn" type="button" data-action="expand-all" aria-expanded="false">${T('expandAll')}</button></div>` : '';
     const body = `<div class="iss-sec-body">${groups[d.key].join('')}</div>`;
     if (protectedSection) return `<section class="iss-sec" id="${sid}" data-section="${d.key}" aria-labelledby="${sid}-h"><h2 class="iss-sec-title" id="${sid}-h">${T(d.label)}</h2>${expand}${body}</section>`;
     return `<section class="iss-sec" id="${sid}" data-section="${d.key}" aria-labelledby="${sid}-h"><details class="iss-secd" open data-default-open="${d.open ? 1 : 0}"><summary><h2 class="iss-sec-title" id="${sid}-h">${T(d.label)}</h2><span class="iss-chev" aria-hidden="true"></span></summary>${body}</details></section>`;

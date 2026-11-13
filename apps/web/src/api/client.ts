@@ -47,6 +47,8 @@ export interface ScenarioRequest {
   /** Current (possibly unsaved) model — the server validates it and records an immutable run. */
   project?: Project;
   allowDraft?: boolean;
+  /** Previews only (with allowDraft): also show unapproved translation drafts; the result is watermarked. */
+  includeDrafts?: boolean;
 }
 
 export interface ChannelParity { parity: { ok: boolean; checks: Array<{ id: string; label: string; status: 'match' | 'mismatch' | 'not-applicable'; blocking: boolean; expected?: unknown; email?: unknown; sms?: unknown; note?: string }> } }
@@ -140,6 +142,8 @@ export const api = {
   deleteProject: (id: string) => json<{ deleted: boolean }>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
   importRecords: (body: { documentType: string; format: 'json' | 'csv'; data: string; dryRun?: boolean; projectId?: string }) => json<ImportResult>('/api/v1/records/import', { method: 'POST', body: JSON.stringify(body) }),
   clearImportedRecords: (documentType?: string) => json<{ removed: number }>(`/api/v1/records/imported${documentType ? `?documentType=${documentType}` : ''}`, { method: 'DELETE' }),
+  /** First-pass translation drafts: AI when a key is configured, bundled sample drafts for the sample projects otherwise. Nothing is saved or approved. */
+  translate: (id: string, body: { locale: string; ids?: string[]; project?: Project; forceOffline?: boolean }) => json<{ mode: 'ai' | 'sample' | 'unavailable'; locale: string; providerStatus: string; drafts: Array<{ id: string; text: string; tokenCheck: { ok: boolean; missing: string[]; extra: string[] } }>; skipped: Array<{ id: string; reason: string }>; message: string }>(`/api/v1/projects/${id}/translate`, { method: 'POST', body: JSON.stringify(body) }),
   translationsCsvUrl: (id: string, locale: string) => `/api/v1/projects/${id}/translations.csv?locale=${encodeURIComponent(locale)}`,
   importTranslations: (id: string, body: { locale: string; csv: string; project?: Project }) => json<{ locale: string; drafts: Array<{ partId: string; text: string }>; errors: Array<{ row: number; partId: string; code: string; message: string }>; skipped: number; rows: number }>(`/api/v1/projects/${id}/translations/import`, { method: 'POST', body: JSON.stringify(body) }),
   schemas: (id: string) => json<{ fields: any[]; dimensions: any[]; edgeCasePresets: Array<{ id: string; label: string; description: string }> }>(`/api/v1/projects/${id}/schemas`),

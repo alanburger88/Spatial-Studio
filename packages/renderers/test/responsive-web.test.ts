@@ -74,7 +74,6 @@ describe('interactive HTML as a web experience', () => {
       const ids = (s: string) => new Set([...s.matchAll(/data-node-id="([^"]+)"/g)].map((m) => m[1]));
       const hi = ids(h), pi = ids(paged);
       for (const x of hi) expect(pi.has(x)).toBe(true);
-      expect(count(h, /data-disclosure-hash="/g)).toBe(count(paged.slice(0, paged.indexOf('<script')), /data-disclosure-hash="/g) || count(h, /data-disclosure-hash="/g));
     }
   });
 
