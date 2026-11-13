@@ -17,6 +17,12 @@ import { LOOKUP_TABLES_MAX, validateLookupTable } from './lookup';
 import type { BrandKit, ContentPart, CustomField, DocNode, Locale, TestCase, TextStyle, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
 import { validatePredicate, validateRule } from './validate';
 import { applyPageDesignPatch, pagedFlowProblems, pagedProfileOf, pageDesignLabel, pageDesignProblems, pageSizePt, refitFixedLayouts, type PageDesignPatch } from './pageDesign';
+import type { LibraryKind, LibraryLink, LibraryTarget } from './types';
+import {
+  LIBRARY_ID_PATTERN, LIBRARY_LINK_ID_PATTERN, LIBRARY_LINKS_MAX, LIBRARY_TITLE_MAX, blockId, blockMembers, blockPrefixFor, changedLink, checkLibraryContent,
+  isLibraryKind, libraryContentFingerprint, linkedContentMessage, linkFor, linkNodeId, linkOfPart, mapBlock, nextLinkId,
+  type LibraryContentByKind, type LibraryWordingContent,
+} from './library';
 
 /**
  * Unified typed command bus. Every authoring mutation is one of these commands.
@@ -73,7 +79,23 @@ export type Command =
   | { type: 'BATCH'; label: string; commands: Command[] }
   /** Paper, orientation, margins and page templates of the paged outputs (PDF and the AFP simulation together). */
   | { type: 'SET_PAGE_DESIGN'; patch: PageDesignPatch }
-  | { type: 'RESTORE_SNAPSHOT'; project: Project; label: string };
+  | { type: 'RESTORE_SNAPSHOT'; project: Project; label: string }
+  // Shared library (wave 2, phase 4). `content` is the approved version's content as the library holds it (validated here again).
+  /** Links the document to an approved library version and places its content (inserting it, or replacing what `placement` names). */
+  | { type: 'LINK_LIBRARY_ITEM'; item: { id: string; kind: LibraryKind; title: string }; version: number; content: unknown; placement?: LibraryPlacement; linkId?: string }
+  /** Replaces a link's content in place with another approved version (position and what the document adds around it are kept). */
+  | { type: 'UPDATE_LIBRARY_LINK'; linkId: string; version: number; content: unknown; title?: string }
+  /** Removes the link; the content stays and becomes the document's own. */
+  | { type: 'UNLINK_LIBRARY_ITEM'; linkId: string };
+
+/**
+ * Where a linked item's content goes. A block is inserted into `parentId` (at `index`) or replaces the component
+ * `replaceNodeId` (keeping its ids: the block was made from it); wording replaces the message `partId`; a lookup table
+ * replaces `tableId`. Without a placement: a block is refused, wording and tables are added, the rest replace the document's own.
+ */
+export type LibraryPlacement = { parentId: string; index?: number } | { replaceNodeId: string } | { partId: string } | { tableId: string };
+
+const LIBRARY_COMMANDS = new Set<Command['type']>(['LINK_LIBRARY_ITEM', 'UPDATE_LIBRARY_LINK', 'UNLINK_LIBRARY_ITEM', 'BATCH', 'RESTORE_SNAPSHOT']);
 
 export type CommandResult =
   | { ok: true; project: Project; label: string }
@@ -153,7 +175,19 @@ function validateNodeShape(node: DocNode, project: Project): string | null {
 }
 
 
+/**
+ * Applies one command. Content linked from the shared library is read-only: when a document has library links, any
+ * command other than the library commands themselves (and a batch, whose steps are each checked, or an undo) that would
+ * change linked content is refused here, once, whatever the command. A document without links is not affected.
+ */
 export function applyCommand(project: Project, cmd: Command): CommandResult {
+  const res = applyOne(project, cmd);
+  if (!res.ok || !project.libraryLinks?.length || LIBRARY_COMMANDS.has(cmd.type)) return res;
+  const hit = changedLink(project, res.project);
+  return hit ? reject('LIBRARY_READ_ONLY', linkedContentMessage(hit), linkNodeId(hit)) : res;
+}
+
+function applyOne(project: Project, cmd: Command): CommandResult {
   const map = nodeMap(project);
   switch (cmd.type) {
     case 'INSERT_NODE': {
@@ -655,7 +689,225 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
     case 'RESTORE_SNAPSHOT': {
       return { ok: true, label: cmd.label, project: { ...cmd.project, modelVersion: project.modelVersion + 1 } };
     }
+    case 'LINK_LIBRARY_ITEM':
+    case 'UPDATE_LIBRARY_LINK':
+    case 'UNLINK_LIBRARY_ITEM':
+      return applyLibraryCommand(project, cmd);
   }
+}
+
+/* ------------------------------------------------------------ shared library */
+
+type LibraryCommand = Extract<Command, { type: 'LINK_LIBRARY_ITEM' | 'UPDATE_LIBRARY_LINK' | 'UNLINK_LIBRARY_ITEM' }>;
+
+function applyLibraryCommand(project: Project, cmd: LibraryCommand): CommandResult {
+  const links = project.libraryLinks ?? [];
+  if (cmd.type === 'UNLINK_LIBRARY_ITEM') {
+    const link = linkFor(project, cmd.linkId);
+    if (!link) return reject('NOT_FOUND', 'That library link is not in this document.');
+    return { ok: true, label: `Unlink “${link.title}” from the library`, project: bump(project, (d) => {
+      const rest = (d.libraryLinks ?? []).filter((l) => l.linkId !== cmd.linkId);
+      if (rest.length) d.libraryLinks = rest; else delete d.libraryLinks;
+    }) };
+  }
+  if (!Number.isInteger(cmd.version) || cmd.version < 1) return reject('INVALID_LIBRARY_LINK', 'Say which approved version of the library item to use.');
+  let link: LibraryLink;
+  if (cmd.type === 'LINK_LIBRARY_ITEM') {
+    const it = cmd.item;
+    if (!it || !LIBRARY_ID_PATTERN.test(it.id ?? '') || !isLibraryKind(it.kind)) return reject('INVALID_LIBRARY_LINK', 'The library item cannot be read.');
+    if (typeof it.title !== 'string' || !it.title.trim() || it.title.length > LIBRARY_TITLE_MAX) return reject('INVALID_LIBRARY_LINK', `The library item needs a title (max ${LIBRARY_TITLE_MAX} characters).`);
+    if (links.length >= LIBRARY_LINKS_MAX) return reject('TOO_MANY', `A document can link to at most ${LIBRARY_LINKS_MAX} library items.`);
+    if (cmd.linkId !== undefined && (!LIBRARY_LINK_ID_PATTERN.test(cmd.linkId) || links.some((l) => l.linkId === cmd.linkId))) return reject('INVALID_LIBRARY_LINK', 'The link id is not valid or is already used.');
+    const linkId = cmd.linkId ?? nextLinkId(project, it.id);
+    const target = initialTarget(project, it.kind, linkId, cmd.content, cmd.placement);
+    if ('error' in target) return reject('INVALID_LIBRARY_LINK', target.error);
+    link = { linkId, itemId: it.id, kind: it.kind, title: it.title.trim(), version: cmd.version, fingerprint: '', target: target.target };
+  } else {
+    const found = linkFor(project, cmd.linkId);
+    if (!found) return reject('NOT_FOUND', 'That library link is not in this document.');
+    if (found.version === cmd.version) return reject('UNCHANGED', `This document already holds version ${cmd.version} of “${found.title}”.`);
+    link = { ...found, version: cmd.version, ...(typeof cmd.title === 'string' && cmd.title.trim() && cmd.title.length <= LIBRARY_TITLE_MAX ? { title: cmd.title.trim() } : {}) };
+  }
+  const checked = checkLibraryContent(link.kind, cmd.content);
+  if (!checked.ok) return reject('INVALID_LIBRARY_CONTENT', `The library content cannot be used: ${checked.problems[0]}`);
+  const content = checked.content;
+  link.fingerprint = libraryContentFingerprint(content);
+  const updating = cmd.type === 'UPDATE_LIBRARY_LINK';
+  const verb = updating ? `Update “${link.title}” to library version ${link.version}` : `Link “${link.title}” from the library (version ${link.version})`;
+  const others = links.filter((l) => l.linkId !== link.linkId);
+  const taken = (pred: (l: LibraryLink) => boolean) => others.find(pred);
+  const withLink = (d: Project) => { d.libraryLinks = updating ? (d.libraryLinks ?? []).map((l) => (l.linkId === link.linkId ? link : l)) : [...(d.libraryLinks ?? []), link]; };
+  const t = link.target;
+
+  switch (t.kind) {
+    case 'brand': {
+      const other = taken((l) => l.target.kind === 'brand');
+      if (other) return reject('ALREADY_LINKED', `The brand already comes from the library (“${other.title}”). Update or unlink it first.`);
+      const brand = content as BrandKit;
+      return { ok: true, label: verb, project: bump(project, (d) => { d.brand = { ...brand }; withLink(d); }) };
+    }
+    case 'glossary': {
+      const other = taken((l) => l.target.kind === 'glossary');
+      if (other) return reject('ALREADY_LINKED', `The glossary already comes from the library (“${other.title}”). Update or unlink it first.`);
+      const entries = (content as LibraryContentByKind['glossary']).entries;
+      return { ok: true, label: verb, project: bump(project, (d) => { d.glossary = JSON.parse(JSON.stringify(entries)); withLink(d); }) };
+    }
+    case 'wording-rules': {
+      const other = taken((l) => l.target.kind === 'wording-rules');
+      if (other) return reject('ALREADY_LINKED', `The house wording rules already come from the library (“${other.title}”). Update or unlink them first.`);
+      const rules = (content as LibraryContentByKind['wording-rules']).rules;
+      return { ok: true, label: verb, project: bump(project, (d) => { d.houseWordingRules = JSON.parse(JSON.stringify(rules)); withLink(d); }) };
+    }
+    case 'lookup-table': {
+      const other = taken((l) => l.target.kind === 'lookup-table' && l.target.tableId === t.tableId);
+      if (other) return reject('ALREADY_LINKED', `That lookup table already comes from the library (“${other.title}”).`);
+      const table: LookupTable = { ...(JSON.parse(JSON.stringify(content)) as LookupTable), id: t.tableId };
+      const tables = project.lookupTables ?? [];
+      const at = tables.findIndex((x) => x.id === t.tableId);
+      if (at < 0 && tables.length >= LOOKUP_TABLES_MAX) return reject('TOO_MANY', `A document can have at most ${LOOKUP_TABLES_MAX} lookup tables.`);
+      const next = at >= 0 ? tables.map((x, i) => (i === at ? table : x)) : [...tables, table];
+      const calcErrors = validateCalculatedFields({ ...project, lookupTables: next }, project.calculatedFields ?? []);
+      if (calcErrors.length) return reject('TABLE_IN_USE', `A calculation that reads this table would no longer work: ${calcErrors[0]}`);
+      return { ok: true, label: verb, project: bump(project, (d) => { d.lookupTables = next; withLink(d); }) };
+    }
+    case 'wording': {
+      const other = taken((l) => linkOfPart(project, t.partId)?.linkId === l.linkId);
+      if (other) return reject('ALREADY_LINKED', `That wording already comes from the library (“${other.title}”).`);
+      const w = content as LibraryContentByKind['wording'];
+      const existing = project.contentParts.find((c) => c.id === t.partId);
+      const part: ContentPart = { id: t.partId, version: existing ? existing.version + 1 : 1, title: w.part.title, approvedLocales: { ...w.part.approvedLocales }, syntheticDemoOnly: existing?.syntheticDemoOnly ?? true, type: w.part.type };
+      return { ok: true, label: verb, project: bump(project, (d) => {
+        const i = d.contentParts.findIndex((c) => c.id === t.partId);
+        if (i >= 0) d.contentParts[i] = part; else d.contentParts.push(part);
+        const strings = { ...(d.strings ?? {}) };
+        if (w.titleTranslations) strings[`@title/${t.partId}`] = { approved: { ...w.titleTranslations } }; else delete strings[`@title/${t.partId}`];
+        if (Object.keys(strings).length) d.strings = strings; else delete d.strings;
+        if (d.translationOrigins) for (const k of Object.keys(d.translationOrigins)) if (k.endsWith(`|${t.partId}`)) clearOrigin(d, k.split('|')[0], t.partId);
+        withLink(d);
+      }) };
+    }
+    case 'block': {
+      const block = content as LibraryContentByKind['block'];
+      const mapped = mapBlock(block, t.idPrefix, project);
+      // What is replaced: the linked block itself (an update), the component the block was made from, or nothing (an insert).
+      const replaceId = updating ? t.rootNodeId : cmd.type === 'LINK_LIBRARY_ITEM' && cmd.placement && 'replaceNodeId' in cmd.placement ? cmd.placement.replaceNodeId : null;
+      const insertAt = cmd.type === 'LINK_LIBRARY_ITEM' && cmd.placement && 'parentId' in cmd.placement ? cmd.placement : null;
+      const placed = placeBlock(project, mapped, replaceId, insertAt, others);
+      if ('error' in placed) return reject(placed.code, placed.error, placed.nodeId);
+      const next: LibraryLink = { ...link, target: { ...t, rootNodeId: mapped.nodes[0].id } };
+      const finalProject = { ...placed.project, libraryLinks: updating ? (project.libraryLinks ?? []).map((l) => (l.linkId === link.linkId ? next : l)) : [...links, next] };
+      return { ok: true, label: verb, project: { ...finalProject, modelVersion: project.modelVersion + 1 } };
+    }
+  }
+}
+
+/** Where a new link's content goes, from the command's placement (validated against the document). */
+function initialTarget(project: Project, kind: LibraryKind, linkId: string, content: unknown, placement: LibraryPlacement | undefined): { target: LibraryTarget } | { error: string } {
+  const pl = (placement ?? {}) as Record<string, unknown>;
+  switch (kind) {
+    case 'brand': case 'glossary': case 'wording-rules': return { target: { kind } };
+    case 'lookup-table': {
+      if (typeof pl.tableId === 'string') {
+        if (!(project.lookupTables ?? []).some((x) => x.id === pl.tableId)) return { error: `There is no lookup table ${pl.tableId} to replace.` };
+        return { target: { kind, tableId: pl.tableId } };
+      }
+      const id = (content as LookupTable | null)?.id;
+      if (typeof id !== 'string') return { error: 'The lookup table cannot be read.' };
+      if ((project.lookupTables ?? []).some((x) => x.id === id)) return { error: `This document already has a lookup table with the id ${id}. Choose it to replace it, or rename one of them.` };
+      return { target: { kind, tableId: id } };
+    }
+    case 'wording': {
+      if (typeof pl.partId === 'string') {
+        if (!project.contentParts.some((c) => c.id === pl.partId)) return { error: `There is no message ${pl.partId} to replace.` };
+        return { target: { kind, partId: pl.partId } };
+      }
+      const id = (content as LibraryWordingContent | null)?.part?.id;
+      if (typeof id !== 'string') return { error: 'The wording cannot be read.' };
+      const partId = blockId(blockPrefixFor(linkId), id);
+      if (project.contentParts.some((c) => c.id === partId)) return { error: `This document already has a message with the id ${partId}.` };
+      return { target: { kind, partId } };
+    }
+    case 'block': {
+      if (typeof pl.replaceNodeId === 'string') return { target: { kind, rootNodeId: pl.replaceNodeId, idPrefix: '' } };
+      if (typeof pl.parentId === 'string') return { target: { kind, rootNodeId: '', idPrefix: blockPrefixFor(linkId) } };
+      return { error: 'Say where in the document the building block goes.' };
+    }
+  }
+}
+
+/**
+ * Puts a block's (mapped) nodes, messages and translations in the document: in place of `replaceId` (keeping its place
+ * in its parent and its own layout, which belong to the document) or at `insertAt`. Checks everything a document needs.
+ */
+function placeBlock(project: Project, mapped: ReturnType<typeof mapBlock>, replaceId: string | null, insertAt: { parentId: string; index?: number } | null, otherLinks: LibraryLink[]): { project: Project } | { code: string; error: string; nodeId?: string } {
+  const map = nodeMap(project);
+  const root = mapped.nodes[0];
+  const inOtherBlock = (id: string) => otherLinks.find((l) => l.target.kind === 'block' && blockMembers(project, l.target.rootNodeId).nodeIds.includes(id));
+  let parentId: string, index: number;
+  let removed = { nodeIds: [] as string[], partIds: [] as string[], stringIds: [] as string[] };
+  let keptLayout: DocNode['layout'];
+  if (replaceId !== null) {
+    const old = map.get(replaceId);
+    if (!old) return { code: 'NOT_FOUND', error: `There is no component ${replaceId} to replace.` };
+    if (replaceId === project.rootNodeId) return { code: 'PROTECTED', error: 'The document itself cannot be replaced by a building block.' };
+    const inside = inOtherBlock(replaceId);
+    if (inside) return { code: 'ALREADY_LINKED', error: `That component already comes from the library (“${inside.title}”).`, nodeId: replaceId };
+    removed = blockMembers(project, replaceId);
+    const nested = otherLinks.find((l) => l.target.kind === 'block' && removed.nodeIds.includes(l.target.rootNodeId));
+    if (nested) return { code: 'ALREADY_LINKED', error: `That component contains “${nested.title}”, which comes from the library. Unlink it first.`, nodeId: replaceId };
+    const parent = parentOf(project, replaceId);
+    if (!parent) return { code: 'NOT_FOUND', error: 'The component has no place in the document.' };
+    parentId = parent.id; index = parent.children!.indexOf(replaceId);
+    keptLayout = old.layout;
+  } else if (insertAt) {
+    const why = dropRejection(project, insertAt.parentId, root.type);
+    if (why) return { code: 'INVALID_DROP_TARGET', error: why, nodeId: insertAt.parentId };
+    const inside = inOtherBlock(insertAt.parentId);
+    if (inside) return { code: 'LIBRARY_READ_ONLY', error: `“${inside.title}” comes from the library and is read-only, so nothing can be put inside it.`, nodeId: insertAt.parentId };
+    parentId = insertAt.parentId;
+    index = insertAt.index ?? map.get(parentId)!.children?.length ?? 0;
+  } else return { code: 'INVALID_LIBRARY_LINK', error: 'Say where in the document the building block goes.' };
+
+  const goneNodes = new Set(removed.nodeIds), goneParts = new Set(removed.partIds);
+  const clash = mapped.nodes.find((n) => map.has(n.id) && !goneNodes.has(n.id));
+  if (clash) return { code: 'DUPLICATE_ID', error: `The document already has a component with the id ${clash.id}, so the building block cannot be placed.`, nodeId: clash.id };
+  const partClash = mapped.parts.find((p) => !goneParts.has(p.id) && project.contentParts.some((c) => c.id === p.id) && replaceId === null);
+  if (partClash) return { code: 'DUPLICATE_ID', error: `The document already has a message with the id ${partClash.id}, so the building block cannot be placed.` };
+  const keptIds = new Set(mapped.nodes.map((n) => n.id));
+  const req = requiredNodeIds(project);
+  const lost = removed.nodeIds.find((id) => req.has(id) && !keptIds.has(id));
+  if (lost) return { code: 'PROTECTED_OBLIGATION', error: `This would remove “${map.get(lost)?.name ?? lost}”, which a rule of this document requires.`, nodeId: lost };
+
+  const placedRoot: DocNode = keptLayout ? { ...root, layout: keptLayout } : root;
+  const fields = projectFieldIndex(project);
+  for (const n of [placedRoot, ...mapped.nodes.slice(1)]) {
+    const shape = validateNodeShape(n, project);
+    if (shape) return { code: 'INVALID_NODE', error: `“${n.name ?? n.id}” cannot be placed in this document: ${shape}`, nodeId: n.id };
+    if (n.binding && !fields.has(n.binding)) return { code: 'INVALID_BINDING', error: `“${n.name ?? n.id}” shows the data field ${n.binding}, which this document does not have.`, nodeId: n.id };
+  }
+  const nodes = project.nodes.filter((n) => !goneNodes.has(n.id)).map((n) => (n.id === parentId ? { ...n, children: (n.children ?? []).filter((c) => c !== replaceId) } : n));
+  const parent = nodes.find((n) => n.id === parentId)!;
+  const children = [...(parent.children ?? [])];
+  children.splice(Math.max(0, Math.min(index, children.length)), 0, placedRoot.id);
+  parent.children = children;
+  nodes.push(placedRoot, ...mapped.nodes.slice(1));
+  const oldParts = new Map(project.contentParts.map((c) => [c.id, c]));
+  const newPartIds = new Set(mapped.parts.map((p) => p.id));
+  const contentParts = project.contentParts.filter((c) => !(goneParts.has(c.id) && !newPartIds.has(c.id))).map((c) => {
+    const np = mapped.parts.find((p) => p.id === c.id);
+    return np ? { ...np, version: c.version + 1, syntheticDemoOnly: c.syntheticDemoOnly } : c;
+  });
+  for (const p of mapped.parts) if (!oldParts.has(p.id)) contentParts.push(p);
+  const strings = { ...(project.strings ?? {}) };
+  for (const id of removed.stringIds) delete strings[id];
+  Object.assign(strings, mapped.strings);
+  const origins = Object.fromEntries(Object.entries(project.translationOrigins ?? {}).filter(([k]) => !removed.stringIds.includes(k.slice(k.indexOf('|') + 1)) && !goneParts.has(k.slice(k.indexOf('|') + 1))));
+  const candidate: Project = { ...project, nodes, contentParts };
+  if (Object.keys(strings).length) candidate.strings = strings; else delete candidate.strings;
+  if (Object.keys(origins).length) candidate.translationOrigins = origins; else delete candidate.translationOrigins;
+  const badRule = candidate.rules.map((r) => ({ r, e: validateRule(r, candidate) })).find((x) => x.e.length);
+  if (badRule) return { code: 'RULE_IN_USE', error: `Rule ${badRule.r.id} would no longer work: ${badRule.e[0]}` };
+  return { project: candidate };
 }
 
 /* ------------------------------------------------------------ translations */

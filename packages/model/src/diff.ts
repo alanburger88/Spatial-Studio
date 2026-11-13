@@ -1,6 +1,7 @@
 import { canonicalJson } from './digest';
 import { richToPlain } from './rich';
 import { effectivePageDesign, PAGE_TEMPLATE_LABEL, PAPER_SIZES } from './pageDesign';
+import type { LibraryKind, LibraryLink } from './types';
 import type { BrandKit, CalculatedField, ContentPart, CustomField, DocNode, DocumentDateSource, JourneyEvent, LookupTable, NodeLayout, Predicate, PresentationProfile, Project, Rule, RuleAction, TestCase, TextStyle } from './types';
 import { printFormula } from './formula';
 import { periodInWords } from './formulaWords';
@@ -60,7 +61,25 @@ export interface ProjectDiff {
   documentDate?: { from: string | null; to: string | null };
   /** Other top-level keys (issuer, rootNodeId, documentType…) that differ. */
   other: string[];
-  summary: { counts: Record<'title' | 'components' | 'rules' | 'content' | 'customFields' | 'styles' | 'brand' | 'testCases' | 'journey' | 'profiles' | 'calculations' | 'lookupTables' | 'documentDate' | 'other', number>; total: number; identical: boolean };
+  /** Shared library links made, updated to another version and removed (only present when one of them changed). */
+  library?: { linked: LibraryLinkRef[]; updated: Array<LibraryLinkRef & { from: number }>; unlinked: LibraryLinkRef[] };
+  summary: { counts: Record<'title' | 'components' | 'rules' | 'content' | 'customFields' | 'styles' | 'brand' | 'testCases' | 'journey' | 'profiles' | 'calculations' | 'lookupTables' | 'documentDate' | 'other', number> & { library?: number }; total: number; identical: boolean };
+}
+
+/** A library link in a diff: the item, its kind and the version the document holds (after the change, or before an unlink). */
+export interface LibraryLinkRef { linkId: string; itemId: string; title: string; kind: LibraryKind; version: number }
+
+/** The library links that were made, updated and removed between two versions (null when none). */
+export function diffLibraryLinks(a: Project, b: Project): ProjectDiff['library'] | null {
+  if (!a.libraryLinks?.length && !b.libraryLinks?.length) return null;
+  const ref = (l: LibraryLink): LibraryLinkRef => ({ linkId: l.linkId, itemId: l.itemId, title: l.title, kind: l.kind, version: l.version });
+  const A = byId(a.libraryLinks, (l) => l.linkId), B = byId(b.libraryLinks, (l) => l.linkId);
+  const out = {
+    linked: (b.libraryLinks ?? []).filter((l) => !A.has(l.linkId)).map(ref),
+    unlinked: (a.libraryLinks ?? []).filter((l) => !B.has(l.linkId)).map(ref),
+    updated: (b.libraryLinks ?? []).filter((l) => A.has(l.linkId) && A.get(l.linkId)!.version !== l.version).map((l) => ({ ...ref(l), from: A.get(l.linkId)!.version })),
+  };
+  return out.linked.length + out.unlinked.length + out.updated.length ? out : null;
 }
 
 const same = (a: unknown, b: unknown) => canonicalJson(a ?? null) === canonicalJson(b ?? null);
@@ -227,7 +246,7 @@ function diffBrand(a: BrandKit | undefined, b: BrandKit | undefined): ValueChang
     : { field: k, from: scalarText((a as any)?.[k]), to: scalarText((b as any)?.[k]) });
 }
 
-const KNOWN = new Set(['schemaVersion', 'projectId', 'title', 'modelVersion', 'lastSavedAt', 'nodes', 'rules', 'contentParts', 'customFields', 'styles', 'brand', 'testCases', 'journey', 'presentationProfiles', 'derivedFrom', 'fromTemplate', 'importedFrom', 'calculatedFields', 'lookupTables', 'documentDate']);
+const KNOWN = new Set(['schemaVersion', 'projectId', 'title', 'modelVersion', 'lastSavedAt', 'nodes', 'rules', 'contentParts', 'customFields', 'styles', 'brand', 'testCases', 'journey', 'presentationProfiles', 'derivedFrom', 'fromTemplate', 'importedFrom', 'calculatedFields', 'lookupTables', 'documentDate', 'libraryLinks', 'houseWordingRules']);
 
 /** Where the document's date comes from, in plain words. */
 export function documentDateWords(src: DocumentDateSource | undefined, fieldLabel?: (path: string) => string): string | null {
@@ -291,13 +310,16 @@ export function diffProjects(a: Project, b: Project): ProjectDiff {
     documentDate: dateChanged ? 1 : 0,
     other: other.length,
   };
-  const total = Object.values(counts).reduce((s, n) => s + n, 0);
+  const library = diffLibraryLinks(a, b);
+  const libraryCount = library ? library.linked.length + library.updated.length + library.unlinked.length : 0;
+  const total = Object.values(counts).reduce((s, n) => s + n, 0) + libraryCount;
   return {
     ...(a.title !== b.title ? { title: { from: a.title, to: b.title } } : {}),
     components, rules, content, customFields, styles, brand, testCases, journey, profiles, calculations, lookupTables,
     ...(dateChanged ? { documentDate: { from: documentDateWords(a.documentDate), to: documentDateWords(b.documentDate) } } : {}),
     other,
-    summary: { counts, total, identical: total === 0 },
+    ...(library ? { library } : {}),
+    summary: { counts: library ? { ...counts, library: libraryCount } : counts, total, identical: total === 0 },
   };
 }
 
