@@ -15,7 +15,7 @@ Code: `apps/api/src/routes/releases.ts` (routes), `apps/api/src/releases.ts` (cr
 
 | Action | Author | Reviewer | Approver | Admin |
 |---|---|---|---|---|
-| Read releases, download packages, prepare a package | yes | yes | yes | yes |
+| Read releases, download packages, prepare a package (release package and runnable package) | yes | yes | yes | yes |
 | Create a release (by approving, or from the approved version) | no | no | yes | yes |
 | Add to the handover log | no | no | yes | yes |
 | Move a release to Production, withdraw a release | no | no | no | yes |
@@ -247,6 +247,18 @@ Single-file headers: the content type for its extension, `X-Sha256`, `Content-Di
 
 A build fails with a plain reason when composition fails, or when the studio's engine, a renderer or the package format has changed since the release was made: the package states the versions that produced it, so it is not built with others.
 
+### The runnable package (phase 7)
+
+The release with the studio's own engine, a data contract and a proof pack, for a system that produces the documents itself. Format: [`docs/design/RUNNABLE_PACKAGE.md`](../design/RUNNABLE_PACKAGE.md). Handlers: `apps/api/src/routes/runtime.ts`; builder: `apps/api/src/runnablePackage.ts`. Same permissions and behaviour as the release package: built on request off the request that asked, one at a time, kept once built and never replaced.
+
+| Route | What it does |
+|---|---|
+| `GET /api/v1/releases/:releaseId/runtime/status` | `{ "runtime": RuntimePackageStatus }` |
+| `POST /api/v1/releases/:releaseId/runtime` | Prepare. Body `{ "wait"?: true, "verify"?: true }`. Answers `{ "runtime": RuntimePackageStatus, "started": boolean }`, `202` while work is going on, `200` otherwise. When the release package is not built yet it is prepared first (and recorded as such in the audit entry). A failed build is tried again by this route. |
+| `GET /api/v1/releases/:releaseId/runtime` | Download. `200` ZIP when ready (`Content-Disposition: attachment; filename="<document id>-r<number>-runtime.zip"`, `X-Sha256`, `X-Content-Type-Options: nosniff`). When not built: starts the build and answers `202` with `Retry-After: 2`; with `?wait=1` it waits and sends the ZIP. `409 RUNTIME_FAILED` (with `runtime`) after a failed build. |
+
+`RuntimePackageStatus` is `ReleasePackageStatus` without `summary`, plus `engine: { version, sha256 } | null` (the engine file inside it) and `proofCases: number | null`. `404 NOT_FOUND` for an unknown release. A build fails with a plain reason when the release package cannot be built, or when the engine or a renderer has changed since the release was made.
+
 ### Reset (tests and demos only)
 
 `POST /api/v1/releases/reset` with `{ "confirm": true }` removes every release. It answers `403 RESET_DISABLED` unless the server was started with `RELEASES_RESET=allow`, and needs an admin. It exists so browser tests can start clean; in normal use nothing deletes a release.
@@ -262,6 +274,7 @@ Every state change writes one, with names and numbers and never content. `detail
 | `release.withdraw` | withdrawn | `stage` ("Test" or "Production"), `withReason: true` |
 | `release.handover` | handover entry added | `kind` ("Received" or "Live"), `stage` (label or null), `withNote` |
 | `release.package` | package work started or ended | `event`: `started`, `ready` (`sha256`, `bytes`, `files`), `failed` (`reason`), `check-started`, `checked` (`same`, `sha256`, `keptSha256`, `reason?`) |
+| `release.runtime` | runnable package work started or ended | `event` as for `release.package`; `ready` also has `engine` (`version`, `sha256`) and `releasePackageBuilt` (the release package was prepared for it) |
 
 Reasons and notes a person typed are kept on the release (history and handover log), not in the audit log. `workflow.approve` also says which release it made: `detail.release = { number, created }`. `project.delete` says `releasesKept`.
 
