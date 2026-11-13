@@ -297,7 +297,12 @@ export interface Project {
   translationOrigins?: Record<string, TranslationOrigin>;
   /** Email and SMS wording and section choices. Absent = the defaults from `defaultChannels`. */
   channels?: ChannelConfig;
+  /** Preferred translations of recurring terms, per target language. AI drafts and the translation check follow them. */
+  glossary?: Record<Locale, GlossaryEntry[]>;
 }
+
+/** One preferred term: the English `source` should be rendered as `target` in that language. */
+export interface GlossaryEntry { source: string; target: string; note?: string }
 
 export type TranslationOrigin = 'ai' | 'sample';
 

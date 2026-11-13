@@ -428,3 +428,4 @@ export function replayJourney(project: Project, record: SyntheticRecord, overrid
 export * from './impact';
 export * from './decisionTable';
 export * from './testCases';
+export * from './assist';

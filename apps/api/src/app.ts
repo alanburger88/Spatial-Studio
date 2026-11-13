@@ -651,6 +651,14 @@ export async function buildApp(opts: AppOptions = {}) {
   app.get<{ Querystring: { runId?: string; projectId?: string } }>('/api/v1/artifacts', async (req) => ({ artifacts: store.listArtifacts({ runId: req.query.runId, projectId: req.query.projectId }) }));
 
   app.get('/api/v1/assistant/status', async () => providerStatus(providerConfig()));
+  /** The studio reports each assistant proposal a person applied, so Activity shows it as AI-assisted. Stores a label and counts only. */
+  app.post('/api/v1/assist/applied', async (req) => {
+    const b = (req.body ?? {}) as { projectId?: unknown; feature?: unknown; label?: unknown; source?: unknown; changes?: unknown; modelVersion?: unknown };
+    if (typeof b.projectId !== 'string' || typeof b.feature !== 'string' || typeof b.label !== 'string') throw new ApiError(400, 'INVALID', 'projectId, feature and label are required.');
+    projectOr404(b.projectId);
+    audit(store, req, 'assist.applied', { projectId: b.projectId, modelVersion: typeof b.modelVersion === 'number' ? b.modelVersion : null, detail: { feature: b.feature.slice(0, 40), label: b.label.slice(0, 200), source: b.source === 'ai' ? 'ai' : 'builtin', changes: typeof b.changes === 'number' ? b.changes : 1 } });
+    return { recorded: true };
+  });
   app.post('/api/v1/assistant/message', async (req) => {
     const b = req.body as any;
     if (typeof b?.message !== 'string' || !b.message.trim() || b.message.length > 2000) throw new ApiError(400, 'INVALID_MESSAGE', 'Message must be 1–2000 characters.');

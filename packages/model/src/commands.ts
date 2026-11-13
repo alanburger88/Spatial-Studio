@@ -7,7 +7,7 @@ import { isSupportedLanguage, languageName, languageShortName, projectLanguages,
 import { isStringId, translatableStrings } from './strings';
 import { tokensOfText } from './translations';
 import { CHANNEL_TEXT_LIMITS, CHANNEL_TOKENS, EMAIL_SECTION_IDS } from './channels';
-import type { ChannelConfig, TranslationOrigin } from './types';
+import type { ChannelConfig, GlossaryEntry, TranslationOrigin } from './types';
 import type { BrandKit, ContentPart, CustomField, DocNode, Locale, TestCase, TextStyle, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
 import { validatePredicate, validateRule } from './validate';
 
@@ -47,6 +47,9 @@ export type Command =
   | { type: 'ADD_LANGUAGE'; locale: Locale }
   | { type: 'REMOVE_LANGUAGE'; locale: Locale }
   | { type: 'SET_CHANNELS'; channels: ChannelConfig }
+  | { type: 'SET_GLOSSARY'; locale: Locale; entries: GlossaryEntry[] }
+  /** Several commands applied in order as ONE undoable step (assistant fixes). All or nothing: the first rejection rejects the batch. */
+  | { type: 'BATCH'; label: string; commands: Command[] }
   | { type: 'RESTORE_SNAPSHOT'; project: Project; label: string };
 
 export type CommandResult =
@@ -424,6 +427,41 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
         sms: { text: c.sms.text },
       };
       return { ok: true, label: 'Edit email and SMS wording', project: bump(project, (d) => { d.channels = clean; }) };
+    }
+    case 'SET_GLOSSARY': {
+      const bad = localeProblem(project, cmd.locale);
+      if (bad || cmd.locale === SOURCE_LANGUAGE) return reject('INVALID_LOCALE', bad ?? 'The glossary is kept per target language.');
+      if (cmd.entries.length > 200) return reject('TOO_LONG', 'A glossary is limited to 200 terms per language.');
+      const seen = new Set<string>();
+      const clean: GlossaryEntry[] = [];
+      for (const e of cmd.entries) {
+        const source = (e?.source ?? '').trim(), target = (e?.target ?? '').trim();
+        if (!source || !target) return reject('INVALID', 'Every glossary term needs the English term and its translation.');
+        if (source.length > 80 || target.length > 80 || (e.note ?? '').length > 200) return reject('TOO_LONG', 'Glossary terms are limited to 80 characters and notes to 200.');
+        if (/[<>{}]/.test(source + target)) return reject('INVALID', 'Glossary terms cannot contain <, >, { or }.');
+        const key = source.toLowerCase();
+        if (seen.has(key)) return reject('DUPLICATE', `“${source}” is listed twice.`);
+        seen.add(key);
+        clean.push({ source, target, ...(e.note?.trim() ? { note: e.note.trim() } : {}) });
+      }
+      return { ok: true, label: `Edit ${languageShortName(cmd.locale)} glossary`, project: bump(project, (d) => {
+        const all = { ...(d.glossary ?? {}) };
+        if (clean.length) all[cmd.locale] = clean; else delete all[cmd.locale];
+        if (Object.keys(all).length) d.glossary = all; else delete d.glossary;
+      }) };
+    }
+    case 'BATCH': {
+      if (!cmd.commands.length) return reject('EMPTY', 'There is nothing to apply.');
+      if (cmd.commands.length > 200) return reject('TOO_LONG', 'Too many changes in one step.');
+      let current = project;
+      for (const [i, c] of cmd.commands.entries()) {
+        if (c.type === 'BATCH' || c.type === 'RESTORE_SNAPSHOT') return reject('INVALID', 'A batch cannot contain another batch or a restore.');
+        const r = applyCommand(current, c);
+        if (!r.ok) return reject(r.code, `Change ${i + 1} of ${cmd.commands.length} could not be applied, so nothing was changed: ${r.message}`, r.nodeId);
+        current = r.project;
+      }
+      // one undoable step, one version bump
+      return { ok: true, label: cmd.label.slice(0, 160) || `${cmd.commands.length} changes`, project: { ...current, modelVersion: project.modelVersion + 1 } };
     }
     case 'RESTORE_SNAPSHOT': {
       return { ok: true, label: cmd.label, project: { ...cmd.project, modelVersion: project.modelVersion + 1 } };
