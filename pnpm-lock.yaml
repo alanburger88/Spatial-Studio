@@ -56,6 +56,9 @@ importers:
       '@iss/resolver':
         specifier: workspace:*
         version: link:../../packages/resolver
+      '@iss/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@iss/scenarios':
         specifier: workspace:*
         version: link:../../packages/scenarios
@@ -162,6 +165,27 @@ importers:
       '@iss/model':
         specifier: workspace:*
         version: link:../model
+
+  packages/runtime:
+    dependencies:
+      '@iss/model':
+        specifier: workspace:*
+        version: link:../model
+      '@iss/renderers':
+        specifier: workspace:*
+        version: link:../renderers
+      '@iss/resolver':
+        specifier: workspace:*
+        version: link:../resolver
+      '@iss/scenarios':
+        specifier: workspace:*
+        version: link:../scenarios
+      esbuild:
+        specifier: 0.24.0
+        version: 0.24.0
+      playwright-core:
+        specifier: 1.63.0
+        version: 1.63.0
 
   packages/scenarios:
     dependencies:

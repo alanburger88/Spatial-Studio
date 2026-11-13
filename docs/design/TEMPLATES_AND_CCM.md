@@ -1,6 +1,6 @@
 # Templates and working with an existing CCM
 
-Status: **design agreed in a workshop with the product owner. Phase 1 is built (see "Phase 1 as built"); phases 2 to 7 are not.**
+Status: **design agreed in a workshop with the product owner. Phase 1 is built (see "Phase 1 as built"); phase 7, the runnable package, is built (see "Phase 7 as built"); phases 2 to 6 are as their own sections say.**
 Build starts after the AI assistant work is finished and verified, in the phases below, with a check-in at the start of each phase.
 
 ## Where we start from
@@ -76,7 +76,7 @@ Decisions taken at the phase check-in (2026-11-13): approvers and admins save te
 
 Limits: a template version cannot be deleted or edited, only superseded or retired. Pinned tests that use customers the importing studio does not have are kept and reported, and fail until those customers exist. Templates are per studio installation; moving them between installations is phase 2 (release packages).
 
-## The runnable package (phase 7, agreed 2026-11-13, not built)
+## The runnable package (phase 7, agreed 2026-11-13, built: see "Phase 7 as built")
 
 **Why.** The only way to guarantee that what an external system produces equals what was approved in the studio is to run the same engine on the same release. Rebuilding a template in a CCM's internal format is where precision is lost. The release package (phases 2–6) stays for CCMs that prefer to rebuild; this is in addition.
 
@@ -121,6 +121,17 @@ These timings are single-document measurements in the development environment, n
 4. **Proof against a real print environment.** AFP cannot be called production-ready from the studio alone: it needs a named print partner, their resolution, fonts, barcode and finishing requirements, and their preflight of sample jobs.
 
 **Costs to keep in view.** The studio's engine would run in other people's environments, which brings versioning, security patching, licensing and a support matrix. The engine is TypeScript; a container or command line avoids a port to Java or .NET, which would be a second implementation and weaken the guarantee.
+
+## Phase 7 as built (2026-11-13)
+
+Built as specified above; format and measurements in [`RUNNABLE_PACKAGE.md`](RUNNABLE_PACKAGE.md), routes in [`docs/api/RELEASES.md`](../api/RELEASES.md).
+
+- **Engine:** `packages/runtime` (`@iss/runtime`), bundled by esbuild into one file, `engine/iss-engine.mjs` (about 370 KB), that runs with Node.js 22 alone for email, SMS and interactive HTML. It states its engine and renderer versions; its SHA-256 is in `engine/engine.json` and `runtime.json`, and it computes its own when it starts and refuses to run when they differ. PDF loads the pinned page composer (playwright-core 1.63.0, carried in `engine/node_modules/`) only when asked, and finds the browser from `CHROMIUM_PATH` or the Playwright install.
+- **The package** carries the release package as it is under `release/`, the engine, the contract (`input.schema.json` from the data dictionary, a sample line, `entry-point.json`), the proof pack (the release package's scenarios run through the engine, with expected files and fingerprints), `run`, `serve`, `verify`, `image/Dockerfile` and `README.html`. Built on request, kept once built, checked by building again; audited as `release.runtime`. It needs the release package and prepares it first when nobody has.
+- **Rules held and tested:** approved content only; byte-identical email, SMS and HTML and the same run ID as the studio on the release's template; blocked documents are not produced; no outbound connection (guarded and scanned); no customer values in results, proof records or logs; synthetic customers only; deterministic ZIP.
+- **Differences from the sketch:** `verify`, `runtime.json` and `package.json` are extra files at the top; the browser is not inside (the composer is); no ready image was built (no container daemon was running); no fonts are included (none in the repository), so `verify` requires the font the studio's reference PDFs used.
+- **Measured:** 5,000 email+SMS+HTML sets in 8.07 s; 200 PDF sets in 27.21 s with 4 pages in parallel (one run on one 4-core development machine; not a load test).
+- **Open:** for a release whose approved version carried unapproved drafts, the studio's stored copy resolves to a different run ID than the release's template (the resolver digests drafts too); see `RUNNABLE_PACKAGE.md`.
 
 ## Phase 2 check-in (2026-11-13)
 
