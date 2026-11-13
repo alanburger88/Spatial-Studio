@@ -104,7 +104,7 @@ export function ProposalCard({ proposal, impact, applied, busy, onApply, onOpen,
         {proposal.kind === 'change' && onApply && (applied
           ? <span className="chip ok" data-testid="assist-applied">Applied · undo in the top bar</span>
           : <button type="button" className="btn primary sm" onClick={onApply} disabled={busy || (impact ? impact.newlyBlocked.length > 0 : false)} data-testid="assist-apply">Apply this fix</button>)}
-        {proposal.kind === 'link' && onOpen && <button type="button" className="btn sm" onClick={onOpen} data-testid="assist-open"><Icon.external width={13} height={13} /> {proposal.link?.label ?? 'Open'}</button>}
+        {proposal.kind === 'link' && onOpen && <button type="button" className="btn sm" onClick={onOpen} data-testid="assist-link"><Icon.external width={13} height={13} /> {proposal.link?.label ?? 'Open'}</button>}
         {proposal.kind === 'scenario' && <span className="muted">Nothing to change in the document.</span>}
         {impact && impact.newlyBlocked.length > 0 && <span className="as-card-risk">Not offered: it would block {impact.newlyBlocked.length} other customer{impact.newlyBlocked.length === 1 ? '' : 's'}.</span>}
       </div>

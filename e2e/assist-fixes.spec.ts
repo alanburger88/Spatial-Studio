@@ -96,7 +96,7 @@ test('F04 a missing translation offers a link to Content & Translations and no A
   const card = panel.getByTestId('assist-proposal').first();
   await expect(card).toHaveAttribute('data-kind', 'link');
   await expect(panel.getByTestId('assist-apply')).toHaveCount(0);
-  await panel.getByTestId('assist-open').first().click();
+  await panel.getByTestId('assist-link').first().click();
   await expect(page).toHaveURL(/\/studio\/aster-card-demo\/content/);
 });
 

@@ -20,6 +20,7 @@ const CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'records.', label: 'Imported records' },
   { id: 'asset.', label: 'Images' },
   { id: 'batch.', label: 'Batch runs' },
+  { id: 'assist.', label: 'Assistant-assisted changes' },
   { id: 'user.', label: 'User accounts' },
   { id: 'auth.', label: 'Sign-ins' },
 ];
@@ -68,6 +69,7 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
     case 'batch.start': return `Started a batch run for ${plural(Number(d.records ?? 0), 'synthetic record')} (${(d.outputs ?? []).map((o: string) => o.toUpperCase()).join(' + ')})${d.unsavedModel ? ' using unsaved changes' : ''}`;
     case 'batch.cancel': return 'Cancelled a batch run';
     case 'snapshots.reset': return 'Cleared the issued journey snapshots';
+    case 'assist.applied': return `Applied an assistant proposal: ${String(d.label ?? 'a change')} (${d.source === 'ai' ? 'AI suggestion' : 'built-in'}${Number(d.changes ?? 1) > 1 ? `, ${d.changes} changes in one step` : ''})`;
     case 'user.create': return `Added ${d.email} as ${ROLE_LABEL[d.role as Role] ?? d.role}`;
     case 'user.update': return `Updated ${d.email}: ${(d.changed ?? []).map((k: string) => (k === 'role' ? `role is now ${ROLE_LABEL[d.role as Role] ?? d.role}` : k === 'disabled' ? (d.disabled ? 'disabled' : 'enabled') : k === 'password' ? 'password reset' : k)).join(', ') || 'no change'}`;
     case 'auth.login': return 'Signed in';
