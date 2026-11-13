@@ -51,6 +51,9 @@ export interface ScenarioRequest {
   includeDrafts?: boolean;
 }
 
+/** Common part of every model-backed assistant reply. */
+export interface AssistReply { mode: 'ai' | 'unavailable'; providerStatus: string; message: string }
+
 export interface ChannelParity { parity: { ok: boolean; checks: Array<{ id: string; label: string; status: 'match' | 'mismatch' | 'not-applicable'; blocking: boolean; expected?: unknown; email?: unknown; sms?: unknown; note?: string }> } }
 
 export interface BinaryResult {
@@ -144,6 +147,12 @@ export const api = {
   clearImportedRecords: (documentType?: string) => json<{ removed: number }>(`/api/v1/records/imported${documentType ? `?documentType=${documentType}` : ''}`, { method: 'DELETE' }),
   /** Tell the activity log that a person applied an assistant proposal (label and counts only). Never blocks the UI. */
   assistApplied: (body: { projectId: string; feature: string; label: string; source: 'builtin' | 'ai'; changes?: number; modelVersion?: number }) => json<{ recorded: boolean }>('/api/v1/assist/applied', { method: 'POST', body: JSON.stringify(body) }).catch(() => ({ recorded: false })),
+  /* Model-backed assistant suggestions. Each answers `mode: 'ai'` with suggestions or `mode: 'unavailable'` with an explanation (no AI key, or nothing usable). Nothing is saved. */
+  assistRewrite: (id: string, body: { text: string; style: 'shorter' | 'plainer' | 'warmer' | 'formal' | 'one-sms'; kind: 'message' | 'label' | 'email' | 'sms'; locale?: string; project?: Project }) => json<AssistReply & { options: Array<{ text: string; tokenCheck: { ok: boolean; missing: string[]; extra: string[] } }> }>(`/api/v1/projects/${id}/assist/rewrite`, { method: 'POST', body: JSON.stringify(body) }),
+  assistNewVersion: (id: string, body: { nodeId: string; brief: string; project?: Project }) => json<AssistReply & { title?: string; text?: string }>(`/api/v1/projects/${id}/assist/new-version`, { method: 'POST', body: JSON.stringify(body) }),
+  assistSubjectLines: (id: string, body: { current: string; brief?: string; project?: Project }) => json<AssistReply & { options: Array<{ text: string }> }>(`/api/v1/projects/${id}/assist/subject-lines`, { method: 'POST', body: JSON.stringify(body) }),
+  assistTranslationMeaning: (id: string, body: { locale: string; ids?: string[]; project?: Project }) => json<AssistReply & { flags: Array<{ textId: string; message: string }>; checked: number }>(`/api/v1/projects/${id}/assist/translation-meaning`, { method: 'POST', body: JSON.stringify(body) }),
+  assistImageDescription: (id: string, body: { nodeId: string; project?: Project }) => json<AssistReply & { text?: string }>(`/api/v1/projects/${id}/assist/image-description`, { method: 'POST', body: JSON.stringify(body) }),
   /** First-pass translation drafts: AI when a key is configured, bundled sample drafts for the sample projects otherwise. Nothing is saved or approved. */
   translate: (id: string, body: { locale: string; ids?: string[]; project?: Project; forceOffline?: boolean }) => json<{ mode: 'ai' | 'sample' | 'unavailable'; locale: string; providerStatus: string; drafts: Array<{ id: string; text: string; tokenCheck: { ok: boolean; missing: string[]; extra: string[] } }>; skipped: Array<{ id: string; reason: string }>; message: string }>(`/api/v1/projects/${id}/translate`, { method: 'POST', body: JSON.stringify(body) }),
   translationsCsvUrl: (id: string, locale: string) => `/api/v1/projects/${id}/translations.csv?locale=${encodeURIComponent(locale)}`,

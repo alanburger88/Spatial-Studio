@@ -18,6 +18,7 @@ import { BatchRunner, BATCH_LIMIT, type BatchOutput } from './batch';
 import { registerTemplateRoutes } from './routes/templates';
 import { registerChannelRoutes } from './routes/channels';
 import { registerTranslationRoutes } from './routes/translations';
+import { registerAssistRoutes } from './routes/assist';
 import type { RouteDeps } from './routes/deps';
 import { handleMessage, providerConfig, providerStatus, type Proposal } from './assistant';
 import { registerAuth, audit } from './auth';
@@ -53,7 +54,7 @@ function checkDraftProject(p: any, projectId: string): Project {
   return p as Project;
 }
 
-export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides env AUTH=on (tests). */ auth?: boolean; /** Replaces the AI translation call (tests). */ translator?: import('./translate').Translator }
+export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides env AUTH=on (tests). */ auth?: boolean; /** Replaces the AI translation call (tests). */ translator?: import('./translate').Translator; /** Replaces the assistant's model call (tests). */ assistModel?: import('./assistAi').AssistModel }
 
 export async function buildApp(opts: AppOptions = {}) {
   const store = new Store(opts.dataDir ?? process.env.DATA_DIR ?? path.resolve(here, '../../../.data'));
@@ -198,10 +199,11 @@ export async function buildApp(opts: AppOptions = {}) {
   });
 
   /* Feature route modules (each owns its own file; see routes/deps.ts for the shared helpers they receive). */
-  const deps: RouteDeps = { store, composer, ApiError, projectOr404, recordOr404, allRecords, checkDraftProject, runFor: (b) => runFor(ResolveBody.parse(b)), translator: opts.translator };
+  const deps: RouteDeps = { store, composer, ApiError, projectOr404, recordOr404, allRecords, checkDraftProject, runFor: (b) => runFor(ResolveBody.parse(b)), translator: opts.translator, assistModel: opts.assistModel };
   registerTemplateRoutes(app, deps);
   registerChannelRoutes(app, deps);
   registerTranslationRoutes(app, deps);
+  registerAssistRoutes(app, deps);
 
   /* ------------------------------------------------ version history, review workflow, comments, audit */
 
