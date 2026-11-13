@@ -80,8 +80,9 @@
 .bl-best { align-self: flex-start; }
 .bl-wait { display: flex; gap: 6px; align-items: center; font-size: 12px; margin: 4px 0; }
 .bl-warn { font-size: 12px; margin: 4px 0; color: var(--iss-warning-fg); }
-.bl-next { margin: 0 0 6px; }
-.bl-readonly { margin: 0 0 8px; }
+.bl-next { margin: 0 0 6px; font-size: 12.5px; }
+.bl-readonly { margin: 0 0 8px; font-size: 12.5px; }
+.bl-resolved { margin-bottom: 8px; }
 .bl-customer-filter { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .bl-customer-filter .btn { margin-left: auto; }
 .bl-none-shown { padding: 8px 14px; margin: 0; }

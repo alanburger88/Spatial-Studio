@@ -51,7 +51,7 @@ export function Summary({ data, current, full, modelChanged, kind, onKind, onRun
             {running ? <span data-testid="bl-full-progress" role="status">checking customer {Math.min(full.done + 1, full.total)} of {full.total}…</span>
               : lastRun ? <span data-testid="bl-full-time">from the full check at {clockTime(full.ranAtMs!)} <span className="muted">({plural(full.total, 'customer')}{full.elapsedMs !== null ? `, ${(full.elapsedMs / 1000).toFixed(1)} s` : ''})</span></span>
               : <span data-testid="bl-full-time">not run yet</span>}
-            {fromFull > 0 && !running && <span className="chip count" title="Blockers that came from the full check">{fromFull}</span>}
+            {fromFull > 0 && !running && <span className="chip count" title="Blockers that came from the full check">{plural(fromFull, 'blocker')}</span>}
           </span>
         </li>
       </ul>

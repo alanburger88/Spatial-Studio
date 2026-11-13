@@ -222,6 +222,7 @@ describe('findings from a composed-page check', () => {
     const f: Finding = { code: 'PARITY_MISMATCH', severity: 'blocking', source: 'parity', message: 'Total: PDF and/or HTML differ from the resolved semantic facts.', details: { check: 'total' } };
     const b = documentBlockers(card, RECORDS, { extraFindings: [{ finding: f, recordId: 'CARD-0003' }] }).blockers.find((x) => x.code === 'PARITY_MISMATCH')!;
     expect(b).toMatchObject({ kind: 'layout', id: 'parity-mismatch~total', speed: 'full-check', link: { view: 'validate' } });
+    expect(b.title).toBe('The PDF and the web version disagree about “Total”');
   });
 });
 

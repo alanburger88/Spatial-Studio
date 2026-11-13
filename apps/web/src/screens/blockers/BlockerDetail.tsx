@@ -20,7 +20,7 @@ function Customers({ blocker, records, personas, onPreview, onOpenData }: { bloc
         const name = sum?.name ?? id;
         return (
           <li key={id} className="bl-customer" data-record={id}>
-            <button type="button" className="linkbtn bl-customer-name" onClick={() => onPreview(id)} data-testid={`bl-customer-${id}`} title="Show what this customer gets" aria-label={`Preview ${name}`}>{name}</button>
+            <button type="button" className="linkbtn bl-customer-name" onClick={() => onPreview(id)} data-testid={`bl-customer-${id}`} title={`Show what this customer gets (${id})`} aria-label={`Preview ${name}`}>{name}</button>
             {sum?.tag && <span className="muted bl-customer-tag">{sum.tag}</span>}
             <Tech><span className="chip code">{id}</span></Tech>
             {data && <button type="button" className="btn sm ghost bl-customer-data" onClick={() => onOpenData(id)} data-testid={`bl-customer-data-${id}`} aria-label={`Open ${name} in Data Explorer`}>Data Explorer</button>}

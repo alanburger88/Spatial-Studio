@@ -146,7 +146,11 @@ function wordsFor(project: Project, f: Finding, about: BlockerAbout, n: number):
     case 'TABLE_TOTAL_CLIPPED':
       return { title: `The total row of ${q(where)} does not fit`, explanation: `The total row of ${q(where)} does not fit on its page. ${who}` };
     case 'PARITY_MISMATCH':
-      return { title: 'The PDF and the web version disagree', explanation: `${f.message} ${who}` };
+    {
+      // The server words it "<what was compared>: PDF and/or HTML differ from the resolved semantic facts."
+      const what = /^([^:]{1,80}):\s/.exec(f.message ?? '')?.[1];
+      return { title: what ? `The PDF and the web version disagree about ${q(what)}` : 'The PDF and the web version disagree', explanation: `${f.message} ${who}` };
+    }
     case 'INVALID_BINDING': {
       const field = about.field?.path;
       return { title: field ? `${q(where)} shows a field that does not exist` : `${q(where)} is not connected to a field`, explanation: `${field ? `${q(where)} reads ${field}, which is not a field of this document.` : `${q(where)} has no field chosen yet.`} Customers cannot be issued the document until it shows a real field. ${who}` };

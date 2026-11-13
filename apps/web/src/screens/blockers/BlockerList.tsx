@@ -34,7 +34,9 @@ export function BlockerList({ blockers, selectedId, onSelect, impactFor, totalCh
     btns[n].focus();
     onSelect(btns[n].dataset.blocker!);
   };
-  const kinds = KINDS.filter((k) => blockers.some((b) => b.kind === k));
+  // The kind that stops the most customers comes first; ties keep the usual order of kinds.
+  const top = (k: BlockerKind): number => Math.max(...blockers.filter((b) => b.kind === k).map((b) => b.customerCount));
+  const kinds = KINDS.filter((k) => blockers.some((b) => b.kind === k)).sort((a, b) => top(b) - top(a) || KINDS.indexOf(a) - KINDS.indexOf(b));
   return (
     <div className="bl-list" data-testid="bl-list" ref={root} onKeyDown={onKey}>
       {kinds.map((k: BlockerKind) => {

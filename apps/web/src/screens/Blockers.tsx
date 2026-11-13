@@ -42,12 +42,14 @@ export function Blockers() {
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
   const [note, setNote] = useState<{ title: string | null; applied: boolean; next: string | null } | null>(null);
   const [fixAllOpen, setFixAllOpen] = useState(false);
+  const asideBody = useRef<HTMLDivElement>(null);
 
   const blockers = data?.result.blockers ?? [];
   const ofCustomer = customerId ? blockers.filter((b) => b.recordIds.includes(customerId)) : blockers;
   const shown = kind ? ofCustomer.filter((b) => b.kind === kind) : ofCustomer;
   const customerName = (() => { const r = customerId ? records.find((x) => x.recordId === customerId) : undefined; return r ? `${r.customer.givenName} ${r.customer.familyName}` : customerId; })();
   const selected: Blocker | null = blockers.find((b) => b.id === wantedId) ?? shown[0] ?? null;
+  useEffect(() => { asideBody.current?.scrollTo?.({ top: 0 }); }, [selected?.id]);
 
   const setParam = (patch: Record<string, string | null>, replace = true) => setParams((p) => {
     const n = new URLSearchParams(p);
@@ -139,15 +141,6 @@ export function Blockers() {
             onRunFull={() => void useFullCheck.getState().run(project, records)} onCancelFull={() => useFullCheck.getState().cancel(project.projectId)}
             fixAll={<FixAllButton plan={plan} onOpen={() => setFixAllOpen(true)} testId="bl-fix-all-safe" />} />
 
-          {note && (
-            <div className="callout accent bl-resolved" role="status" data-testid="bl-resolved">
-              <Icon.info width={14} height={14} />
-              <span>{note.title ? <><strong>{note.title}</strong> is no longer a blocker.</> : <>That blocker is no longer listed; it may already be fixed.</>}{' '}
-                {note.next ? 'Showing the next one.' : result.blockers.length ? 'Showing the first one.' : 'Nothing else stops this document.'}</span>
-              <button type="button" className="btn ghost sm" onClick={() => setNote(null)} aria-label="Dismiss">Dismiss</button>
-            </div>
-          )}
-
           {customerId && !empty && (
             <div className="callout accent bl-customer-filter" role="status" data-testid="bl-customer-filter">
               <span>{ofCustomer.length ? <>Showing the {plural(ofCustomer.length, 'blocker')} that stop <strong>{customerName}</strong>.</> : <>No blocker stops <strong>{customerName}</strong> any more.</>}</span>
@@ -176,7 +169,16 @@ export function Blockers() {
 
         <aside className="panel bl-aside" data-side="right" data-side-title="Blocker" data-testid="bl-aside" aria-label="Blocker detail">
           <div className="panel-head">Blocker detail</div>
-          <div className="panel-body bl-aside-body">
+          <div className="panel-body bl-aside-body" ref={asideBody}>
+            {note && (
+              <div className="callout accent bl-resolved" role="status" data-testid="bl-resolved">
+                <Icon.info width={14} height={14} />
+                <span>{note.title ? <><strong>{note.title}</strong> is no longer a blocker.</> : <>That blocker is no longer listed; it may already be fixed.</>}{' '}
+                  {note.next ? 'Showing the next one.' : result.blockers.length ? 'Showing the first one.' : 'Nothing else stops this document.'}</span>
+                <button type="button" className="btn ghost sm" onClick={() => setNote(null)} aria-label="Dismiss">Dismiss</button>
+              </div>
+            )}
+
             {selected ? (
               <BlockerDetail blocker={selected} records={records} personas={personas} impactFor={impactFor} readOnlyReason={readOnly}
                 appliedFixId={applied && applied.blockerId === selected.id ? applied.fixId : null}
