@@ -51,6 +51,62 @@ export interface FixImpact {
 
 export interface FindingGroup { key: string; finding: Finding; recordIds: string[] }
 
+/* ------------------------------------------------------------------ blockers (one root cause across all customers) */
+
+/** The kind of fix a blocker needs: which screen it is resolved in. */
+export type BlockerKind = 'wording' | 'rules' | 'layout' | 'data-fields' | 'customer-data';
+
+/** Where a blocker is fixed by hand. `data` (Data Explorer) is only used for a blocker whose cause is a customer's data. */
+export type BlockerLink = Omit<AssistLink, 'view'> & { view: AssistLink['view'] | 'data'; /** `data` links: the customer to open. */ recordId?: string };
+
+/** What a blocker is about: ids for linking and names for showing. Only the parts that apply are present. */
+export interface BlockerAbout {
+  component?: { id: string; name: string };
+  rules?: Array<{ id: string; name: string }>;
+  /** A content part (message) or a version of one. */
+  message?: { id: string; name: string };
+  field?: { path: string; name: string };
+  language?: { code: string; name: string };
+}
+
+/**
+ * ONE ROOT CAUSE that stops a document being issued, across every customer it stops.
+ * `id` is stable: it is made of the kind of problem, what it is about and the language, so the same cause keeps the same
+ * id across saves, re-checks and the fixing of other blockers.
+ */
+export interface Blocker {
+  id: string;
+  kind: BlockerKind;
+  /** Technical code of the resolver, rule check or page composer, for the Technical view only. */
+  code: string;
+  /** Plain words, names not ids. */
+  title: string;
+  explanation: string;
+  about: BlockerAbout;
+  /** Customers this stops, sorted. Empty when the cause is in the document but no sample customer reaches it. */
+  recordIds: string[];
+  customerCount: number;
+  /** `fast` = worked out by the engine for every customer just now; `full-check` = came from a composed-page check passed in. */
+  speed: 'fast' | 'full-check';
+  /** All sensible alternatives, best first (from `proposeFixes`). */
+  fixes: FixProposal[];
+  /** Where it is fixed by hand. */
+  link: BlockerLink | null;
+  /** The finding the fixes were worked out from (one customer's, or the full check's). */
+  finding: Finding;
+}
+
+export interface DocumentBlockers {
+  /** Customers of the document's kind that were checked. */
+  checked: number;
+  /** Customers no blocker stops. */
+  issuable: number;
+  /** Customers at least one blocker stops. */
+  stopped: number;
+  /** Most customers stopped first, then by kind. */
+  blockers: Blocker[];
+}
+
 /* ------------------------------------------------------------------ rules */
 
 export interface RuleDraft {

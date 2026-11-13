@@ -1,4 +1,4 @@
-import type { SetupSpec, DocumentType, Permission, Persona, Project, ProjectDiff, Role, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
+import type { SetupSpec, DocumentType, HandoverEntry, HandoverKind, Permission, Persona, Project, ProjectDiff, ReleaseEvent, ReleaseInfo, ReleasePackageStatus, ReleaseStage, Role, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
 import type { RowMatch, SetupOutline, TestResult } from '@iss/scenarios';
 
 /** Typed client for the local Spatial Studio API (/api/v1, proxied by Vite). */
@@ -166,6 +166,24 @@ export interface CommentDto { id: string; projectId: string; nodeId: string; par
 export interface AuditEventDto { id: number; at: string; user: string | null; userName: string | null; action: string; projectId: string | null; modelVersion: number | null; detail: Record<string, any> }
 export interface AuditQuery { projectId?: string; user?: string; action?: string; since?: string; before?: number; limit?: number }
 
+
+/* ----------------------------------------------------------- releases (docs/api/RELEASES.md) */
+
+/** One document's releases, newest first. `create` says whether the caller may make a release from the approved version now, and if not why. */
+export interface ProjectReleasesDto { documentId: string; documentExists: boolean; title: string; releases: ReleaseInfo[]; production: string | null; test: string | null; create: { allowed: boolean; reason: string | null } }
+export interface ReleaseActionDto { action: 'promote' | 'withdraw' | 'handover'; stage?: ReleaseStage; kind?: HandoverKind; label: string; allowed: boolean; reason: string | null }
+export interface ReleaseDetailDto { release: ReleaseInfo; history: ReleaseEvent[]; handover: HandoverEntry[]; actions: ReleaseActionDto[]; document: { id: string; exists: boolean; title: string | null; modelVersion: number | null; workflowState: WorkflowState | null } }
+export interface ReleaseCreateResult { created: boolean; reason: string | null; message: string; release: ReleaseInfo }
+export interface ReleasePackageFileDto { path: string; sha256: string; bytes: number; role: string; contentType: string }
+/** The parts of a package manifest the studio reads (`manifest.json`; format in docs/design/RELEASE_PACKAGE.md). */
+export interface ReleaseManifestDto {
+  formatVersion: number;
+  languages: { source: string; targets: Array<{ locale: string; name: string; texts: number; approved: number; missing: string[] }> };
+  tests: { scenarios: number; pinnedTestsExcluded?: Array<{ test: string; reason: string }> };
+  reference: { scenarios: string[]; files: string[] };
+}
+export interface ReleaseScenarioDto { id: string; name: string; customerName?: string }
+
 const qs = (q: Record<string, unknown>) => { const u = new URLSearchParams(); for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== null && v !== '') u.set(k, String(v)); const s = u.toString(); return s ? `?${s}` : ''; };
 
 export const api = {
@@ -275,4 +293,24 @@ export const api = {
   users: () => json<{ users: SessionUser[]; roles: Role[]; authEnabled: boolean }>('/api/v1/users'),
   createUser: (body: { email: string; name: string; role: Role; password: string }) => json<{ user: SessionUser }>('/api/v1/users', { method: 'POST', body: JSON.stringify(body) }),
   updateUser: (userId: string, patch: { name?: string; role?: Role; disabled?: boolean; password?: string }) => json<{ user: SessionUser }>(`/api/v1/users/${userId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  // Releases: frozen, numbered copies of an approved document, their stages, the package and the handover log.
+  projectReleases: (projectId: string) => json<ProjectReleasesDto>(`/api/v1/projects/${projectId}/releases`),
+  createRelease: (projectId: string) => json<ReleaseCreateResult>(`/api/v1/projects/${projectId}/releases`, { method: 'POST', body: '{}' }),
+  release: (releaseId: string) => json<ReleaseDetailDto>(`/api/v1/releases/${releaseId}`),
+  promoteRelease: (releaseId: string, note?: string) => json<{ release: ReleaseInfo; superseded: ReleaseInfo[] }>(`/api/v1/releases/${releaseId}/promote`, { method: 'POST', body: JSON.stringify(note ? { note } : {}) }),
+  withdrawRelease: (releaseId: string, stage: ReleaseStage, reason: string) => json<{ release: ReleaseInfo }>(`/api/v1/releases/${releaseId}/withdraw`, { method: 'POST', body: JSON.stringify({ stage, reason }) }),
+  addHandover: (releaseId: string, body: { kind: HandoverKind; note?: string; stage?: ReleaseStage }) => json<{ entry: HandoverEntry; handover: HandoverEntry[]; release: ReleaseInfo }>(`/api/v1/releases/${releaseId}/handover`, { method: 'POST', body: JSON.stringify(body) }),
+  packageStatus: (releaseId: string) => json<{ package: ReleasePackageStatus }>(`/api/v1/releases/${releaseId}/package/status`),
+  /** Starts building the package in the background (a ready package is only checked, never replaced). Answers at once unless `wait`. */
+  preparePackage: (releaseId: string, body: { wait?: boolean; verify?: boolean } = {}) => json<{ package: ReleasePackageStatus; started: boolean }>(`/api/v1/releases/${releaseId}/package`, { method: 'POST', body: JSON.stringify(body) }),
+  packageFiles: (releaseId: string) => json<{ package: ReleasePackageStatus; files: ReleasePackageFileDto[] }>(`/api/v1/releases/${releaseId}/package/files`),
+  /** One file of a ready package, for a preview (no ZIP download). */
+  packageFileUrl: (releaseId: string, path: string, download = false) => `/api/v1/releases/${releaseId}/package/files/${path.split('/').map(encodeURIComponent).join('/')}${download ? '?download=1' : ''}`,
+  packageFileText: async (releaseId: string, path: string): Promise<string> => {
+    const res = await fetch(`/api/v1/releases/${releaseId}/package/files/${path.split('/').map(encodeURIComponent).join('/')}`);
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new ApiFailure(res.status, b?.error?.code ?? 'HTTP_' + res.status, b?.error?.message ?? res.statusText, b); }
+    return res.text();
+  },
+  packageDownloadUrl: (releaseId: string) => `/api/v1/releases/${releaseId}/package`,
+  releaseTemplateUrl: (releaseId: string) => `/api/v1/releases/${releaseId}/template`,
 };

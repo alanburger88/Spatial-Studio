@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project } from '@iss/model';
+import { resolve } from '@iss/resolver';
 import { api, type RemovalResult, type TestDataResult, type TestDataTargetDto } from '../../api/client';
 import { SourceChip } from '../../assist/common';
 import { Dialog, Loading, Tech } from '../../ui/common';
 import { localeLabel } from '../../ui/plain';
 import { editBlockedReason, useIsDirty, useStudio } from '../../state/store';
+import { ResolveCustomerInBlockers } from '../blockers/link';
 import './RuleAssist.css';
 import './TestData.css';
 
@@ -61,6 +63,18 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
     if (which === 'outcomes') { if (outcomes && !edges) return; setOutcomes(!outcomes); } else { if (edges && !outcomes) return; setEdges(!edges); }
     setDone(null);
   };
+
+  /** Generated customers the document cannot be issued to, worked out from the model on screen. */
+  const records = useStudio((s) => s.records);
+  const blockedIds = useMemo(() => {
+    const out = new Set<string>();
+    if (!done) return out;
+    for (const c of done.customers) {
+      const r = c.recordId ? records.find((x) => x.recordId === c.recordId) : undefined;
+      if (r && resolve({ project, record: r }).findings.some((f) => f.severity === 'blocking')) out.add(c.recordId!);
+    }
+    return out;
+  }, [done, records, project]);
 
   const count = plan?.customers.length ?? 0;
   const unreachable = useMemo(() => (plan?.targets ?? []).filter((t) => t.customer === null), [plan]);
@@ -190,7 +204,7 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
                         <td><strong>{c.name}</strong><Tech> <span className="chip code">{c.recordId}</span></Tech></td>
                         <td>{c.label}</td>
                         <td>{localeLabel(c.locale)}</td>
-                        <td>{c.recordId && <button type="button" className="btn sm" onClick={() => preview(c.recordId!)} aria-label={`Preview as ${c.name}`} data-testid="testdata-preview">Preview</button>}</td>
+                        <td>{c.recordId && <button type="button" className="btn sm" onClick={() => preview(c.recordId!)} aria-label={`Preview as ${c.name}`} data-testid="testdata-preview">Preview</button>}{c.recordId && blockedIds.has(c.recordId) && <> <span className="chip error" data-testid="testdata-blocked-customer">Blocked</span> <ResolveCustomerInBlockers recordId={c.recordId} /></>}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -109,3 +109,6 @@
 .vc-fixall-skipped summary { cursor: pointer; }
 .vc-fixall-skipped ul { margin: 6px 0 0; padding: 0; max-height: 200px; overflow: auto; }
 .screen-head .actions .btn .chip.count { margin-left: 6px; }
+
+.vc-resolve { padding: 0 2px; font-size: 12px; }
+.vc-item > .vc-resolve { margin-top: 2px; }

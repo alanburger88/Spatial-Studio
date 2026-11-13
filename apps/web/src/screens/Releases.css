@@ -1,0 +1,111 @@
+/* S18 Releases. Tokens only; every class is prefixed rel-. */
+.rel-body { grid-template-columns: minmax(0, 1fr) minmax(400px, 540px); align-items: stretch; min-height: 0; }
+.rel-body.single { grid-template-columns: minmax(0, 1fr); }
+.rel-main { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+.rel-listpanel { flex: none; }
+.rel-listpanel .panel-head { display: flex; align-items: center; gap: 8px; }
+.rel-listpanel .panel-head .right { margin-left: auto; }
+.rel-detail { min-height: 0; display: flex; flex-direction: column; }
+.rel-detail > .panel-body { overflow: auto; min-height: 0; }
+.rel-create-why { margin: 0; padding: 6px 12px 8px; font-size: 12.5px; }
+
+/* what is live */
+.rel-live { display: flex; flex-direction: column; gap: 8px; }
+.rel-live-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rel-live-card { background: var(--iss-surface); border: 1px solid var(--iss-border); border-radius: var(--iss-radius-md); padding: 10px 14px 12px; min-width: 0; }
+.rel-live-card[data-testid='rel-live-production']:not(.empty-card) { border-color: var(--iss-accent-line); background: var(--iss-accent-soft); }
+.rel-live-card .section-title { margin: 0 0 4px; }
+.rel-live-num { background: none; border: 0; padding: 0; font: inherit; font-size: 20px; font-weight: 800; letter-spacing: -.01em; color: var(--iss-text); cursor: pointer; text-decoration: underline; text-decoration-color: var(--iss-border-strong); text-underline-offset: 4px; }
+.rel-live-num:hover { text-decoration-color: var(--iss-accent-strong); }
+.rel-live-num:focus-visible { outline: none; box-shadow: var(--iss-focus); border-radius: 4px; }
+.rel-live-meta { margin: 4px 0 0; font-size: 12.5px; }
+.rel-live-none { margin: 4px 0 0; font-size: 14px; }
+.rel-changed { display: block; }
+
+/* list rows */
+.rel-list .rel-row-li { padding: 0; }
+.rel-list > li { padding: 0; border-bottom: 1px solid var(--iss-row-border); }
+.rel-list > li:last-child { border-bottom: 0; }
+.rel-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; width: 100%; padding: 9px 12px; background: transparent; border: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; position: relative; }
+.rel-row:hover { background: var(--iss-row-hover); }
+.rel-row[aria-current='true'] { background: var(--iss-accent-soft); box-shadow: inset 3px 0 0 var(--iss-accent); }
+.rel-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--iss-accent); }
+.rel-row-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rel-row-sub { font-size: 12.5px; }
+.rel-row-marks { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rel-row-nohand { font-size: 12px; }
+
+/* detail */
+.rel-detail-body { display: flex; flex-direction: column; gap: 4px; }
+.rel-detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rel-detail-title { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -.01em; }
+.rel-section { padding: 10px 0 12px; border-bottom: 1px solid var(--iss-row-border); display: flex; flex-direction: column; gap: 8px; }
+.rel-section:last-child { border-bottom: 0; }
+.rel-section .section-title { margin: 0; }
+.rel-hint { margin: 0; font-size: 12.5px; }
+.rel-kv dd { text-align: left; }
+.rel-tech { margin-top: 2px; padding-top: 8px; border-top: 1px dashed var(--iss-border); }
+.rel-tech dd { font-size: 11px; }
+.rel-sub { margin: 6px 0 0; font-size: 13px; font-weight: 700; }
+
+/* timeline */
+.rel-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+.rel-timeline > li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; padding: 0 0 10px; position: relative; font-size: 13px; }
+.rel-timeline > li:not(:last-child)::before { content: ''; position: absolute; left: 4.5px; top: 12px; bottom: 0; width: 1px; background: var(--iss-border-strong); }
+.rel-dot { width: 10px; height: 10px; margin-top: 4px; border-radius: 50%; background: var(--iss-surface); border: 2px solid var(--iss-accent); }
+.rel-timeline > li[data-kind='withdrawn'] .rel-dot { border-color: var(--iss-warning); }
+.rel-timeline > li[data-kind='superseded'] .rel-dot { border-color: var(--iss-text-faint); }
+.rel-ev-text { display: flex; flex-wrap: wrap; gap: 0 4px; min-width: 0; }
+.rel-ev-note { flex-basis: 100%; color: var(--iss-text-muted); font-size: 12.5px; overflow-wrap: anywhere; }
+
+/* actions */
+.rel-action-row { display: flex; gap: 12px 16px; flex-wrap: wrap; align-items: flex-start; }
+.rel-action { display: flex; flex-direction: column; gap: 4px; max-width: 260px; }
+.rel-why { margin: 0; font-size: 12px; }
+.rel-dialog { display: flex; flex-direction: column; gap: 8px; }
+.rel-dialog p { margin: 0; }
+.rel-dialog .textarea { width: 100%; }
+
+/* package */
+.rel-pkg-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.rel-progress { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--iss-info-line); background: var(--iss-info-soft); border-radius: 10px; }
+.rel-progress-text { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; min-width: 0; flex: 1; }
+.rel-progress progress { width: 100%; height: 8px; margin-top: 4px; accent-color: var(--iss-accent); }
+.rel-verified { margin: 0; font-size: 12.5px; color: var(--iss-text-muted); }
+.rel-verified.bad { color: var(--iss-warning-fg); }
+.rel-contents { display: flex; flex-direction: column; gap: 8px; }
+.rel-groups { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.rel-groups > li { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--iss-row-border); font-size: 12.5px; }
+.rel-groups > li:last-child { border-bottom: 0; }
+.rel-groups > li > strong { font-size: 13px; }
+.rel-groups > li > span { color: var(--iss-text-muted); }
+.rel-langs, .rel-refs { list-style: none; margin: 4px 0 0; padding: 0 0 0 10px; display: flex; flex-direction: column; gap: 4px; }
+.rel-langs > li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.rel-missing { margin-left: 4px; white-space: normal; }
+.rel-refs > li { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.rel-ref-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; color: var(--iss-text); min-width: 0; flex: 1 1 140px; }
+.rel-ref-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+.rel-files summary { cursor: pointer; font-size: 12px; color: var(--iss-text-muted); }
+.rel-filelist { margin: 4px 0 0; padding-left: 18px; font-size: 11px; max-height: 180px; overflow: auto; }
+
+/* preview dialog */
+.dialog:has(.rel-preview) { width: min(960px, calc(100vw - 32px)); }
+.rel-preview-frame { width: 100%; height: min(62vh, 640px); border: 1px solid var(--iss-border); border-radius: 8px; background: var(--iss-paper); }
+.rel-preview-text { margin: 0; padding: 12px; max-height: 50vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--iss-surface-sunken); border: 1px solid var(--iss-border); border-radius: 8px; font-family: var(--iss-font-mono); font-size: 12.5px; }
+.rel-preview-path { margin: 6px 0 0; font-size: 11px; }
+
+/* handover */
+.rel-handover-add { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+.rel-handover-add .input { width: 100%; }
+
+/* narrow windows: the detail is a drawer; give it room for the package contents */
+@media (max-width: 1100px) {
+  #main .rel-detail[data-side] { width: min(560px, calc(100vw - 96px)); }
+  .rel-live-cards { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 760px) { .rel-live-cards { grid-template-columns: 1fr; } }
+.rel-stage-states { margin: 0; display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--iss-text-muted); }
+.rel-stage-states > span { display: inline-flex; align-items: center; gap: 6px; }
+.nowrap { white-space: nowrap; }
+.rel-contents > .btn { align-self: flex-start; }
+.rel-live-meta + .rel-live-meta { margin-top: 0; }

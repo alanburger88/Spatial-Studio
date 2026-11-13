@@ -18,6 +18,7 @@ const CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'template.', label: 'Templates' },
   { id: 'testdata.', label: 'Test customers' },
   { id: 'workflow.', label: 'Review & approval' },
+  { id: 'release.', label: 'Releases' },
   { id: 'comment.', label: 'Comments' },
   { id: 'records.', label: 'Imported records' },
   { id: 'asset.', label: 'Images' },
@@ -85,6 +86,21 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
     case 'assist.applied': return `Applied an assistant proposal: ${String(d.label ?? 'a change')} (${d.source === 'ai' ? 'AI suggestion' : 'built-in'}${Number(d.changes ?? 1) > 1 ? `, ${d.changes} changes in one step` : ''})`;
     case 'user.create': return `Added ${d.email} as ${ROLE_LABEL[d.role as Role] ?? d.role}`;
     case 'user.update': return `Updated ${d.email}: ${(d.changed ?? []).map((k: string) => (k === 'role' ? `role is now ${ROLE_LABEL[d.role as Role] ?? d.role}` : k === 'disabled' ? (d.disabled ? 'disabled' : 'enabled') : k === 'password' ? 'password reset' : k)).join(', ') || 'no change'}`;
+    case 'release.create': return `Created release ${d.number} of “${d.title}” at ${d.stage ?? 'Test'}${d.origin === 'manual' ? ' from the approved version' : ' by approving it'}${Array.isArray(d.supersededAtTest) && d.supersededAtTest.length ? `; it replaces ${d.supersededAtTest.length === 1 ? 'release' : 'releases'} ${d.supersededAtTest.join(', ')} in Test` : ''}`;
+    case 'release.promote': return `Moved release ${d.number} of “${d.title}” to ${d.stage ?? 'Production'}${Array.isArray(d.superseded) && d.superseded.length ? `, replacing ${d.superseded.length === 1 ? 'release' : 'releases'} ${d.superseded.join(', ')}` : ''}${d.withNote ? ' (with a note)' : ''}`;
+    case 'release.withdraw': return `Withdrew release ${d.number} of “${d.title}” from ${d.stage}${d.withReason ? ' (reason recorded on the release)' : ''}`;
+    case 'release.handover': return `Marked release ${d.number} of “${d.title}” as ${String(d.kind ?? 'handed over').toLowerCase()}${d.stage ? ` in ${d.stage}` : ''}${d.withNote ? ' (with a note)' : ''}`;
+    case 'release.package': {
+      const what = `the package for release ${d.number} of “${d.title}”`;
+      switch (d.event) {
+        case 'started': return `Started preparing ${what}`;
+        case 'ready': return `Finished preparing ${what}${d.bytes ? ` (${Math.max(1, Math.round(Number(d.bytes) / 1024))} KB, ${plural(Number(d.files ?? 0), 'file')})` : ''}`;
+        case 'failed': return `Could not prepare ${what}${d.reason ? `: ${d.reason}` : ''}`;
+        case 'check-started': return `Started checking ${what}`;
+        case 'checked': return d.reason ? `Could not check ${what}: ${d.reason}` : `Checked ${what}: ${d.same ? 'a new build matches the kept package' : 'a new build differs from the kept package (the kept package is unchanged)'}`;
+        default: return `Worked on ${what}`;
+      }
+    }
     case 'auth.login': return 'Signed in';
     case 'auth.logout': return 'Signed out';
     case 'auth.login_failed': return `Failed sign-in for ${d.email ?? 'an unknown account'}`;
@@ -93,7 +109,7 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
 }
 
 
-const ACTION_WORDS: Record<string, string> = { 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs' };
+const ACTION_WORDS: Record<string, string> = { 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs', 'release.create': 'New releases', 'release.promote': 'Moves to Production', 'release.withdraw': 'Withdrawn releases', 'release.handover': 'Handover entries', 'release.package': 'Release packages' };
 const actionLabel = (a: string): string => ACTION_WORDS[a] ?? CATEGORIES.find((c) => c.id === a)?.label ?? a;
 
 /* ------------------------------------------------------------------ grouping */

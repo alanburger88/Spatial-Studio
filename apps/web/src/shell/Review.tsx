@@ -8,6 +8,7 @@ import { useIsDirty, useStudio } from '../state/store';
 import { Biz, Proof, Tech } from '../ui/common';
 import { nodeTitle } from '../ui/plain';
 import { CommentsTab, useCommentsRev } from '../screens/design/Comments';
+import { ResolveInBlockers } from '../screens/blockers/link';
 import { Drawer, When, fmtAbs, useDrawers } from './History';
 import './collab.css';
 
@@ -199,6 +200,7 @@ function ReviewPanelInner() {
                           <span className="muted"> {g.recordIds.length ? `Affects ${g.recordIds.length} of ${r.recordsChecked} synthetic records.` : 'Found by the rule & binding checks.'}</span>
                           <Tech><span className="tech mono" style={{ display: 'block', fontSize: 11 }}>{g.code}{g.nodeId ? ` · ${g.nodeId}` : ''}{g.locale ? ` · ${g.locale}` : ''} · {g.source}{g.recordIds.length ? ` · ${g.recordIds.slice(0, 6).join(', ')}${g.recordIds.length > 6 ? '…' : ''}` : ''}</span></Tech>
                           <span className="links">
+                            <ResolveInBlockers finding={{ code: g.code, nodeId: g.nodeId ?? undefined, locale: g.locale ?? undefined, message: g.message }} onNavigate={close} />
                             <button type="button" className="linkbtn" onClick={() => goValidate(g)}>Open in Validate{g.recordIds[0] ? ` (${g.recordIds[0]})` : ''}</button>
                             {g.nodeId && project.nodes.some((n) => n.id === g.nodeId) && <button type="button" className="linkbtn" onClick={() => goNode(g.nodeId!)}>Show “{title(g.nodeId)}”</button>}
                             {g.source === 'rules-static' && <button type="button" className="linkbtn" onClick={goRules}>Open Rules &amp; Data</button>}

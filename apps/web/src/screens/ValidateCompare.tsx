@@ -12,6 +12,7 @@ import { recordSummary } from '../shell/RecordPicker';
 import { api, ApiFailure } from '../api/client';
 import { abridge } from './RulesData';
 import { ParityRow, blockWord } from './PreviewExport';
+import { ResolveInBlockers } from './blockers/link';
 import './PreviewExport.css';
 import './ValidateCompare.css';
 
@@ -354,6 +355,7 @@ export function ValidateCompare() {
                                 {multi && <span className="chip info">{g.members.length} checks agree</span>}</span>
                               <span className="vc-issue-msg">{i.message}</span>
                             </button>
+                            {i.severity === 'blocking' && <span className="vc-resolve"><ResolveInBlockers finding={toFinding(i)} /></span>}
                             {multi && (
                               <details className="vc-agree">
                                 <summary>Show the {g.members.length} agreeing checks</summary>
@@ -509,6 +511,7 @@ function BlockersAll({ state, shown, selected, onSelect, onlyBlocking, onToggle 
                       <span className="chip count vc-reach">{g.recordIds.length} of {data.total} synthetic customers</span></span>
                     <span className="vc-issue-msg">{g.message}</span>
                   </button>
+                  {g.severity === 'blocking' && <span className="vc-resolve"><ResolveInBlockers finding={{ code: g.code, nodeId: g.nodeId, ruleIds: g.ruleIds, locale: g.locale, message: g.message, details: g.details }} /></span>}
                 </li>
               );
             })}
@@ -579,6 +582,7 @@ function BlockerDetail({ group: g, data, loading, onlyBlocking, onPreview, onGo,
         <h3 className="section-title">Source</h3>
         <div className="row wrap">
           <button className="btn primary" onClick={() => onGo(g)} data-testid="go-to-source"><Icon.external /> Go to source</button>
+          {g.severity === 'blocking' && <ResolveInBlockers finding={finding} className="btn" testId="resolve-in-blockers-detail">Resolve in Blockers</ResolveInBlockers>}
         </div>
         <p className="hint">Opens {sourceLabel}{issue.nodeId ? ' with the node selected' : ''}. Your selection and scenario are kept.</p>
       </div>
@@ -696,6 +700,7 @@ function Inspector({ issue: i, members, onGo, onOpenLink, sourceLabel, stale }: 
         <h3 className="section-title">Source</h3>
         <div className="row wrap">
           <button className="btn primary" onClick={() => onGo(i)} data-testid="go-to-source"><Icon.external /> Go to source</button>
+          {i.severity === 'blocking' && <ResolveInBlockers finding={finding} className="btn" testId="resolve-in-blockers-detail">Resolve in Blockers</ResolveInBlockers>}
           {idsOf(i).slice(1).map((r) => <button key={r} className="btn sm" onClick={() => onGo(i, r)}>Rule {r}</button>)}
         </div>
         <p className="hint">Opens {sourceLabel}{i.nodeId ? ' with the node selected' : ''}. Your selection and scenario are kept.</p>
@@ -801,9 +806,9 @@ function SuggestedFix({ finding, recordId, scenario, onOpenLink }: { finding: Fi
 
 /* ------------------------------------------------------------ fix all safe */
 
-type Plan = ReturnType<typeof safeFixPlan>;
+export type Plan = ReturnType<typeof safeFixPlan>;
 /** The "Fix all safe issues" plan, computed after paint; only valid for the exact model and findings it was computed from. */
-function useSafePlan(extra: Finding[]): { plan: Plan | null; ready: boolean } {
+export function useSafePlan(extra: Finding[]): { plan: Plan | null; ready: boolean } {
   const project = useStudio((s) => s.project);
   const records = useStudio((s) => s.records);
   const profileId = useStudio((s) => s.ctx.profileId);
@@ -822,19 +827,19 @@ function useSafePlan(extra: Finding[]): { plan: Plan | null; ready: boolean } {
   return { plan: ready ? st!.plan : null, ready };
 }
 
-function FixAllButton({ plan, onOpen }: { plan: { plan: Plan | null; ready: boolean }; onOpen: () => void }) {
+export function FixAllButton({ plan, onOpen, testId = 'fix-all-safe' }: { plan: { plan: Plan | null; ready: boolean }; onOpen: () => void; testId?: string }) {
   const n = plan.plan?.batch ? plan.plan.items.length : 0;
   const why = !plan.ready ? 'Checking which fixes are low risk…' : n ? `Apply ${n} low-risk fix${n === 1 ? '' : 'es'} in one undoable step, after you confirm` : 'No low-risk fixes available; open an issue to see proposals that need review';
   return (
     <span title={why}>
-      <button type="button" className="btn" onClick={onOpen} disabled={!n} data-testid="fix-all-safe" aria-label={n ? `Fix all safe issues (${n})` : 'Fix all safe issues (none available)'}>
+      <button type="button" className="btn" onClick={onOpen} disabled={!n} data-testid={testId} aria-label={n ? `Fix all safe issues (${n})` : 'Fix all safe issues (none available)'}>
         <Icon.validate /> Fix all safe issues{n ? <span className="chip count">{n}</span> : null}
       </button>
     </span>
   );
 }
 
-function FixAllDialog({ plan, onClose }: { plan: Plan; onClose: () => void }) {
+export function FixAllDialog({ plan, onClose }: { plan: Plan; onClose: () => void }) {
   const project = useStudio((s) => s.project)!;
   const records = useStudio((s) => s.records);
   const ctx = useStudio((s) => s.ctx);

@@ -337,7 +337,7 @@ function Dock() {
         {(res?.translation.draftsShown.length ?? 0) > 0 && <Link to={`/studio/${project.projectId}/content`} className="dock-btn warn" data-testid="dock-drafts" title="This preview shows translations that are not approved yet. Exports use approved text only. Open Content & Translations to review them.">{res!.translation.draftsShown.length} unapproved translation{res!.translation.draftsShown.length === 1 ? '' : 's'} shown</Link>}
         <DemoToolsButton />
       </span>
-      <Link to={`/studio/${project.projectId}/validate`} className={`dock-status ${blocking || errors ? 'sev blocking' : warnings ? 'sev warning' : 'sev ok'}`} data-testid="dock-status" title={`${scope} for this scenario — open Validate & Compare`}>
+      <Link to={`/studio/${project.projectId}/${blocking ? 'blockers' : 'validate'}`} className={`dock-status ${blocking || errors ? 'sev blocking' : warnings ? 'sev warning' : 'sev ok'}`} data-testid="dock-status" title={blocking ? `${scope} for this scenario — open Blockers to see every cause and resolve it` : `${scope} for this scenario — open Validate & Compare`}>
         {scope}: {blocking ? `${blocking} blocking` : errors ? `${errors} errors` : warnings ? `${warnings} warning${warnings === 1 ? '' : 's'}` : 'no issues'}
       </Link>
     </footer>

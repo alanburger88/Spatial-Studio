@@ -6,6 +6,7 @@ import { api, ApiFailure, type BatchDto, type BatchItemDto, type BinaryResult, t
 import { useStudio, useScenarioRequest, useIsDirty } from '../state/store';
 import { ScreenHeader, Empty, Proof, Tech, Named } from '../ui/common';
 import { Icon } from '../ui/icons';
+import { ResolveCustomerInBlockers, ResolveInBlockers } from './blockers/link';
 import './PreviewExport.css';
 
 type Tab = 'pdf' | 'html' | 'email' | 'sms' | 'afp' | 'batch';
@@ -13,7 +14,7 @@ type Device = 'desktop' | 'tablet' | 'mobile';
 const DEVICES: Record<Device, { label: string; width: number; id: 'phone' | 'tablet' | 'desktop' }> = { mobile: { label: 'Phone', width: 390, id: 'phone' }, tablet: { label: 'Tablet', width: 768, id: 'tablet' }, desktop: { label: 'Desktop', width: 1200, id: 'desktop' } };
 const AFP_LABEL = 'AFP simulation only — no MO:DCA / AFP print stream generated';
 
-interface Issue { code?: string; severity?: string; message?: string; nodeId?: string }
+interface Issue { code?: string; severity?: string; message?: string; nodeId?: string; locale?: string; ruleIds?: string[]; ruleId?: string; details?: Record<string, unknown> }
 interface Job<T> { status: 'idle' | 'running' | 'done' | 'error'; result?: T; runId?: string; /** run id this job was requested for (stops auto-retry loops) */ forRun?: string; builtAt?: number; error?: { code: string; message: string; issues: Issue[] }; startedAt?: number }
 interface HtmlResult { bin: BinaryResult; text: string }
 interface Session {
@@ -393,7 +394,7 @@ function IssuesBlock({ job, onDraft, kind }: { job: Job<any>; onDraft?: () => vo
       <span>{e.message}</span>
       {e.issues.length > 0 && (
         <ul>
-          {e.issues.map((i, k) => <li key={k}><span className="sev">{i.severity ?? 'issue'}</span> <strong>{i.code}</strong>{i.nodeId ? ` · ${i.nodeId}` : ''} — {i.message}</li>)}
+          {e.issues.map((i, k) => <li key={k}><span className="sev">{i.severity ?? 'issue'}</span> <strong>{i.code}</strong>{i.nodeId ? ` · ${i.nodeId}` : ''} — {i.message}{i.severity === 'blocking' && <> <ResolveInBlockers finding={{ code: i.code ?? '', nodeId: i.nodeId, message: i.message ?? '', locale: i.locale, ruleIds: i.ruleIds, ruleId: i.ruleId, details: i.details }} /></>}</li>)}
         </ul>
       )}
       <div className="row" style={{ gap: 8 }}>
@@ -534,7 +535,7 @@ function ChannelIssues({ error, onDraft }: { error?: { code: string; message: st
     <div className="callout error ox-issues" role="alert" data-testid={blocked ? 'blocking-issues' : 'compose-error'}>
       <strong>{blocked ? 'Channel export blocked' : 'Channel composition failed'} <span className="mono">({error.code})</span></strong>
       <span>{error.message}</span>
-      {error.issues.length > 0 && <ul>{error.issues.map((i, k) => <li key={k}><span className="sev">{i.severity ?? 'issue'}</span> <strong>{i.code}</strong>{i.nodeId ? ` · ${i.nodeId}` : ''} — {i.message}</li>)}</ul>}
+      {error.issues.length > 0 && <ul>{error.issues.map((i, k) => <li key={k}><span className="sev">{i.severity ?? 'issue'}</span> <strong>{i.code}</strong>{i.nodeId ? ` · ${i.nodeId}` : ''} — {i.message}{i.severity === 'blocking' && <> <ResolveInBlockers finding={{ code: i.code ?? '', nodeId: i.nodeId, message: i.message ?? '', locale: i.locale, ruleIds: i.ruleIds, ruleId: i.ruleId, details: i.details }} /></>}</li>)}</ul>}
       {blocked && <div className="row" style={{ gap: 8 }}><button className="btn sm danger" onClick={onDraft}>Compose draft anyway</button></div>}
     </div>
   );
@@ -1009,7 +1010,7 @@ function BatchTab() {
                     <td className="num">{i.pages ?? '—'}</td>
                     <td className="num">{i.ms == null ? '—' : `${i.ms} ms`}</td>
                     <td>
-                      {i.blocking.length > 0 && <>{i.blocking.map(blockWord).join('; ')}<Tech><div className="mono bx-sub">{i.blocking.join(' ')}</div></Tech></>}
+                      {i.blocking.length > 0 && <>{i.blocking.map(blockWord).join('; ')}<Tech><div className="mono bx-sub">{i.blocking.join(' ')}</div></Tech> <ResolveCustomerInBlockers recordId={i.recordId} /></>}
                       {i.error && <span>{i.error}</span>}
                       {i.warnings > 0 && i.blocking.length === 0 && !i.error && <span className="muted">{i.warnings} warning{i.warnings === 1 ? '' : 's'}</span>}
                     </td>

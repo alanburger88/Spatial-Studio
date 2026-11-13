@@ -1,5 +1,6 @@
 export * from './types';
 export * from './fixes';
+export * from './blockers';
 export * from './coverage';
 export * from './testData';
 export * from './changeSummary';

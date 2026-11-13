@@ -14,6 +14,7 @@ import { CommentsTab, useOpenCommentCount } from './Comments';
 import { suggestAltText } from '@iss/scenarios';
 import { api } from '../../api/client';
 import { NeedsAi, useBusy } from '../../assist/common';
+import { ComponentBlockers } from '../blockers/ComponentBlockers';
 import { GuardedSuggestion, WritingHelp, recordAssist, useReadOnlyReason } from '../../assist/WritingHelp';
 
 /**
@@ -141,6 +142,7 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
             {tab === 'layout' && <LayoutTab node={node} project={project} />}
             {tab === 'review' && (
               <>
+                <section className="insp-sec" data-testid="insp-blockers-section"><h3 className="insp-h">Blockers</h3><ComponentBlockers nodeId={node.id} /></section>
                 <section className="insp-sec"><h3 className="insp-h">Comments</h3><CommentsTab nodeId={node.id} /></section>
                 <section className="insp-sec"><h3 className="insp-h">Impact</h3><ImpactTab node={node} /></section>
                 <section className="insp-sec"><h3 className="insp-h">Accessibility</h3><A11yTab node={node} res={res} /></section>

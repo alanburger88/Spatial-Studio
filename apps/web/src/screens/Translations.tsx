@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { AVAILABLE_LANGUAGES, checkTokens, languageName, languageShortName, projectLanguages, toTranslationCsv, translationStatus, usageEntryFromResolution, type TranslationRow, type TranslationUsageEntry } from '@iss/model';
 import { resolve } from '@iss/resolver';
 import { ScreenHeader, Loading, Empty, Tech, Dialog } from '../ui/common';
+import { ResolveInBlockers } from './blockers/link';
 import { fieldLabel, localeLabel } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { editBlockedReason, useStudio, setPreviewLanguage } from '../state/store';
@@ -396,6 +397,8 @@ export function Translations() {
   const glossaryCount = project.glossary?.[LOCALE]?.length ?? 0;
   const pct = s.total ? Math.round((s.approved / s.total) * 100) : 0;
   const missingNow = st.rows.filter((r) => r.status.status === 'missing').length;
+  /** The first required message with no approved text: the Blockers screen lists one blocker for each. */
+  const firstMissing = st.rows.find((r) => r.kind === 'part' && r.status.mandatory && r.status.status !== 'approved') ?? null;
   const liveOn = aiStatus ? aiStatus.mode === 'external' : lastProvider ? /live|external|ready|ok/i.test(lastProvider) && !/no |not |off|unavail/i.test(lastProvider) : null;
 
   let lastGroup: GroupKey | null = null;
@@ -417,7 +420,7 @@ export function Translations() {
             <strong>{langLabel(LOCALE)}{technical && <> <span className="chip code">{LOCALE}</span></>}: {s.approved} of {s.total} approved</strong>
             {s.drafts > 0 && <span> · {s.drafts} {s.drafts === 1 ? 'draft' : 'drafts'} waiting for approval</span>}
             {s.mandatoryMissing > 0 && <span> · {s.mandatoryMissing} {req} still missing</span>}
-            {s.usageKnown && s.mandatoryMissing > 0 && <span className={`tr-affects${s.affectedRecords ? ' bad' : ''}`}> · {s.affectedRecords ? <>{s.affectedRecords} synthetic {langShort}-speaking {s.affectedRecords === 1 ? 'customer is' : 'customers are'} blocked until they are</> : <>no synthetic {langShort}-speaking customers are affected</>}</span>}
+            {s.usageKnown && s.mandatoryMissing > 0 && <span className={`tr-affects${s.affectedRecords ? ' bad' : ''}`}> · {s.affectedRecords ? <>{s.affectedRecords} synthetic {langShort}-speaking {s.affectedRecords === 1 ? 'customer is' : 'customers are'} blocked until they are{firstMissing && <> · <ResolveInBlockers finding={{ code: 'REQUIRED_TRANSLATION_MISSING', nodeId: firstMissing.partId, locale: LOCALE, message: '' }}>See them in Blockers</ResolveInBlockers></>}</> : <>no synthetic {langShort}-speaking customers are affected</>}</span>}
             {s.mandatoryMissing === 0 && s.usageKnown && <span className="tr-affects ok"> · ✓ All {req} text is approved{hasLocaleRecord ? ` for synthetic ${langShort}-speaking customers` : ''}</span>}
             <button className="btn sm tr-only-req" onClick={() => { setMandatoryOnly(true); setStatus('all'); }} aria-pressed={mandatoryOnly} hidden={!s.mandatoryMissing || mandatoryOnly}>Show {req} only</button>
           </div>

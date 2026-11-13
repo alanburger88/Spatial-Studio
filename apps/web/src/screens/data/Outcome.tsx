@@ -1,15 +1,16 @@
 import { useMemo } from 'react';
 import type { Project, SyntheticRecord } from '@iss/model';
-import { resolve } from '@iss/resolver';
+import { resolve, type Finding } from '@iss/resolver';
 import { Tech } from '../../ui/common';
 import { Icon } from '../../ui/icons';
 import { localeLabel, nodeTitle } from '../../ui/plain';
+import { ResolveInBlockers } from '../blockers/link';
 
 export interface Outcome {
   language: string;
   messages: Array<{ nodeId: string; node: string; version: string | null }>;
   sections: Array<{ nodeId: string; node: string; shown: boolean }>;
-  blocking: Array<{ code: string; message: string }>;
+  blocking: Array<{ code: string; message: string; finding: Finding }>;
   error: string | null;
 }
 
@@ -24,7 +25,7 @@ export function computeOutcome(project: Project, record: SyntheticRecord): Outco
         nodeId, node: nodeTitle(project, nodeId), version: variantId ? project.contentParts.find((c) => c.id === variantId)?.title ?? variantId : null,
       })),
       sections: project.nodes.filter((n) => (n.visibleWhen || n.ruleDriven) && !n.decorative).map((n) => ({ nodeId: n.id, node: nodeTitle(project, n.id), shown: visible.has(n.id) })),
-      blocking: res.findings.filter((f) => f.severity === 'blocking').map((f) => ({ code: f.code, message: f.message })),
+      blocking: res.findings.filter((f) => f.severity === 'blocking').map((f) => ({ code: f.code, message: f.message, finding: f })),
       error: null,
     };
   } catch (e) {
@@ -93,7 +94,7 @@ export function OutcomePanel({ project, saved, draft, hasProblems, jsonBroken, d
             )}
             <h4 className="section-title">Blocking issues</h4>
             {now.blocking.length === 0 ? <p className="muted" data-testid="dx-outcome-ok">None. The document can be issued for this customer.</p> : (
-              <ul className="dx-blocking" data-testid="dx-outcome-blocking">{now.blocking.map((b) => <li key={b.code + b.message}><Icon.warning width={14} height={14} aria-hidden="true" /> {b.message}</li>)}</ul>
+              <ul className="dx-blocking" data-testid="dx-outcome-blocking">{now.blocking.map((b) => <li key={b.code + b.message}><Icon.warning width={14} height={14} aria-hidden="true" /> {b.message} <ResolveInBlockers finding={b.finding} /></li>)}</ul>
             )}
           </>
         )}

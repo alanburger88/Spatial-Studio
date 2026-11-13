@@ -1,6 +1,6 @@
 # Releases API
 
-Status: **built and tested on the server (phase 2 of the template work). No screen uses it yet.**
+Status: **built and tested on the server (phase 2 of the template work). The Releases screen (`apps/web/src/screens/Releases.tsx`) uses it.**
 Design background: `docs/design/TEMPLATES_AND_CCM.md`. Package format: `docs/design/RELEASE_PACKAGE.md`.
 Code: `apps/api/src/routes/releases.ts` (routes), `apps/api/src/releases.ts` (creating, stages, keeping packages), `apps/api/src/releasePackage.ts` (the package builder), `packages/model/src/releases.ts` (the rules and the shared types). Tests: `apps/api/test/releases.test.ts`, `packages/model/test/releases.test.ts`.
 
