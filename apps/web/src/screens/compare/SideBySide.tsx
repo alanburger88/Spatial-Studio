@@ -10,7 +10,8 @@ import { HtmlPane, PagesPane, SmsPane, WordMarked, type PaneControl } from './Pa
 import { wordDiff } from './wordDiff';
 
 /** What one side of the comparison is: a frozen release, or the working version. */
-export interface SideData { id: SideId; label: string; short: string; project: Project; working: boolean }
+/** `issueDate`: "As issued on", for a side whose document uses dates (both sides are composed on the same day). */
+export interface SideData { id: SideId; label: string; short: string; project: Project; working: boolean; issueDate?: string | null }
 
 const failText = (e: unknown) => (e instanceof ApiFailure ? e.message : e instanceof Error ? e.message : 'That did not work.');
 
@@ -40,6 +41,7 @@ function requestFor(side: SideData, recordId: string, profileId?: 'paged-pdf' | 
   return {
     projectId: side.project.projectId, recordId, project: side.project, overrides: {}, journeyCursor: null, allowDraft: true,
     ...(side.working ? { includeDrafts: true } : {}), ...(profileId ? { outputContext: { profileId } } : {}),
+    ...(side.issueDate && side.project.documentDate ? { issueDate: side.issueDate } : {}),
   };
 }
 
@@ -199,7 +201,7 @@ export function SideBySide({ before, after, record, comparison, output, onOutput
 
   // Notes that change how to read the pages.
   const draftsShown = useMemo(() => {
-    const n = (s: SideData) => (s.working ? resolve({ project: s.project, record, overrides: {}, journeyCursor: null, includeDrafts: true }).translation.draftsShown.length : 0);
+    const n = (s: SideData) => (s.working ? resolve({ project: s.project, record, overrides: {}, journeyCursor: null, includeDrafts: true, ...(s.issueDate && s.project.documentDate ? { issueDate: s.issueDate } : {}) }).translation.draftsShown.length : 0);
     return { before: n(before), after: n(after) };
   }, [before, after, record]);
   const pdfPages = output === 'pdf' && b.data && a.data ? { before: b.data.pageCount as number, after: a.data.pageCount as number } : null;

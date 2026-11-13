@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resolve } from '@iss/resolver';
 import { api, ApiFailure, type ComposedPages } from '../api/client';
-import { useStudio, useScenarioRequest, personaLabel } from '../state/store';
+import { dated, useStudio, useScenarioRequest, usePreviewDate, personaLabel } from '../state/store';
 import { recordSummary } from '../shell/RecordPicker';
 import { ScreenHeader, Loading, ErrorState, Empty, Tech, Proof } from '../ui/common';
 import { nodeTitle } from '../ui/plain';
@@ -206,6 +206,7 @@ export function PageStack() {
   const setOverrides = useStudio((s) => s.setOverrides);
   const patchOverrides = useStudio((s) => s.patchOverrides);
   const baseReq = useScenarioRequest();
+  const issueDate = usePreviewDate();
   const isCard = project.documentType === 'credit-statement';
   const biz = useStudio((s) => s.viewMode) === 'business';
   const nm = (id: string) => (biz ? nodeTitle(project, id) : id);
@@ -254,8 +255,8 @@ export function PageStack() {
   const expectedRunId = useMemo(() => {
     const rec = records.find((r) => r.recordId === ctx.recordId);
     if (!rec || rec.documentType !== project.documentType) return null;
-    try { return resolve({ project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: 'paged-pdf' }).runId; } catch { return null; }
-  }, [project, records, ctx.recordId, ctx.overrides, ctx.journeyCursor]);
+    try { return resolve({ project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: 'paged-pdf', ...dated(issueDate) }).runId; } catch { return null; }
+  }, [project, records, ctx.recordId, ctx.overrides, ctx.journeyCursor, issueDate]);
   const stale = !!A.data && !!expectedRunId && A.data.runId !== expectedRunId;
 
   useEffect(() => { setFocusDiag(null); }, [comp?.runId, viewSide]);

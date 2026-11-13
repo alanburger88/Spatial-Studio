@@ -4,6 +4,7 @@ import type { Project, ReleaseInfo } from '@iss/model';
 import { compareVersions, type VersionComparison } from '@iss/scenarios';
 import { ApiFailure, api, type ProjectReleasesDto } from '../api/client';
 import { useIsDirty, useStudio } from '../state/store';
+import { IssuedOnPicks } from './dates/IssuedOnPicks';
 import { useWorkflow } from '../shell/workflow';
 import { Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
 import { DocChanges } from './compare/DocChanges';
@@ -48,6 +49,8 @@ export function BeforeAfter() {
   const studioRecord = useStudio((s) => s.ctx.recordId);
   const savedVersion = useStudio((s) => s.serverVersion);
   const dirty = useIsDirty();
+  // "As issued on": both sides are worked out on the same day when either version uses dates (a version without dates ignores it).
+  const chosenDay = useStudio((s) => s.ctx.issueDate ?? null);
   const wf = useWorkflow((s) => (s.wf && s.wf.projectId === project.projectId ? s.wf : null));
   const [params, setParams] = useSearchParams();
 
@@ -92,7 +95,7 @@ export function BeforeAfter() {
 
   const build = (id: SideId, f: { project: Project | null }): SideData | null => {
     const p = id === WORKING ? project : f.project;
-    return p ? { id, label: sideLabel(id, releases, dirty), short: sideShort(id), project: p, working: id === WORKING } : null;
+    return p ? { id, label: sideLabel(id, releases, dirty), short: sideShort(id), project: p, working: id === WORKING, issueDate: chosenDay } : null;
   };
   const before = sides ? build(sides.before, frozenBefore) : null;
   const after = sides ? build(sides.after, frozenAfter) : null;
@@ -101,15 +104,16 @@ export function BeforeAfter() {
   /* ---------------------------------------------------- the comparison (the engine, off the paint) */
   const [cmp, setCmp] = useState<{ value: VersionComparison } | { error: string } | null>(null);
   const bProject = before?.project, aProject = after?.project, bWorking = before?.working, aWorking = after?.working;
+  const compareDay = chosenDay && (bProject?.documentDate || aProject?.documentDate) ? chosenDay : null;
   useEffect(() => {
     setCmp(null);
     if (!bProject || !aProject) return;
     const t = window.setTimeout(() => {
-      try { setCmp({ value: compareVersions(bProject, aProject, records, { includeDraftsBefore: bWorking, includeDraftsAfter: aWorking }) }); }
+      try { setCmp({ value: compareVersions(bProject, aProject, records, { includeDraftsBefore: bWorking, includeDraftsAfter: aWorking, ...(compareDay ? { issueDate: compareDay } : {}) }) }); }
       catch (e) { setCmp({ error: e instanceof Error ? e.message : String(e) }); }
     }, 30);
     return () => window.clearTimeout(t);
-  }, [bProject, aProject, bWorking, aWorking, records]);
+  }, [bProject, aProject, bWorking, aWorking, records, compareDay]);
   const comparison = cmp && 'value' in cmp ? cmp.value : null;
 
   /* ---------------------------------------------------- the customer and the output */
@@ -192,6 +196,7 @@ export function BeforeAfter() {
               ))}
             </p>
           </Tech>
+          {(bProject?.documentDate || aProject?.documentDate) && <IssuedOnPicks project={(aProject?.documentDate ? aProject : bProject)!} what="Both versions are compared" testId="cmp-issue-date" />}
           {sides!.unknown.length > 0 && <div className="callout warning" role="note" data-testid="cmp-unknown-side">{sides!.unknown.join(', ')} is not a release of this document, so the usual pair is shown instead.</div>}
           {sides!.before === sides!.after && <div className="callout accent" role="note" data-testid="cmp-same-side">Both sides are the same version, so nothing can differ. Choose a different Before or After.</div>}
 

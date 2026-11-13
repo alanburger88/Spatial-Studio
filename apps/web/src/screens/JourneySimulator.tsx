@@ -8,7 +8,7 @@ import { api } from '../api/client';
 import { Biz, Dialog, Empty, ErrorState, Loading, Named, Proof, ScreenHeader, Tech } from '../ui/common';
 import { fieldLabel, nodeTitle, ruleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
-import { useRecord, useResolution, useStudio } from '../state/store';
+import { useRecord, useResolution, useStudio, dated, usePreviewDate } from '../state/store';
 import './JourneySimulator.css';
 
 /* ------------------------------------------------------------ event templates */
@@ -221,6 +221,7 @@ export function JourneySimulator() {
   const reduced = useStudio((s) => s.reducedMotion);
   const record = useRecord();
   const res = useResolution();
+  const issueDate = usePreviewDate();
   const navigate = useNavigate();
   const events = project.journey.events;
   const eob = project.documentType === 'eob';
@@ -248,12 +249,12 @@ export function JourneySimulator() {
     let live = true;
     setServer((s) => ({ ...s, status: 'loading' }));
     const t = setTimeout(() => {
-      api.replayJourney({ projectId: project.projectId, recordId: record.recordId, overrides: ctx.overrides, project })
+      api.replayJourney({ projectId: project.projectId, recordId: record.recordId, overrides: ctx.overrides, project, ...dated(issueDate) })
         .then((r) => { if (live) setServer({ status: 'ready', issued: r.issued ?? [] }); })
         .catch((e) => { if (live) setServer({ status: 'error', issued: [], error: e.message }); });
     }, 350);
     return () => { live = false; clearTimeout(t); };
-  }, [project, record, ctx.overrides, reloadTick]);
+  }, [project, record, ctx.overrides, reloadTick, issueDate]);
   const issuedServer = firstIssued ? server.issued.find((i) => i.eventId === firstIssued.eventId) : undefined;
 
   /* trigger / replay */
@@ -310,10 +311,10 @@ export function JourneySimulator() {
   const previewHtml = useMemo(() => {
     if (!record || !project) return '';
     try {
-      if (previewOf === 'issued' && firstIssued) return renderInteractiveHtml(resolve({ project, record, overrides: ctx.overrides, journeyCursor: firstIssued.cursor, profileId: ctx.profileId }), project);
+      if (previewOf === 'issued' && firstIssued) return renderInteractiveHtml(resolve({ project, record, overrides: ctx.overrides, journeyCursor: firstIssued.cursor, profileId: ctx.profileId, ...dated(issueDate) }), project);
       return res ? renderInteractiveHtml(res, project) : '';
     } catch (e: any) { return `<p style="font:14px sans-serif;padding:16px">Preview could not be composed: ${String(e.message).replace(/</g, '&lt;')}</p>`; }
-  }, [record, project, res, previewOf, firstIssued, ctx.overrides, ctx.profileId]);
+  }, [record, project, res, previewOf, firstIssued, ctx.overrides, ctx.profileId, issueDate]);
 
   const explanation = useMemo(() => (res && primaryNodeId ? explainNode(res, primaryNodeId) : null), [res, primaryNodeId]);
   const guarded = res?.semanticManifest?.guardedLiabilityNodeIds ?? [];

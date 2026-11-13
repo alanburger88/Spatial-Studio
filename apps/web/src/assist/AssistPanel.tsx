@@ -1,3 +1,4 @@
+import { dayWords } from '@iss/model';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { OUTPUT_PROFILES, journeyStates, primaryVariantSet, explainInPlainWords, safeFixPlan } from '@iss/scenarios';
@@ -197,7 +198,7 @@ export function ExplainCard({ nodeId }: { nodeId: string }) {
   return (
     <article className="assist-explanation" data-testid="assist-explanation" data-node-id={ex.nodeId} data-variant-id={ex.variantId ?? ''} aria-label={`Why: ${nodeTitle(project, ex.nodeId)}`}>
       <div className="assist-ex-for muted" data-testid="assist-explanation-for">
-        {nodeTitle(project, ex.nodeId)} · {customer} · {localeLabel(res.locale)} · {output} · {step}
+        {nodeTitle(project, ex.nodeId)} · {customer} · {localeLabel(res.locale)} · {output} · {step}{res.documentDate ? ` · ${res.documentDate.date ? `${res.documentDate.given ? 'as issued on' : 'dated'} ${dayWords(res.documentDate.date)}` : 'no document date'}` : ''}
       </div>
       <p className="assist-ex-headline" data-testid="assist-explanation-headline">{ex.headline}</p>
       {ex.steps.length > 0 && <ol className="assist-ex-steps" data-testid="assist-explanation-steps">{ex.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>}

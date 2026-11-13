@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { DOCUMENT_TYPE_LABEL, currentRelease, languageName, projectContentDigest, projectLanguages, translationStatus, type Project, type ReleaseInfo } from '@iss/model';
+import { dayWords, DOCUMENT_TYPE_LABEL, currentRelease, languageName, projectContentDigest, projectLanguages, translationStatus, type Project, type ReleaseInfo } from '@iss/model';
 import { OUTPUT_PROFILES, coverageGaps, runTestCases, summariseTests, type CoverageGap } from '@iss/scenarios';
 import { ApiFailure, api, type AuditEventDto, type ProjectReleasesDto } from '../api/client';
-import { useIsDirty, useStudio } from '../state/store';
+import { useIsDirty, usePreviewDate, useStudio } from '../state/store';
+import { nextBoundary, sourceWords } from './dates/model';
 import { Empty, ErrorState, Loading, ScreenHeader } from '../ui/common';
 import { StateChip, useWorkflow } from '../shell/workflow';
 import { useDrawers } from '../shell/drawers';
@@ -41,13 +42,15 @@ const customers = (n: number) => plural(n, 'synthetic customer');
 /** Rules, message versions and sections that no customer reaches. Worked out after paint, again a moment after the model or customers change. */
 function useCoverage(project: Project, records: ReturnType<typeof useStudio.getState>['records']): { gaps: CoverageGap[] | null; stale: boolean } {
   const [state, setState] = useState<{ gaps: CoverageGap[]; project: Project; records: typeof records } | null>(null);
+  // "As issued on" (documents that use dates): coverage is worked out for that day, like everywhere else.
+  const issueDate = usePreviewDate();
   useEffect(() => {
     if (records.length === 0) { setState({ gaps: [], project, records }); return; }
     const h = setTimeout(() => {
-      try { setState({ gaps: coverageGaps(project, records), project, records }); } catch { setState(null); }
+      try { setState({ gaps: coverageGaps(project, records, issueDate ? { issueDate } : undefined), project, records }); } catch { setState(null); }
     }, 250);
     return () => clearTimeout(h);
-  }, [project, records]);
+  }, [project, records, issueDate]);
   return { gaps: state?.gaps ?? null, stale: !!state && (state.project !== project || state.records !== records) };
 }
 
@@ -296,6 +299,7 @@ export function Overview() {
                     : blockers.checked === 0 ? 'No customers yet'
                     : <>{customers(blockers.checked)}: <strong>{blockers.issuable}</strong> can be issued{blockers.stopped > 0 ? <>, <strong>{blockers.stopped}</strong> stopped by a blocker</> : ', none stopped'}</>}
                 </dd></div>
+                {project.documentDate && <DatesGlance project={project} base={base} />}
                 <div><dt>Languages</dt><dd data-testid="glance-languages">{['English', ...languages.map(languageName)].join(', ')}</dd></div>
                 <div><dt>Outputs</dt><dd data-testid="glance-outputs">{[...OUTPUT_PROFILES.map((p) => p.label), 'Email', 'Text message'].join(', ')}</dd></div>
                 <div><dt>Pinned tests</dt><dd data-testid="glance-tests">
@@ -333,3 +337,16 @@ export function Overview() {
   );
 }
 export default Overview;
+
+/** One line for a document that uses dates: where its date comes from, the preview date and the next day something changes. */
+function DatesGlance({ project, base }: { project: Project; base: string }) {
+  const issueDate = usePreviewDate();
+  const next = nextBoundary(project, issueDate);
+  return (
+    <div><dt>Dates</dt><dd data-testid="glance-dates">
+      {sourceWords(project)}{issueDate ? <> Previewing as issued on <strong>{dayWords(issueDate)}</strong>.</> : null}{' '}
+      {next ? <>Next change{issueDate ? ' after that' : ''}: <strong>{dayWords(next)}</strong>.</> : issueDate ? 'Nothing changes after that day.' : 'Nothing starts or ends on a day yet.'}{' '}
+      <Link to={`${base}/dates`} data-testid="glance-dates-open">Open Dates</Link>
+    </dd></div>
+  );
+}

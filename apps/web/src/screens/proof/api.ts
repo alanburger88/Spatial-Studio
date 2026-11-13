@@ -70,5 +70,6 @@ export const proofApi = {
   get: (proofId: string) => call<ProofDetailDto>(`/api/v1/proofs/${encodeURIComponent(proofId)}`),
   verify: (proofId: string, body: VerifyBody) => call<VerifyResultDto>(`/api/v1/proofs/${encodeURIComponent(proofId)}/verify`, { method: 'POST', body: JSON.stringify(body) }),
   importFile: (text: string, dryRun: boolean) => call<ImportResultDto>('/api/v1/proofs/import', { method: 'POST', body: JSON.stringify({ text, dryRun }) }),
-  produce: (releaseId: string, body: { recordId?: string; all?: true; outputs: ProofChannel[] }) => call<ProduceResultDto>(`/api/v1/releases/${encodeURIComponent(releaseId)}/produce`, { method: 'POST', body: JSON.stringify(body) }),
+  /** `issueDate`: "As issued on" for a release whose document uses dates (kept in each proof record). */
+  produce: (releaseId: string, body: { recordId?: string; all?: true; outputs: ProofChannel[]; issueDate?: string }) => call<ProduceResultDto>(`/api/v1/releases/${encodeURIComponent(releaseId)}/produce`, { method: 'POST', body: JSON.stringify(body) }),
 };

@@ -132,7 +132,7 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
     <Dialog title={<>Generate test customers <SourceChip source="builtin" /></>} onClose={onClose} labelledBy="testdata-title" footer={footer}>
       <div className="ra-wide td-wide" data-testid="testdata-dialog">
         {!done && <p className="td-intro">Make customers for this document only, so every rule, message version, optional section and language is tried. They are marked “Generated” and never touch {own ? 'the customers you supplied' : 'the sample or imported customers'}.{own && ' Generate them again after you change the data fields or the rules.'}</p>}
-        <IssuedOnPicks project={project} what="Customers are generated to reach every outcome" testId="testdata-issue-date" />
+        <IssuedOnPicks project={project} what="Customers are generated to reach every outcome" testId="testdata-issue-date" undated="on the day before the first change (no preview date is set)" />
         <fieldset className="td-options">
           <legend className="sr-only">What to generate</legend>
           <label className="td-opt"><input type="checkbox" checked={outcomes} onChange={() => toggle('outcomes')} aria-disabled={outcomes && !edges} data-testid="testdata-outcomes" />

@@ -3,7 +3,7 @@ import { resolve, type SemanticManifest } from '@iss/resolver';
 import { compareManifests, type ExtractedManifest } from '@iss/renderers';
 import { languageName, type ProfileId } from '@iss/model';
 import { api, ApiFailure, type BatchDto, type BatchItemDto, type BinaryResult, type ScenarioRequest } from '../api/client';
-import { useStudio, useScenarioRequest, useIsDirty } from '../state/store';
+import { currentPreviewDate, dated, useStudio, useScenarioRequest, useIsDirty, usePreviewDate } from '../state/store';
 import { ScreenHeader, Empty, Proof, Tech, Named } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { ResolveCustomerInBlockers, ResolveInBlockers } from './blockers/link';
@@ -88,6 +88,8 @@ export function PreviewExport() {
   const ctx = useStudio((s) => s.ctx);
   const records = useStudio((s) => s.records);
   const baseReq = useScenarioRequest();
+  // "As issued on" travels in baseReq; the expected run ids below are worked out with the same day.
+  const issueDate = usePreviewDate();
   const projectId = project.projectId;
 
   const [tab, setTab] = useState<Tab>('pdf');
@@ -122,12 +124,12 @@ export function PreviewExport() {
     let manifest: SemanticManifest | null = null;
     if (!rec || rec.documentType !== project.documentType) return { expected: out, manifest, draftCount: 0, language: 'en-US' };
     let draftCount = 0, language = 'en-US';
-    try { const probe = resolve({ project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: 'paged-pdf', includeDrafts: true }); draftCount = probe.translation.draftsShown.length; language = probe.locale; } catch { /* reported by the per-profile resolution below */ }
+    try { const probe = resolve({ project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: 'paged-pdf', includeDrafts: true, ...dated(issueDate) }); draftCount = probe.translation.draftsShown.length; language = probe.locale; } catch { /* reported by the per-profile resolution below */ }
     for (const p of Object.keys(out) as ProfileId[]) {
-      try { const r = resolve({ project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: p, includeDrafts: draftCount > 0 && showDrafts }); out[p] = r.runId; if (p === 'paged-pdf') manifest = r.semanticManifest; } catch { out[p] = null; }
+      try { const r = resolve({ project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: p, includeDrafts: draftCount > 0 && showDrafts, ...dated(issueDate) }); out[p] = r.runId; if (p === 'paged-pdf') manifest = r.semanticManifest; } catch { out[p] = null; }
     }
     return { expected: out, manifest, draftCount, language };
-  }, [project, records, ctx.recordId, ctx.overrides, ctx.journeyCursor, showDrafts]);
+  }, [project, records, ctx.recordId, ctx.overrides, ctx.journeyCursor, showDrafts, issueDate]);
   const previewDrafts = draftCount > 0 && showDrafts;
   const wantPdf = expected['paged-pdf'], wantHtml = expected['html-responsive'], wantAfp = expected['paged-afp-sim'];
   const pairKey = wantPdf && wantHtml ? `${wantPdf}|${wantHtml}` : null;
@@ -873,7 +875,9 @@ function BatchTab() {
     setError(null); setStarting(true); setFilter('all');
     try {
       const ids = pick === 'all' ? undefined : targets.map((r) => r.recordId);
-      const r = await api.startBatch({ projectId: project.projectId, project, recordIds: ids, outputs, includeBlocked: drafts });
+      // A batch of a document that uses dates is produced as issued on the preview date, and records it.
+      const issueDate = currentPreviewDate();
+      const r = await api.startBatch({ projectId: project.projectId, project, recordIds: ids, outputs, includeBlocked: drafts, ...dated(issueDate) });
       liveId.current = r.batch.batchId; setBatch(r.batch); setNow(Date.now());
     } catch (e) { setError(toError(e).message); }
     finally { setStarting(false); }

@@ -6,14 +6,14 @@ import { quickPicks } from './model';
  * "As issued on" inside a check (coverage, generate test customers): says which day the check works on and offers the
  * boundary days and the day before each. Nothing for a document that does not use dates.
  */
-export function IssuedOnPicks({ project, what, testId }: { project: Project; what: string; testId: string }) {
+export function IssuedOnPicks({ project, what, testId, undated }: { project: Project; what: string; testId: string; /** What happens with no preview date, for a document whose date is given for each run. */ undated?: string }) {
   const issueDate = usePreviewDate();
   const setIssueDate = useStudio((s) => s.setIssueDate);
   if (!project.documentDate) return null;
   const picks = quickPicks(project);
   return (
-    <div className="callout info dt-check-date" data-testid={testId} data-value={issueDate ?? ''}>
-      <span>{issueDate ? `${what} as issued on ${dayWords(issueDate)}.` : project.documentDate.source === 'field' ? `${what} with each customer’s own date. Pick a day to check as issued on that day.` : `${what} on the day before the first change (no preview date is set). Pick a day to check as issued on that day.`}</span>
+    <div className="callout accent dt-check-date" data-testid={testId} data-value={issueDate ?? ''}>
+      <span>{issueDate ? `${what} as issued on ${dayWords(issueDate)}.` : project.documentDate.source === 'field' ? `${what} with each customer’s own date. Pick a day to check as issued on that day.` : `${what} ${undated ?? 'with no date given, so a customer whose document needs one is stopped'}. Pick a day to check as issued on that day.`}</span>
       {picks.length > 0 && (
         <span className="row wrap dt-check-picks" role="group" aria-label="Check as issued on">
           {picks.map((p) => (
