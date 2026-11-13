@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { documentBlockers } from '@iss/scenarios';
-import { useStudio } from '../../state/store';
+import { usePreviewDate, useStudio } from '../../state/store';
 import { plural } from './labels';
 import { ResolveInBlockers } from './link';
 
@@ -8,11 +8,12 @@ import { ResolveInBlockers } from './link';
 export function ComponentBlockers({ nodeId }: { nodeId: string }) {
   const project = useStudio((s) => s.project);
   const records = useStudio((s) => s.records);
+  const issueDate = usePreviewDate();
   const found = useMemo(() => {
     if (!project) return null;
-    const r = documentBlockers(project, records);
+    const r = documentBlockers(project, records, issueDate ? { issueDate } : undefined);
     return { checked: r.checked, list: r.blockers.filter((b) => b.about.component?.id === nodeId || b.finding.nodeId === nodeId) };
-  }, [project, records, nodeId]);
+  }, [project, records, nodeId, issueDate]);
   if (!found) return null;
   if (!found.list.length) return <p className="muted" data-testid="insp-no-blockers">Nothing about this component stops the document being issued to any of the {found.checked} synthetic customers checked.</p>;
   return (

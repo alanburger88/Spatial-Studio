@@ -38,6 +38,7 @@ export function Drawer({ title, sub, testId, wide, onClose, children, labelId }:
 
 const LOCALE_NAME: Record<string, string> = { 'en-US': 'English', 'es-US': 'Spanish' };
 const FIELD_WORD: Record<string, string> = {
+  effective: 'period in effect', variantPeriods: 'periods of the alternatives', totalFrom: 'table total',
   name: 'name', layout: 'position & size', text: 'text', content: 'text', binding: 'data field', formatter: 'number format', label: 'label', nullPolicy: 'empty-value handling',
   fallbackText: 'fallback text', visibleWhen: 'visibility condition', children: 'contents', variantIds: 'alternatives', fallbackVariantId: 'default alternative',
   variantConditions: 'alternative conditions', styleId: 'text style', columns: 'table columns', chart: 'chart settings', image: 'image', shape: 'shape', locked: 'lock',
@@ -72,6 +73,8 @@ function componentChangeLine(c: ValueChange): ReactNode {
   if (c.field === 'layout') return <>{word('layout')}: <OldNew from={c.from} to={c.to} quote={false} /></>;
   if (c.field === 'children' || c.field === 'variantIds') return <>{word(c.field)} changed</>;
   if (['label', 'fallbackText', 'caption', 'binding'].includes(c.field)) return <>{word(c.field)} <OldNew from={c.from} to={c.to} /></>;
+  if (c.field === 'effective') return <>in effect <OldNew from={c.from ?? 'always'} to={c.to ?? 'always'} quote={false} /></>;
+  if (c.field === 'variantPeriods') return <>periods of the alternatives <OldNew from={c.from ?? 'none'} to={c.to ?? 'none'} quote={false} /></>;
   return <>{word(c.field)} changed</>;
 }
 
@@ -83,7 +86,8 @@ function ruleChangeParts(project: Project, c: RuleChange): ReactNode[] {
   if (c.action) out.push(<>now will <span className="diff-new">{actionSentence(project, c.after)}</span> <span className="sub">was: {actionSentence(project, c.before)}</span></>);
   if (c.title) out.push(<>title <OldNew from={c.title.from} to={c.title.to} /></>);
   if (c.mode) out.push(<>mode {c.mode.from} → {c.mode.to}</>);
-  const rest = c.fields.filter((f) => !['enabled', 'priority', 'when', 'then', 'title', 'mode', 'version'].includes(f));
+  if (c.period) out.push(<>in effect <span className="diff-new">{c.period.to}</span> <span className="sub">was: {c.period.from}</span></>);
+  const rest = c.fields.filter((f) => !['enabled', 'priority', 'when', 'then', 'title', 'mode', 'version', 'effective'].includes(f));
   if (rest.length) out.push(<>{rest.map(word).join(', ')} changed</>);
   if (!out.length && c.fields.includes('version')) out.push('rule version number changed');
   return out;
@@ -136,6 +140,18 @@ export function DiffView({ diff, project, testId = 'history-diff' }: { diff: Pro
   g('brand', 'Brand', diff.brand.changed.map((c) => <Item key={c.field} kind="chg" tech={c.field}>Brand {word(c.field)}: <OldNew from={c.from} to={c.to} quote={false} /></Item>));
   named('testCases', 'Tests', 'test');
   named('journey', 'Journey', 'journey event');
+  // Calculations, lookup tables and the document's date (absent on documents that do not use them).
+  g('calculations', 'Calculations', [
+    ...(diff.calculations?.added ?? []).map((x) => <Item key={`a${x.id}`} kind="add" tech={x.id}>New calculation <strong>“{x.name}”</strong></Item>),
+    ...(diff.calculations?.removed ?? []).map((x) => <Item key={`r${x.id}`} kind="del" tech={x.id}>Removed calculation <strong>“{x.name}”</strong></Item>),
+    ...(diff.calculations?.changed ?? []).map((x) => <Item key={`c${x.id}`} kind="chg" tech={<>{x.id} · {x.fields.join(', ')}{x.formula && <span className="tech">{x.formula.from} → {x.formula.to}</span>}</>}>Calculation <strong>“{x.name}”</strong> changed ({x.formula ? 'how it is worked out' : x.fields.map(word).join(', ')})</Item>),
+  ]);
+  g('lookupTables', 'Lookup tables', [
+    ...(diff.lookupTables?.added ?? []).map((x) => <Item key={`a${x.id}`} kind="add" tech={x.id}>New lookup table <strong>“{x.name}”</strong></Item>),
+    ...(diff.lookupTables?.removed ?? []).map((x) => <Item key={`r${x.id}`} kind="del" tech={x.id}>Removed lookup table <strong>“{x.name}”</strong></Item>),
+    ...(diff.lookupTables?.changed ?? []).map((x) => <Item key={`c${x.id}`} kind="chg" tech={`${x.id} · ${x.fields.join(', ')}`}>Lookup table <strong>“{x.name}”</strong> changed{x.rows.from !== x.rows.to ? ` (${x.rows.from} → ${x.rows.to} rows)` : ` (${x.fields.map(word).join(', ')})`}</Item>),
+  ]);
+  g('documentDate', 'The document’s date', diff.documentDate ? [<Item key="d" kind={diff.documentDate.from === null ? 'add' : diff.documentDate.to === null ? 'del' : 'chg'}>{diff.documentDate.to === null ? 'The document no longer uses its date' : 'Where the document’s date comes from'} <OldNew from={diff.documentDate.from} to={diff.documentDate.to} quote={false} /></Item>] : []);
   g('profiles', 'Output profiles', diff.profiles.changed.map((p) => <Item key={p.id} kind="chg" tech={`${p.id} · ${p.fields.join(', ')}`}>Output settings for <strong>{p.id === 'paged-pdf' ? 'PDF' : p.id === 'html-responsive' ? 'Interactive HTML' : p.id === 'paged-afp-sim' ? 'AFP (simulated)' : p.id}</strong> changed ({p.fields.map(word).join(', ')})</Item>));
   g('other', 'Other', diff.other.map((k) => <Item key={k} kind="chg" tech={k}>{word(k)} changed</Item>));
   return (
@@ -153,7 +169,7 @@ export function DiffView({ diff, project, testId = 'history-diff' }: { diff: Pro
 /** Small summary chips: "2 components · 1 rule". */
 export function DiffSummary({ diff }: { diff: ProjectDiff }) {
   const c = diff.summary.counts;
-  const parts: Array<[number, string, string]> = [[c.title, 'title', 'title'], [c.components, 'component', 'components'], [c.rules, 'rule', 'rules'], [c.content, 'wording change', 'wording changes'], [c.customFields, 'data field', 'data fields'], [c.styles, 'style', 'styles'], [c.brand, 'brand setting', 'brand settings'], [c.testCases, 'test', 'tests'], [c.journey, 'journey event', 'journey events'], [c.profiles, 'output profile', 'output profiles'], [c.other, 'other change', 'other changes']];
+  const parts: Array<[number, string, string]> = [[c.title, 'title', 'title'], [c.components, 'component', 'components'], [c.rules, 'rule', 'rules'], [c.content, 'wording change', 'wording changes'], [c.customFields, 'data field', 'data fields'], [c.styles, 'style', 'styles'], [c.brand, 'brand setting', 'brand settings'], [c.testCases, 'test', 'tests'], [c.journey, 'journey event', 'journey events'], [c.profiles, 'output profile', 'output profiles'], [c.calculations ?? 0, 'calculation', 'calculations'], [c.lookupTables ?? 0, 'lookup table', 'lookup tables'], [c.documentDate ?? 0, 'change to the document’s date', 'changes to the document’s date'], [c.other, 'other change', 'other changes']];
   return <div className="hist-summary">{parts.filter(([n]) => n > 0).map(([n, one, many]) => <span key={one} className="chip info">{n} {n === 1 ? one : many}</span>)}{diff.summary.identical && <span className="chip">No changes</span>}</div>;
 }
 

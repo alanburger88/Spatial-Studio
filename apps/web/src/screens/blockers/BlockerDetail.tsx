@@ -1,4 +1,6 @@
+import { Link } from 'react-router-dom';
 import type { Persona, SyntheticRecord } from '@iss/model';
+import { useStudio } from '../../state/store';
 import type { BlockerLink, BlockerWithStatus, FixImpact, FixProposal, KnownDataProblem } from '@iss/scenarios';
 import { Named, Tech } from '../../ui/common';
 import { Icon } from '../../ui/icons';
@@ -101,6 +103,11 @@ export function BlockerDetail({ blocker, records, personas, impactFor, readOnlyR
   children?: React.ReactNode;
 }) {
   const isData = blocker.kind === 'customer-data';
+  // The document's date: with a date field, the customer's data is missing it (Data Explorer); given for each run, the
+  // fix is a date for the run (Dates: "As issued on"), not the customer's data.
+  const project = useStudio((s) => s.project);
+  const dateCode = blocker.code === 'DOCUMENT_DATE_MISSING' || blocker.code === 'ISSUE_DATE_INVALID';
+  const runDate = dateCode && (project?.documentDate?.source === 'run' || blocker.code === 'ISSUE_DATE_INVALID');
   const canApply = blocker.fixes.some((f) => f.kind === 'change');
   const firstOpen = blocker.openRecordIds[0] ?? null;
   const firstName = firstOpen ? nameOf(records, personas, firstOpen)?.name ?? firstOpen : null;
@@ -121,11 +128,20 @@ export function BlockerDetail({ blocker, records, personas, impactFor, readOnlyR
       <p className="bl-why">{blocker.explanation}</p>
       <About blocker={blocker} />
 
-      {isData && (
+      {runDate && project && (
+        <div className="callout warning bl-datanote" data-testid="bl-datenote">
+          <strong>This document’s wording depends on its date, and none was given for this run.</strong> The date is given for each run: choose the day to preview with (“As issued on”) on Dates. A batch or a release run gives it when documents are produced. Nothing in the customer’s data needs to change.
+          <div className="row wrap bl-datanote-actions">
+            <Link className="btn primary" to={`/studio/${project.projectId}/dates`} data-testid="bl-open-dates">Open Dates</Link>
+          </div>
+        </div>
+      )}
+      {isData && !runDate && (
         <div className="callout warning bl-datanote" data-testid="bl-datanote">
           <strong>The document is fine; the customer’s data is wrong.</strong> Nothing in the document needs to change. Data Explorer shows the customer’s values with the wrong ones highlighted; sample and imported customers stay read-only there, so make an editable copy to correct one. If the data cannot be corrected before approval, an approver can mark it as a known data problem for that one customer, with a reason.
           <div className="row wrap bl-datanote-actions">
             <button type="button" className="btn primary" onClick={() => data.onOpenData(firstOpen ?? blocker.recordIds[0], blocker.id)} disabled={!blocker.recordIds.length} data-testid="bl-open-data"><Icon.external /> Open in Data Explorer</button>
+            {dateCode && project && <Link className="btn" to={`/studio/${project.projectId}/dates`} data-testid="bl-open-dates">Open Dates</Link>}
             {firstOpen && <button type="button" className="btn" onClick={() => data.onMarkKnown(blocker, firstOpen)} disabled={!!data.knownBlockedReason} title={data.knownBlockedReason ?? `Set this problem aside for ${firstName}`} data-testid="bl-mark-known">Mark as a known data problem{blocker.openRecordIds.length > 1 ? ` for ${firstName}` : ''}</button>}
           </div>
           {data.knownBlockedReason && firstOpen && <p className="hint bl-readonly" data-testid="bl-known-readonly">{data.knownBlockedReason}.</p>}

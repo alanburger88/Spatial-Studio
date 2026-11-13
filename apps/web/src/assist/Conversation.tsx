@@ -7,7 +7,7 @@ import { api } from '../api/client';
 import { Biz, Proof, Tech } from '../ui/common';
 import { fieldLabel, nodeTitle, predicateSentence, ruleSentence, ruleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
-import { useStudio } from '../state/store';
+import { dated, previewDateOf, useStudio } from '../state/store';
 import '../screens/AiAssistant.css';
 
 /**
@@ -104,7 +104,8 @@ export function useConversation() {
     try {
       const reply: Reply = await api.assistantMessage({
         message, forceOffline: cur.forceOffline,
-        context: { projectId: pid, recordId: s.ctx.recordId, overrides: s.ctx.overrides, journeyCursor: s.ctx.journeyCursor, selectedNodeId: s.ctx.selectedNodeId },
+        // "As issued on" (documents that use dates): the assistant answers for the same day the studio previews.
+        context: { projectId: pid, recordId: s.ctx.recordId, overrides: s.ctx.overrides, journeyCursor: s.ctx.journeyCursor, selectedNodeId: s.ctx.selectedNodeId, ...dated(previewDateOf(s.project, s.ctx)) },
         project: s.project ?? undefined,
       });
       const proj = store.getState().project!;
@@ -149,7 +150,7 @@ export function useConversation() {
           const out = (a.recordIds as string[]).map((rid) => {
             const rec = records.find((r) => r.recordId === rid);
             if (!rec) return { recordId: rid, error: 'No matching fixture' };
-            const r = resolve({ project: st.project!, record: rec, overrides: {}, journeyCursor: null, profileId: st.ctx.profileId });
+            const r = resolve({ project: st.project!, record: rec, overrides: {}, journeyCursor: null, profileId: st.ctx.profileId, ...dated(previewDateOf(st.project, st.ctx)) });
             return { recordId: rid, selected: r.result.selectedVariants, rules: r.result.matchedRuleIds, runId: r.runId, digest: r.contentDigest };
           });
           setState({ done: true, data: { compare: out } }); break;

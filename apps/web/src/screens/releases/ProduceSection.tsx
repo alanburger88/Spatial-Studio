@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { roleCan, type ReleaseInfo, type Role } from '@iss/model';
 import type { ProofChannel } from '@iss/resolver';
 import { ApiFailure } from '../../api/client';
-import { useStudio } from '../../state/store';
+import { useStudio, currentPreviewDate } from '../../state/store';
 import { proofApi, type ProduceResultDto } from '../proof/api';
 import { CHANNEL_LABEL } from '../proof/format';
 
@@ -36,7 +36,9 @@ export function ProduceSection({ release, role }: { release: ReleaseInfo; role: 
   const toggle = (c: ProofChannel) => setOutputs((o) => (o.includes(c) ? o.filter((x) => x !== c) : [...o, c]));
   const go = async () => {
     setBusy(true); setError(null); setDone(null);
-    try { setDone(await proofApi.produce(release.id, { ...(who === 'all' ? { all: true as const } : { recordId: who }), outputs })); }
+    // A document that uses dates is produced as issued on the preview date (the date is kept in each proof record).
+    const issueDate = currentPreviewDate();
+    try { setDone(await proofApi.produce(release.id, { ...(who === 'all' ? { all: true as const } : { recordId: who }), outputs, ...(issueDate ? { issueDate } : {}) })); }
     catch (e) { setError(e instanceof ApiFailure ? e.message : 'Nothing was produced.'); }
     finally { setBusy(false); }
   };

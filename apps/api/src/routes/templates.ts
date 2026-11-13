@@ -12,6 +12,7 @@ import { baselineCustomer } from '@iss/scenarios';
 import { audit } from '../auth';
 import { firstCustomers } from '../projectCustomers';
 import type { RouteDeps } from './deps';
+import { dated, issueDateFrom } from '../issueDate';
 
 const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'project';
 const oneLine = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, max) : '');
@@ -179,6 +180,8 @@ export function registerTemplateRoutes(app: FastifyInstance, deps: RouteDeps): v
    */
   app.post<{ Body: Record<string, any> }>('/api/v1/projects/import', async (req, reply) => {
     const body = req.body ?? {};
+    // The day the import is tried on, for a document that uses dates ("as issued on"); none = as before.
+    const issueDate = issueDateFrom(body.issueDate, ApiError);
     const raw = projectInFile(body.file ?? body.project);
     const problems = projectFileProblems(raw);
     if (problems.length) throw new ApiError(422, 'INVALID_PROJECT_FILE', problems[0].message, { problems });
@@ -199,7 +202,7 @@ export function registerTemplateRoutes(app: FastifyInstance, deps: RouteDeps): v
     const known = new Set(records.map((r) => r.recordId));
     try {
       const probe: SyntheticRecord | undefined = ownData ? previewRecordOf(project) : records[0];
-      if (probe) resolve({ project, record: probe, profileId: 'paged-pdf' });
+      if (probe) resolve({ project, record: probe, profileId: 'paged-pdf', ...dated(issueDate) });
     }
     catch (e: any) { throw new ApiError(422, 'INVALID_PROJECT_FILE', 'The file has the right shape, but the studio could not work out a document from it, so it was not imported.', { problems: [{ code: 'CANNOT_RESOLVE', message: String(e?.message ?? e).slice(0, 300) }] }); }
 

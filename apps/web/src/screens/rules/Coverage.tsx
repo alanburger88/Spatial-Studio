@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { projectFieldIndex, type Project, type SyntheticRecord } from '@iss/model';
+import { dayWords, projectFieldIndex, type Project, type SyntheticRecord } from '@iss/model';
 import { coverageGaps, type CoverageGap } from '@iss/scenarios';
 import { applyAssistCommands, SourceChip } from '../../assist/common';
 import { Dialog, formatMoney, Loading, Tech } from '../../ui/common';
 import { fieldLabel } from '../../ui/plain';
-import { editBlockedReason, useStudio } from '../../state/store';
+import { editBlockedReason, usePreviewDate, useStudio } from '../../state/store';
+import { IssuedOnPicks } from '../dates/IssuedOnPicks';
+import '../dates/dates.css';
 import './RuleAssist.css';
 
 type Scenario = NonNullable<CoverageGap['scenario']>;
@@ -67,16 +69,19 @@ export function CoverageDialog({ project, onClose, onPreview, onGenerate }: { pr
   const [gaps, setGaps] = useState<CoverageGap[] | null>(null);
   const [total, setTotal] = useState(0);
   const testCases = project.testCases ?? [];
+  // "As issued on": coverage is worked out for that day (documents that use dates); choosing another day works it out again.
+  const issueDate = usePreviewDate();
 
   useEffect(() => {
-    // Computed once when opened (after first paint). Pinning a test does not change coverage, so the list is not recomputed.
+    // Computed when opened (after first paint) and when the day changes. Pinning a test does not change coverage, so the list is not recomputed for it.
+    setGaps(null);
     const h = setTimeout(() => {
       setTotal(targetTotal(project));
-      setGaps(coverageGaps(project, records));
+      setGaps(coverageGaps(project, records, issueDate ? { issueDate } : undefined));
     }, 30);
     return () => clearTimeout(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [issueDate]);
 
   const isPinned = (g: CoverageGap) => !!g.testCase && testCases.some((t) => t.id === g.testCase!.id && t.name === g.testCase!.name);
   const pinnable = (gaps ?? []).filter((g) => g.testCase && !isPinned(g));
@@ -98,10 +103,11 @@ export function CoverageDialog({ project, onClose, onPreview, onGenerate }: { pr
             <button type="button" className="btn sm" onClick={onGenerate} data-testid="coverage-generate">Generate test customers for all of this</button>
           </p>
         )}
+        <IssuedOnPicks project={project} what="Coverage is worked out" testId="coverage-issue-date" />
         {!gaps ? <Loading label="Trying what-if scenarios on the synthetic customers…" /> : (
           <>
             <p className="ra-summary" data-testid="coverage-summary" data-gaps={gaps.length} data-total={total}>
-              {exercised} of {total} rules, versions and sections are exercised by the {records.length} synthetic customers as issued.
+              {exercised} of {total} rules, versions and sections are exercised by the {records.length} synthetic customers as issued{issueDate ? ` on ${dayWords(issueDate)}` : ''}.
               {gaps.length > 0 && <span className="muted"> {gaps.length} {gaps.length === 1 ? 'is' : 'are'} not.</span>}
             </p>
             <div className="row wrap ra-covbar">

@@ -12,6 +12,7 @@ import { audit } from '../auth';
 import { ensureCustomer, firstCustomers } from '../projectCustomers';
 import { SETUP_DESCRIPTION_MAX, SETUP_NEEDS_KEY, draftSetupSpec } from '../setupAi';
 import type { RouteDeps } from './deps';
+import { dated, issueDateFrom } from '../issueDate';
 
 const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'project';
 const oneLine = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, max) : '');
@@ -104,10 +105,10 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
   }
 
   /** What the document does for one customer as issued: the message versions chosen and any blocking issue. Never throws. */
-  function previewOf(project: Project, record: SyntheticRecord, origin: 'supplied' | 'generated') {
+  function previewOf(project: Project, record: SyntheticRecord, origin: 'supplied' | 'generated', issueDate: string | null = null) {
     const customer = { name: `${record.customer.givenName} ${record.customer.familyName}`.trim(), origin };
     try {
-      const res = resolve({ project, record });
+      const res = resolve({ project, record, ...dated(issueDate) });
       return {
         customer,
         messages: Object.entries(res.result.selectedVariants).map(([nodeId, variantId]) => ({ section: project.nodes.find((n) => n.id === nodeId)?.name ?? 'Message', version: variantId ? project.contentParts.find((c) => c.id === variantId)?.title ?? null : null })),
@@ -134,6 +135,8 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
 
   app.post<{ Body: Record<string, any> }>('/api/v1/projects/setup/draft', async (req) => {
     const b = req.body ?? {};
+    // "As issued on" for the preview of the proposed document (a setup that uses no dates is unaffected).
+    const issueDate = issueDateFrom(b.issueDate, ApiError);
     const description = typeof b.description === 'string' ? b.description.trim() : '';
     if (b.description !== undefined && b.description !== null && typeof b.description !== 'string') throw new ApiError(400, 'INVALID', 'The description must be text.');
     if (description.length > SETUP_DESCRIPTION_MAX) throw new ApiError(400, 'TOO_LONG', 'The description is limited to 2,000 characters.');
@@ -183,8 +186,8 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
     const supplied = rows ? suppliedFor(built.project, rows) : null;
     const first = supplied?.records[0];
     const preview = first
-      ? previewOf(built.project, { ...first, recordId: 'REC-0000' } as SyntheticRecord, 'supplied')
-      : previewOf(built.project, { ...baselineCustomer(built.project).record, recordId: 'REC-0000' } as SyntheticRecord, 'generated');
+      ? previewOf(built.project, { ...first, recordId: 'REC-0000' } as SyntheticRecord, 'supplied', issueDate)
+      : previewOf(built.project, { ...baselineCustomer(built.project).record, recordId: 'REC-0000' } as SyntheticRecord, 'generated', issueDate);
     return {
       mode: 'proposal' as const,
       source,
@@ -202,6 +205,7 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
 
   app.post<{ Body: Record<string, any> }>('/api/v1/projects/setup', async (req, reply) => {
     const b = req.body ?? {};
+    const issueDate = issueDateFrom(b.issueDate, ApiError);
     if (!b.spec || typeof b.spec !== 'object' || Array.isArray(b.spec)) throw new ApiError(400, 'INVALID_SETUP', 'Send the document setup as "spec".');
     const title = titleOf(b.title);
     const issuer = issuerOf(b);
@@ -220,7 +224,7 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
     if (problems.length) throw new ApiError(422, 'INVALID_SETUP', problems[0].message, { problems });
     const project = checkDraftProject(built.project, id);
     // Prove the studio can work out a document from it before storing anything.
-    try { resolve({ project, record: { ...baselineCustomer(project).record, recordId: 'REC-0000' } as SyntheticRecord, profileId: 'paged-pdf' }); }
+    try { resolve({ project, record: { ...baselineCustomer(project).record, recordId: 'REC-0000' } as SyntheticRecord, profileId: 'paged-pdf', ...dated(issueDate) }); }
     catch (e: any) { throw new ApiError(422, 'INVALID_SETUP', 'The studio could not work out a document from this setup, so nothing was created.', { problems: [{ code: 'CANNOT_RESOLVE', message: String(e?.message ?? e).slice(0, 300) }] }); }
     const supplied = rows ? suppliedFor(project, rows) : null;
 
@@ -242,7 +246,7 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
       source,
       notes,
       customers: { total, generated: generated.length, supplied: supplied?.summary ?? null, startingCustomerOnly },
-      preview: previewOf(saved, mine[0] ?? generated[0], mine[0] ? 'supplied' : 'generated'),
+      preview: previewOf(saved, mine[0] ?? generated[0], mine[0] ? 'supplied' : 'generated', issueDate),
     };
   });
 }

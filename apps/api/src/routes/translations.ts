@@ -4,6 +4,7 @@ import { providerConfig } from '../assistant';
 import { draftTranslations, MAX_ITEMS } from '../translate';
 import { resolve } from '@iss/resolver';
 import type { RouteDeps } from './deps';
+import { dated, issueDateFrom } from '../issueDate';
 
 
 /** Translations routes (C1): CSV export for translators and CSV import that returns drafts (the client applies them as undoable commands). */
@@ -14,13 +15,15 @@ export function registerTranslationRoutes(app: FastifyInstance, deps: RouteDeps)
     if (!isSupportedLanguage(l)) throw new ApiError(400, 'INVALID_LOCALE', `Unsupported locale ${l}.`);
     return l;
   };
-  const usage = (project: ReturnType<typeof projectOr404>) =>
-    allRecords(project.projectId).filter((r) => r.documentType === project.documentType).map((record) => usageEntryFromResolution(project, record as any, resolve({ project, record }) as any));
+  /** Which texts each customer is shown, as issued on `issueDate` when one is given (a dated message is shown only in its period). */
+  const usage = (project: ReturnType<typeof projectOr404>, issueDate: string | null = null) =>
+    allRecords(project.projectId).filter((r) => r.documentType === project.documentType).map((record) => usageEntryFromResolution(project, record as any, resolve({ project, record, ...dated(issueDate) }) as any));
 
   app.get('/api/v1/projects/:projectId/translations.csv', async (req, reply) => {
     const project = projectOr404((req.params as any).projectId);
     const locale = localeOf((req.query as any)?.locale);
-    const csv = toTranslationCsv(project, locale, usage(project));
+    const issueDate = issueDateFrom((req.query as any)?.issueDate, ApiError);
+    const csv = toTranslationCsv(project, locale, usage(project, issueDate));
     reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', `attachment; filename="${project.projectId}-translations-${locale}.csv"`).header('X-Content-Type-Options', 'nosniff');
     return csv;
   });

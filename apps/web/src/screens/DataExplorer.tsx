@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { editBlockedReason, useCan, useStudio } from '../state/store';
+import { currentPreviewDate, editBlockedReason, useCan, useStudio } from '../state/store';
 import { Dialog, Empty, ScreenHeader } from '../ui/common';
 import { CustomerList } from './data/CustomerList';
 import { blankRecord, problemsFor, recordName } from './data/explorerModel';
@@ -57,7 +57,8 @@ export function DataExplorer() {
   const add = async (body: { record?: unknown; copyOf?: string }, done: string, keepBlocker = false) => {
     setBusy(true);
     try {
-      const r = await api.addRecord(project.projectId, body);
+      const issueDate = currentPreviewDate();
+      const r = await api.addRecord(project.projectId, { ...body, ...(issueDate ? { issueDate } : {}) });
       await useStudio.getState().refreshRecords();
       if (keepBlocker && blockerId) setParams({ customer: r.record.recordId, blocker: blockerId, ...(highlightParam ? { highlight: highlightParam } : {}) }, { replace: true });
       else show(r.record.recordId);

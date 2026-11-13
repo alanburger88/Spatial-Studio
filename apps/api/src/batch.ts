@@ -23,6 +23,8 @@ export interface BatchJob {
   batchId: string; projectId: string; projectTitle: string; modelVersion: number; outputs: BatchOutput[]; includeBlocked: boolean;
   status: 'running' | 'done' | 'failed' | 'cancelled'; total: number; done: number; items: BatchItem[];
   startedAt: string; finishedAt: string | null; durationMs: number | null; zipBytes: number | null; zipSha256: string | null; error?: string;
+  /** "As issued on": the document's date given for the whole batch (documents that use dates). Absent when none was given. */
+  issueDate?: string;
 }
 
 export const BATCH_LIMIT = 500;
@@ -38,11 +40,12 @@ export class BatchRunner {
   readZip(id: string) { const p = this.zipPath(id); return p ? readFileSync(p) : null; }
   cancel(id: string) { const j = this.jobs.get(id); if (j && j.status === 'running') this.cancelled.add(id); return j; }
 
-  start(project: Project, records: SyntheticRecord[], outputs: BatchOutput[], includeBlocked: boolean): BatchJob {
+  start(project: Project, records: SyntheticRecord[], outputs: BatchOutput[], includeBlocked: boolean, issueDate: string | null = null): BatchJob {
     const batchId = `batch-${randomUUID().slice(0, 8)}`;
     const job: BatchJob = {
       batchId, projectId: project.projectId, projectTitle: project.title, modelVersion: project.modelVersion, outputs, includeBlocked,
       status: 'running', total: records.length, done: 0, startedAt: new Date().toISOString(), finishedAt: null, durationMs: null, zipBytes: null, zipSha256: null,
+      ...(issueDate ? { issueDate } : {}),
       items: records.map((r) => ({ recordId: r.recordId, name: `${r.customer.givenName} ${r.customer.familyName}`, status: 'pending', pages: null, pdfBytes: null, htmlBytes: null, ms: null, blocking: [], warnings: 0, selectedVariants: {} })),
     };
     this.jobs.set(batchId, job);
@@ -61,7 +64,7 @@ export class BatchRunner {
         const item = job.items[i];
         const s = Date.now();
         try {
-          const res = resolve({ project, record: r, profileId: 'paged-pdf' });
+          const res = resolve({ project, record: r, profileId: 'paged-pdf', ...(job.issueDate ? { issueDate: job.issueDate } : {}) });
           item.runId = res.runId;
           item.selectedVariants = res.result.selectedVariants;
           item.blocking = [...new Set(res.findings.filter((f) => f.severity === 'blocking').map((f) => f.code))];
@@ -88,7 +91,7 @@ export class BatchRunner {
         job.done = i + 1;
       }
       job.durationMs = Date.now() - t0;
-      const manifest = { batchId: job.batchId, projectId: job.projectId, projectTitle: job.projectTitle, modelVersion: job.modelVersion, outputs: job.outputs, includeBlocked: job.includeBlocked, startedAt: job.startedAt, durationMs: job.durationMs, status: job.status === 'running' ? 'done' : job.status, items: job.items };
+      const manifest = { batchId: job.batchId, projectId: job.projectId, projectTitle: job.projectTitle, modelVersion: job.modelVersion, outputs: job.outputs, includeBlocked: job.includeBlocked, startedAt: job.startedAt, durationMs: job.durationMs, status: job.status === 'running' ? 'done' : job.status, ...(job.issueDate ? { issueDate: job.issueDate } : {}), items: job.items };
       const csvq = (v: unknown) => { const t = v === null || v === undefined ? '' : String(v); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
       const csv = ['recordId,name,status,pages,pdfBytes,htmlBytes,ms,blocking,warnings,runId,error', ...job.items.map((it) => [it.recordId, it.name, it.status, it.pages, it.pdfBytes, it.htmlBytes, it.ms, it.blocking.join(' '), it.warnings, it.runId, it.error].map(csvq).join(','))].join('\r\n') + '\r\n';
       files.push({ name: 'manifest.json', data: Buffer.from(canonicalJson(manifest) + '\n', 'utf8') }, { name: 'run-report.csv', data: Buffer.from(csv, 'utf8') });

@@ -10,7 +10,7 @@ import { addDaysToIso, dateBoundaries, isIsoDay, projectFileProblems, diffProjec
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
 import { renderPagedDocument, renderInteractiveHtml, compareManifests, afpSimulation, pageDesignFindings, AFP_SIMULATION_LABEL, PAGED_RENDERER_VERSION, HTML_RENDERER_VERSION } from '@iss/renderers';
-import { ScenarioEngine, blockerIdOf, buildCube, buildLandscape, generateEdgeCase, replayJourney, runTestCases, EDGE_CASE_PRESETS, DIMENSIONS, type DimensionId } from '@iss/scenarios';
+import { blockerIdOf, buildCube, buildLandscape, generateEdgeCase, replayJourney, runTestCases, EDGE_CASE_PRESETS, DIMENSIONS, type DimensionId } from '@iss/scenarios';
 import { staticRuleAnalysis, bindingAnalysis, modelAccessibility, axeToFindings, toIssue, type ValidationIssue, type Suite } from '@iss/validation';
 import { Composer } from './composer';
 import { Store } from './db';
@@ -34,6 +34,7 @@ import type { RouteDeps } from './routes/deps';
 import { handleMessage, providerConfig, providerStatus, type Proposal } from './assistant';
 import { registerAuth, audit } from './auth';
 import { firstCustomers } from './projectCustomers';
+import { dated, issueDateFrom, scenarioEngineFor } from './issueDate';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -129,6 +130,8 @@ export async function buildApp(opts: AppOptions = {}) {
 
   function runFromBody(raw: unknown) {
     const b = raw as any;
+    // "As issued on": refused in plain words before anything else is read (the schema check would name the field only).
+    issueDateFrom(b?.issueDate, ApiError);
     if (b && typeof b.runId === 'string') {
       const run = store.getRun(b.runId);
       if (!run) throw new ApiError(404, 'NOT_FOUND', `Unknown run ${b.runId}.`);
@@ -496,8 +499,9 @@ export async function buildApp(opts: AppOptions = {}) {
 
   /* Batch production runs */
   app.post<{ Body: Record<string, any> }>('/api/v1/batches', async (req, reply) => {
-    const b = (req.body ?? {}) as { projectId?: string; project?: unknown; recordIds?: unknown; outputs?: unknown; includeBlocked?: boolean };
+    const b = (req.body ?? {}) as { projectId?: string; project?: unknown; recordIds?: unknown; outputs?: unknown; includeBlocked?: boolean; issueDate?: unknown };
     if (typeof b.projectId !== 'string') throw new ApiError(400, 'INVALID_REQUEST', 'projectId is required.');
+    const issueDate = issueDateFrom(b.issueDate, ApiError);
     const project = b.project ? checkDraftProject(b.project, b.projectId) : projectOr404(b.projectId);
     const pool = allRecords(project.projectId).filter((r) => r.documentType === project.documentType);
     let records = pool;
@@ -512,8 +516,8 @@ export async function buildApp(opts: AppOptions = {}) {
     const outputs = (Array.isArray(b.outputs) && b.outputs.length ? b.outputs : ['pdf']).filter((o): o is BatchOutput => o === 'pdf' || o === 'html');
     if (!outputs.length) throw new ApiError(400, 'INVALID_REQUEST', 'outputs must include pdf and/or html (AFP is simulation-only).');
     if (batches.list().some((j) => j.status === 'running')) throw new ApiError(409, 'BATCH_RUNNING', 'Another batch is still running; wait for it or cancel it.');
-    const job = batches.start(project, records, outputs, !!b.includeBlocked);
-    audit(store, req, 'batch.start', { projectId: project.projectId, modelVersion: project.modelVersion, detail: { batchId: job.batchId, records: records.length, outputs, includeBlocked: !!b.includeBlocked, unsavedModel: !!b.project } });
+    const job = batches.start(project, records, outputs, !!b.includeBlocked, issueDate);
+    audit(store, req, 'batch.start', { projectId: project.projectId, modelVersion: project.modelVersion, detail: { batchId: job.batchId, records: records.length, outputs, includeBlocked: !!b.includeBlocked, unsavedModel: !!b.project, ...dated(issueDate) } });
     reply.status(202);
     return { batch: job };
   });
@@ -599,9 +603,10 @@ export async function buildApp(opts: AppOptions = {}) {
   app.get('/api/v1/personas', async () => ({ personas: PERSONAS }));
 
   app.post('/api/v1/resolve', async (req) => {
+    issueDateFrom((req.body as any)?.issueDate, ApiError);
     const { res, project } = runFor(ResolveBody.parse(req.body));
     const body = req.body as any;
-    return { runId: res.runId, result: res.result, trace: res.trace, findings: res.findings, semanticManifest: res.semanticManifest, contentDigest: res.contentDigest, projectDigest: res.projectDigest, rulesDigest: res.rulesDigest, modelVersion: project.modelVersion, engineVersion: res.engineVersion, hints: res.hints, locale: res.locale, journeySteps: res.journeySteps, ...(body?.includeTree ? { tree: res.root } : {}) };
+    return { runId: res.runId, result: res.result, trace: res.trace, findings: res.findings, semanticManifest: res.semanticManifest, contentDigest: res.contentDigest, projectDigest: res.projectDigest, rulesDigest: res.rulesDigest, modelVersion: project.modelVersion, engineVersion: res.engineVersion, hints: res.hints, locale: res.locale, journeySteps: res.journeySteps, ...(res.documentDate ? { documentDate: res.documentDate } : {}), ...(res.calculated ? { calculated: res.calculated } : {}), ...(body?.includeTree ? { tree: res.root } : {}) };
   });
 
   app.post('/api/v1/compose/pdf', async (req, reply: FastifyReply) => {
@@ -708,7 +713,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const project = b?.project ? checkDraftProject(b.project, b.projectId) : projectOr404(String(b?.projectId));
     const record = recordOr404(String(b?.recordId));
     const overrides = b?.overrides ?? {};
-    const issueDate = typeof b?.issueDate === 'string' && isIsoDay(b.issueDate) ? b.issueDate : null;
+    const issueDate = issueDateFrom(b?.issueDate, ApiError);
     const snaps = replayJourney(project, record, overrides);
     const issued = [];
     for (const s of snaps.filter((x) => x.kind === 'issued')) {
@@ -734,14 +739,14 @@ export async function buildApp(opts: AppOptions = {}) {
   app.post('/api/v1/analysis/cube', async (req) => {
     const b = req.body as any;
     const project = b?.project ? checkDraftProject(b.project, b.projectId) : projectOr404(String(b?.projectId));
-    const cube = buildCube(new ScenarioEngine(project, allRecords(project.projectId)), (b?.axes ?? ['persona', 'output', 'journey']) as [DimensionId, DimensionId, DimensionId], { offsets: b?.offsets, filters: b?.filters });
+    const cube = buildCube(scenarioEngineFor(project, allRecords(project.projectId), issueDateFrom(b?.issueDate, ApiError)), (b?.axes ?? ['persona', 'output', 'journey']) as [DimensionId, DimensionId, DimensionId], { offsets: b?.offsets, filters: b?.filters });
     if (cube.errors.length) throw new ApiError(400, 'INVALID_AXES', cube.errors.join(' '));
     return cube;
   });
   app.post('/api/v1/analysis/landscape', async (req) => {
     const b = req.body as any;
     const project = b?.project ? checkDraftProject(b.project, b.projectId) : projectOr404(String(b?.projectId));
-    return buildLandscape(new ScenarioEngine(project, allRecords(project.projectId)), { includeJourney: !!b?.includeJourney, filters: b?.filters });
+    return buildLandscape(scenarioEngineFor(project, allRecords(project.projectId), issueDateFrom(b?.issueDate, ApiError)), { includeJourney: !!b?.includeJourney, filters: b?.filters });
   });
 
   app.get<{ Params: { artifactId: string } }>('/api/v1/artifacts/:artifactId', async (req, reply) => {
@@ -766,6 +771,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const b = req.body as any;
     if (typeof b?.message !== 'string' || !b.message.trim() || b.message.length > 2000) throw new ApiError(400, 'INVALID_MESSAGE', 'Message must be 1–2000 characters.');
     const ctx = b.context ?? {};
+    const issueDate = issueDateFrom(ctx.issueDate ?? b.issueDate, ApiError);
     const project = b.project ? checkDraftProject(b.project, String(ctx.projectId)) : projectOr404(String(ctx.projectId));
     // Without a chosen customer: the first sample customer of the kind, or, for a document with its own data, its first own customer.
     const recordId = String(ctx.recordId ?? (project.documentType === 'custom' ? store.projectRecords(project.projectId)[0]?.recordId ?? '' : project.documentType === 'eob' ? 'EOB-0001' : 'CARD-0001'));
@@ -774,7 +780,7 @@ export async function buildApp(opts: AppOptions = {}) {
     if (chosen.projectId && chosen.projectId !== project.projectId) throw new ApiError(400, 'RECORD_OTHER_PROJECT', 'That customer belongs to another document.');
     const cfg = providerConfig();
     if (b.forceOffline === true) cfg.provider = 'offline';
-    const reply = await handleMessage(b.message, { project, records: allRecords(project.projectId), recordId, overrides: ctx.overrides ?? {}, journeyCursor: ctx.journeyCursor ?? null, selectedNodeId: ctx.selectedNodeId ?? null }, cfg);
+    const reply = await handleMessage(b.message, { project, records: allRecords(project.projectId), recordId, overrides: ctx.overrides ?? {}, journeyCursor: ctx.journeyCursor ?? null, selectedNodeId: ctx.selectedNodeId ?? null, issueDate }, cfg);
     if (reply.proposal) store.saveProposal(reply.proposal.proposalId, reply.proposal);
     return reply;
   });

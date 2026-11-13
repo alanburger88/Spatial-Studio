@@ -5,7 +5,9 @@ import { api, type RemovalResult, type TestDataResult, type TestDataTargetDto } 
 import { SourceChip } from '../../assist/common';
 import { Dialog, Loading, Tech } from '../../ui/common';
 import { localeLabel } from '../../ui/plain';
-import { editBlockedReason, useIsDirty, useStudio } from '../../state/store';
+import { dated, editBlockedReason, useIsDirty, usePreviewDate, useStudio } from '../../state/store';
+import { IssuedOnPicks } from '../dates/IssuedOnPicks';
+import '../dates/dates.css';
 import { ResolveCustomerInBlockers } from '../blockers/link';
 import './RuleAssist.css';
 import './TestData.css';
@@ -43,6 +45,8 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
   const projectRef = useRef(project);
   projectRef.current = project;
   const pid = project.projectId;
+  // "As issued on": the outcomes are reached on that day (documents that use dates).
+  const issueDate = usePreviewDate();
 
   const loadExisting = () => api.testData(pid).then((t) => setExisting({ count: t.count, stale: t.stale })).catch(() => setExisting(null));
   useEffect(() => { void loadExisting(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
@@ -52,12 +56,12 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
     const my = ++seq.current;
     setPlan(null); setPlanError(null);
     const h = setTimeout(() => {
-      api.planTestData(pid, { project: projectRef.current, outcomes, edges })
+      api.planTestData(pid, { project: projectRef.current, outcomes, edges, ...dated(issueDate) })
         .then((p) => { if (seq.current === my) setPlan(p); })
         .catch((e) => { if (seq.current === my) setPlanError(e instanceof Error ? e.message : 'The preview could not be computed.'); });
     }, 250);
     return () => clearTimeout(h);
-  }, [pid, outcomes, edges]);
+  }, [pid, outcomes, edges, issueDate]);
 
   const toggle = (which: 'outcomes' | 'edges') => {
     if (which === 'outcomes') { if (outcomes && !edges) return; setOutcomes(!outcomes); } else { if (edges && !outcomes) return; setEdges(!edges); }
@@ -71,10 +75,10 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
     if (!done) return out;
     for (const c of done.customers) {
       const r = c.recordId ? records.find((x) => x.recordId === c.recordId) : undefined;
-      if (r && resolve({ project, record: r }).findings.some((f) => f.severity === 'blocking')) out.add(c.recordId!);
+      if (r && resolve({ project, record: r, ...dated(c.issueDate ?? issueDate) }).findings.some((f) => f.severity === 'blocking')) out.add(c.recordId!);
     }
     return out;
-  }, [done, records, project]);
+  }, [done, records, project, issueDate]);
 
   const count = plan?.customers.length ?? 0;
   const unreachable = useMemo(() => (plan?.targets ?? []).filter((t) => t.customer === null), [plan]);
@@ -85,7 +89,7 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
   const generate = async () => {
     setBusy('generate'); setError(null);
     try {
-      const r = await api.generateTestData(pid, { project: projectRef.current, outcomes, edges });
+      const r = await api.generateTestData(pid, { project: projectRef.current, outcomes, edges, ...dated(issueDate) });
       await useStudio.getState().refreshRecords();
       setDone(r); setTab('customers'); setConfirmClear(false); setRemoval(null);
       await loadExisting();
@@ -128,6 +132,7 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
     <Dialog title={<>Generate test customers <SourceChip source="builtin" /></>} onClose={onClose} labelledBy="testdata-title" footer={footer}>
       <div className="ra-wide td-wide" data-testid="testdata-dialog">
         {!done && <p className="td-intro">Make customers for this document only, so every rule, message version, optional section and language is tried. They are marked “Generated” and never touch {own ? 'the customers you supplied' : 'the sample or imported customers'}.{own && ' Generate them again after you change the data fields or the rules.'}</p>}
+        <IssuedOnPicks project={project} what="Customers are generated to reach every outcome" testId="testdata-issue-date" undated="on the day before the first change (no preview date is set)" />
         <fieldset className="td-options">
           <legend className="sr-only">What to generate</legend>
           <label className="td-opt"><input type="checkbox" checked={outcomes} onChange={() => toggle('outcomes')} aria-disabled={outcomes && !edges} data-testid="testdata-outcomes" />

@@ -108,7 +108,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S07: {
-    purpose: 'Decide who sees what. A rule says "when this is true for a customer, show this version of a message". Write the rules, test them against every customer, and see the exact inputs behind the current scenario.',
+    purpose: 'Decide who sees what. A rule says "when this is true for a customer, show this version of a message". Write the rules, test them against every customer, and see the exact inputs behind the current scenario. When the document uses dates, a rule can also be in effect from or until a day; a rule that is not in effect on the preview date is marked "Not in effect", never hidden.',
     actions: [
       'Add a rule, or describe one in words and review the draft.',
       'Switch between the rule Editor, the Table of all rules and the Tests.',
@@ -152,7 +152,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S03: {
-    purpose: 'Pull one conditional section out of the page and look at it from the side: every named alternative it can show, why each appears and who receives it.',
+    purpose: 'Pull one conditional section out of the page and look at it from the side: every named alternative it can show, why each appears and who receives it. When the document uses dates, an alternative or rule that is not in effect on the document\'s date is marked, and the explanation gives the dates.',
     actions: [
       'Choose a section in the Design screen, then open it here with Explore variants.',
       'Look at each alternative, and select one to see why it shows.',
@@ -342,15 +342,20 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S24: {
-    purpose: 'The document\'s date decides which dated rules and wording are in effect. This screen says where that date comes from and shows what changes on which day.',
+    purpose: 'The document\'s own date decides which dated rules, alternatives and sections are in effect; the studio never uses today\'s date. This screen says where that date comes from, sets the day every preview and check is worked out for, and shows what changes on which day.',
     actions: [
-      'Choose where the document\'s date comes from: a date in the customer\'s data, or a date given for each run.',
-      'Preview the document "as issued on" any date.',
-      'Read the timeline of what starts and ends, and how many synthetic customers each change reaches.',
+      'Choose where the document\'s date comes from: none, a date in the customer\'s data, or a date given for each run.',
+      'Preview the whole studio "as issued on" a day you pick, or a day something changes and the day before it. The status bar says when a preview date is set, and clearing it there is one click.',
+      'Read the timeline: each day something starts or ends, in plain words, and how many synthetic customers it reaches, with their names.',
+      'Fix problems in time: a message with no alternative in effect on some days, or two rules that tie only during a period.',
     ],
     next: [
       { screen: 'S07', why: 'put a rule in effect from or until a date' },
       { screen: 'S17', why: 'check for blockers as issued on a date' },
+    ],
+    read: [
+      { what: 'The timeline', means: 'One row per day something changes, in date order. The strip above it shows the same days; the list is the full version and works with the keyboard.' },
+      { what: 'Reaches', means: 'How many synthetic customers get a different document on that day than on the day before.' },
     ],
   },
   S11: {
@@ -409,6 +414,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   { term: 'Pinned test', screen: 'S07', means: 'A customer and the outcome you expect for them, saved with the document ("Pin as a test" in Rules). The studio runs it again after every change, so a fix that later breaks shows up straight away.' },
   { term: 'Synthetic customer', screen: 'S16', means: 'A made-up customer the document is tested with. Every customer, account and claim in the studio is fictional, and counts of customers say "synthetic" so you do not read them as real people.' },
   { term: 'Alternative (variant)', screen: 'S03', means: 'One of the named versions a section or message can show, for example a standard reminder or a payment support message. Rules choose which alternative a customer gets.' },
+  { term: 'The document\'s date', screen: 'S24', means: 'The day a document is issued on, as far as its rules are concerned: a date in the customer\'s data or a date given for each run, never today\'s date. Rules, alternatives and sections can be in effect from or until a day; "As issued on" previews the studio on a day you pick.' },
   { term: 'Coverage', screen: 'S07', means: 'Whether every rule, message version and section is reached by at least one customer. A gap is one that no customer reaches, so nobody has checked it. "Find coverage gaps" in Rules lists them and can generate customers who reach them.' },
 ];
 

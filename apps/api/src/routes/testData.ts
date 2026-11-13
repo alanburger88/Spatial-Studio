@@ -4,6 +4,7 @@ import { planTestData } from '@iss/scenarios';
 import { audit } from '../auth';
 import { baseRecordsFor, ensureCustomer, generateTestCustomers, publicPlan } from '../projectCustomers';
 import type { RouteDeps } from './deps';
+import { issueDateFrom } from '../issueDate';
 
 /**
  * Generated test customers: synthetic records made FOR ONE PROJECT so that every rule, message version and optional
@@ -22,7 +23,9 @@ export function registerTestDataRoutes(app: FastifyInstance, deps: RouteDeps): v
     const outcomes = body?.outcomes !== false;
     const edges = body?.edges !== false;
     if (!outcomes && !edges) throw new ApiError(400, 'NOTHING_TO_GENERATE', 'Choose at least one of: every outcome, edge values.');
-    return { outcomes, edges };
+    // "As issued on": the outcomes are reached on this day (documents that use dates). Only sent when set.
+    const issueDate = issueDateFrom(body?.issueDate, ApiError);
+    return { outcomes, edges, ...(issueDate ? { issueDate } : {}) };
   };
   /** The customer a project was given so that it is not left without one, as the responses report it. */
   const keptOf = (b: ReturnType<typeof ensureCustomer>) => (b ? { recordId: b.record.recordId, name: b.name, label: b.label } : null);

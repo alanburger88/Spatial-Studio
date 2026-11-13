@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Project, TestCase } from '@iss/model';
+import { dayWords, type Project, type TestCase } from '@iss/model';
 import { captureExpectation, nextTestId, runTestCases, summariseTests, type TestResult } from '@iss/scenarios';
-import { useStudio } from '../../state/store';
+import { usePreviewDate, useStudio } from '../../state/store';
 import { Empty, Proof, Tech, Biz } from '../../ui/common';
 import { Icon } from '../../ui/icons';
 import { nodeTitle } from '../../ui/plain';
@@ -69,13 +69,15 @@ function expectLines(project: Project, t: TestCase): string[] {
   return lines;
 }
 
-interface Pending { recordId: string; overrides: Record<string, unknown>; journeyCursor: number | null; name: string }
+/** `issueDate`: the "As issued on" day the test is pinned with (documents that use dates); the test runs on that day. */
+interface Pending { recordId: string; overrides: Record<string, unknown>; journeyCursor: number | null; name: string; issueDate: string | null }
 
 /** Regression tests: pin the current scenario and the outcome it must keep producing. */
 export function TestsPanel({ project }: { project: Project }) {
   const records = useStudio((s) => s.records);
   const ctx = useStudio((s) => s.ctx);
   const dispatch = useStudio((s) => s.dispatch);
+  const issueDate = usePreviewDate();
   const { results, pending: running } = useTestResults(project);
   const tests = project.testCases ?? EMPTY;
   const [naming, setNaming] = useState<Pending | null>(null);
@@ -87,11 +89,11 @@ export function TestsPanel({ project }: { project: Project }) {
 
   const suggest = (recordId: string, overrides: Record<string, unknown>, cursor: number | null) => {
     const rec = records.find((r) => r.recordId === recordId);
-    const e = rec ? captureExpectation(project, rec, overrides, cursor) : undefined;
+    const e = rec ? captureExpectation(project, rec, overrides, cursor, issueDate) : undefined;
     const first = Object.entries(e?.selectedVariants ?? {}).find(([, v]) => v);
-    return `${recordId}${first ? ` · ${nodeTitle(project, first[1]!)}` : ''}${Object.keys(overrides).length ? ' · with edits' : ''}`;
+    return `${recordId}${first ? ` · ${nodeTitle(project, first[1]!)}` : ''}${Object.keys(overrides).length ? ' · with edits' : ''}${issueDate ? ` · on ${dayWords(issueDate)}` : ''}`;
   };
-  const startPin = (recordId: string, overrides: Record<string, unknown>, journeyCursor: number | null) => setNaming({ recordId, overrides, journeyCursor, name: suggest(recordId, overrides, journeyCursor) });
+  const startPin = (recordId: string, overrides: Record<string, unknown>, journeyCursor: number | null) => setNaming({ recordId, overrides, journeyCursor, name: suggest(recordId, overrides, journeyCursor), issueDate });
   const confirmPin = () => {
     if (!naming) return;
     const rec = records.find((r) => r.recordId === naming.recordId);
@@ -99,7 +101,8 @@ export function TestsPanel({ project }: { project: Project }) {
     const tc: TestCase = {
       id: nextTestId(tests), name: naming.name.trim(), recordId: naming.recordId,
       overrides: naming.overrides, journeyCursor: naming.journeyCursor,
-      expect: captureExpectation(project, rec, naming.overrides, naming.journeyCursor), createdAt: new Date().toISOString(),
+      expect: captureExpectation(project, rec, naming.overrides, naming.journeyCursor, naming.issueDate), createdAt: new Date().toISOString(),
+      ...(naming.issueDate ? { issueDate: naming.issueDate } : {}),
     };
     if (dispatch({ type: 'UPSERT_TEST_CASE', testCase: tc }).ok) setNaming(null);
   };
@@ -108,12 +111,14 @@ export function TestsPanel({ project }: { project: Project }) {
     st.setRecord(t.recordId);
     st.setOverrides(t.overrides ?? {});
     st.setJourneyCursor(t.journeyCursor ?? null);
+    // A test pinned "as issued on" a day opens on that day (a scenario setting, like the customer).
+    if (project.documentDate && t.issueDate) st.setIssueDate(t.issueDate);
     st.toast({ kind: 'info', title: `Scenario loaded: ${t.name}`, message: 'Record, edits and journey step now match this test.' });
   };
   const update = (t: TestCase) => {
     const rec = records.find((r) => r.recordId === t.recordId);
     if (!rec) return;
-    dispatch({ type: 'UPSERT_TEST_CASE', testCase: { ...t, expect: captureExpectation(project, rec, t.overrides ?? {}, t.journeyCursor ?? null) } });
+    dispatch({ type: 'UPSERT_TEST_CASE', testCase: { ...t, expect: captureExpectation(project, rec, t.overrides ?? {}, t.journeyCursor ?? null, t.issueDate ?? null) } });
   };
   const del = (t: TestCase) => {
     if (window.confirm(`Delete test “${t.name}”? You can undo this from the top bar.`)) dispatch({ type: 'DELETE_TEST_CASE', testCaseId: t.id });
@@ -137,7 +142,7 @@ export function TestsPanel({ project }: { project: Project }) {
       <div className="rdtest-body">
         {naming && (
           <form className="rdtest-form" onSubmit={(e) => { e.preventDefault(); if (naming.name.trim()) confirmPin(); }} data-testid="pin-form">
-            <label htmlFor="pin-name">Name this test <span className="muted">({naming.recordId}{Object.keys(naming.overrides).length ? ' with your scenario edits' : ''}{naming.journeyCursor !== null ? `, journey step ${naming.journeyCursor + 1}` : ''})</span></label>
+            <label htmlFor="pin-name">Name this test <span className="muted">({naming.recordId}{Object.keys(naming.overrides).length ? ' with your scenario edits' : ''}{naming.journeyCursor !== null ? `, journey step ${naming.journeyCursor + 1}` : ''}{naming.issueDate ? `, as issued on ${dayWords(naming.issueDate)}` : ''})</span></label>
             <div className="row">
               <input id="pin-name" className="input" autoFocus value={naming.name} onChange={(e) => setNaming({ ...naming, name: e.target.value })} data-testid="pin-name" />
               <button type="submit" className="btn primary" disabled={!naming.name.trim()} data-testid="pin-confirm">Save test</button>
@@ -160,13 +165,14 @@ export function TestsPanel({ project }: { project: Project }) {
                     <Biz><span className="muted rdtest-who">{who(t.recordId)}</span></Biz>
                     <span className="mono rd-rule-id">{t.recordId}</span>
                     <Tech><span className="mono rd-rule-id">{t.id}</span></Tech>
+                    {t.issueDate && <span className="chip info" data-testid="test-issue-date" title="This test runs as issued on this day">as issued on {dayWords(t.issueDate)}</span>}
                   </div>
                   {r && !r.pass && (
                     <ul className="rdtest-diffs" data-testid="test-diffs">{r.diffs.map((d, i) => <li key={i}>{d.message}</li>)}</ul>
                   )}
                   <details className="rdtest-exp"><summary>Expects</summary>
                     <ul>{expectLines(project, t).map((l, i) => <li key={i}>{l}</li>)}</ul>
-                    <Proof label="Scenario and expectation (JSON)"><pre className="code">{JSON.stringify({ recordId: t.recordId, overrides: t.overrides, journeyCursor: t.journeyCursor, expect: t.expect }, null, 2)}</pre></Proof>
+                    <Proof label="Scenario and expectation (JSON)"><pre className="code">{JSON.stringify({ recordId: t.recordId, overrides: t.overrides, journeyCursor: t.journeyCursor, ...(t.issueDate ? { issueDate: t.issueDate } : {}), expect: t.expect }, null, 2)}</pre></Proof>
                   </details>
                   <div className="rdtest-actions">
                     <button type="button" className="btn sm" onClick={() => open(t)} data-testid="test-open">Open scenario</button>
