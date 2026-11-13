@@ -2,6 +2,9 @@ import { richFromMarkup } from './rich';
 import { deepClone } from './data';
 import { validateCustomFields } from './fields';
 import { pageDesignProblems } from './pageDesign';
+import { validateCalculatedFields } from './expressions';
+import { periodProblem } from './effective';
+import { LOOKUP_TABLES_MAX, validateLookupTable } from './lookup';
 import { SCHEMA_VERSION, isDocumentType } from './types';
 import type { DocNode, DocumentType, PresentationProfile, Project } from './types';
 
@@ -278,8 +281,46 @@ export function projectFileProblems(raw: unknown): ProjectFileProblem[] {
     if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id) { bad('RULE', 'A rule in the file has no id.'); continue; }
     if (ruleIds.has(r.id)) bad('RULE', `Two rules share the id "${r.id}".`);
     ruleIds.add(r.id);
+    if (r.effective !== undefined) { const why = periodProblem(r.effective); if (why) bad('PERIOD', `The period of rule "${r.id}" is not valid: ${why}`); }
+  }
+  // Rules and data depth: the document's date, periods, lookup tables and calculations decide what a customer gets.
+  const dateSource = p.documentDate;
+  if (dateSource !== undefined && (!dateSource || typeof dateSource !== 'object' || !((dateSource.source === 'run' && Object.keys(dateSource).length === 1) || (dateSource.source === 'field' && typeof dateSource.path === 'string' && Object.keys(dateSource).length === 2)))) bad('DOCUMENT_DATE', 'The file does not say clearly where the document’s date comes from.');
+  for (const n of p.nodes as any[]) {
+    if (!n || typeof n !== 'object') continue;
+    if (n.effective !== undefined) { const why = periodProblem(n.effective); if (why) bad('PERIOD', `The period of “${called(n)}” is not valid: ${why}`); }
+    if (n.variantPeriods !== undefined) {
+      if (!n.variantPeriods || typeof n.variantPeriods !== 'object' || Array.isArray(n.variantPeriods)) bad('PERIOD', `The periods of the messages in “${called(n)}” cannot be read.`);
+      else for (const [v, per] of Object.entries(n.variantPeriods)) { const why = periodProblem(per); if (why) bad('PERIOD', `The period of the message "${String(v).slice(0, 60)}" in “${called(n)}” is not valid: ${why}`); }
+    }
+  }
+  if ((n0(p.rules) || n0(p.nodes)) && dateSource === undefined) bad('DOCUMENT_DATE', 'The file gives something a period but does not say where the document’s date comes from.');
+  let tablesOk = true;
+  if (p.lookupTables !== undefined) {
+    if (!Array.isArray(p.lookupTables)) { bad('LOOKUP_TABLE', 'The list of lookup tables in the file cannot be read.'); tablesOk = false; }
+    else {
+      if (p.lookupTables.length > LOOKUP_TABLES_MAX) bad('LOOKUP_TABLE', `The file has ${p.lookupTables.length} lookup tables; a document can have at most ${LOOKUP_TABLES_MAX}.`);
+      const tableIds = new Set<string>();
+      for (const t of p.lookupTables) {
+        const errs = validateLookupTable(t);
+        if (errs.length) { tablesOk = false; bad('LOOKUP_TABLE', `A lookup table in the file is not valid: ${errs[0]}`); }
+        else if (tableIds.has(t.id)) { tablesOk = false; bad('LOOKUP_TABLE', `Two lookup tables share the id "${t.id}".`); }
+        else tableIds.add(t.id);
+      }
+    }
+  }
+  if (p.calculatedFields !== undefined) {
+    if (!Array.isArray(p.calculatedFields)) bad('CALCULATION', 'The list of calculated fields in the file cannot be read.');
+    else if (tablesOk && isDocumentType(p.documentType) && !out.some((x) => x.code === 'DATA_FIELDS' || x.code === 'DOCUMENT_DATE')) {
+      for (const e of validateCalculatedFields(p as Project, p.calculatedFields).slice(0, 5)) bad('CALCULATION', `A calculated field in the file is not valid: ${e}`);
+    }
   }
   return out.slice(0, 20);
+}
+
+/** Whether any item of a list carries an effective period (rules, or nodes with a section or message period). */
+function n0(list: unknown): boolean {
+  return Array.isArray(list) && list.some((x) => x && typeof x === 'object' && ((x as any).effective !== undefined || ((x as any).variantPeriods && Object.keys((x as any).variantPeriods).length)));
 }
 
 /** A project file is either the bare project (what "Export project" downloads) or an envelope `{ format: "iss-project", project }`. */

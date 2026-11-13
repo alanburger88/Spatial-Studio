@@ -6,7 +6,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import { z } from 'zod';
 import { canonicalJson, customFieldDefs, fieldsFor, projectFields, projectContentDigest, validateRule, validateCustomFields, isDocumentType, csvToRecords, prepareImport, IMPORT_ID_BASE, IMPORT_LIMIT, RECORD_ID_PREFIX, SCHEMA_VERSION, RECORD_ID_PATTERN, DOCUMENT_TYPE_LABEL, type DocumentType, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
-import { diffProjects, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_MAX, WORKFLOW_ACTIONS, WORKFLOW_LABEL, WORKFLOW_TRANSITIONS, ACTION_LABEL, type WorkflowAction } from '@iss/model';
+import { addDaysToIso, dateBoundaries, isIsoDay, projectFileProblems, diffProjects, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_MAX, WORKFLOW_ACTIONS, WORKFLOW_LABEL, WORKFLOW_TRANSITIONS, ACTION_LABEL, type WorkflowAction } from '@iss/model';
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
 import { renderPagedDocument, renderInteractiveHtml, compareManifests, afpSimulation, pageDesignFindings, AFP_SIMULATION_LABEL, PAGED_RENDERER_VERSION, HTML_RENDERER_VERSION } from '@iss/renderers';
@@ -52,6 +52,8 @@ const ResolveBody = z.object({
   /** Previews only, and only honoured together with allowDraft: also show unapproved translation drafts. */
   includeDrafts: z.boolean().optional(),
   includeTree: z.boolean().optional(),
+  /** The document's date for this run or preview ("as issued on"), for documents that use dates. Part of the run ID. */
+  issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isIsoDay, 'not a calendar day').nullable().optional(),
 });
 type ResolveBodyT = z.infer<typeof ResolveBody>;
 
@@ -68,7 +70,18 @@ function checkDraftProject(p: any, projectId: string): Project {
   const ids = new Set<string>();
   for (const n of p.nodes) { if (typeof n.id !== 'string' || ids.has(n.id)) throw new ApiError(400, 'INVALID_PROJECT', `Duplicate or invalid node id ${n.id}.`); ids.add(n.id); }
   for (const r of p.rules) { const errs = validateRule(r, p); if (errs.length) throw new ApiError(422, 'INVALID_RULE', `${r.id}: ${errs.join(' ')}`, { ruleId: r.id }); }
+  // Calculations, lookup tables, the document's date and periods decide what a customer gets: checked like the rest.
+  if (p.calculatedFields !== undefined || p.lookupTables !== undefined || p.documentDate !== undefined) {
+    const problems = projectFileProblems(p).filter((x) => ['CALCULATION', 'LOOKUP_TABLE', 'DOCUMENT_DATE', 'PERIOD'].includes(x.code));
+    if (problems.length) throw new ApiError(422, 'INVALID_PROJECT', problems.map((x) => x.message).slice(0, 3).join(' '));
+  }
   return p as Project;
+}
+
+/** The days a document whose date is given for each run is checked on before approval: each boundary and the day before the first (a fixed day when it has none). */
+export function approvalDays(project: Project): string[] {
+  const days = dateBoundaries(project).map((b) => b.date);
+  return days.length ? [addDaysToIso(days[0], -1), ...days] : ['2026-01-01'];
 }
 
 export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides env AUTH=on (tests). */ auth?: boolean; /** Replaces the AI translation call (tests). */ translator?: import('./translate').Translator; /** Replaces the assistant's model call (tests). */ assistModel?: import('./assistAi').AssistModel; /** Release packages: replaces the browser composition and lowers the scenario caps (tests). */ releasePackage?: { composer?: PackageComposer; scenarioCap?: number; referenceCap?: number } }
@@ -107,7 +120,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const record = recordOr404(body.recordId);
     if (record.projectId && record.projectId !== project.projectId) throw new ApiError(400, 'RECORD_OTHER_PROJECT', `${record.recordId} is a test customer of another project.`);
     if (record.documentType !== project.documentType) throw new ApiError(400, 'RECORD_TYPE_MISMATCH', `${record.recordId} is a ${record.documentType} record; ${project.projectId} expects ${project.documentType}.`);
-    const res = resolve({ project, record, overrides: body.overrides, journeyCursor: body.journeyCursor, claimIndex: body.claimIndex, profileId: (body.outputContext?.profileId ?? 'paged-pdf') as ProfileId, includeDrafts: body.includeDrafts === true && body.allowDraft === true });
+    const res = resolve({ project, record, overrides: body.overrides, journeyCursor: body.journeyCursor, claimIndex: body.claimIndex, profileId: (body.outputContext?.profileId ?? 'paged-pdf') as ProfileId, includeDrafts: body.includeDrafts === true && body.allowDraft === true, ...(body.issueDate ? { issueDate: body.issueDate } : {}) });
     store.saveRun(res.runId, project.projectId, record.recordId, { ...body, project }, { result: res.result, contentDigest: res.contentDigest, modelVersion: project.modelVersion, projectDigest: res.projectDigest, rulesDigest: res.rulesDigest, engine: ENGINE_VERSION });
     return { res, project, request: body };
   }
@@ -296,7 +309,10 @@ export async function buildApp(opts: AppOptions = {}) {
       if (recordId && !g.recordIds.includes(recordId)) g.recordIds.push(recordId);
       groups.set(key, g);
     };
-    for (const record of records) for (const f of resolve({ project, record }).findings) if (f.severity === 'blocking' && !(excused.size && excused.has(`${blockerIdOf(f)}|${record.recordId}`))) add(f, record.recordId);
+    // A document whose date is given for each run is checked on every day its behaviour changes (and the day before the
+    // first): what is approved is the whole dated behaviour, not one day of it.
+    const days: Array<string | null> = project.documentDate?.source === 'run' ? approvalDays(project) : [null];
+    for (const record of records) for (const day of days) for (const f of resolve({ project, record, ...(day ? { issueDate: day } : {}) }).findings) if (f.severity === 'blocking' && !(excused.size && excused.has(`${blockerIdOf(f)}|${record.recordId}`))) add(f, record.recordId);
     for (const f of [...staticRuleAnalysis(project, allRecords(project.projectId)), ...bindingAnalysis(project)]) if (f.severity === 'blocking') add(f, null);
     // Same runner as Rules & Data → Tests, so "passes" means the same thing everywhere.
     const tests = runTestCases(project, allRecords(project.projectId));
@@ -684,10 +700,11 @@ export async function buildApp(opts: AppOptions = {}) {
     const project = b?.project ? checkDraftProject(b.project, b.projectId) : projectOr404(String(b?.projectId));
     const record = recordOr404(String(b?.recordId));
     const overrides = b?.overrides ?? {};
+    const issueDate = typeof b?.issueDate === 'string' && isIsoDay(b.issueDate) ? b.issueDate : null;
     const snaps = replayJourney(project, record, overrides);
     const issued = [];
     for (const s of snaps.filter((x) => x.kind === 'issued')) {
-      const res = resolve({ project, record, overrides, journeyCursor: s.cursor });
+      const res = resolve({ project, record, overrides, journeyCursor: s.cursor, ...(issueDate ? { issueDate } : {}) });
       const canonical = canonicalJson({ manifest: res.semanticManifest, html: renderInteractiveHtml(res, project) });
       const stored = store.issueSnapshot(project.projectId, record.recordId, s.eventId!, res.runId, res.contentDigest, canonical);
       issued.push({ ...stored, currentPreviewDigest: res.contentDigest, unchangedByLaterEvents: true, currentModelWouldDiffer: stored.contentDigest !== res.contentDigest });

@@ -4,8 +4,8 @@ import { availableParallelism } from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
-import { RECORD_ID_PREFIX, projectContentDigest, type Project, type SyntheticRecord } from '@iss/model';
-import { proofRecordProblems, type ProofOutput } from '@iss/resolver';
+import { RECORD_ID_PREFIX, isIsoDay, projectContentDigest, type Project, type SyntheticRecord } from '@iss/model';
+import { givenDate, proofRecordProblems, type ProofOutput } from '@iss/resolver';
 import { planTestData } from '@iss/scenarios';
 import { parseInput, parseInputLine, MAX_LINE_BYTES } from './contract';
 import { CHANNELS, ENGINE_VERSIONS, RUNTIME_FORMAT, RUNTIME_FORMAT_VERSION, draftProblems, isChannel, outputFingerprints, proofOf, render, sha256, type Channel, type LoadedRelease, type Rendered } from './core';
@@ -147,13 +147,25 @@ interface Produced {
   outputs: ProofOutput[];
 }
 
-async function produce(pkg: Pkg, record: SyntheticRecord, channels: Set<Channel>, pdf: PdfComposer | null): Promise<Produced> {
-  const rendered = render(pkg.loaded, record, channels);
+async function produce(pkg: Pkg, record: SyntheticRecord, channels: Set<Channel>, pdf: PdfComposer | null, issueDate: string | null = null): Promise<Produced> {
+  const rendered = render(pkg.loaded, record, channels, issueDate);
   if (!rendered.produced) return { status: 'stopped', rendered, outputs: [] };
   let composed: { pdf: Buffer; pages: number } | undefined;
   if (rendered.files.pagedHtml !== undefined) composed = await pdf!.compose(rendered.files.pagedHtml);
   return { status: 'produced', rendered, pdf: composed?.pdf, outputs: outputFingerprints(rendered, composed?.pages ?? null) };
 }
+
+/** `--issue-date`: the document's date for every customer of the run (a customer's own `issueDate` wins). */
+function issueDateArg(v: string | boolean | undefined): string | null {
+  if (v === undefined) return null;
+  if (typeof v !== 'string' || !isIsoDay(v)) throw new Stop('--issue-date must be a date written as YYYY-MM-DD.', 2);
+  return v;
+}
+/**
+ * The date a document is produced as issued on, as results state it: only a date GIVEN for the run (a date taken from the
+ * customer's own data is a customer value, and results never carry those). Nothing for a template without dates.
+ */
+const stated = (rendered: Rendered): { issueDate?: string } => { const d = givenDate(rendered.res); return d ? { issueDate: d } : {}; };
 
 /** A reason for a failure that never carries the customer's data. */
 const failureReason = (e: unknown): string => (e instanceof RuntimeProblem ? e.message : `The engine could not produce this document (${(e as Error)?.name ?? 'error'}).`);
@@ -172,6 +184,9 @@ const RUN_HELP = `Produces documents from a file of customers, one JSON object p
   --outputs    any of pdf, html, email, sms (default: html,email,sms). PDF needs a headless browser.
   --out        the folder to write to. It must not hold the results of an earlier run.
   --parallel   PDF pages composed at the same time (default: the number of processor cores, at most 4).
+  --issue-date the document's date for every customer of the run, YYYY-MM-DD (only for a template that uses dates;
+               a customer's own "issueDate", next to "data", takes precedence). It is part of each run ID and is
+               written to results.jsonl and to each proof record.
 
 Writes documents/<reference>/ (document.pdf, document.html, email.html, email.txt, sms.txt), results.jsonl (one line
 per input line: produced, stopped with the blocking issue codes, or invalid with what is wrong) and proof.jsonl (one
@@ -179,8 +194,9 @@ proof record per document). A document with a blocking issue is not produced. Cu
 results.jsonl, proof.jsonl or the console.`;
 
 export async function cmdRun(argv: string[]): Promise<number> {
-  const a = parseArgs(argv, { data: 'string', outputs: 'string', out: 'string', parallel: 'string', help: 'flag' });
+  const a = parseArgs(argv, { data: 'string', outputs: 'string', out: 'string', parallel: 'string', 'issue-date': 'string', help: 'flag' });
   if (a.help) { out(RUN_HELP); return 0; }
+  const runDate = issueDateArg(a['issue-date']);
   if (typeof a.data !== 'string') throw new Stop('Say which file to read: --data customers.jsonl', 2);
   if (typeof a.out !== 'string') throw new Stop('Say where to write: --out <folder>', 2);
   const channels = new Set(channelsOf(a.outputs, ['html', 'email', 'sms']));
@@ -212,10 +228,10 @@ export async function cmdRun(argv: string[]): Promise<number> {
     const parsed = parseInputLine(text, pkg.loaded.project);
     if (!parsed.ok) { counts.invalid++; return { result: { line, customerRef: parsed.customerRef, status: 'invalid', problems: parsed.problems } }; }
     try {
-      const p = await produce(pkg, parsed.record, channels, pdf);
+      const p = await produce(pkg, parsed.record, channels, pdf, parsed.issueDate ?? runDate);
       const producedAt = new Date().toISOString();
       const proof = proofOf(pkg.loaded, p.rendered, parsed.record, parsed.customerRef, producedAt, p.outputs);
-      if (p.status === 'stopped') { counts.stopped++; return { result: { line, customerRef: parsed.customerRef, status: 'stopped', runId: p.rendered.res.runId, blockedBy: p.rendered.blockedBy }, proof }; }
+      if (p.status === 'stopped') { counts.stopped++; return { result: { line, customerRef: parsed.customerRef, status: 'stopped', runId: p.rendered.res.runId, ...stated(p.rendered), blockedBy: p.rendered.blockedBy }, proof }; }
       let name = safeName(parsed.customerRef);
       for (let i = 2; used.has(name); i++) name = `${safeName(parsed.customerRef)}~${i}`;
       used.add(name);
@@ -229,7 +245,7 @@ export async function cmdRun(argv: string[]): Promise<number> {
       put('email.txt', p.rendered.files.emailText);
       put('sms.txt', p.rendered.files.sms);
       counts.produced++; counts.files += files.length;
-      return { result: { line, customerRef: parsed.customerRef, status: 'produced', runId: p.rendered.res.runId, files }, proof };
+      return { result: { line, customerRef: parsed.customerRef, status: 'produced', runId: p.rendered.res.runId, ...stated(p.rendered), files }, proof };
     } catch (e) {
       counts.failed++;
       return { result: { line, customerRef: parsed.customerRef, status: 'failed', reason: failureReason(e) } };
@@ -273,7 +289,7 @@ const SERVE_HELP = `Produces documents over local HTTP.
 
   node serve [--port 8787] [--host 127.0.0.1] [--parallel 4] [--pdf]
 
-  POST /render   body: a customer record, or { "customerRef": "...", "data": <record>, "outputs": ["html","email","sms","pdf"] }
+  POST /render   body: a customer record, or { "customerRef": "...", "data": <record>, "issueDate": "YYYY-MM-DD", "outputs": ["html","email","sms","pdf"] }
                  answers 200 with the documents and the proof record, 409 when a blocking issue stops the document,
                  422 when the record does not match the contract.
   GET  /health   whether the engine is ready, and which release it runs.
@@ -346,14 +362,14 @@ export async function cmdServe(argv: string[]): Promise<number> {
       if (channels.includes('pdf')) {
         try { composer = await getPdf(); } catch { status = 503; send(res, 503, { status: 'unavailable', problems: [pdfProblem ?? 'The headless browser could not be started.'] }); return; }
       }
-      const p = await produce(pkg, parsed.record, new Set(channels), composer);
+      const p = await produce(pkg, parsed.record, new Set(channels), composer, parsed.issueDate);
       const proof = proofOf(pkg.loaded, p.rendered, parsed.record, parsed.customerRef, new Date().toISOString(), p.outputs);
       served++;
-      if (p.status === 'stopped') { status = 409; send(res, 409, { status: 'stopped', customerRef: parsed.customerRef, runId: p.rendered.res.runId, blockedBy: p.rendered.blockedBy, proof }); return; }
+      if (p.status === 'stopped') { status = 409; send(res, 409, { status: 'stopped', customerRef: parsed.customerRef, runId: p.rendered.res.runId, ...stated(p.rendered), blockedBy: p.rendered.blockedBy, proof }); return; }
       const f = p.rendered.files;
       status = 200;
       send(res, 200, {
-        status: 'produced', customerRef: parsed.customerRef, runId: p.rendered.res.runId,
+        status: 'produced', customerRef: parsed.customerRef, runId: p.rendered.res.runId, ...stated(p.rendered),
         outputs: {
           ...(f.html ? { html: f.html.toString('utf8') } : {}),
           ...(f.emailHtml ? { email: { subject: p.rendered.email!.subject, preheader: p.rendered.email!.preheader, html: f.emailHtml.toString('utf8'), text: f.emailText!.toString('utf8') } } : {}),
@@ -387,6 +403,8 @@ export async function cmdServe(argv: string[]): Promise<number> {
 interface ExpectedCase {
   customerRef: string; line: number; status: 'produced' | 'stopped' | 'invalid';
   runId?: string; contentDigest?: string; dataFingerprint?: string; blockedBy?: string[];
+  /** The document's date the case is produced as issued on (given with its input line). */
+  issueDate?: string;
   files?: Record<string, { path: string; sha256: string; bytes: number }>;
   outputs?: ProofOutput[];
 }
@@ -445,8 +463,10 @@ export async function cmdVerify(argv: string[]): Promise<number> {
       }
       if (c.status === 'invalid') { differences.push(`${label}: the input is accepted now, but was refused when the package was built.`); return; }
       let made: Produced;
-      try { made = await produce(p, parsed.record, channels, pdf); } catch (e) { differences.push(`${label}: ${failureReason(e)}`); return; }
+      try { made = await produce(p, parsed.record, channels, pdf, parsed.issueDate); } catch (e) { differences.push(`${label}: ${failureReason(e)}`); return; }
       const r = made.rendered;
+      if ((c.issueDate ?? null) !== (parsed.issueDate ?? null)) differences.push(`${label}: its input is dated ${parsed.issueDate ?? 'without a date'}, but the studio produced it as issued on ${c.issueDate ?? 'no given date'}.`);
+      if (c.issueDate && r.res.documentDate?.date !== c.issueDate) differences.push(`${label}: the engine did not produce it as issued on ${c.issueDate}.`);
       if (r.res.runId !== c.runId) differences.push(`${label}: the run ID is ${r.res.runId}; the studio gave ${c.runId}.`);
       if (r.res.contentDigest !== c.contentDigest) differences.push(`${label}: what the document says differs from what the studio worked out.`);
       if (made.status !== c.status) differences.push(`${label}: the document is ${made.status === 'stopped' ? `stopped (${r.blockedBy.join(', ')})` : 'produced'} now; in the studio it was ${c.status === 'stopped' ? `stopped (${(c.blockedBy ?? []).join(', ')})` : 'produced'}.`);
@@ -454,6 +474,7 @@ export async function cmdVerify(argv: string[]): Promise<number> {
       const proof = proofOf(p.loaded, r, parsed.record, parsed.customerRef, new Date().toISOString(), made.outputs);
       const shape = proofRecordProblems(proof);
       if (shape.length) differences.push(`${label}: the proof record is not valid (${shape.join(' ')}).`);
+      if ((proof.issueDate ?? null) !== (c.issueDate ?? null)) differences.push(`${label}: the proof record states the date ${proof.issueDate ?? 'nothing'}; it should state ${c.issueDate ?? 'nothing'}.`);
       if (made.status === 'produced') {
         const now: Record<string, Buffer | undefined> = { 'document.html': r.files.html, 'email.html': r.files.emailHtml, 'email.txt': r.files.emailText, 'sms.txt': r.files.sms };
         for (const [name, want] of Object.entries(c.files ?? {})) {
@@ -478,11 +499,12 @@ export async function cmdVerify(argv: string[]): Promise<number> {
     await pdf?.close();
   }
   const ok = differences.length === 0;
-  const report = { ok, release: p.manifest.release, engine: { version: ENGINE_VERSIONS.engine, sha256: p.engineSha256 }, proofCases: expected.cases.length, checked, pdfChecked: !!pdf, differences, notes };
+  const dated = expected.cases.filter((c) => c.issueDate).length;
+  const report = { ok, release: p.manifest.release, engine: { version: ENGINE_VERSIONS.engine, sha256: p.engineSha256 }, proofCases: expected.cases.length, ...(dated ? { datedCases: dated } : {}), checked, pdfChecked: !!pdf, differences, notes };
   if (a.json) out(JSON.stringify(report, null, 2));
   else {
     out(`Release ${p.manifest.release.number} of “${p.manifest.release.title}”, engine ${ENGINE_VERSIONS.engine} (SHA-256 ${p.engineSha256}).`);
-    out(`${checked} of ${expected.cases.length} proof cases produced and compared${pdf ? ', PDF included' : ', PDF not included'}.`);
+    out(`${checked} of ${expected.cases.length} proof cases produced and compared${dated ? ` (${dated} of them as issued on a given date)` : ''}${pdf ? ', PDF included' : ', PDF not included'}.`);
     for (const n of notes) out(`Note: ${n}`);
     if (ok) out('Verified: this machine produces exactly what the studio approved.');
     else { out(`NOT verified. ${differences.length} difference${differences.length === 1 ? '' : 's'}:`); for (const d of differences) out(`  - ${d}`); }
@@ -507,16 +529,21 @@ export async function cmdGenerate(argv: string[]): Promise<number> {
   const pkg = openForProduction();
   const project = pkg.loaded.project;
   const expected = readJson<ExpectedPack>(path.join(pkg.root, 'proof', 'expected.json'), 'The proof pack (proof/expected.json)');
-  const bases = readFileSync(path.join(pkg.root, ...expected.inputs.split('/')), 'utf8').split('\n').filter((l) => l.trim())
-    .map((l) => parseInputLine(l, project)).filter((x): x is Extract<typeof x, { ok: true }> => x.ok).map((x) => x.record);
+  const parsedBases = readFileSync(path.join(pkg.root, ...expected.inputs.split('/')), 'utf8').split('\n').filter((l) => l.trim())
+    .map((l) => parseInputLine(l, project)).filter((x): x is Extract<typeof x, { ok: true }> => x.ok);
+  const bases = parsedBases.map((x) => x.record);
   const plan = planTestData(project, bases, { outcomes: true, edges: true });
-  const pool = [...plan.customers.map((c) => c.record), ...bases.map(({ recordId: _id, ...rest }) => rest)];
+  // A customer that reaches its outcome on a given date keeps that date (a template that uses dates).
+  const pool: Array<{ record: Omit<SyntheticRecord, 'recordId'>; issueDate: string | null }> = [
+    ...plan.customers.map((c) => ({ record: c.record, issueDate: c.issueDate ?? null })),
+    ...parsedBases.map(({ record: { recordId: _id, ...rest }, issueDate }) => ({ record: rest, issueDate })),
+  ];
   const prefix = RECORD_ID_PREFIX[project.documentType] ?? 'REC';
   const lines: string[] = [];
   for (let i = 0; i < count; i++) {
     const base = pool[i % pool.length];
-    const record = { ...base, recordId: `${prefix}-${String(100000 + i)}`, documentType: project.documentType };
-    lines.push(JSON.stringify({ customerRef: `synthetic-${i + 1}`, data: record }));
+    const record = { ...base.record, recordId: `${prefix}-${String(100000 + i)}`, documentType: project.documentType };
+    lines.push(JSON.stringify({ customerRef: `synthetic-${i + 1}`, ...(base.issueDate ? { issueDate: base.issueDate } : {}), data: record }));
   }
   const text = lines.join('\n') + '\n';
   if (typeof a.out === 'string') { writeFileSync(path.resolve(a.out), text); err(`${count} synthetic customers written to ${path.resolve(a.out)} (${pool.length} different customers, repeated with their own record ids).`); }

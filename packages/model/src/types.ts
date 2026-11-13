@@ -75,6 +75,86 @@ export interface Rule {
   enabled?: boolean;
   title?: string;
   description?: string;
+  /** In effect only from/until these days (the document's date decides). Absent = always. */
+  effective?: EffectivePeriod;
+}
+
+/* ---------------------------------------- Rules and data depth (wave 2, engine) */
+
+/**
+ * A period of days in which a rule, an alternative or a conditional section is in effect. `from` is the first day it
+ * applies (included); `until` is the first day it no longer applies. Either may be left open. ISO days (`YYYY-MM-DD`).
+ */
+export interface EffectivePeriod { from?: string; until?: string }
+
+/** Where a document's date comes from: one of the customer's date fields, or a date given for the whole run. */
+export type DocumentDateSource = { source: 'field'; path: string } | { source: 'run' };
+
+/** The kind of value a calculation gives. Money is whole cents; dates are ISO days. */
+export type CalcType = 'number' | 'money' | 'date' | 'text' | 'bool';
+
+/**
+ * A calculation as a small tree of data, never code. Row conditions (`where`) use the columns of the list by key;
+ * `if` conditions are ordinary rule conditions. See `docs/dev/RULES_DATA_CONTRACTS.md` for the formula form of each.
+ */
+export type Expr =
+  | { op: 'field'; path: string }
+  | { op: 'number'; value: number }
+  | { op: 'money'; cents: number }
+  | { op: 'text'; value: string }
+  | { op: 'date'; value: string }
+  | { op: 'bool'; value: boolean }
+  | { op: 'issueDate' }
+  | { op: 'add' | 'sub' | 'mul' | 'div'; a: Expr; b: Expr }
+  | { op: 'round'; arg: Expr; places: number }
+  | { op: 'min' | 'max'; args: Expr[] }
+  | { op: 'abs'; arg: Expr }
+  | { op: 'days'; from: Expr; to: Expr }
+  | { op: 'addDays'; date: Expr; days: Expr }
+  | { op: 'earlier' | 'later'; a: Expr; b: Expr }
+  | { op: 'join'; sep: string; parts: Expr[] }
+  | { op: 'count'; list: string; where?: Predicate }
+  | { op: 'sum' | 'smallest' | 'largest'; list: string; column: string; where?: Predicate }
+  | { op: 'if'; when: Predicate; then: Expr; else: Expr }
+  | { op: 'lookup'; table: string; column: string; keys: Expr[] };
+
+/** A named value worked out from the customer's data (path `calc.<key>`), usable wherever a data field is. */
+export interface CalculatedField {
+  key: string;
+  label: string;
+  type: CalcType;
+  description?: string;
+  expr: Expr;
+}
+
+/** How a lookup table's key column is matched: exact text, or a range of numbers or days (from included, until excluded). */
+export type LookupKeyMatch = 'text' | 'number-range' | 'date-range';
+export interface LookupKeyColumn {
+  key: string;
+  label: string;
+  match: LookupKeyMatch;
+  /** number-range only: whether the bounds are plain numbers or amounts in cents (default number). */
+  unit?: 'number' | 'money';
+}
+export interface LookupValueColumn { key: string; label: string; type: CalcType }
+/** A range key cell. Open at either end when a bound is left out. */
+export interface LookupRange { from?: number | string; until?: number | string }
+export interface LookupRow {
+  /** One cell per key column: text for an exact key, a range otherwise. */
+  keys: Record<string, string | LookupRange>;
+  /** One value per value column (null = no value: a lookup of it is missing). */
+  values: Record<string, Scalar>;
+}
+/** A small table kept with the document, read by a calculation with `LOOKUP`. */
+export interface LookupTable {
+  id: string;
+  title: string;
+  description?: string;
+  keys: LookupKeyColumn[];
+  columns: LookupValueColumn[];
+  rows: LookupRow[];
+  /** What a lookup gives when no row matches. Absent = the value is missing (the calculation is missing). */
+  defaultRow?: Record<string, Scalar>;
 }
 
 /* --------------------------------------------------------------- Rich text */
@@ -185,6 +265,13 @@ export interface DocNode {
   fallbackText?: string;
   importance?: 'primary' | 'secondary';
   domainRole?: 'member-liability' | 'amount-due';
+
+  /** Conditional sections only: in effect only in this period; outside it the section is not shown. */
+  effective?: EffectivePeriod;
+  /** Alternatives (variants) that can only be chosen in a period, by variant id. */
+  variantPeriods?: Record<string, EffectivePeriod>;
+  /** Repeating table: the footer shows this money field (a data or calculated field) instead of the column sum. */
+  totalFrom?: string;
 
   // Rich text
   content?: RichDoc;
@@ -335,6 +422,12 @@ export interface Project {
   fromTemplate?: { templateId: string; version: number; title: string };
   /** Set when the project was brought in from a studio project file: what the file said it was. */
   importedFrom?: { projectId: string; title: string; modelVersion: number; importedAt: string };
+  /** Named values worked out from each customer's data (`calc.<key>`), in the order they are listed. */
+  calculatedFields?: CalculatedField[];
+  /** Small tables kept with the document, read by calculations. */
+  lookupTables?: LookupTable[];
+  /** Where the document's date comes from. Absent = the document does not use dates (no periods, no ISSUE_DATE()). */
+  documentDate?: DocumentDateSource;
 }
 
 /** One preferred term: the English `source` should be rendered as `target` in that language. */
@@ -403,6 +496,8 @@ export interface TestCase {
   recordId: string;
   overrides?: Record<string, unknown>;
   journeyCursor?: number | null;
+  /** The document's date the test runs "as issued on" (ISO day). Only for documents that use dates. */
+  issueDate?: string;
   expect: {
     selectedVariants?: Record<string, string | null>;
     visibleNodeIds?: string[];

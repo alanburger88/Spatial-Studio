@@ -78,20 +78,20 @@ function snapOf(res: Resolution): Snap {
 
 const ofType = (project: Project, records: SyntheticRecord[]): SyntheticRecord[] => records.filter((r) => r.documentType === project.documentType);
 
-function snapshots(project: Project, records: SyntheticRecord[], profileId: ProfileId | undefined, journeyCursor: number | null): Snap[] {
-  return ofType(project, records).map((record) => snapOf(resolve({ project, record, profileId, journeyCursor })));
+function snapshots(project: Project, records: SyntheticRecord[], profileId: ProfileId | undefined, journeyCursor: number | null, issueDate?: string | null): Snap[] {
+  return ofType(project, records).map((record) => snapOf(resolve({ project, record, profileId, journeyCursor, ...(issueDate ? { issueDate } : {}) })));
 }
 
 /** Projects are immutable values, so results are remembered per project object and record list (identity), like `impactOf` does. */
 const popCache = new WeakMap<Project, WeakMap<SyntheticRecord[], Map<string, Snap[]>>>();
-function population(project: Project, records: SyntheticRecord[], profileId: ProfileId | undefined, journeyCursor: number | null | undefined): Snap[] {
+function population(project: Project, records: SyntheticRecord[], profileId: ProfileId | undefined, journeyCursor: number | null | undefined, issueDate?: string | null): Snap[] {
   let byRecords = popCache.get(project);
   if (!byRecords) { byRecords = new WeakMap(); popCache.set(project, byRecords); }
   let byKey = byRecords.get(records);
   if (!byKey) { byKey = new Map(); byRecords.set(records, byKey); }
-  const key = `${profileId ?? ''}|${journeyCursor ?? 'base'}|${records.length}`;
+  const key = `${profileId ?? ''}|${journeyCursor ?? 'base'}|${records.length}|${issueDate ?? ''}`;
   let snaps = byKey.get(key);
-  if (!snaps) { snaps = snapshots(project, records, profileId, journeyCursor ?? null); byKey.set(key, snaps); }
+  if (!snaps) { snaps = snapshots(project, records, profileId, journeyCursor ?? null, issueDate); byKey.set(key, snaps); }
   return snaps;
 }
 
@@ -527,11 +527,14 @@ const DATA_PROBLEM: Record<string, string> = {
   UNCONFIRMED_MEMBER_LIABILITY: 'The claim is denied pending review and the member’s liability is not confirmed, yet the data supplies an amount for the member to pay. The document will not present that amount as owed.',
   CLAIM_RECONCILIATION_FAILED: 'The claim amounts do not add up: billed must equal the adjustment plus the allowed amount, and allowed must equal what the plan paid plus the member’s share.',
   NULL_BINDING: 'A value this document must show is empty for this customer.',
+  CALCULATION_MISSING: 'A calculated value this document needs cannot be worked out from this customer’s data.',
+  DOCUMENT_DATE_MISSING: 'This document depends on its date, and this customer has none.',
+  ISSUE_DATE_INVALID: 'The date given for this run is not a date.',
 };
 
 function scenarioFixes(project: Project, f: Finding, ctx: FixCtx): Draft[] {
   const record = ctx.recordId ? ctx.records.find((r) => r.recordId === ctx.recordId) : undefined;
-  const has = (overrides: Record<string, unknown> | undefined, journeyCursor: number | null): boolean => !!record && resolve({ project, record, overrides, journeyCursor, profileId: ctx.profileId }).findings.some((x) => sameIssue(f, x));
+  const has = (overrides: Record<string, unknown> | undefined, journeyCursor: number | null): boolean => !!record && resolve({ project, record, overrides, journeyCursor, profileId: ctx.profileId, ...(ctx.issueDate ? { issueDate: ctx.issueDate } : {}) }).findings.some((x) => sameIssue(f, x));
   const hasOverrides = !!ctx.overrides && Object.keys(ctx.overrides).length > 0;
   const cursor = ctx.journeyCursor ?? null;
   const step = cursor !== null ? project.journey.events[Math.min(cursor, project.journey.events.length - 1)] : undefined;
@@ -542,6 +545,8 @@ function scenarioFixes(project: Project, f: Finding, ctx: FixCtx): Draft[] {
   else if (record && step && has(undefined, cursor)) { title = `Review the journey step ${q(step.label ?? humanise(step.eventType))}`; origin = `It appears at the journey step ${q(step.label ?? humanise(step.eventType))}: the step leaves the data in this state. Correct the step or the data it starts from.`; }
   else if (record && hasOverrides) { title = 'Adjust the what-if values'; origin = 'It is caused by the what-if values in this preview: change or clear them.'; }
   const drafts: Draft[] = [{ kind: 'scenario', title, explanation: `${DATA_PROBLEM[f.code] ?? 'The data being previewed is not consistent.'} ${origin} The document itself is not at fault, so no document change is proposed.`, risk: 'review' }];
+  if (f.code === 'CALCULATION_MISSING') drafts.push(linkDraft('Make the calculation cope without the value', `${f.message} If this customer’s data is right, change the calculation in Rules & data so it gives a value anyway (for example with IF … IS EMPTY).`, { view: 'rules-data', label: 'Open the calculations' }));
+  if (f.code === 'DOCUMENT_DATE_MISSING') drafts.push(linkDraft('Check where the document’s date comes from', 'The document’s date comes from a date field of the customer’s data or is given for the run. Check that choice in Rules & data, or give an “as issued on” date.', { view: 'rules-data', label: 'Open Rules & data' }));
   if (f.code === 'NULL_BINDING') drafts.push(linkDraft(`Decide what ${q(nodeName(project, f.nodeId))} shows when the value is empty`, `${q(nodeName(project, f.nodeId))} is set to stop the document when its value is empty. If an empty value is acceptable, choose a fallback text or hide the field in the Design view.`, designLink(project, f.nodeId)));
   return drafts;
 }
@@ -632,7 +637,7 @@ function personFixes(project: Project, f: Finding): Draft[] {
 
 /* ------------------------------------------------------------------ public API */
 
-interface FixCtx { records: SyntheticRecord[]; recordId?: string; overrides?: Record<string, unknown>; journeyCursor?: number | null; profileId?: ProfileId }
+interface FixCtx { records: SyntheticRecord[]; recordId?: string; overrides?: Record<string, unknown>; journeyCursor?: number | null; profileId?: ProfileId; issueDate?: string | null }
 
 function draftsFor(project: Project, f: Finding, ctx: FixCtx): Draft[] {
   switch (f.code) {
@@ -658,14 +663,18 @@ function draftsFor(project: Project, f: Finding, ctx: FixCtx): Draft[] {
     case 'BALANCE_RECONCILIATION_FAILED':
     case 'UNCONFIRMED_MEMBER_LIABILITY':
     case 'CLAIM_RECONCILIATION_FAILED':
-    case 'NULL_BINDING': return scenarioFixes(project, f, ctx);
+    case 'NULL_BINDING':
+    case 'CALCULATION_MISSING':
+    case 'DOCUMENT_DATE_MISSING':
+    case 'ISSUE_DATE_INVALID': return scenarioFixes(project, f, ctx);
+    case 'LOOKUP_NO_MATCH': return [linkDraft('Add a row that covers this customer', `${f.message} Add a row to the lookup table, or give the table a default row, in Rules & data.`, { view: 'rules-data', label: 'Open the lookup tables' })];
     case 'FALLBACK_SELECTED': return [];
     default: return personFixes(project, f);
   }
 }
 
 /** Proposals for one finding, best first. Never applies anything; an empty list means there is nothing to do (information only). */
-export function proposeFixes(project: Project, finding: Finding, ctx: { records: SyntheticRecord[]; recordId?: string; overrides?: Record<string, unknown>; journeyCursor?: number | null; profileId?: ProfileId }): FixProposal[] {
+export function proposeFixes(project: Project, finding: Finding, ctx: { records: SyntheticRecord[]; recordId?: string; overrides?: Record<string, unknown>; journeyCursor?: number | null; profileId?: ProfileId; issueDate?: string | null }): FixProposal[] {
   return finish(finding, draftsFor(project, finding, ctx));
 }
 
@@ -673,10 +682,11 @@ export function proposeFixes(project: Project, finding: Finding, ctx: { records:
  * The population after a change. A change that touches only rules cannot alter anything for a customer whom none of
  * the changed rules matches (before or after), so those customers keep their "before" result and are not resolved again.
  */
-function afterSnapshots(before: Project, after: Project, records: SyntheticRecord[], beforeSnaps: Snap[], profileId: ProfileId | undefined, journeyCursor: number | null): Snap[] {
+function afterSnapshots(before: Project, after: Project, records: SyntheticRecord[], beforeSnaps: Snap[], profileId: ProfileId | undefined, journeyCursor: number | null, issueDate?: string | null): Snap[] {
   const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])] as Array<keyof Project>;
-  const rulesOnly = keys.every((k) => k === 'rules' || k === 'modelVersion' || before[k] === after[k]);
-  if (!rulesOnly) return snapshots(after, records, profileId, journeyCursor);
+  // The shortcut reads conditions on the stored data, so it cannot see calculated values or the document's date.
+  const rulesOnly = keys.every((k) => k === 'rules' || k === 'modelVersion' || before[k] === after[k]) && !after.calculatedFields?.length && !after.documentDate;
+  if (!rulesOnly) return snapshots(after, records, profileId, journeyCursor, issueDate);
   const was = new Map(before.rules.map((r) => [r.id, r]));
   const now = new Map(after.rules.map((r) => [r.id, r]));
   const conditions: Predicate[] = [];
@@ -724,7 +734,7 @@ function resolvedInModel(after: Project, f: Pick<Finding, 'code' | 'nodeId' | 'r
 }
 
 /** The effect of a proposal on every synthetic customer of the document type, before anything is applied. */
-export function fixImpact(project: Project, proposal: FixProposal, records: SyntheticRecord[], opts?: { finding?: Finding; profileId?: ProfileId; journeyCursor?: number | null }): FixImpact {
+export function fixImpact(project: Project, proposal: FixProposal, records: SyntheticRecord[], opts?: { finding?: Finding; profileId?: ProfileId; journeyCursor?: number | null; issueDate?: string | null }): FixImpact {
   const total = ofType(project, records).length;
   const none = (summary: string): FixImpact => ({ resolves: false, unblocked: [], newlyBlocked: [], changedCustomers: 0, totalCustomers: total, summary });
   if (proposal.kind === 'link') return none('Nothing changes until a person makes this edit; the issue stays open until then.');
@@ -734,8 +744,8 @@ export function fixImpact(project: Project, proposal: FixProposal, records: Synt
   if (!applied.ok) return none(`This change cannot be applied to the current model: ${applied.message}`);
 
   const cursor = opts?.journeyCursor ?? null;
-  const before = population(project, records, opts?.profileId, cursor);
-  const after = afterSnapshots(project, applied.project, records, before, opts?.profileId, cursor);
+  const before = population(project, records, opts?.profileId, cursor, opts?.issueDate);
+  const after = afterSnapshots(project, applied.project, records, before, opts?.profileId, cursor, opts?.issueDate);
   const unblocked: string[] = [];
   const newlyBlocked: string[] = [];
   let changed = 0;
@@ -768,9 +778,9 @@ export function fixImpact(project: Project, proposal: FixProposal, records: Synt
 const SEVERITY_RANK: Record<string, number> = { blocking: 0, error: 1, warning: 2, info: 3 };
 
 /** Blocking and warning findings across every record of the project's document type (baseline or the given journey step), grouped. */
-export function groupFindings(project: Project, records: SyntheticRecord[], opts?: { profileId?: ProfileId; journeyCursor?: number | null }): FindingGroup[] {
+export function groupFindings(project: Project, records: SyntheticRecord[], opts?: { profileId?: ProfileId; journeyCursor?: number | null; issueDate?: string | null }): FindingGroup[] {
   const groups = new Map<string, FindingGroup>();
-  for (const s of population(project, records, opts?.profileId, opts?.journeyCursor)) {
+  for (const s of population(project, records, opts?.profileId, opts?.journeyCursor, opts?.issueDate)) {
     for (const f of s.findings) {
       if (f.severity === 'info') continue;
       const key = findingKey(f);

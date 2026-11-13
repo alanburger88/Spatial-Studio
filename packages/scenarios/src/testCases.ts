@@ -44,8 +44,8 @@ function outcomeOf(project: Project, res: Resolution): Outcome {
 }
 
 /** The outcome of a scenario as an `expect` block (what "Pin as test" stores). */
-export function captureExpectation(project: Project, record: SyntheticRecord, overrides: Record<string, unknown> = {}, journeyCursor: number | null = null): TestExpect {
-  const o = outcomeOf(project, resolve({ project, record, overrides, journeyCursor }));
+export function captureExpectation(project: Project, record: SyntheticRecord, overrides: Record<string, unknown> = {}, journeyCursor: number | null = null, issueDate?: string | null): TestExpect {
+  const o = outcomeOf(project, resolve({ project, record, overrides, journeyCursor, ...(issueDate ? { issueDate } : {}) }));
   const vis = [...o.visible].filter(([, v]) => v).map(([id]) => id).sort();
   const hid = [...o.visible].filter(([, v]) => !v).map(([id]) => id).sort();
   return {
@@ -64,7 +64,7 @@ export function runTestCase(project: Project, records: SyntheticRecord[], tc: Te
     const message = `Record ${tc.recordId} ${rec ? 'is a different document type' : 'no longer exists'}.`;
     return { ...base, pass: false, diffs: [{ kind: 'record', expected: tc.recordId, got: rec ? rec.documentType : 'missing', message }] };
   }
-  const o = outcomeOf(project, resolve({ project, record: rec, overrides: tc.overrides ?? {}, journeyCursor: tc.journeyCursor ?? null }));
+  const o = outcomeOf(project, resolve({ project, record: rec, overrides: tc.overrides ?? {}, journeyCursor: tc.journeyCursor ?? null, ...(tc.issueDate ? { issueDate: tc.issueDate } : {}) }));
   const diffs: TestDiff[] = [];
   const e = tc.expect;
   const vt = (id: string | null | undefined) => (id ? title(project, id) : 'nothing chosen');

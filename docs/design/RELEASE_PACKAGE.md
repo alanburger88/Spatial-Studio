@@ -321,6 +321,31 @@ The package does not come with a tool that runs these checks on someone else's o
 - A format change is announced in this document, with what a reader has to change.
 - The studio records the format version a release was created under, and does not build that release's package under another.
 
+### Additions for calculated fields, lookup tables and dates (rules and data depth, wave 2)
+
+No reader of format 1 can misread a package because of these, so `formatVersion` stays **1**. Every addition below is
+absent from the package of a template that does not use the feature, so such packages are unchanged.
+
+- `template.json` may carry `calculatedFields`, `lookupTables`, `documentDate`, `effective` on rules and conditional
+  sections, `variantPeriods` on messages and `totalFrom` on tables (`schemaVersion` stays `1.0.0`: older studios ignore
+  unknown fields, and the engine of the release is the one that knows them).
+- `manifest.json`: `documentDate` (`{ "source": "run" }` or `{ "source": "field", "path": … }`) and `dateBoundaries`:
+  every day on which what the document says changes, each with `changes` (`kind` rule / variant / section / lookup-row,
+  `id`, `nodeId`, `change` starts / ends, `words`) and `scenarios: { dayBefore, onTheDay }` (scenario ids).
+- `data/dictionary.json`: a calculated field has `calculated: true`, `calculatedFrom` (data fields, lists, other
+  calculations as `calc.<key>`, and `document.date`), and `calculation: { gives, formula, inWords, description? }`; the
+  document's date is the field `document.date` with `documentDate` saying where it comes from; top-level `documentDate`
+  and `lookupTables` (id, title, keys, columns, rows, `whenNoRowMatches`, `problems`, `usedBy`). `inWords` is fixed
+  studio English, not customer-visible text. A field's `type` can be `number` (a calculated number, may have decimals).
+- `tests/scenarios.json`: a scenario may have `issueDate` (the document's date it is produced as issued on) and
+  `dateBoundary: { date, side: "before" | "on" }`. Its `expected` adds `issueDate`, `issueDateGiven` and `calculated`
+  (each calculated value of that synthetic customer, by path). For every date boundary there is one scenario for the day
+  before and one for the day itself, placed after the pinned tests and within the scenario cap.
+- `reference/`: both sides of every boundary come first among the reference outputs (within the reference cap of 8),
+  then the greedy cover of the remaining outcomes as before.
+- `README.html` gains a "Dates" section (what changes on which day, and the scenarios on each side) when the template
+  uses dates.
+
 ## Limits
 
 - **Caps.** 24 scenarios and 8 sets of reference outputs. A document with many rules will have outcomes that are in `scenarios.json` but have no reference output, and may have scenarios named in `omittedByCap`.

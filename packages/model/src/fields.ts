@@ -1,10 +1,11 @@
-import type { CustomField, DocumentType, Formatter, Project } from './types';
+import type { CalcType, CalculatedField, CustomField, DocumentDateSource, DocumentType, Formatter, Project } from './types';
 
 /**
  * Typed data contracts. Tokens, bindings and rule predicates may only reference
  * allowlisted paths. No path is ever evaluated against arbitrary objects.
  */
-export type FieldType = 'string' | 'cents' | 'date' | 'int' | 'bool' | 'enum' | 'array' | 'points';
+/** `number` is only ever the type of a calculated field (a number that may have decimals). */
+export type FieldType = 'string' | 'cents' | 'date' | 'int' | 'bool' | 'enum' | 'array' | 'points' | 'number';
 
 export interface FieldDef {
   path: string;
@@ -19,6 +20,10 @@ export interface FieldDef {
   example?: string;
   /** Suitable as Cube/Landscape scenario dimension. */
   dimension?: boolean;
+  /** One of the project's calculated fields (`calc.<key>`): worked out by the engine, never an input. Also `derived`. */
+  calculated?: boolean;
+  /** The document's date (`document.date`): from a date field or given for the run, never an input. Also `derived`. */
+  documentDate?: boolean;
 }
 
 const common: FieldDef[] = [
@@ -123,13 +128,37 @@ export const CUSTOM_FIELD_KEY = /^[a-zA-Z][a-zA-Z0-9]{0,39}$/;
 export const CUSTOM_LIST_MAX_COLUMNS = 8;
 const LIST_COLUMN_TYPES = new Set<string>(['string', 'int', 'cents', 'date']);
 
-/** Data contract of one project: the standard fields of its document type plus its custom fields. */
-export function projectFields(project: Pick<Project, 'documentType' | 'customFields'>): FieldDef[] {
-  return [...fieldsFor(project.documentType), ...customFieldDefs(project.customFields)];
+/** What `projectFields` reads from a project. */
+export type FieldScopeOf = Pick<Project, 'documentType' | 'customFields'> & Partial<Pick<Project, 'calculatedFields' | 'documentDate'>>;
+
+/**
+ * Data contract of one project: the standard fields of its document type plus its custom fields, then (only when the
+ * project has them) the document's date and its calculated fields, both marked derived (never an input).
+ */
+export function projectFields(project: FieldScopeOf): FieldDef[] {
+  return [...fieldsFor(project.documentType), ...customFieldDefs(project.customFields), ...documentDateDefs(project.documentDate), ...calculatedFieldDefs(project.calculatedFields)];
 }
 
-export function projectFieldIndex(project: Pick<Project, 'documentType' | 'customFields'>): Map<string, FieldDef> {
+export function projectFieldIndex(project: FieldScopeOf): Map<string, FieldDef> {
   return new Map(projectFields(project).map((f) => [f.path, f]));
+}
+
+/** The path of the document's date as a value in conditions and wording. */
+export const DOCUMENT_DATE_PATH = 'document.date';
+/** Calculated fields are read as `calc.<key>`. */
+export const CALC_PREFIX = 'calc.';
+
+/** The field type a calculated value has in the data contract. */
+export const CALC_FIELD_TYPE: Record<CalcType, FieldType> = { number: 'number', money: 'cents', date: 'date', text: 'string', bool: 'bool' };
+
+/** `document.date`, present only when the project says where its date comes from. */
+export function documentDateDefs(source: DocumentDateSource | undefined): FieldDef[] {
+  return source ? [{ path: DOCUMENT_DATE_PATH, type: 'date', label: 'The document’s date', derived: true, documentDate: true }] : [];
+}
+
+/** The field definitions of a project's calculated fields (`calc.<key>`), marked calculated and derived. */
+export function calculatedFieldDefs(calcs: CalculatedField[] | undefined): FieldDef[] {
+  return (calcs ?? []).map((c) => ({ path: `${CALC_PREFIX}${c.key}`, type: CALC_FIELD_TYPE[c.type] ?? 'string', label: c.label, derived: true, calculated: true }));
 }
 
 /**
@@ -193,6 +222,7 @@ export function defaultFormatterFor(type: FieldType): Formatter {
     case 'date': return 'date';
     case 'int': return 'int';
     case 'points': return 'points';
+    case 'number': return 'text';
     default: return 'text';
   }
 }

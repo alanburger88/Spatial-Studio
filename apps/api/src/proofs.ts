@@ -229,8 +229,9 @@ export interface Produced {
  * HTML, email and SMS fingerprinted by the SHA-256 of their exact file (email: `email.html`); the PDF by the SHA-256
  * of the page source it is composed from, with the page count the composition gives. A stopped customer gets nothing.
  */
-export async function produceOne(template: Project, record: SyntheticRecord, channels: readonly ProofChannel[], composer: PackageComposer): Promise<Produced> {
-  const res = resolve({ project: template, record, profileId: PROFILE });
+export async function produceOne(template: Project, record: SyntheticRecord, channels: readonly ProofChannel[], composer: PackageComposer, issueDate?: string | null): Promise<Produced> {
+  // The document's date given for the run (documents that use dates); it is part of the run ID and kept in the proof record.
+  const res = resolve({ project: template, record, profileId: PROFILE, ...(issueDate ? { issueDate } : {}) });
   const out: Produced = { res, outputs: [], files: {} };
   if (res.findings.some((f) => f.severity === 'blocking')) return out;
   if (channels.includes('html')) {
@@ -281,6 +282,10 @@ const ISSUE_WORDS: Record<string, string> = {
   REQUIRED_NODE_MISSING: 'required content was missing from the document',
   INVALID_BINDING: 'a part used a data field that does not exist',
   NULL_BINDING: 'a part had no value but must have one',
+  CALCULATION_MISSING: 'a calculated value the document needs could not be worked out',
+  LOOKUP_NO_MATCH: 'a lookup table had no row for the customer',
+  DOCUMENT_DATE_MISSING: 'the document had no date',
+  ISSUE_DATE_INVALID: 'the date given for the run was not a date',
   UNSAFE_URL: 'a link was not a safe web address',
   UNCONFIRMED_DEBT_LANGUAGE: 'an unconfirmed amount was worded as owed',
 };
@@ -326,6 +331,7 @@ export function plainDifferences(diffs: ProofDifference[], proof: ProofRecord, t
     } else if (d.kind === 'output' && d.channel) plain = `The ${CHANNEL_LABEL[d.channel]} differs from what was produced.`;
     else if (d.kind === 'release') plain = `This is not the release the document was produced from (release ${proof.releaseNumber}).`;
     else if (d.kind === 'engine') plain = `The engine differs: produced with ${proof.engineVersion}, checked with ${again.engineVersion}.`;
+    else if (d.kind === 'date') plain = d.message;
     return { ...d, plain };
   });
 }

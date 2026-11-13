@@ -1,5 +1,5 @@
 import {
-  channelConfig, diffProjects, EMAIL_SECTION_LABELS, languageName, projectLanguages, richToPlain, SOURCE_LANGUAGE, tokensOfText, translatableStrings, translationStatus,
+  channelConfig, diffProjects, EMAIL_SECTION_LABELS, languageName, periodInWords, projectLanguages, richToPlain, SOURCE_LANGUAGE, tokensOfText, translatableStrings, translationStatus,
   type ChannelConfig, type DocNode, type GlossaryEntry, type Predicate, type Project, type SyntheticRecord,
 } from '@iss/model';
 import { resolve } from '@iss/resolver';
@@ -239,6 +239,16 @@ export function summarizeChanges(before: Project, after: Project, records: Synth
           amountNotes.push(`the safeguard on the amount ${name} changed`);
           break;
         case 'nullPolicy': add('layout', `What ${name} shows when it has no value changed`); break;
+        case 'effective': add('rules', b.effective ? `${name} is now shown only ${periodInWords(b.effective)}${a.effective ? ` (before: ${periodInWords(a.effective)})` : ''}` : `${name} is no longer limited to a period`); break;
+        case 'variantPeriods': {
+          const ids = [...new Set([...Object.keys(a.variantPeriods ?? {}), ...Object.keys(b.variantPeriods ?? {})])].sort();
+          for (const v of ids) if (!same(a.variantPeriods?.[v], b.variantPeriods?.[v])) add('rules', b.variantPeriods?.[v] ? `The message ${q(partName(v))} in ${name} can now be chosen only ${periodInWords(b.variantPeriods[v])}` : `The message ${q(partName(v))} in ${name} is no longer limited to a period`);
+          break;
+        }
+        case 'totalFrom':
+          add('layout', b.totalFrom ? `The footer of ${name} now shows ${fieldWords(after, b.totalFrom)}` : `The footer of ${name} adds up its amount column again`);
+          amountNotes.push(`the total in the footer of ${name} changed`);
+          break;
         default: detail = true;
       }
     }
@@ -277,13 +287,28 @@ export function summarizeChanges(before: Project, after: Project, records: Synth
     if (c.priority) said.push(`has priority ${c.priority.to} instead of ${c.priority.from}`);
     if (c.enabled) said.push(c.enabled.to ? 'is switched on again' : 'is switched off');
     if (c.mode) said.push(`changed kind from ${c.mode.from} to ${c.mode.to}`);
+    if (c.period) said.push(c.after.effective ? `is now in effect ${c.period.to} (before: ${c.period.from})` : 'is no longer limited to a period');
     if (c.title) said.unshift(`was renamed (before: ${q(c.title.from ?? ruleWords(before, c.before))})`);
-    const rest = c.fields.filter((f) => !['when', 'then', 'priority', 'enabled', 'mode', 'title', 'version'].includes(f));
+    const rest = c.fields.filter((f) => !['when', 'then', 'priority', 'enabled', 'mode', 'title', 'version', 'effective'].includes(f));
     if (rest.length) said.push('has other details changed');
     if (!said.length) continue; // only its version counter moved
     add('rules', `Rule ${name} ${listWords(said, 4)}`);
     if ((c.before.mode === 'obligation' || c.after.mode === 'obligation') && (c.action || c.condition || c.enabled || c.mode)) disclosureNotes.push(`the rule ${name}, which makes content required, changed`);
   }
+  /* calculated fields, lookup tables and the document's date */
+  for (const c of d.calculations.added) add('rules', `New calculation ${q(c.name)}`);
+  for (const c of d.calculations.removed) add('rules', `Calculation ${q(c.name)} removed`);
+  for (const c of d.calculations.changed) {
+    add('rules', c.formula ? `Calculation ${q(c.name)} is now worked out as ${c.formula.to} (before: ${c.formula.from})` : `Calculation ${q(c.name)} changed (${listWords(c.fields.map((f) => (f === 'label' ? 'its name' : f === 'type' ? 'the kind of value it gives' : f === 'description' ? 'its description' : f)), 3)})`);
+    if (c.formula || c.fields.includes('type')) amountNotes.push(`the calculation ${q(c.name)} changed, so every value shown from it may differ`);
+  }
+  for (const t of d.lookupTables.added) add('rules', `New lookup table ${q(t.name)}`);
+  for (const t of d.lookupTables.removed) add('rules', `Lookup table ${q(t.name)} removed`);
+  for (const t of d.lookupTables.changed) {
+    add('rules', `Lookup table ${q(t.name)} changed${t.rows.from !== t.rows.to ? ` (${countWords(t.rows.to, 'row')} instead of ${t.rows.from})` : ''}`);
+    amountNotes.push(`the lookup table ${q(t.name)} changed, so values read from it may differ`);
+  }
+  if (d.documentDate) add('rules', d.documentDate.to ? `The document’s date is now ${d.documentDate.to}${d.documentDate.from ? ` (before: ${d.documentDate.from})` : ''}` : 'The document no longer uses its date');
   items.rules = collapse(items.rules, 'rule and condition changes');
 
   /* ------------------------------------------------------------------ translations */

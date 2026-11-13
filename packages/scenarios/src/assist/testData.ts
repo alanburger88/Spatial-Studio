@@ -1,6 +1,6 @@
 import {
-  buildContext, canonicalJson, customFieldDefs, deepClone, deepPatch, getPath, languageName, projectFieldIndex, projectFields, projectLanguages,
-  SOURCE_LANGUAGE, validateRecordShape,
+  addDaysToIso, buildContext, canonicalJson, customFieldDefs, dateBoundaries, deepClone, deepPatch, exprChildren, exprDependencies, getPath, isIsoDay, languageName, projectFieldIndex, projectFields, projectLanguages,
+  SOURCE_LANGUAGE, validateRecordShape, type Expr,
   type DocNode, type FieldDef, type Predicate, type Project, type Rule, type Scalar, type SyntheticRecord,
 } from '@iss/model';
 import { predicatePaths, resolve, type Resolution } from '@iss/resolver';
@@ -189,9 +189,10 @@ interface Edge {
   scenes?: CoverageConj[][];
 }
 
-interface Built { record: SyntheticRecord; res: Resolution; changes: number }
+interface Built { record: SyntheticRecord; res: Resolution; changes: number; /** The document's date it was reached on (given for the run). */ issueDate?: string | null }
 
 interface Entry {
+  issueDate: string | null;
   record: SyntheticRecord;
   ctx: unknown;
   blocked: boolean;
@@ -220,7 +221,13 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
   const bases = own.length ? own.map((r) => completed(project, r, locales)) : [completed(project, null, locales)];
   // As issued: the search must not lean on journey steps, so it sees the project without them.
   const issued: Project = { ...project, journey: { ...project.journey, snapshotPolicy: 'issued-is-immutable', events: [] } };
-  const env: CoverageEnv = new Env(issued, bases, SEARCH_WIDTH);
+  // The document's date: the "as issued on" day asked for; for a document whose date is given for each run, the day
+  // before its first boundary (or a fixed day) when none is asked for. Documents without dates have none.
+  const boundaryDays = project.documentDate ? dateBoundaries(project).map((b) => b.date) : [];
+  const baseDate: string | null = !project.documentDate ? null
+    : opts.issueDate && isIsoDay(opts.issueDate) ? opts.issueDate
+    : project.documentDate.source === 'run' ? (boundaryDays[0] ? addDaysToIso(boundaryDays[0], -1) : FIRST_DATE) : null;
+  const env: CoverageEnv = new Env(issued, bases, SEARCH_WIDTH, baseDate);
   let journeyEnv: CoverageEnv | null = null;
 
   /** Why this record cannot be a customer (the first problem the customer import would report, or a language the project does not have), or null. */
@@ -230,10 +237,10 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
     return locales.includes(record.customer.locale) ? null : `${languageName(record.customer.locale)} is not a language of this project, so no customer is given it as preferred language.`;
   };
   const resolutions = new Map<string, Resolution>();
-  const resolved = (record: SyntheticRecord): Resolution => {
-    const key = canonicalJson(record);
+  const resolved = (record: SyntheticRecord, issueDate: string | null = baseDate): Resolution => {
+    const key = `${issueDate ?? ''}|${canonicalJson(record)}`;
     let res = resolutions.get(key);
-    if (!res) { res = resolve({ project: issued, record }); resolutions.set(key, res); }
+    if (!res) { res = resolve({ project: issued, record, ...(issueDate ? { issueDate } : {}) }); resolutions.set(key, res); }
     return res;
   };
   const baseBlocked = bases.map((record, i) => {
@@ -249,6 +256,8 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
   const calculated = (preds: Predicate[]): string | null => {
     for (const path of preds.flatMap((p) => predicatePaths(p))) {
       const f = fields.get(path);
+      if (f?.calculated) return `It depends on the calculation ${q(plain(f.label))}. No change to the fields it is worked out from${project.documentDate ? ', or to the document’s date,' : ''} reached it within the search limit.`;
+      if (f?.documentDate) return 'It depends on the document’s date, and no date that was tried reached it.';
       if (f?.derived && !env.overridable(path)) return `It depends on ${q(plain(f.label))}, which is calculated from other fields and cannot be set on a customer, and no starting customer has a value that fits.`;
     }
     return null;
@@ -364,6 +373,130 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
     }
   }
 
+  /* ------------------------------------------------------------------ calculated fields and dates */
+
+  /**
+   * A target that depends on a calculated value or on the document's date cannot be reached by setting one field: the
+   * value is worked out. So the inputs of the calculations it reads are varied (one, then two at a time), with values
+   * taken from the thresholds the conditions and calculations use, and so is the "as issued on" date (each boundary and
+   * the day before). Bounded; the first valid customer the resolver confirms wins, one without a blocking issue first.
+   */
+  const calcByKey = new Map((project.calculatedFields ?? []).map((c) => [c.key, c]));
+  const hasPeriods = boundaryDays.length > 0;
+  const depthPaths = (alts: Predicate[]): { inputs: string[]; dated: boolean } | null => {
+    const paths = alts.flatMap((p) => predicatePaths(p));
+    const seen = new Set<string>();
+    const inputs = new Set<string>();
+    let dated = hasPeriods;
+    const visit = (path: string): void => {
+      if (seen.has(path)) return;
+      seen.add(path);
+      if (path === 'document.date') { dated = true; return; }
+      if (path.startsWith('calc.')) {
+        const c = calcByKey.get(path.slice(5));
+        if (!c) return;
+        const d = exprDependencies(c.expr);
+        if (d.usesIssueDate) dated = true;
+        d.fields.forEach(visit); d.lists.forEach((l) => inputs.add(`${l}.count`)); d.calcs.forEach((k) => visit(`calc.${k}`));
+        return;
+      }
+      const f = fields.get(path);
+      if (f && !f.derived && f.type !== 'array' && path !== 'documentType' && path !== 'recordId') inputs.add(path);
+    };
+    const touchesDepth = paths.some((x) => x.startsWith('calc.') || x === 'document.date');
+    if (!touchesDepth && !hasPeriods) return null;
+    paths.forEach(visit);
+    return { inputs: [...inputs], dated };
+  };
+  const numbersIn = (alts: Predicate[]): number[] => {
+    const out = new Set<number>();
+    const fromPred = (p: Predicate): void => {
+      if (p.op === 'and' || p.op === 'or') p.args.forEach(fromPred);
+      else if (p.op === 'not') fromPred(p.arg);
+      else if (p.op === 'in') { for (const v of p.value) if (typeof v === 'number') out.add(v); } else { const v = (p as { value?: unknown }).value; if (typeof v === 'number') out.add(v); }
+    };
+    const fromExpr = (e: Expr): void => { if (e.op === 'number') out.add(e.value); if (e.op === 'money') out.add(e.cents); if (e.op === 'if') fromPred(e.when); exprChildren(e).forEach(([, c]) => fromExpr(c)); };
+    alts.forEach(fromPred);
+    for (const c of calcByKey.values()) fromExpr(c.expr);
+    return [...out].filter((n) => Number.isFinite(n) && Math.abs(n) < 1e7).slice(0, 12);
+  };
+  const depthSearch = (g: Goal): Built | null => {
+    const depth = depthPaths([...g.alts, ...(g.weak?.alts ?? [])]);
+    if (!depth) return null;
+    const K = numbersIn(g.alts);
+    const days = depth.dated ? [...new Set([...(baseDate ? [baseDate] : []), ...boundaryDays.flatMap((d) => [addDaysToIso(d, -1), d])])].sort() : [baseDate];
+    const dayList = days.length ? days : [FIRST_DATE];
+    const valuesFor = (path: string): unknown[] => {
+      const f = fields.get(path);
+      if (path.endsWith('.count')) return [0, 1, 2, 3, 4, ...K.filter((k) => Number.isInteger(k) && k >= 0 && k <= 50).flatMap((k) => [k, k + 1])];
+      if (!f) return [];
+      const ints = [0, 1, 2, ...K.filter(Number.isInteger).flatMap((k) => [k - 1, k, k + 1])];
+      switch (f.type) {
+        case 'enum': return f.enumValues ?? [];
+        case 'bool': return [true, false];
+        case 'int': case 'points': return [...new Set(ints.filter((n) => n >= 0))];
+        case 'cents': return [...new Set([...ints, 100, 1000, 10000])];
+        case 'date': {
+          const around = dayList.filter((d): d is string => !!d);
+          const shifts = [0, 1, -1, ...K.filter(Number.isInteger).flatMap((k) => [k, k - 1, k + 1, -k])];
+          return [...new Set(around.flatMap((d) => shifts.filter((k) => Math.abs(k) < 4000).map((k) => addDaysToIso(d, k))))].slice(0, 40);
+        }
+        default: return [];
+      }
+    };
+    const options = depth.inputs.map((path) => ({ path, values: valuesFor(path).slice(0, 40) })).filter((o) => o.values.length);
+    const runDay = (d: string | null | undefined): string | null => (project.documentDate?.source === 'run' || (opts.issueDate && project.documentDate) ? d ?? baseDate : null);
+    let budget = 900;
+    let fallback: Built | null = null;
+    const tryRecord = (record: SyntheticRecord, day: string | null, changes: number): Built | null => {
+      if (budget-- <= 0) return null;
+      if (invalid(record)) return null;
+      const res = resolved(record, day);
+      if (!g.reached(res)) return null;
+      const built: Built = { record, res, changes, issueDate: day };
+      if (!isBlocking(res)) return built;
+      fallback ??= built;
+      return null;
+    };
+    const withChange = (base: SyntheticRecord, path: string, value: unknown): SyntheticRecord => {
+      const record = deepClone(base);
+      if (path.endsWith('.count')) {
+        const list = path.slice(0, -6);
+        const f = fields.get(list);
+        const cur = (getPath(record, list) as unknown[] | null) ?? [];
+        const rows = Array.from({ length: value as number }, (_, i) => deepClone(cur[i % Math.max(1, cur.length)] ?? sampleRows(f!, fields)[0]));
+        setField(record as unknown as Record<string, unknown>, list, rows);
+      } else setField(record as unknown as Record<string, unknown>, path, value);
+      return record;
+    };
+    // A document that takes its date from a field gets each day through that field; otherwise it is given for the run.
+    const dateField = depth.dated && project.documentDate?.source === 'field' && !opts.issueDate ? project.documentDate.path : null;
+    const onDay = (b: SyntheticRecord, d: string | null | undefined): SyntheticRecord => (dateField && d ? withChange(b, dateField, d) : b);
+    for (const d of dayList) {
+      const day = runDay(d);
+      for (const base0 of bases.slice(0, SEARCH_WIDTH)) {
+        const base = onDay(base0, d);
+        const hit = tryRecord(base, day, 0);
+        if (hit) return hit;
+        for (const o of options) for (const v of o.values) { const h = tryRecord(withChange(base, o.path, v), day, 1); if (h) return h; if (budget <= 0) return fallback; }
+      }
+    }
+    for (const d of dayList) {
+      const day = runDay(d);
+      for (const base0 of bases.slice(0, 3)) {
+        const base = onDay(base0, d);
+        for (let i = 0; i < options.length; i++) for (let j = i + 1; j < options.length; j++) {
+          for (const v of options[i].values) for (const w of options[j].values) {
+            const h = tryRecord(withChange(withChange(base, options[i].path, v), options[j].path, w), day, 2);
+            if (h) return h;
+            if (budget <= 0) return fallback;
+          }
+        }
+      }
+    }
+    return fallback;
+  };
+
   /* one candidate customer per target, then the fewest candidates that cover everything */
   interface Candidate extends Built { covers: number[] }
   const candidates = new Map<string, Candidate>();
@@ -376,9 +509,11 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
       weak = attempt(g.weak.alts, g.weak.reached);
       if (weak.built && g.weak.accept) { found = weak; g.check = g.weak.reached; }
     }
-    if (!found.built) { g.why = () => reasonFor(g, strong, weak); return; }
-    const key = canonicalJson(found.built.record);
-    if (!candidates.has(key)) candidates.set(key, { ...found.built, covers: [] });
+    let built: Built | null = found.built;
+    if (!built && (calcByKey.size || project.documentDate)) built = depthSearch(g);
+    if (!built) { g.why = () => reasonFor(g, strong, weak); return; }
+    const key = `${built.issueDate ?? baseDate ?? ''}|${canonicalJson(built.record)}`;
+    if (!candidates.has(key)) candidates.set(key, { ...built, covers: [] });
   });
   const pool = [...candidates.values()];
   for (const c of pool) c.covers = goals.flatMap((g, i) => (!g.never && g.check(c.res) ? [i] : []));
@@ -401,7 +536,7 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
       const mine = c.covers.filter((x) => open.has(x)).map((x) => goals[x]);
       c.covers.forEach((x) => open.delete(x));
       const first = [...mine].sort((a, b) => LABEL_ORDER.indexOf(a.target.kind) - LABEL_ORDER.indexOf(b.target.kind))[0];
-      entries.push({ record: c.record, ctx: buildContext(c.record), blocked, changes: c.changes, label: first.label, goals: mine, edges: [] });
+      entries.push({ issueDate: c.issueDate ?? baseDate, record: c.record, ctx: buildContext(c.record), blocked, changes: c.changes, label: first.label, goals: mine, edges: [] });
     }
   }
 
@@ -575,9 +710,9 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
       if (x.blocked && !isBlocking(fresh.res)) return false;
       return (e.scenes ?? []).slice(0, fresh.level + 1).some((conjs) => conjs.some((conj) => conj.every((l) => holds(l, getPath(x.ctx, l.path)))));
     };
-    const reuse = entries.find(fits);
+    const reuse = entries.find((x) => x.issueDate === baseDate && fits(x));
     if (reuse) reuse.edges.push(e);
-    else if (fresh) entries.push({ record: fresh.record, ctx: buildContext(fresh.record), blocked: isBlocking(fresh.res), changes: fresh.changes, label: e.target.title, goals: [], edges: [e] });
+    else if (fresh) entries.push({ issueDate: baseDate, record: fresh.record, ctx: buildContext(fresh.record), blocked: isBlocking(fresh.res), changes: fresh.changes, label: e.target.title, goals: [], edges: [e] });
     else if ('reason' in built) edgeReasons.set(e, built.reason);
   }
 
@@ -601,7 +736,7 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
       if (!(keepReadNames && read.has('customer.familyName'))) record.customer.familyName = FAMILY[n % FAMILY.length];
       const issuedRecord: SyntheticRecord = { ...record, recordId: `TEST-${String(n + 1).padStart(4, '0')}` };
       if (invalid(issuedRecord)) return { record, goals: [], edges: [] };
-      const res = resolve({ project, record: issuedRecord });
+      const res = resolve({ project, record: issuedRecord, ...(entry.issueDate ? { issueDate: entry.issueDate } : {}) });
       const ctx = buildContext(issuedRecord);
       return {
         record, goals: entry.goals.filter((g) => g.check(res)),
@@ -617,7 +752,7 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
       if (seen) { placed.set(e.target, index); observed.set(e.target, seen[1]); } else failed.add(e.target);
     }
     const targets = [...done.goals.map((g) => g.target.id), ...done.edges.map(([e]) => e.target.id)];
-    if (targets.length) customers.push({ record: done.record, label: entry.label, targets });
+    if (targets.length) customers.push({ record: done.record, label: entry.label, targets, ...(entry.issueDate && project.documentDate ? { issueDate: entry.issueDate } : {}) });
   });
 
   const dropped = new Set(entries.slice(max).flatMap((x) => [...x.goals.map((g) => g.target.id), ...x.edges.map((e) => e.target.id)]));

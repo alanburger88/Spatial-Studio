@@ -1,4 +1,4 @@
-import type { ComponentType, DocumentType, NodeLayout, Predicate, ProfileId, RuleAction, RuleMode, TableColumn } from '@iss/model';
+import type { CalcType, CalcValue, ComponentType, DocumentType, EffectivePeriod, Missing, NodeLayout, Predicate, ProfileId, RuleAction, RuleMode, TableColumn } from '@iss/model';
 import type { JourneyStep } from '@iss/model';
 
 export type Severity = 'blocking' | 'error' | 'warning' | 'info';
@@ -34,8 +34,27 @@ export interface TraceEntry {
   expression: Predicate;
   action?: RuleAction;
   targetNodeId?: string;
+  /** `out-of-scope` also marks a rule, alternative or section that is not in effect on the document's date (see `period`). */
   outcome: 'selected' | 'outranked' | 'tie' | 'applied' | 'required' | 'not-matched' | 'disabled' | 'out-of-scope';
   note?: string;
+  /** Set when the outcome was decided by an effective period: the period, and the document's date it was checked on. */
+  period?: { period: EffectivePeriod; issueDate: string | null };
+  /** Set when the condition could not be decided because a calculated value (or the document's date) is missing. */
+  undecided?: { path: string; reason: string };
+}
+
+/** How one calculated field was worked out for this customer (values are shown in the studio; never in proof records). */
+export interface CalculatedOutcome {
+  label: string;
+  type: CalcType;
+  /** Null when missing. */
+  value: CalcValue | null;
+  /** Why it is missing (plain words), when it is. */
+  missing?: Missing;
+  /** What it reads, as field paths (`calc.<key>` for other calculations, `document.date` for the document's date). */
+  inputs: string[];
+  /** The same, by name (field labels, calculation names, "the document’s date"). */
+  inputNames: string[];
 }
 
 export interface RInline {
@@ -147,6 +166,11 @@ export interface ResolveInput {
   profileId?: ProfileId;
   /** Previews only: also show unapproved translation drafts (reported as a finding). Clean exports never set this. */
   includeDrafts?: boolean;
+  /**
+   * The document's date given for this run or preview ("as issued on"), as an ISO day. Used only by a document that says
+   * where its date comes from; it then takes precedence over the date field and becomes part of the run ID.
+   */
+  issueDate?: string | null;
 }
 
 /** Email and SMS wording resolved for this customer and language. `{{keyFacts}}` and `{{link}}` are filled by the channel renderers. */
@@ -183,4 +207,8 @@ export interface Resolution {
   systemStrings: Record<string, string>;
   /** Which texts of the document language are drafts or still English. */
   translation: { locale: string; draftsShown: string[]; missing: string[] };
+  /** Only for a document that has a date source: the date used, where it came from, and whether it was given for the run. */
+  documentDate?: { date: string | null; source: 'field' | 'run'; given: boolean };
+  /** Only for a document with calculated fields: each one's value for this customer, by key, in the order worked out. */
+  calculated?: Record<string, CalculatedOutcome>;
 }

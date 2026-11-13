@@ -155,6 +155,8 @@ export interface TestDataOptions {
   edges: boolean;
   /** hard cap on customers, default 200 */
   max?: number;
+  /** "As issued on": the document's date to plan for (documents that use dates). Dated targets also try each boundary day. */
+  issueDate?: string | null;
 }
 
 export type TestDataTargetKind = 'rule' | 'variant' | 'section-shown' | 'section-hidden' | 'language' | 'edge' | 'empty';
@@ -181,6 +183,8 @@ export interface GeneratedCustomer {
   label: string;
   /** ids of the targets this customer covers */
   targets: string[];
+  /** The document's date this customer reaches its targets on, when the document's date is given for the run (or "as issued on" was asked for). */
+  issueDate?: string;
 }
 
 export interface TestDataPlan {

@@ -448,3 +448,4 @@ export * from './decisionTable';
 export * from './testCases';
 export * from './assist';
 export * from './compareVersions';
+export * from './dates';

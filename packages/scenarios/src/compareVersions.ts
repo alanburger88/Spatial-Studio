@@ -167,6 +167,8 @@ export interface CompareOptions {
   /** Previews only: show unapproved translation drafts on a side that is a working version. Never set for a release. */
   includeDraftsBefore?: boolean;
   includeDraftsAfter?: boolean;
+  /** "As issued on": both versions are resolved with this document's date (documents that use dates). */
+  issueDate?: string | null;
 }
 
 export function compareVersions(before: Project, after: Project, allRecords: SyntheticRecord[], opts: CompareOptions = {}): VersionComparison {
@@ -175,9 +177,10 @@ export function compareVersions(before: Project, after: Project, allRecords: Syn
   const identical = digestOf(before) === digestOf(after) && !!opts.includeDraftsBefore === !!opts.includeDraftsAfter;
   const customers: CustomerComparison[] = records.map((record) => {
     const name = `${record.customer.givenName} ${record.customer.familyName}`.trim();
-    const rb = resolve({ project: before, record, overrides: {}, journeyCursor: null, profileId: opts.profileId, includeDrafts: opts.includeDraftsBefore });
+    const dated = opts.issueDate ? { issueDate: opts.issueDate } : {};
+    const rb = resolve({ project: before, record, overrides: {}, journeyCursor: null, profileId: opts.profileId, includeDrafts: opts.includeDraftsBefore, ...dated });
     if (identical) { const stopped = isStopped(rb); groups.same.push(record.recordId); return { recordId: record.recordId, name, outcome: 'same' as const, changes: [], stoppedBefore: stopped, stoppedAfter: stopped }; }
-    const ra = resolve({ project: after, record, overrides: {}, journeyCursor: null, profileId: opts.profileId, includeDrafts: opts.includeDraftsAfter });
+    const ra = resolve({ project: after, record, overrides: {}, journeyCursor: null, profileId: opts.profileId, includeDrafts: opts.includeDraftsAfter, ...dated });
     const changes = visibleChanges(rb, ra);
     const outcome = outcomeOf(changes);
     groups[outcome].push(record.recordId);

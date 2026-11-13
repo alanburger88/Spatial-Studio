@@ -93,6 +93,8 @@ CMD ["node", "serve", "--host", "0.0.0.0", "--port", "8787"]
 /* ------------------------------------------------------------------ README */
 
 interface ReadmeFacts {
+  /** Where the document's date comes from, when the template uses dates. */
+  dated?: 'run' | 'field' | null;
   title: string; kind: string; number: number; approver: string | null; approvedAt: string; folder: string; fileName: string;
   engine: { version: string; sha256: string }; composerVersion: string; chromium: string | null;
   fonts: { use: string; family: string; stack: string }[]; referencePdfFonts: string[];
@@ -153,7 +155,11 @@ ${row(['<code>summary.json</code>', 'Counts and timing of the run.'])}
 </table>
 <p>A line that does not match the contract is reported and skipped; the run goes on. A document with a blocking issue is not produced, exactly as in the studio. Exit codes: 0 done (look at <code>results.jsonl</code>), 2 wrong arguments, 3 the package was changed or is incomplete, 4 PDF asked for but no browser, 5 some documents failed.</p>
 
-<h2>Produce documents over HTTP</h2>
+${a.dated ? `<h2>The document’s date</h2>
+<p>This template uses the document’s date: some of what it says depends on the day it is issued on (see “Dates” in <code>release/README.html</code>). ${a.dated === 'run' ? 'Give the date for the whole run with <code>--issue-date YYYY-MM-DD</code>, or per customer as <code>"issueDate"</code> next to <code>"data"</code>. A customer with no date is stopped (DOCUMENT_DATE_MISSING).' : 'The date is taken from each customer’s data. A date given with <code>--issue-date</code> or a customer’s <code>"issueDate"</code> is used instead.'} A date given for the run is part of the run ID, is stated in <code>results.jsonl</code> and is kept in the proof record (<code>issueDate</code>), so the document can be re-created exactly.</p>
+${code('node run --data customers.jsonl --issue-date 2027-01-31 --out out')}
+
+` : ''}<h2>Produce documents over HTTP</h2>
 ${code('node serve --port 8787')}
 <p>Listens on <code>127.0.0.1</code> only (use <code>--host</code> to change that, behind your own access control). <code>POST /render</code> with a customer record, or <code>{"customerRef": "…", "data": {…}, "outputs": ["html", "email", "sms", "pdf"]}</code>, answers 200 with the documents and the proof record (the PDF as base64), 409 when a blocking issue stops the document, 422 when the data does not match the contract. <code>GET /health</code> says whether it is ready and which release it runs. It logs one line per request with no customer data.</p>
 
@@ -232,13 +238,14 @@ export async function buildRunnablePackage(release: StoredRelease, frozen: Proje
   add('contract/input.schema.json', 'contract-schema', json(inputSchemaFromDictionary(dictionary, { releaseId: release.id, title: release.title, languages })));
 
   /* proof/: the release package's scenarios, run through the engine as the operator's lines would be */
-  const scenarios = JSON.parse(relText('tests/scenarios.json')) as { scenarios: Array<{ id: string; data: Record<string, unknown> }> };
-  const inputs: Array<{ customerRef: string; data: Record<string, unknown> }> = scenarios.scenarios.map((s) => ({ customerRef: s.id, data: s.data }));
+  const scenarios = JSON.parse(relText('tests/scenarios.json')) as { scenarios: Array<{ id: string; data: Record<string, unknown>; issueDate?: string }> };
+  // A scenario produced as issued on a given date (a document that uses dates) keeps that date on its input line.
+  const inputs: Array<{ customerRef: string; issueDate?: string; data: Record<string, unknown> }> = scenarios.scenarios.map((s) => ({ customerRef: s.id, ...(s.issueDate ? { issueDate: s.issueDate } : {}), data: s.data }));
   // One line the contract refuses (a synthetic customer without its required name), so `verify` also proves that a bad line is reported, not produced.
   const first = scenarios.scenarios[0];
   if (first) {
     const { givenName: _drop, ...customer } = (first.data.customer ?? {}) as Record<string, unknown>;
-    inputs.push({ customerRef: 'invalid-missing-given-name', data: { ...first.data, customer } });
+    inputs.push({ customerRef: 'invalid-missing-given-name', ...(first.issueDate ? { issueDate: first.issueDate } : {}), data: { ...first.data, customer } });
   }
   const lines = inputs.map((i) => JSON.stringify(i));
   add('proof/inputs.jsonl', 'proof-inputs', lines.join('\n') + '\n');
@@ -249,8 +256,8 @@ export async function buildRunnablePackage(release: StoredRelease, frozen: Proje
     progress({ step: 'Producing the proof pack', done: i, total: inputs.length });
     const parsed = parseInput(JSON.parse(lines[i]), template);
     if (!parsed.ok) { counts.invalid++; cases.push({ customerRef: input.customerRef, line: i + 1, status: 'invalid', problems: parsed.problems }); continue; }
-    const r = render(loaded, parsed.record, new Set(CHANNELS));
-    const base = { customerRef: parsed.customerRef, line: i + 1, runId: r.res.runId, contentDigest: r.res.contentDigest };
+    const r = render(loaded, parsed.record, new Set(CHANNELS), parsed.issueDate);
+    const base = { customerRef: parsed.customerRef, line: i + 1, runId: r.res.runId, contentDigest: r.res.contentDigest, ...(parsed.issueDate ? { issueDate: parsed.issueDate } : {}) };
     if (!r.produced) {
       counts.stopped++;
       cases.push({ ...base, status: 'stopped', blockedBy: r.blockedBy });
@@ -285,15 +292,15 @@ export async function buildRunnablePackage(release: StoredRelease, frozen: Proje
   add('contract/entry-point.json', 'contract-entry-point', json({
     formatVersion: 1,
     release: { id: release.id, number: release.number, title: release.title, documentKind: release.documentType },
-    input: { format: 'JSON Lines (one JSON object per line, UTF-8)', line: 'a record as in input.schema.json, or {"customerRef": string, "data": record}', customerRef: 'defaults to data.recordId', maxLineBytes: 2 * 1024 * 1024, check: 'the studio’s own record check (validateRecordShape); a refused line is reported and skipped' },
+    input: { format: 'JSON Lines (one JSON object per line, UTF-8)', line: 'a record as in input.schema.json, or {"customerRef": string, "issueDate": "YYYY-MM-DD", "data": record}', customerRef: 'defaults to data.recordId', ...(template.documentDate ? { issueDate: template.documentDate.source === 'run' ? 'the document’s date: required by this template, per customer ("issueDate") or for the whole run (--issue-date)' : 'optional: the document’s date for this customer, instead of the date in its data' } : {}), maxLineBytes: 2 * 1024 * 1024, check: 'the studio’s own record check (validateRecordShape); a refused line is reported and skipped' },
     commands: {
-      run: { command: 'node run --data <file.jsonl> --outputs pdf,html,email,sms --out <folder> [--parallel n]', defaultOutputs: ['html', 'email', 'sms'], writes: ['documents/<customerRef>/{document.pdf,document.html,email.html,email.txt,sms.txt}', 'results.jsonl', 'proof.jsonl', 'summary.json'], exitCodes: { 0: 'done', 2: 'wrong arguments', 3: 'the package was changed or is incomplete', 4: 'PDF asked for but no browser', 5: 'some documents failed' } },
+      run: { command: 'node run --data <file.jsonl> --outputs pdf,html,email,sms --out <folder> [--parallel n] [--issue-date YYYY-MM-DD]', defaultOutputs: ['html', 'email', 'sms'], writes: ['documents/<customerRef>/{document.pdf,document.html,email.html,email.txt,sms.txt}', 'results.jsonl', 'proof.jsonl', 'summary.json'], exitCodes: { 0: 'done', 2: 'wrong arguments', 3: 'the package was changed or is incomplete', 4: 'PDF asked for but no browser', 5: 'some documents failed' } },
       serve: { command: 'node serve [--port 8787] [--host 127.0.0.1] [--parallel n] [--pdf]', routes: { 'POST /render': { body: 'record, or {"customerRef", "data", "outputs"}', answers: { 200: 'produced: outputs and proof', 409: 'stopped by a blocking issue: blockedBy and proof', 422: 'refused by the contract: problems', 503: 'PDF asked for but no browser' } }, 'GET /health': 'engine, release, PDF readiness' } },
       verify: { command: 'node verify [--without-pdf] [--json]', exitCodes: { 0: 'nothing differs', 1: 'something differs, or the browser or a font is missing' } },
       generate: { command: 'node engine/iss-engine.mjs generate --count <n> --out <file.jsonl>', what: 'engine-generated synthetic customers for trying the package out' },
     },
-    results: { produced: '{line, customerRef, status: "produced", runId, files}', stopped: '{line, customerRef, status: "stopped", runId, blockedBy: [issue codes]}', invalid: '{line, customerRef, status: "invalid", problems: [plain words, no values]}', failed: '{line, customerRef, status: "failed", reason}' },
-    proof: { schema: 'proof-record/1', producer: 'runtime', fingerprints: { html: 'bytes', email: 'bytes (email.html)', sms: 'bytes', pdf: 'content (SHA-256 of the page source, and page count)' } },
+    results: { produced: '{line, customerRef, status: "produced", runId, issueDate (when a date was given), files}', stopped: '{line, customerRef, status: "stopped", runId, issueDate (when a date was given), blockedBy: [issue codes]}', invalid: '{line, customerRef, status: "invalid", problems: [plain words, no values]}', failed: '{line, customerRef, status: "failed", reason}' },
+    proof: { schema: 'proof-record/1', producer: 'runtime', issueDate: 'kept in the record when a date was given for the run', fingerprints: { html: 'bytes', email: 'bytes (email.html)', sms: 'bytes', pdf: 'content (SHA-256 of the page source, and page count)' } },
   }));
   await tick();
 
@@ -305,6 +312,7 @@ export async function buildRunnablePackage(release: StoredRelease, frozen: Proje
   add('image/Dockerfile', 'container', dockerfile(folder, composer.version));
   const fontsJson = JSON.parse(relText('assets/fonts.json')) as { fonts: Array<{ use: string; family: string; stack: string }>; referencePdfFonts: string[] };
   add('README.html', 'readme', readmeHtml({
+    dated: template.documentDate?.source ?? null,
     title: release.title, kind: DOCUMENT_TYPE_LABEL[release.documentType], number: release.number, approver: release.approvedBy?.name ?? null, approvedAt: release.approvedAt, folder, fileName,
     engine: { version: engine.versions.engine, sha256: engine.sha256 }, composerVersion: composer.version, chromium: composer.chromiumRevision,
     fonts: fontsJson.fonts, referencePdfFonts: fontsJson.referencePdfFonts ?? [], languages, proof: { cases: cases.length, ...counts },

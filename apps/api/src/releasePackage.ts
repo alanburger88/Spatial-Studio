@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto';
 import {
-  DERIVED_FIELDS_VERSION, DOCUMENT_TYPE_LABEL, RECORD_ID_PREFIX, SOURCE_LANGUAGE, buildContext, defaultFormatterFor, digestOf, getPath, languageName,
+  DERIVED_FIELDS_VERSION, DOCUMENT_TYPE_LABEL, RECORD_ID_PREFIX, SOURCE_LANGUAGE, addDaysToIso, buildContext, dateBoundaries, dayWords, defaultFormatterFor, digestOf, evaluateCalculations, exprDependencies,
+  formulaInWords, getPath, languageName, lookupTableProblems, printFormula, projectFieldIndex, wordsScopeOf,
   projectContentDigest, projectFields, projectFileContentOf, projectLanguages, releaseId, releasePackageName, tokensIn, tokensInText, translatableStrings, translationStatus,
   type DocNode, type FieldDef, type Predicate, type Project, type ReleasePackageSummary, type SyntheticRecord, type TestCase,
 } from '@iss/model';
 import { RECORDS } from '@iss/model/fixtures';
 import { indexTree, predicatePaths, resolve, type Resolution } from '@iss/resolver';
 import { BRAND_FONTS, DOC_FONT, SCREEN_FONT, checkChannelParity, compareManifests, imageSrc, renderEmail, renderInteractiveHtml, renderPagedDocument, renderSms, type ExtractedManifest } from '@iss/renderers';
-import { baselineCustomer, planTestData, runTestCase } from '@iss/scenarios';
+import { baselineCustomer, documentDateBoundaries, documentTimeline, planTestData, runTestCase } from '@iss/scenarios';
 import type { Composer } from './composer';
 import type { PinnedCustomerRef, StoredRelease } from './db';
 import { ZIP_FIXED_DATE, zipFiles } from './zip';
@@ -184,6 +185,7 @@ const FORMAT_OF: Record<FieldDef['type'], string> = {
   enum: 'One of the allowed values',
   array: 'List of rows',
   points: 'Whole number of points',
+  number: 'Number (may have decimals; calculated fields only)',
 };
 
 interface FieldUse { rules: Map<string, string>; conditions: Set<string>; bindings: Set<string>; tokens: Set<string>; journey: Set<string>; columns: Set<string> }
@@ -235,12 +237,26 @@ function fieldUsage(project: Project): { used: Map<string, FieldUse>; unknown: A
 
 export function dataDictionary(project: Project) {
   const { used, unknown } = fieldUsage(project);
-  const sample = buildContext({ ...baselineCustomer(project).record, recordId: `${RECORD_ID_PREFIX[project.documentType] ?? 'REC'}-0000` } as SyntheticRecord);
+  const sample = buildContext({ ...baselineCustomer(project).record, recordId: `${RECORD_ID_PREFIX[project.documentType] ?? 'REC'}-0000` } as SyntheticRecord) as Record<string, unknown>;
+  // The document's date and calculated values of the synthetic example customer (as issued on the first boundary, when the date is given for the run).
+  const exampleDate = project.documentDate ? (project.documentDate.source === 'field' ? (getPath(sample, project.documentDate.path) as string | null) : dateBoundaries(project)[0]?.date ?? null) : null;
+  if (project.documentDate) sample.document = { date: exampleDate };
+  if (project.calculatedFields?.length) evaluateCalculations(project, sample, exampleDate);
   const fields = projectFields(project);
-  // A calculated field needs the fields it is calculated from (a row count needs its list).
-  const sourcesOf = (f: FieldDef): string[] => (!f.derived ? [] : CALCULATED_FROM[f.path] ?? (f.path.endsWith('.count') ? [f.path.slice(0, -'.count'.length)] : []));
+  const calcs = new Map((project.calculatedFields ?? []).map((c) => [`calc.${c.key}`, c]));
+  const words = wordsScopeOf(project, projectFieldIndex(project));
+  // A calculated field needs the fields it is calculated from (a row count needs its list; the document's date its source field).
+  const sourcesOf = (f: FieldDef): string[] => {
+    if (!f.derived) return [];
+    const calc = calcs.get(f.path);
+    if (calc) { const d = exprDependencies(calc.expr); return [...d.fields, ...d.lists, ...d.calcs.map((k) => `calc.${k}`), ...(d.usesIssueDate ? ['document.date'] : [])]; }
+    if (f.documentDate) return project.documentDate?.source === 'field' ? [project.documentDate.path] : [];
+    return CALCULATED_FROM[f.path] ?? (f.path.endsWith('.count') ? [f.path.slice(0, -'.count'.length)] : []);
+  };
   const neededFor = new Map<string, string[]>();
-  for (const f of fields) if (used.has(f.path)) for (const src of sourcesOf(f)) neededFor.set(src, [...(neededFor.get(src) ?? []), f.path]);
+  // Needed through a chain of calculations too (a calculation used by the template needs what its inputs need).
+  const need = (f: FieldDef, seen = new Set<string>()) => { for (const src of sourcesOf(f)) { if (seen.has(src)) continue; seen.add(src); neededFor.set(src, [...new Set([...(neededFor.get(src) ?? []), f.path])]); const g = fields.find((x) => x.path === src); if (g?.derived) need(g, seen); } };
+  for (const f of fields) if (used.has(f.path)) need(f);
   const out = fields.map((f) => {
     const u = used.get(f.path);
     const example = f.type === 'array' ? ((getPath(sample, f.path) as unknown[] | null) ?? []).slice(0, 1) : f.example ?? (getPath(sample, f.path) as unknown) ?? null;
@@ -250,6 +266,9 @@ export function dataDictionary(project: Project) {
       /** Calculated by the engine from other fields; never supplied. */
       calculated: !!f.derived,
       ...(f.derived ? { calculatedFrom: sourcesOf(f) } : {}),
+      // One of the template's own calculated fields: what it gives and how, as a formula and in plain words (studio English).
+      ...(calcs.has(f.path) ? { calculation: { gives: calcs.get(f.path)!.type, formula: printFormula(calcs.get(f.path)!.expr, projectFieldIndex(project)), inWords: formulaInWords(calcs.get(f.path)!.expr, words), ...(calcs.get(f.path)!.description ? { description: calcs.get(f.path)!.description } : {}) } } : {}),
+      ...(f.documentDate ? { documentDate: project.documentDate?.source === 'run' ? 'given for each run (--issue-date, or "issueDate" with a customer)' : `taken from ${project.documentDate?.source === 'field' ? project.documentDate.path : 'the data'}, unless a date is given for the run` } : {}),
       ...(f.enumValues?.length ? { allowedValues: f.enumValues } : {}),
       ...(f.itemFields?.length ? { columns: f.itemFields.map((c) => ({ key: c.key, label: c.label, type: c.type, format: FORMAT_OF[c.type], used: !!u?.columns.has(c.key) })) } : {}),
       example,
@@ -273,6 +292,14 @@ export function dataDictionary(project: Project) {
     fields: out,
     /** Tokens in the wording that are not data fields of this document (none in a document that passed the studio's checks). */
     unknownReferences: unknown,
+    // Additions for documents with calculations, lookup tables or dates (absent otherwise; older readers ignore them).
+    ...(project.documentDate ? { documentDate: project.documentDate.source === 'run' ? { source: 'run', note: 'The document’s date is given for each run: --issue-date, or "issueDate" next to a customer’s "data". A document that needs it and has none is stopped.' } : { source: 'field', path: project.documentDate.path, note: 'The document’s date is taken from this field of each customer, unless a date is given for the run.' } } : {}),
+    ...(project.lookupTables?.length ? { lookupTables: project.lookupTables.map((t) => ({
+      id: t.id, title: t.title, ...(t.description ? { description: t.description } : {}),
+      keys: t.keys, columns: t.columns, rows: t.rows, whenNoRowMatches: t.defaultRow ? { defaultRow: t.defaultRow } : 'the value is missing',
+      problems: lookupTableProblems(t).map((x) => x.message),
+      usedBy: (project.calculatedFields ?? []).filter((c) => exprDependencies(c.expr).tables.includes(t.id)).map((c) => `calc.${c.key}`),
+    })) } : {}),
   };
 }
 
@@ -332,6 +359,10 @@ interface Candidate {
   overrides: Record<string, unknown>;
   journeyCursor: number | null;
   test?: TestCase;
+  /** The document's date the scenario is produced as issued on (given for the run). */
+  issueDate?: string | null;
+  /** A scenario on one side of a date boundary: the boundary day, and which side. */
+  boundary?: { date: string; side: 'before' | 'on' };
 }
 
 export interface PlannedScenario extends Candidate { id: string; res: Resolution; keys: string[]; produced: boolean; reference: boolean }
@@ -401,32 +432,50 @@ export async function planScenarios(project: Project, pinned: PinnedCustomerRef[
     const ref = refs.get(test.id);
     const overrides = test.overrides ?? {};
     const journeyCursor = test.journeyCursor ?? null;
+    const dated = test.issueDate && project.documentDate ? { issueDate: test.issueDate } : {};
     if (!ref || ref.recordId !== test.recordId) { excluded.push({ test: test.name, reason: EXCLUDED_WHY.unknown }); continue; }
     if (ref.kind === 'sample') {
       const record = samples.find((r) => r.recordId === ref.recordId);
       if (!record) { excluded.push({ test: test.name, reason: EXCLUDED_WHY.missing }); continue; }
-      candidates.push({ source: 'pinned-test', name: test.name, covers: [], customer: { id: record.recordId, name: customerName(record), kind: 'sample', why: null, record }, overrides, journeyCursor, test });
+      candidates.push({ source: 'pinned-test', name: test.name, covers: [], customer: { id: record.recordId, name: customerName(record), kind: 'sample', why: null, record }, overrides, journeyCursor, test, ...dated });
     } else if (ref.kind === 'generated') {
       const fresh = ref.digest ? reproducible.get(ref.digest) : undefined;
       if (!fresh) { excluded.push({ test: test.name, reason: EXCLUDED_WHY['not-reproduced'] }); continue; }
       const record = { recordId: ref.recordId, ...fresh } as SyntheticRecord;
-      candidates.push({ source: 'pinned-test', name: test.name, covers: [], customer: { id: record.recordId, name: customerName(record), kind: 'generated', why: null, record }, overrides, journeyCursor, test });
+      candidates.push({ source: 'pinned-test', name: test.name, covers: [], customer: { id: record.recordId, name: customerName(record), kind: 'generated', why: null, record }, overrides, journeyCursor, test, ...dated });
     } else excluded.push({ test: test.name, reason: EXCLUDED_WHY[ref.kind] });
   }
-  const pinnedPlain = new Set(candidates.filter((c) => !Object.keys(c.overrides).length && c.journeyCursor === null).map((c) => customerDigest(c.customer.record)));
+  const pinnedPlain = new Set(candidates.filter((c) => !Object.keys(c.overrides).length && c.journeyCursor === null).map((c) => `${c.issueDate ?? ''}|${customerDigest(c.customer.record)}`));
+  const generated: Candidate[] = [];
   plan.customers.forEach((c, i) => {
     const record = { recordId: `${prefix}-9${String(i + 1).padStart(4, '0')}`, ...c.record, documentType: project.documentType } as SyntheticRecord;
-    if (pinnedPlain.has(customerDigest(record))) return;
+    if (pinnedPlain.has(`${c.issueDate ?? ''}|${customerDigest(record)}`)) return;
     const covers = plan.targets.filter((t) => c.targets.includes(t.id)).map((t) => t.title);
-    candidates.push({ source: 'generated', name: c.label, covers, customer: { id: record.recordId, name: customerName(record), kind: 'generated', why: c.label, record }, overrides: {}, journeyCursor: null });
+    generated.push({ source: 'generated', name: c.label, covers, customer: { id: record.recordId, name: customerName(record), kind: 'generated', why: c.label, record }, overrides: {}, journeyCursor: null, ...(c.issueDate ? { issueDate: c.issueDate } : {}) });
   });
+  // A document that changes on a date: one scenario on each side of every boundary (the day before, and the day itself),
+  // for a customer the change reaches (the first customer when it reaches none of them), after the pinned tests.
+  if (project.documentDate) {
+    const pool = [...generated.map((g) => g.customer), ...samples.map((r) => ({ id: r.recordId, name: customerName(r), kind: 'sample' as const, why: null, record: r }))];
+    const timeline = documentTimeline(project, pool.map((c) => c.record));
+    for (const b of timeline) {
+      const who = pool.find((c) => c.record.recordId === b.reached[0]) ?? pool[0];
+      if (!who) continue;
+      const what = b.changes.map((c) => c.words).join('; ');
+      for (const side of ['before', 'on'] as const) {
+        const day = side === 'before' ? b.dayBefore : b.date;
+        candidates.push({ source: 'generated', name: `${side === 'before' ? 'The day before' : 'On'} ${dayWords(b.date)}`, covers: [`${side === 'before' ? 'Before' : 'From'} ${dayWords(b.date)}: ${what}`], customer: who, overrides: {}, journeyCursor: null, issueDate: day, boundary: { date: b.date, side } });
+      }
+    }
+  }
+  candidates.push(...generated);
 
   const included = candidates.slice(0, Math.max(0, cap));
   const omitted = candidates.slice(included.length).map((c) => c.name);
   const scenarios: PlannedScenario[] = [];
   const used = new Set<string>();
   for (const [i, c] of included.entries()) {
-    const res = resolve({ project, record: c.customer.record, overrides: c.overrides, journeyCursor: c.journeyCursor, profileId: 'paged-pdf' });
+    const res = resolve({ project, record: c.customer.record, overrides: c.overrides, journeyCursor: c.journeyCursor, profileId: 'paged-pdf', ...(c.issueDate ? { issueDate: c.issueDate } : {}) });
     let id = `s${String(i + 1).padStart(2, '0')}${slug(c.name) ? `-${slug(c.name)}` : ''}`;
     if (used.has(id)) id = `s${String(i + 1).padStart(2, '0')}`;
     used.add(id);
@@ -434,14 +483,24 @@ export async function planScenarios(project: Project, pinned: PinnedCustomerRef[
     if (i % 4 === 3) await tick();
   }
 
-  // Reference subset: greedy cover of the outcomes seen, over the scenarios a document is actually produced for.
+  // Reference subset: first both sides of every date boundary (within the cap), then a greedy cover of the outcomes seen,
+  // over the scenarios a document is actually produced for.
   const seen = new Set(scenarios.flatMap((s) => s.keys.filter((k) => k !== 'blocked')));
   const shown = new Set<string>();
   const pool = scenarios.filter((s) => s.produced);
-  for (let n = 0; n < referenceCap && pool.length; n++) {
+  let taken = 0;
+  for (const s of scenarios.filter((x) => x.boundary)) {
+    if (taken >= referenceCap) break;
+    s.reference = true;
+    s.keys.forEach((k) => shown.add(k));
+    taken++;
+    const at = pool.indexOf(s);
+    if (at >= 0) pool.splice(at, 1);
+  }
+  for (let n = taken; n < referenceCap && pool.length; n++) {
     let best = -1, gain = -1;
     pool.forEach((s, i) => { const g = s.keys.filter((k) => !shown.has(k)).length; if (g > gain) { gain = g; best = i; } });
-    if (gain <= 0 && n > 0) break;
+    if (gain <= 0 && n > 0 && n > taken) break;
     const [pick] = pool.splice(best, 1);
     pick.reference = true;
     pick.keys.forEach((k) => shown.add(k));
@@ -481,12 +540,15 @@ export function expectedOutcome(project: Project, res: Resolution) {
     blocking: blocking.map((f) => ({ code: f.code, where: f.nodeId ? name(f.nodeId) : null, message: f.message })),
     runId: res.runId,
     contentDigest: res.contentDigest,
+    // Additions for documents with dates and calculations (absent otherwise).
+    ...(res.documentDate ? { issueDate: res.documentDate.date, issueDateGiven: res.documentDate.given } : {}),
+    ...(res.calculated ? { calculated: Object.fromEntries(Object.entries(res.calculated).map(([k, c]) => [`calc.${k}`, c.value])) } : {}),
   };
 }
 
 /* ------------------------------------------------------------------ README */
 
-function readmeHtml(a: { title: string; kind: string; number: number; approver: string | null; approvedAt: string; fileName: string; languages: ReleasePackageSummary['languages']; plan: ScenarioPlan; references: PlannedScenario[]; known?: StoredRelease['knownDataProblems'] }): string {
+function readmeHtml(a: { title: string; kind: string; number: number; approver: string | null; approvedAt: string; fileName: string; languages: ReleasePackageSummary['languages']; plan: ScenarioPlan; references: PlannedScenario[]; known?: StoredRelease['knownDataProblems']; dates?: string }): string {
   const row = (cells: string[]) => `<tr>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
   const knownRows = (a.known ?? []).map((k) => row([escHtml(k.blocker), 'id' in k.customer ? `${k.customer.kind === 'sample' ? 'Sample customer' : 'Generated customer'} <code>${escHtml(k.customer.id)}</code>` : 'One customer who is not synthetic (no id or name recorded)', escHtml(k.reason), escHtml(k.markedBy ?? '—')])).join('\n');
   const scenarioRows = a.plan.scenarios.map((s) => row([
@@ -540,7 +602,7 @@ ${knownRows ? `<h2>Known data problems</h2>
 ${knownRows}
 </table>
 
-` : ''}<h2>Languages</h2>
+` : ''}${a.dates ?? ''}<h2>Languages</h2>
 ${a.languages.length ? `<table>
 <tr><th>Language</th><th>Texts</th><th>Approved</th><th>Not translated</th><th>File</th></tr>
 ${languageRows}
@@ -652,6 +714,8 @@ export async function buildReleasePackage(release: StoredRelease, frozen: Projec
       ...(s.covers.length ? { covers: s.covers } : {}),
       customerId: s.customer.id, customerName: s.customer.name,
       overrides: s.overrides, journeyCursor: s.journeyCursor, journeyStep: stepLabel(s.journeyCursor),
+      ...(s.issueDate ? { issueDate: s.issueDate } : {}),
+      ...(s.boundary ? { dateBoundary: s.boundary } : {}),
       data: s.res.effectiveRecord,
       expected: expectedOutcome(template, s.res),
       ...(s.test ? { pinnedExpectation: { ...s.test.expect, holds: runTestCase(template, [s.customer.record], s.test).pass } } : {}),
@@ -709,7 +773,17 @@ export async function buildReleasePackage(release: StoredRelease, frozen: Projec
   progress({ step: 'Packing', done: 0, total: 1 });
   const fileName = releasePackageName(release.documentId, release.number);
   const languages = targets.map(({ missingIds: _m, ...l }) => l);
-  add('README.html', 'readme', readmeHtml({ title: release.title, kind: DOCUMENT_TYPE_LABEL[release.documentType], number: release.number, approver: release.approvedBy?.name ?? null, approvedAt: release.approvedAt, fileName, languages, plan, references, known: release.knownDataProblems }));
+  const boundaries = template.documentDate ? documentDateBoundaries(template) : [];
+  const sideOf = (date: string, side: 'before' | 'on') => plan.scenarios.find((x) => x.boundary?.date === date && x.boundary.side === side);
+  const datesHtml = template.documentDate ? `<h2>Dates</h2>
+<p>${template.documentDate.source === 'run' ? 'This document’s date is given for each run (as “issued on”); a document that needs it and has none is not produced.' : `This document’s date is taken from the customer’s data (<code>${escHtml(template.documentDate.path)}</code>), unless a date is given for the run.`} What the document says changes on these days. “From” a day means from that day on; a period ends the day before its “until” day. Each day has a scenario for the day before and for the day itself${boundaries.length ? '' : ' (there are none)'}.</p>
+${boundaries.length ? `<table>
+<tr><th>Day</th><th>What changes</th><th>Scenarios</th></tr>
+${boundaries.map((b) => `<tr><td>${escHtml(dayWords(b.date))}</td><td>${b.changes.map((c) => escHtml(c.words)).join('<br>')}</td><td>${[sideOf(b.date, 'before'), sideOf(b.date, 'on')].map((x) => (x ? `<code>${escHtml(x.id)}</code>${x.reference ? ' (reference outputs)' : ''}` : '—')).join(', ')}</td></tr>`).join('\n')}
+</table>` : ''}
+
+` : '';
+  add('README.html', 'readme', readmeHtml({ title: release.title, kind: DOCUMENT_TYPE_LABEL[release.documentType], number: release.number, approver: release.approvedBy?.name ?? null, approvedAt: release.approvedAt, fileName, languages, plan, references, known: release.knownDataProblems, dates: datesHtml }));
 
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const contents: PackageFile[] = files.map((f) => ({ path: f.path, sha256: sha256(f.data), bytes: f.data.length, role: f.role }));
@@ -734,6 +808,11 @@ export async function buildReleasePackage(release: StoredRelease, frozen: Projec
      * customer is named by id; any other customer has no id or name. Absent on releases made before it was recorded.
      */
     ...(release.knownDataProblems ? { knownDataProblems: release.knownDataProblems } : {}),
+    /**
+     * For a document that uses dates (an addition to format 1: readers that do not know it ignore it): where its date
+     * comes from, and every day on which what it says changes, with the scenarios on each side of the day.
+     */
+    ...(template.documentDate ? { documentDate: template.documentDate, dateBoundaries: boundaries.map((b) => ({ date: b.date, changes: b.changes.map(({ words: w, ...c }) => ({ ...c, words: w })), scenarios: { dayBefore: sideOf(b.date, 'before')?.id ?? null, onTheDay: sideOf(b.date, 'on')?.id ?? null } })) } : {}),
     syntheticOnly: true,
     notIncluded: ['customer data', 'draft wording and unapproved translations', 'stage and handover record', 'data/mapping-<ccm>.json', 'library/', 'font files', 'AFP print stream', 'the engine'],
     /** Every file in the package except this one. A reader must ignore roles and paths it does not know. */

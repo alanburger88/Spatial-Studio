@@ -48,14 +48,20 @@ export interface Rendered {
 /** Blocking issue codes of a resolution, sorted and without repeats (the same list a proof record keeps). */
 export const blockingCodes = (res: Resolution): string[] => [...new Set(res.findings.filter((f) => f.severity === 'blocking').map((f) => f.code))].sort();
 
-/** Never sets `includeDrafts`: a runnable package produces approved wording only. */
-export function resolveCustomer(project: Project, record: SyntheticRecord): Resolution {
-  return resolve({ project, record, profileId: RUNTIME_PROFILE });
+/**
+ * Never sets `includeDrafts`: a runnable package produces approved wording only. `issueDate` is the document's date given
+ * for the run (`--issue-date` or a customer's own `issueDate`); a document that does not use dates ignores it.
+ */
+export function resolveCustomer(project: Project, record: SyntheticRecord, issueDate?: string | null): Resolution {
+  return resolve({ project, record, profileId: RUNTIME_PROFILE, ...(issueDate ? { issueDate } : {}) });
 }
 
-export function render(loaded: LoadedRelease, record: SyntheticRecord, channels: ReadonlySet<Channel>): Rendered {
+/** Whether the template uses the document's date (only then is a given date part of the run). */
+export const usesDocumentDate = (project: Project): boolean => !!project.documentDate;
+
+export function render(loaded: LoadedRelease, record: SyntheticRecord, channels: ReadonlySet<Channel>, issueDate?: string | null): Rendered {
   const { project } = loaded;
-  const res = resolveCustomer(project, record);
+  const res = resolveCustomer(project, record, issueDate);
   const blockedBy = blockingCodes(res);
   const out: Rendered = { res, blockedBy, produced: blockedBy.length === 0, files: {} };
   if (!out.produced) return out;

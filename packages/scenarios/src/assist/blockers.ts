@@ -29,11 +29,13 @@ const KIND_BY_CODE: Record<string, BlockerKind> = {
   FLOW_OVERFLOW_NO_CONTINUATION: 'layout', TABLE_TOTAL_CLIPPED: 'layout', BLOCK_OVERFLOW: 'layout', ROW_TALLER_THAN_REGION: 'layout', ORPHANED_HEADING: 'layout', FIXED_FLOW_ADJUSTED: 'layout', PARITY_MISMATCH: 'layout',
   // page design (wave 2)
   KEEP_TOGETHER_CANNOT_FIT: 'layout', FIXED_OFF_PAGE: 'layout', PAGE_DESIGN_INVALID: 'layout',
-  // data fields the document reads
-  INVALID_BINDING: 'data-fields',
+  // data fields the document reads (a lookup table with no row for a customer is fixed in the table)
+  INVALID_BINDING: 'data-fields', LOOKUP_NO_MATCH: 'data-fields',
   // the customer's own data
   RECORD_TYPE_MISMATCH: 'customer-data', INCONSISTENT_PAYMENT_STATE: 'customer-data', BALANCE_RECONCILIATION_FAILED: 'customer-data',
   UNCONFIRMED_MEMBER_LIABILITY: 'customer-data', CLAIM_RECONCILIATION_FAILED: 'customer-data', NULL_BINDING: 'customer-data',
+  // calculated values and the document's date
+  CALCULATION_MISSING: 'customer-data', DOCUMENT_DATE_MISSING: 'customer-data', ISSUE_DATE_INVALID: 'customer-data',
 };
 
 /** Which kind of fix a finding needs. A code this list does not know is placed by where it came from. */
@@ -174,9 +176,33 @@ function wordsFor(project: Project, f: Finding, about: BlockerAbout, n: number):
       return { title: `A value ${q(where)} needs is empty`, explanation: `${q(where)} must show a value and it is empty in these customers’ data. The document is fine; the customers’ data has to be completed. ${who}` };
     case 'RECORD_TYPE_MISMATCH':
       return { title: 'A customer is of a different kind of document', explanation: `The customer’s record belongs to another kind of document than this one. ${who}` };
+    case 'CALCULATION_MISSING': {
+      const name = calcName(project, f);
+      return { title: `${q(name)} cannot be worked out for some customers`, explanation: `The document needs ${q(name)}, and it cannot be worked out from these customers’ data${reasonOf(f)}. The document is fine if the data is completed; otherwise change the calculation so it copes. ${who}` };
+    }
+    case 'LOOKUP_NO_MATCH': {
+      const name = calcName(project, f);
+      return { title: `${q(name)} finds no row in its lookup table for some customers`, explanation: `${q(name)} is read from a lookup table that has no row for these customers and no default row${reasonOf(f)}. Add a row or a default row to the table. ${who}` };
+    }
+    case 'DOCUMENT_DATE_MISSING':
+      return { title: 'Some customers’ documents have no date', explanation: `This document’s wording depends on its date, and these customers have none. ${project.documentDate?.source === 'field' ? 'Fill in the date field the document takes its date from.' : 'Give the date for the run (“as issued on”).'} ${who}` };
+    case 'ISSUE_DATE_INVALID':
+      return { title: 'The date given for the run is not a date', explanation: `The “as issued on” date must be written as YYYY-MM-DD. ${who}` };
     default:
       return { title: f.nodeId ? `A problem with ${q(where)}` : 'A problem that stops the document', explanation: `${f.message} ${who}` };
   }
+}
+
+/** The name of the calculated field a finding is about. */
+function calcName(project: Project, f: Finding): string {
+  const path = typeof f.details?.path === 'string' ? f.details.path : '';
+  const key = path.startsWith('calc.') ? path.slice(5) : path;
+  return project.calculatedFields?.find((c) => c.key === key)?.label ?? (key || 'A calculated value');
+}
+/** ": “Visits this month” is missing" — the reason a calculation is missing, from the first customer's finding. */
+function reasonOf(f: Finding): string {
+  const m = /could not be worked out for this customer: (.*?) It is used by/.exec(f.message ?? '');
+  return m ? ` (for example: ${m[1].replace(/\.$/, '')})` : '';
 }
 
 /* ------------------------------------------------------------------ where it is fixed by hand */
@@ -206,7 +232,7 @@ interface Acc { id: string; finding: Finding; recordIds: Set<string>; fast: bool
  * package cannot compute itself (the last full check's page-layout and PDF/web findings, static rule checks). Only
  * findings of blocking severity count.
  */
-export function documentBlockers(project: Project, records: SyntheticRecord[], opts?: { profileId?: ProfileId; journeyCursor?: number | null; extraFindings?: ExtraFinding[] }): DocumentBlockers {
+export function documentBlockers(project: Project, records: SyntheticRecord[], opts?: { profileId?: ProfileId; journeyCursor?: number | null; extraFindings?: ExtraFinding[]; /** "As issued on": the document's date for a document that uses dates. */ issueDate?: string | null }): DocumentBlockers {
   const ofType = records.filter((r) => r.documentType === project.documentType);
   const known = new Set(ofType.map((r) => r.recordId));
   const acc = new Map<string, Acc>();
@@ -230,7 +256,7 @@ export function documentBlockers(project: Project, records: SyntheticRecord[], o
     recordIds.forEach((r) => stopped.add(r));
     const kind = blockerKindOf(a.finding);
     const about = aboutOf(project, a.finding);
-    const fixes = proposeFixes(project, a.finding, { records, recordId: recordIds[0], journeyCursor: opts?.journeyCursor, profileId: opts?.profileId });
+    const fixes = proposeFixes(project, a.finding, { records, recordId: recordIds[0], journeyCursor: opts?.journeyCursor, profileId: opts?.profileId, issueDate: opts?.issueDate });
     const words = wordsFor(project, a.finding, about, recordIds.length);
     blockers.push({
       id: a.id, kind, code: a.finding.code, ...words, about, recordIds, customerCount: recordIds.length, speed: a.fast ? 'fast' : 'full-check',
@@ -280,6 +306,11 @@ function offendingFields(f: Finding, record: SyntheticRecord): string[] {
       const i = claims.findIndex((c) => c.claimId === claimId);
       return i < 0 ? [] : CLAIM_FIELDS[f.code].map((k) => `claims[${i}].${k}`);
     }
+    case 'CALCULATION_MISSING': {
+      const input = f.details?.input;
+      return typeof input === 'string' ? [input.startsWith('claim.') ? `claims[0].${input.slice(6)}` : input] : [];
+    }
+    case 'DOCUMENT_DATE_MISSING': return typeof f.details?.input === 'string' ? [f.details.input] : [];
     case 'NULL_BINDING': {
       const path = /^([A-Za-z0-9_.]+) is empty/.exec(f.message ?? '')?.[1];
       // The resolver reads one claim as `claim.*`; Data Explorer shows it as the first row of the claims list.
@@ -294,9 +325,9 @@ function offendingFields(f: Finding, record: SyntheticRecord): string[] {
  * resolution, so it is cheap). Data Explorer uses it to open a customer on the right fields; the server uses it to check
  * and lapse known data problems. Static rule checks and composed-page checks are not included.
  */
-export function customerBlockers(project: Project, record: SyntheticRecord, opts?: { profileId?: ProfileId; journeyCursor?: number | null }): CustomerBlocker[] {
+export function customerBlockers(project: Project, record: SyntheticRecord, opts?: { profileId?: ProfileId; journeyCursor?: number | null; issueDate?: string | null }): CustomerBlocker[] {
   if (record.documentType !== project.documentType) return [];
-  const res = resolve({ project, record, profileId: opts?.profileId, journeyCursor: opts?.journeyCursor ?? null });
+  const res = resolve({ project, record, profileId: opts?.profileId, journeyCursor: opts?.journeyCursor ?? null, ...(opts?.issueDate ? { issueDate: opts.issueDate } : {}) });
   const by = new Map<string, CustomerBlocker>();
   for (const f of res.findings) {
     if (f.severity !== 'blocking') continue;
@@ -402,7 +433,7 @@ export function withKnownDataProblems(result: DocumentBlockers, known: readonly 
 }
 
 /** `documentBlockers` with the known data problems applied: the one call the screen makes. */
-export function documentBlockerStatus(project: Project, records: SyntheticRecord[], opts?: { profileId?: ProfileId; journeyCursor?: number | null; extraFindings?: ExtraFinding[]; known?: readonly KnownDataProblem[] }): DocumentBlockersWithStatus {
+export function documentBlockerStatus(project: Project, records: SyntheticRecord[], opts?: { profileId?: ProfileId; journeyCursor?: number | null; extraFindings?: ExtraFinding[]; known?: readonly KnownDataProblem[]; issueDate?: string | null }): DocumentBlockersWithStatus {
   return withKnownDataProblems(documentBlockers(project, records, opts), opts?.known ?? []);
 }
 
@@ -420,13 +451,13 @@ export function resolveOrder(result: DocumentBlockersWithStatus): BlockerWithSta
  * outcome the document gives that customer NOW, so the problem cannot come back unnoticed. Nothing is pinned here. A
  * customer not among `records` is skipped. Test names hold the blocker in plain words, never a customer's name.
  */
-export function testsForFixedBlockers(project: Project, records: SyntheticRecord[], fixed: ReadonlyArray<{ blockerId: string; title: string; recordId: string }>, opts?: { journeyCursor?: number | null }): TestCase[] {
+export function testsForFixedBlockers(project: Project, records: SyntheticRecord[], fixed: ReadonlyArray<{ blockerId: string; title: string; recordId: string }>, opts?: { journeyCursor?: number | null; issueDate?: string | null }): TestCase[] {
   const out: TestCase[] = [];
   const cursor = opts?.journeyCursor ?? null;
   for (const f of fixed) {
     const record = records.find((r) => r.recordId === f.recordId && r.documentType === project.documentType);
     if (!record) continue;
-    out.push({ id: nextTestId([...(project.testCases ?? []), ...out]), name: `Stays fixed: ${f.title}`.slice(0, 160), recordId: record.recordId, overrides: {}, journeyCursor: cursor, expect: captureExpectation(project, record, {}, cursor) });
+    out.push({ id: nextTestId([...(project.testCases ?? []), ...out]), name: `Stays fixed: ${f.title}`.slice(0, 160), recordId: record.recordId, overrides: {}, journeyCursor: cursor, ...(opts?.issueDate && project.documentDate ? { issueDate: opts.issueDate } : {}), expect: captureExpectation(project, record, {}, cursor, opts?.issueDate) });
   }
   return out;
 }

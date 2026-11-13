@@ -63,7 +63,12 @@ export function explainNode(project: Project, res: Resolution, nodeId: string): 
 
   /** Rules (or conditions) that did not match, a few by name and the rest counted. */
   const didNotMatch = (entries: TraceEntry[], individually: number) => {
-    const missed = entries.filter((t) => t.enabled && !t.matched);
+    // Not in effect on the document's date, or not decidable without a calculated value: said as such, never as "did not match".
+    for (const t of entries.filter((x) => x.enabled && !x.matched && ((x.outcome === 'out-of-scope' && x.period) || x.undecided))) {
+      const what = t.kind === 'rule' ? RuleName(t.ruleId) : t.ruleId.endsWith(':period') ? `“${name}”` : `“${partTitle(t.ruleId.slice(n.id.length + 1))}”`;
+      steps.push(t.undecided ? `${what} could not be decided: ${lower1(t.undecided.reason)}` : `${what} is not in effect. ${t.note ?? ''}`.trim());
+    }
+    const missed = entries.filter((t) => t.enabled && !t.matched && !(t.outcome === 'out-of-scope' && t.period) && !t.undecided);
     for (const t of missed.slice(0, individually)) {
       if (t.kind === 'rule') steps.push(`${RuleName(t.ruleId)} did not match: it ${needs(t)}.`);
       else steps.push(`“${partTitle(t.ruleId.slice(n.id.length + 1))}” is shown when ${conditionWords(project, t.expression)}; for ${who}, ${facts(t)}.`);

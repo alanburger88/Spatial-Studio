@@ -384,6 +384,11 @@ describe('every finding code the resolver, the static checks and the composer ca
     [card, F('UNSAFE_URL', 'blocking', 'binding', { nodeId: 'payment-action' }), ['link']],
     [card, F('IMAGE_ALT_MISSING', 'warning', 'accessibility', { nodeId: 'issuer-logo' }), []], // stale: the image has a description
     [card, F('UNKNOWN_SECTION', 'warning', 'resolver', { nodeId: 'nowhere', ruleIds: ['R06'] }), ['link']],
+    // calculated fields, lookup tables and the document's date (rules and data depth)
+    [card, F('CALCULATION_MISSING', 'blocking', 'binding', { details: { path: 'calc.daysToDue', reason: 'input-missing', usedBy: ['rule R03'] } }), ['scenario', 'link']],
+    [card, F('LOOKUP_NO_MATCH', 'blocking', 'binding', { details: { path: 'calc.fee', reason: 'no-lookup-row', usedBy: ['rule R03'] } }), ['link']],
+    [card, F('DOCUMENT_DATE_MISSING', 'blocking', 'binding', { details: { path: 'document.date', usedBy: [] } }), ['scenario', 'link']],
+    [card, F('ISSUE_DATE_INVALID', 'blocking', 'resolver'), ['scenario']],
     // static rule checks, binding analysis, model accessibility, axe
     [d01, F('EQUAL_PRIORITY_EXCLUSIVE_RULES', 'blocking', 'rules-static', { nodeId: 'payment-guidance', ruleIds: ['R03', 'R04'] }), ['change', 'change', 'link']],
     [card, F('RULE_NOT_REACHED_IN_FIXTURES', 'info', 'rules-static', { ruleId: 'R03' }), ['link']],

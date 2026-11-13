@@ -49,6 +49,24 @@ An input line is a customer record, or `{ "customerRef": "...", "data": <record>
 
 `run` (and `serve`, `generate`) refuse to start when the template, the release manifest, the font list, the engine description or the engine file was changed, when the template carries any draft, or when the engine's versions differ from the release's (exit 3).
 
+## The document's date
+
+For a template that uses dates (`documentDate` in `release/template.json`):
+
+- `node run … --issue-date YYYY-MM-DD` gives the document's date for every customer of the run; a line may carry its own
+  `"issueDate"` next to `"data"` (it wins). An invalid date is refused: the option with exit code 2, a line as `invalid`.
+- A date given for the run is part of the run ID, is stated as `issueDate` in `results.jsonl` (never a date taken from
+  the customer's data: that is a customer value), and is kept as `issueDate` in the proof record.
+- `POST /render` accepts `"issueDate"` next to `"data"`; the answer states it.
+- `proof/inputs.jsonl` keeps each dated scenario's `issueDate`, `proof/expected.json` records it per case, and
+  `node verify` checks that each dated case is produced as issued on that day and that its proof record says so
+  (`datedCases` in `--json`).
+- `generate` keeps the date a generated customer reaches its outcome on.
+- A template whose date is given for each run stops a customer with no date (`DOCUMENT_DATE_MISSING`), exactly as the
+  studio does.
+
+`RUNTIME_FORMAT_VERSION` stays 1: a line without `issueDate` means what it meant before, and the option is new.
+
 ## What holds, and how it is tested
 
 `apps/api/test/runnable-package.test.ts` builds packages through the API, unpacks them into a temporary folder outside the repository and runs them with `process.execPath` and an environment of `PATH`, `HOME`, `LANG` (and `PLAYWRIGHT_BROWSERS_PATH` when set) only:
