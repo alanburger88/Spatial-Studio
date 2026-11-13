@@ -37,7 +37,7 @@ describe('one customer’s blockers', () => {
     const eobRecords = RECORDS.filter((r) => r.documentType === 'eob');
     const base = eobRecords[0] as SyntheticRecord & { claims: Array<Record<string, any>> };
     // The document reads the first claim; the finding names it by its claim id, which is how the row is found.
-    const claim = { ...base.claims[0], status: 'processed-covered' };
+    const claim: Record<string, any> = { ...base.claims[0], status: 'processed-covered' };
     const wrong = { ...base, recordId: 'EOB-9001', claims: [{ ...claim, billedCents: claim.billedCents + 100 }, ...base.claims.slice(1)] } as unknown as SyntheticRecord;
     const b = customerBlockers(eob, wrong).find((x) => x.code === 'CLAIM_RECONCILIATION_FAILED')!;
     expect(b.fields).toEqual(['claims[0].billedCents', 'claims[0].contractualAdjustmentCents', 'claims[0].allowedCents', 'claims[0].planPaidCents', 'claims[0].patientResponsibilityCents']);
