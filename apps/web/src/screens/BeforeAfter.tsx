@@ -4,7 +4,7 @@ import type { Project, ReleaseInfo } from '@iss/model';
 import { compareVersions, type VersionComparison } from '@iss/scenarios';
 import { ApiFailure, api, type ProjectReleasesDto } from '../api/client';
 import { useIsDirty, useStudio } from '../state/store';
-import { useWorkflow } from '../shell/Review';
+import { useWorkflow } from '../shell/workflow';
 import { Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
 import { DocChanges } from './compare/DocChanges';
 import { SideBySide, type SideData } from './compare/SideBySide';

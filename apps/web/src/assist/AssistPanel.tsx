@@ -41,17 +41,8 @@ function jumpTo(testIds: string[]) {
   }, 100);
 }
 
-export function AssistPanel() {
-  const { pathname } = useLocation();
-  const open = usePanel((s) => s.open);
-  const setAvailable = usePanel((s) => s.setAvailable);
-  useEffect(() => { setAvailable(true); return () => setAvailable(false); }, [setAvailable]);
-  // The AI Assistant screen is the full-size version of this panel; two copies of the conversation would be confusing.
-  if (!open || /\/assistant\/?$/.test(pathname)) return null;
-  return <PanelInner />;
-}
-
-function PanelInner() {
+/** The panel itself. `AssistHost` (assist/AssistHost.tsx) decides when it is shown and loads this file on first use. */
+export function AssistPanelBody() {
   const close = usePanel((s) => s.close);
   const tab = usePanel((s) => s.tab);
   const setTab = usePanel((s) => s.setTab);

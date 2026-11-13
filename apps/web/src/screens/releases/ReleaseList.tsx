@@ -1,5 +1,5 @@
 import type { ReleaseInfo } from '@iss/model';
-import { When } from '../../shell/History';
+import { When } from '../../ui/time';
 import { Tech } from '../../ui/common';
 import { PACKAGE_CHIP, STANDING_CHIP, personName } from './format';
 

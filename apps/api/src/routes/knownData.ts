@@ -55,7 +55,7 @@ export function removeLapsed(store: Store, req: FastifyRequest | null, project: 
   for (const k of lapsed) {
     store.removeKnownDataProblem(project.projectId, k.id);
     const r = records.find((x) => x.recordId === k.recordId);
-    const detail = { id: k.id, blockerId: k.blockerId, recordId: k.recordId, name: r ? nameOf(r) : null, why: r ? 'no-longer-stops' : 'customer-gone' };
+    const detail = { id: k.id, blockerId: k.blockerId, recordId: k.recordId, why: r ? 'no-longer-stops' : 'customer-gone' };
     if (req) audit(store, req, 'known-data.lapse', { projectId: project.projectId, modelVersion: project.modelVersion, detail });
     else store.audit({ user: null, userName: null, action: 'known-data.lapse', projectId: project.projectId, modelVersion: project.modelVersion, detail });
   }
@@ -131,7 +131,7 @@ export function registerKnownDataRoutes(app: FastifyInstance, deps: RouteDeps): 
     const stored = store.addKnownDataProblem({ projectId: project.projectId, blockerId, recordId, reason, by: req.user ? { id: req.user.id, name: req.user.name } : null });
     if (!stored) throw new ApiError(409, 'ALREADY_KNOWN', 'This problem is already set aside for this customer.');
     const entry = knownDataStatus(store, project, records).active.find((k) => k.id === stored.id)!;
-    audit(store, req, 'known-data.add', { projectId: project.projectId, modelVersion: project.modelVersion, detail: { id: stored.id, blockerId, recordId, name: nameOf(customer!), blocker: entry.blocker.title, reasonLength: reason.length } });
+    audit(store, req, 'known-data.add', { projectId: project.projectId, modelVersion: project.modelVersion, detail: { id: stored.id, blockerId, recordId, blocker: entry.blocker.title, reasonLength: reason.length } });
     reply.status(201);
     return { knownDataProblem: view(entry, project, store), lapsed: lapsed.map((k) => ({ id: k.id, blockerId: k.blockerId, recordId: k.recordId })), note: lapsedNote };
   });
@@ -143,8 +143,7 @@ export function registerKnownDataRoutes(app: FastifyInstance, deps: RouteDeps): 
     if (!found) throw new ApiError(404, 'NOT_FOUND', 'There is no such known data problem for this document; it may already have been removed or have lapsed.');
     store.removeKnownDataProblem(project.projectId, found.id);
     const records = allRecords(project.projectId);
-    const r = records.find((x) => x.recordId === found.recordId);
-    audit(store, req, 'known-data.remove', { projectId: project.projectId, modelVersion: project.modelVersion, detail: { id: found.id, blockerId: found.blockerId, recordId: found.recordId, name: r ? nameOf(r) : null } });
+    audit(store, req, 'known-data.remove', { projectId: project.projectId, modelVersion: project.modelVersion, detail: { id: found.id, blockerId: found.blockerId, recordId: found.recordId } });
     const { lapsedNote, lapsed } = knownDataProblemsInForce(store, req, project, records);
     return { removed: found.id, lapsed: lapsed.map((k) => ({ id: k.id, blockerId: k.blockerId, recordId: k.recordId })), note: lapsedNote };
   });

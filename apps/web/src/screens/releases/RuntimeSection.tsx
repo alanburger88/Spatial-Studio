@@ -3,7 +3,7 @@ import { RELEASE_PACKAGE_STATE_LABEL, runtimePackageName, type ReleaseInfo, type
 import { ApiFailure, api } from '../../api/client';
 import { Tech } from '../../ui/common';
 import { Icon } from '../../ui/icons';
-import { fmtAbs } from '../../shell/History';
+import { fmtAbs } from '../../ui/time';
 import { PACKAGE_CHIP, fmtBytes, plural } from './format';
 
 const COMMANDS = ['node verify', 'node run --data customers.jsonl --outputs pdf,html,email,sms --out out', 'node serve --port 8787'];

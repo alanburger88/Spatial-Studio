@@ -4,9 +4,8 @@ import { DOCUMENT_TYPE_LABEL, NEUTRAL_ACCENT, BLANK_PROJECT_TEMPLATE_ID, ISSUER_
 import { resolve, type Resolution } from '@iss/resolver';
 import { api, ApiFailure, type ImportResult, type ProjectSummary, type TemplateInfoDto } from '../api/client';
 import { editBlockedReason, useCan, useStudio } from '../state/store';
-import { ImportDialog } from './gallery/ImportRecords';
-import { SetupDialog } from './gallery/SetupDialog';
-import { CountsList, ImportProjectDialog, SAVE_TEMPLATE_DENIED, SaveTemplateDialog } from './gallery/TemplateDialogs';
+import { ImportDialog, ImportProjectDialog, SaveTemplateDialog, SetupDialog } from './gallery/lazyDialogs';
+import { CountsList, SAVE_TEMPLATE_DENIED } from './gallery/templateBits';
 import { Biz, Dialog, Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { PagePreview } from '../doc/PagePreview';

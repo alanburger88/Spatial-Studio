@@ -8,7 +8,7 @@ import { ruleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { recordSummary } from './RecordPicker';
 import { SCREENS, SECTIONS, TAB_LABEL, screenTo, sectionOf } from './Shell';
-import { useDrawers } from './History';
+import { useDrawers } from './drawers';
 
 /** Tiny UI-only store for the overlays owned by the shell (palette, shortcuts sheet, tour). */
 interface ShellUi {

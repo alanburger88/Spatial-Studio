@@ -3,7 +3,7 @@ import { HANDOVER_LABEL, RELEASE_NOTE_MAX, cleanReleaseNote, releaseRoleProblem,
 import { ApiFailure, api } from '../../api/client';
 import { useStudio } from '../../state/store';
 import { Tech } from '../../ui/common';
-import { When } from '../../shell/History';
+import { When } from '../../ui/time';
 
 /** The handover log: when the receiving team said they got the package and when it went live. A record only: it moves nothing. */
 export function HandoverSection({ release, entries, role, onChanged }: { release: ReleaseInfo; entries: HandoverEntry[]; role: Role | null; onChanged: () => void }) {

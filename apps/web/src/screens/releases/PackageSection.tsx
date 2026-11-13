@@ -4,7 +4,7 @@ import { ApiFailure, api } from '../../api/client';
 import { useStudio } from '../../state/store';
 import { Tech } from '../../ui/common';
 import { Icon } from '../../ui/icons';
-import { fmtAbs } from '../../shell/History';
+import { fmtAbs } from '../../ui/time';
 import { PACKAGE_CHIP, fmtBytes, plural } from './format';
 import { PackageContents } from './PackageContents';
 

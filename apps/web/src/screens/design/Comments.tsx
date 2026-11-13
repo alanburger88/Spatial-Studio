@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { COMMENT_MAX } from '@iss/model';
 import { api, type CommentDto } from '../../api/client';
 import { useCan, useStudio } from '../../state/store';
-import { When } from '../../shell/History';
+import { When } from '../../ui/time';
 import '../../shell/collab.css';
 
 /** Bumped after any comment change so every open comment list (inspector tab, review panel) refreshes. */

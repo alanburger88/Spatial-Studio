@@ -1,6 +1,6 @@
 import { currentRelease, projectContentDigest, type Project, type ReleaseInfo } from '@iss/model';
 import { COMPARISON_OUTCOMES, type ComparisonOutcome, type CustomerComparison, type VisibleChange, type VisibleChangeKind } from '@iss/scenarios';
-import { fmtAbs } from '../../shell/History';
+import { fmtAbs } from '../../ui/time';
 import { STANDING_CHIP } from '../releases/format';
 
 /** A side of the comparison as it appears in the URL: `working` or `r<release number>`. */

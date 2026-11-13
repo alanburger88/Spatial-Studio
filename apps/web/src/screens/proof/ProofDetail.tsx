@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import type { Project } from '@iss/model';
 import { Named, Proof, Tech } from '../../ui/common';
 import { localeLabel } from '../../ui/plain';
-import { fmtAbs, When } from '../../shell/History';
+import { fmtAbs, When } from '../../ui/time';
 import type { ProofDetailDto } from './api';
 import { CHANNEL_LABEL, PRODUCER_CHIP, PRODUCER_LABEL, STANDING_WORD, channelsWords, listWords } from './format';
 import { VerifySection } from './VerifySection';

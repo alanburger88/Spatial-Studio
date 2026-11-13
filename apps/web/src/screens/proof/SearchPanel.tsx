@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Project, ReleaseInfo } from '@iss/model';
 import { useStudio } from '../../state/store';
 import { ErrorState, Tech } from '../../ui/common';
-import { fmtAbs } from '../../shell/History';
+import { fmtAbs } from '../../ui/time';
 import type { ProofListDto } from './api';
 import { PRODUCER_CHIP, plural, short } from './format';
 

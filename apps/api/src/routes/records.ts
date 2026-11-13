@@ -89,7 +89,7 @@ export function registerRecordRoutes(app: FastifyInstance, deps: RouteDeps): voi
       data = dataOf(copiedFrom);
     } else data = checked(project, dataOf(b.record));
     const [stored] = store.addProjectRecords(project.projectId, PREFIX[project.documentType] ?? 'REC', 'supplied', [{ ...(data as any), documentType: project.documentType }]);
-    audit(store, req, 'records.add', { projectId: project.projectId, detail: { recordId: stored.recordId, name: `${stored.customer.givenName} ${stored.customer.familyName}`, copyOf: copiedFrom?.recordId ?? null } });
+    audit(store, req, 'records.add', { projectId: project.projectId, detail: { recordId: stored.recordId, copyOf: copiedFrom?.recordId ?? null } });
     reply.status(201);
     return { record: stored, origin: 'supplied', copiedFrom: copiedFrom?.recordId ?? null, outcome: outcomeOf(project, stored) };
   });
@@ -101,7 +101,7 @@ export function registerRecordRoutes(app: FastifyInstance, deps: RouteDeps): voi
     const data = checked(project, dataOf(req.body?.record));
     const next = { ...(data as any), recordId: before.recordId, documentType: project.documentType, projectId: project.projectId } as SyntheticRecord;
     store.updateProjectRecord(project.projectId, next);
-    audit(store, req, 'records.edit', { projectId: project.projectId, detail: { recordId: next.recordId, name: `${next.customer.givenName} ${next.customer.familyName}`, wasGenerated: origin === 'generated' } });
+    audit(store, req, 'records.edit', { projectId: project.projectId, detail: { recordId: next.recordId, wasGenerated: origin === 'generated' } });
     return { record: next, origin: 'supplied', wasGenerated: origin === 'generated', outcome: outcomeOf(project, next) };
   });
 
@@ -110,7 +110,7 @@ export function registerRecordRoutes(app: FastifyInstance, deps: RouteDeps): voi
     const project = projectOr404(req.params.projectId);
     const { record } = ownOr404(project, req.params.recordId);
     store.deleteProjectRecord(project.projectId, record.recordId);
-    audit(store, req, 'records.delete', { projectId: project.projectId, detail: { recordId: record.recordId, name: `${record.customer.givenName} ${record.customer.familyName}` } });
+    audit(store, req, 'records.delete', { projectId: project.projectId, detail: { recordId: record.recordId } });
     return { removed: record.recordId };
   });
 }

@@ -12,12 +12,13 @@ import { nodeTitle } from '../ui/plain';
 import { SectionTabs } from './SectionTabs';
 import { DemoBanner } from '../screens/GuidedDemo';
 import { CommandPalette, useShellUi } from './CommandPalette';
-import { MOD, SettingsMenu, HelpSheet } from './Help';
-import { Tour, TourPrompt } from './Tour';
+import { MOD, SettingsMenu } from './Help';
+import { TourPrompt } from './TourPrompt';
+import { LazyDrawers, LazyOverlays } from './LazyOverlays';
 import { DemoToolsButton, DemoToolsPanel } from './DemoTools';
-import { AssistPanel } from '../assist/AssistPanel';
-import { HistoryPanel, useDrawers } from './History';
-import { ReviewPanel, WorkflowChip } from './Review';
+import { AssistHost } from '../assist/AssistHost';
+import { useDrawers } from './drawers';
+import { WorkflowChip } from './workflow';
 import './shell-extras.css';
 import './section-tabs.css';
 import './collab.css';
@@ -202,7 +203,7 @@ function useUiShortcuts() {
 
 function Overlays() {
   useUiShortcuts();
-  return <><CommandPalette /><HelpSheet /><Tour /></>;
+  return <><CommandPalette /><LazyOverlays /></>;
 }
 
 function TopBar() {
@@ -448,7 +449,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
       <DemoBanner />
       <Toasts />
       <Overlays />
-      {ready && <><HistoryPanel /><ReviewPanel /><DemoToolsPanel /><AssistPanel /></>}
+      {ready && <><LazyDrawers /><DemoToolsPanel /><AssistHost /></>}
       <SmallScreenNotice />
     </div>
   );

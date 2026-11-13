@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ReleaseInfo } from '@iss/model';
 import { Tech } from '../../ui/common';
-import { fmtAbs, When } from '../../shell/History';
+import { fmtAbs, When } from '../../ui/time';
 import { personName } from './format';
 
 /** What is live: the current Production and Test release of this document. */

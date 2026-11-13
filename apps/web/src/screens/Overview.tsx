@@ -5,11 +5,12 @@ import { OUTPUT_PROFILES, coverageGaps, runTestCases, summariseTests, type Cover
 import { ApiFailure, api, type AuditEventDto, type ProjectReleasesDto } from '../api/client';
 import { useIsDirty, useStudio } from '../state/store';
 import { Empty, ErrorState, Loading, ScreenHeader } from '../ui/common';
-import { StateChip, useWorkflow } from '../shell/Review';
-import { useDrawers, When } from '../shell/History';
+import { StateChip, useWorkflow } from '../shell/workflow';
+import { useDrawers } from '../shell/drawers';
+import { When } from '../ui/time';
 import { useDocumentBlockers } from './blockers/useBlockers';
 import { clockTime, fullCheckOf, useFullCheck } from './blockers/fullCheck';
-import { auditSentence } from './Activity';
+import { auditSentence, customerNamesOf } from './Activity';
 import './Overview.css';
 
 /**
@@ -95,6 +96,7 @@ export function Overview() {
   const project = useStudio((s) => s.project)!;
   const records = useStudio((s) => s.records);
   const savedVersion = useStudio((s) => s.serverVersion);
+  const customerNames = useMemo(() => customerNamesOf(records), [records]);
   const dirty = useIsDirty();
   const navigate = useNavigate();
   const pid = project.projectId;
@@ -317,7 +319,7 @@ export function Overview() {
                   <ul className="ov-activity list-rows">
                     {activity.events.map((e) => (
                       <li key={e.id}>
-                        <span className="ov-act-what">{auditSentence(e, project)}</span>
+                        <span className="ov-act-what">{auditSentence(e, project, customerNames)}</span>
                         <span className="ov-act-meta muted">{e.userName ?? 'Someone'} · <When iso={e.at} /></span>
                       </li>
                     ))}

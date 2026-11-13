@@ -1,12 +1,12 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ROLES, ROLE_LABEL, ROLE_SUMMARY, type Project, type Role } from '@iss/model';
+import { ROLES, ROLE_LABEL, ROLE_SUMMARY, type Project, type Role, type SyntheticRecord } from '@iss/model';
 import { parseActivityQuery, type ActivityQuery } from '@iss/scenarios';
 import { api, type AuditEventDto, type AuditQuery, type SessionUser } from '../api/client';
 import { useCan, useStudio } from '../state/store';
 import { ErrorState, Proof, ScreenHeader } from '../ui/common';
 import { nodeTitle } from '../ui/plain';
-import { fmtAbs } from '../shell/History';
+import { fmtAbs } from '../ui/time';
 import { SourceChip } from '../assist/common';
 import './Activity.css';
 
@@ -45,9 +45,26 @@ function changeSummary(c: Record<string, number> | undefined): string {
   return parts.length ? parts.join(', ') : 'no content changes';
 }
 
-/** One readable sentence per audit entry. Never invents facts: everything comes from the stored entry. */
-export function auditSentence(e: AuditEventDto, project: Project | null): string {
+/** Finds a customer's name from the customers the studio holds now (null when that customer is not among them). */
+export type CustomerNames = (recordId: string) => string | null;
+export function customerNamesOf(records: readonly SyntheticRecord[]): CustomerNames {
+  const byId = new Map(records.map((r) => [r.recordId, `${r.customer.givenName} ${r.customer.familyName}`.trim()]));
+  return (id) => byId.get(id) ?? null;
+}
+const noNames: CustomerNames = () => null;
+
+/**
+ * One readable sentence per audit entry. Never invents facts: everything comes from the stored entry.
+ * The log keeps only a customer's id; the name is looked up now from `names`. Entries written before that rule carry a
+ * `name` of their own, which is still read when the customer can no longer be found; failing both, the id is shown.
+ */
+export function auditSentence(e: AuditEventDto, project: Project | null, names: CustomerNames = noNames): string {
   const d = e.detail ?? {};
+  const recordId = typeof d.recordId === 'string' ? d.recordId : '';
+  const oldName = typeof d.name === 'string' && d.name ? d.name : null; // entries from before the log stopped storing names
+  const nameNow = recordId ? names(recordId) : null;
+  const who = nameNow ?? oldName ?? (recordId || 'a customer');
+  const forWho = nameNow ?? oldName ?? (recordId ? `customer ${recordId}` : 'a customer');
   const v = e.modelVersion !== null ? `v${e.modelVersion}` : '';
   const node = (id: unknown) => { const s = String(id ?? ''); return project && project.projectId === e.projectId && project.nodes.some((n) => n.id === s) ? `“${nodeTitle(project, s)}”` : d.nodeName ? `“${d.nodeName}”` : s ? `component ${s}` : 'a component'; };
   switch (e.action) {
@@ -56,12 +73,12 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
     case 'project.reset': return `Restored the approved sample as ${v}`;
     case 'project.create': return d.setup ? `Created “${d.title ?? e.projectId}” from a ${d.setup === 'ai' ? 'description, set up by the assistant (AI suggestion, approved by this person)' : 'data file, set up by the studio (built-in)'}` : `Created “${d.title ?? e.projectId}” from the template “${d.templateTitle ?? d.templateId}”${d.templateVersion ? ` v${d.templateVersion}` : ''}`;
     case 'project.import': return `Imported “${d.title ?? e.projectId}” from a project file (“${d.fromTitle}” v${d.fromVersion})`;
-    case 'records.add': return d.copyOf ? `Made an editable copy of a customer (${d.name})` : `Added the customer ${d.name}`;
-    case 'records.edit': return `Edited the customer ${d.name}${d.wasGenerated ? ' (a generated customer, now kept as this document’s own)' : ''}`;
-    case 'records.delete': return `Removed the customer ${d.name}`;
-    case 'known-data.add': return `Set aside a known data problem for ${d.name ?? 'a customer'}: ${d.blocker ?? 'a problem in the customer’s data'}`;
-    case 'known-data.remove': return `Removed the known data problem for ${d.name ?? 'a customer'}, who counts as stopped again`;
-    case 'known-data.lapse': return d.why === 'customer-gone' ? 'A known data problem was removed because its customer no longer exists' : `A known data problem for ${d.name ?? 'a customer'} no longer applied and was removed (the problem no longer stops them)`;
+    case 'records.add': return d.copyOf ? `Made an editable copy of a customer (${who})` : `Added the customer ${who}`;
+    case 'records.edit': return `Edited the customer ${who}${d.wasGenerated ? ' (a generated customer, now kept as this document’s own)' : ''}`;
+    case 'records.delete': return `Removed the customer ${who}`;
+    case 'known-data.add': return `Set aside a known data problem for ${forWho}: ${d.blocker ?? 'a problem in the customer’s data'}`;
+    case 'known-data.remove': return `Removed the known data problem for ${forWho}, who counts as stopped again`;
+    case 'known-data.lapse': return d.why === 'customer-gone' ? 'A known data problem was removed because its customer no longer exists' : `A known data problem for ${forWho} no longer applied and was removed (the problem no longer stops them)`;
     case 'testdata.generate': return `Generated ${plural(Number(d.customers ?? 0), 'test customer')} for this document${d.replaced ? ` (replacing ${d.replaced})` : ''}${d.unreachable ? `; ${plural(Number(d.unreachable), 'outcome')} could not be reached` : ''}`;
     case 'testdata.clear': return `Removed ${plural(Number(d.removed ?? 0), 'generated test customer')}`;
     case 'template.save': return d.newTemplate ? `Saved a new template “${d.title}” (v${d.version})` : `Saved version ${d.version} of the template “${d.title}”`;
@@ -160,21 +177,21 @@ function timeRange(items: AuditEventDto[]): string {
   const [ta, ma] = [a.replace(/\s?[AP]M$/i, ''), a.match(/[AP]M$/i)?.[0]]; const mb = b.match(/[AP]M$/i)?.[0];
   return ma && ma === mb ? `${ta}–${b}` : `${a}–${b}`;
 }
-const normalised = (e: AuditEventDto, project: Project | null) => auditSentence(e, project).replace(/ as v\d+/g, '').replace(/\bv\d+\b/g, 'v#');
-const groupLabel = (e: AuditEventDto, project: Project | null) => (e.action === 'project.restore' ? 'Restored a previous version' : normalised(e, project).replace(/\bv#/g, 'a version'));
+const normalised = (e: AuditEventDto, project: Project | null, names: CustomerNames) => auditSentence(e, project, names).replace(/ as v\d+/g, '').replace(/\bv\d+\b/g, 'v#');
+const groupLabel = (e: AuditEventDto, project: Project | null, names: CustomerNames) => (e.action === 'project.restore' ? 'Restored a previous version' : normalised(e, project, names).replace(/\bv#/g, 'a version'));
 
 /** Consecutive entries by the same person, of the same kind, in the same project, on the same day collapse into one group. */
-function groupEvents(events: AuditEventDto[], project: Project | null): Array<{ day: string; iso: string; entries: Entry[] }> {
+function groupEvents(events: AuditEventDto[], project: Project | null, names: CustomerNames): Array<{ day: string; iso: string; entries: Entry[] }> {
   const days: Array<{ day: string; iso: string; entries: Entry[] }> = [];
   for (const e of events) {
     const k = dayKey(e.at);
     let day = days[days.length - 1];
     if (!day || day.day !== k) { day = { day: k, iso: e.at, entries: [] }; days.push(day); }
     const last = day.entries[day.entries.length - 1];
-    const sig = (x: AuditEventDto) => `${x.user ?? ''}|${x.action}|${x.projectId ?? ''}|${normalised(x, project)}`;
+    const sig = (x: AuditEventDto) => `${x.user ?? ''}|${x.action}|${x.projectId ?? ''}|${normalised(x, project, names)}`;
     const prev = last ? (last.kind === 'one' ? last.e : last.items[0]) : null;
     if (last && prev && sig(prev) === sig(e)) {
-      if (last.kind === 'one') day.entries[day.entries.length - 1] = { kind: 'group', key: `g${last.e.id}`, label: groupLabel(e, project), items: [last.e, e] };
+      if (last.kind === 'one') day.entries[day.entries.length - 1] = { kind: 'group', key: `g${last.e.id}`, label: groupLabel(e, project, names), items: [last.e, e] };
       else last.items.push(e);
     } else day.entries.push({ kind: 'one', e });
   }
@@ -224,6 +241,8 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
   const [loadingMore, setLoadingMore] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const serverVersion = useStudio((s) => s.serverVersion);
+  const records = useStudio((s) => s.records);
+  const names = useMemo(() => customerNamesOf(records), [records]);
   const titles = useMemo(() => new Map(projects.map((p) => [p.projectId, p.title])), [projects]);
 
   // The server filters by project, person, action and start time. An end time and words are applied here, on the rows fetched,
@@ -251,11 +270,11 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
     return events.filter((e) => {
       if (until !== null && !(Date.parse(e.at) < until)) return false;
       if (!words.length) return true;
-      const hay = auditSentence(e, project).toLowerCase();
+      const hay = auditSentence(e, project, names).toLowerCase();
       return words.every((w) => hay.includes(w));
     });
-  }, [events, range?.until, words, project]);
-  const days = useMemo(() => (shown ? groupEvents(shown, project) : []), [shown, project]);
+  }, [events, range?.until, words, project, names]);
+  const days = useMemo(() => (shown ? groupEvents(shown, project, names) : []), [shown, project, names]);
   const cols = projectId ? 4 : 5;
   const filtered = !!(user || action || period !== 'all' || projectFilter || range || words.length);
 
@@ -355,7 +374,7 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
                 <Fragment key={day.day}>
                   <tr className="act-day"><th scope="colgroup" colSpan={cols}>{dayLabel(day.iso)}</th></tr>
                   {day.entries.map((en) => {
-                    if (en.kind === 'one') return <EventRow key={en.e.id} e={en.e} project={project} projectId={projectId} titles={titles} />;
+                    if (en.kind === 'one') return <EventRow key={en.e.id} e={en.e} project={project} names={names} projectId={projectId} titles={titles} />;
                     const first = en.items[0];
                     const isOpen = !!open[en.key];
                     return (
@@ -371,7 +390,7 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
                           {!projectId && <ProjectCell e={first} titles={titles} />}
                           <td className="c-proof" />
                         </tr>
-                        {isOpen && en.items.map((e) => <EventRow key={e.id} e={e} project={project} projectId={projectId} titles={titles} child groupId={`act-${en.key}`} />)}
+                        {isOpen && en.items.map((e) => <EventRow key={e.id} e={e} project={project} names={names} projectId={projectId} titles={titles} child groupId={`act-${en.key}`} />)}
                       </Fragment>
                     );
                   })}
@@ -392,12 +411,12 @@ function ProjectCell({ e, titles }: { e: AuditEventDto; titles: Map<string, stri
   return <td className="c-proj">{!e.projectId ? <span className="muted">—</span> : titles.has(e.projectId) ? <Link to={`/studio/${e.projectId}/activity`} title={`${titles.get(e.projectId)} (${e.projectId})`}>{titles.get(e.projectId)}</Link> : <span className="muted" title="This project no longer exists">{e.projectId} (deleted)</span>}</td>;
 }
 
-function EventRow({ e, project, projectId, titles, child, groupId }: { e: AuditEventDto; project: Project | null; projectId: string | null; titles: Map<string, string>; child?: boolean; groupId?: string }) {
+function EventRow({ e, project, names, projectId, titles, child, groupId }: { e: AuditEventDto; project: Project | null; names: CustomerNames; projectId: string | null; titles: Map<string, string>; child?: boolean; groupId?: string }) {
   return (
     <tr id={groupId ? `${groupId}-${e.id}` : undefined} data-testid="activity-row" data-action={e.action} className={child ? 'act-child' : undefined}>
       <td className="c-when"><time dateTime={e.at} title={fmtAbs(e.at)}>{timeOf(e.at)}</time></td>
       <td className="c-who" title={e.user ?? undefined}>{e.userName ?? <span className="muted">Unknown</span>}</td>
-      <td className="c-what">{auditSentence(e, project)}</td>
+      <td className="c-what">{auditSentence(e, project, names)}</td>
       {!projectId && <ProjectCell e={e} titles={titles} />}
       <td className="c-proof">
         <Proof label="Details">

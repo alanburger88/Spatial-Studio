@@ -5,6 +5,8 @@ import { Loading } from './ui/common';
 import { PlainShell, StudioShell } from './shell/Shell';
 import { ProjectGallery } from './screens/ProjectGallery';
 import { Login } from './screens/Login';
+import { prefetchOverlays } from './shell/LazyOverlays';
+import { prefetchGalleryDialogs } from './screens/gallery/lazyDialogs';
 import { GuidedDemo } from './screens/GuidedDemo'; // small, and the shell already needs its banner
 
 /**
@@ -55,7 +57,7 @@ const Activity = screen('Activity') as ComponentType<{ global?: boolean }>;
 
 function usePrefetchScreens() {
   useEffect(() => {
-    const run = () => { for (const load of Object.values(loaders)) void load().catch(() => undefined); };
+    const run = () => { prefetchOverlays(); prefetchGalleryDialogs(); for (const load of Object.values(loaders)) void load().catch(() => undefined); };
     const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
     const t = ric ? ric(run, { timeout: 4000 }) : window.setTimeout(run, 2500);
     return () => { if (ric) (window as unknown as { cancelIdleCallback?: (n: number) => void }).cancelIdleCallback?.(t); else window.clearTimeout(t); };

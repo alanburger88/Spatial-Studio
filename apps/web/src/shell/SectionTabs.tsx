@@ -2,7 +2,7 @@ import { useRef, type KeyboardEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useStudio } from '../state/store';
 import { SCREENS, TAB_LABEL, screenOfPath, screenTo, sectionOf, useSectionMemory } from './Shell';
-import { startTour } from './Tour';
+import { startTour } from './TourPrompt';
 import './section-tabs.css';
 
 /**

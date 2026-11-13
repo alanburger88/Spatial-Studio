@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { create } from 'zustand';
 import { CATALOG_BY_TYPE, WORKFLOW_LABEL, type Project, type ProjectDiff, type RuleChange, type ValueChange } from '@iss/model';
 import { api, ApiFailure, type VersionDto, type VersionMeta } from '../api/client';
 import { editBlockedReason, useIsDirty, useStudio } from '../state/store';
@@ -7,17 +6,12 @@ import { Proof, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { actionSentence, nodeTitle, predicateSentence, ruleSentence } from '../ui/plain';
 import { ChangeSummaryCard } from '../assist/ChangeSummaryCard';
+import { fmtAbs, When } from '../ui/time';
+import { useDrawers } from './drawers';
 import { useModal } from './CommandPalette';
 import './collab.css';
 
 /* ------------------------------------------------------------------ drawer state + frame */
-
-type DrawerId = 'history' | 'review' | null;
-export const useDrawers = create<{ open: DrawerId; show(d: Exclude<DrawerId, null>): void; close(): void }>((set) => ({
-  open: null,
-  show: (open) => set({ open }),
-  close: () => set({ open: null }),
-}));
 
 /** Right-hand modal panel with focus trap, Esc to close and focus return. */
 export function Drawer({ title, sub, testId, wide, onClose, children, labelId }: { title: string; sub?: ReactNode; testId: string; wide?: boolean; onClose: () => void; children: ReactNode; labelId: string }) {
@@ -39,24 +33,6 @@ export function Drawer({ title, sub, testId, wide, onClose, children, labelId }:
 }
 
 /* ------------------------------------------------------------------ time helpers */
-
-export function fmtAbs(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-export function fmtWhen(iso: string | null | undefined, now = Date.now()): string {
-  if (!iso) return '—';
-  const s = Math.round((now - new Date(iso).getTime()) / 1000);
-  if (s < 45) return 'just now';
-  if (s < 90) return '1 min ago';
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400 && new Date(iso).toDateString() === new Date(now).toDateString()) return `today ${new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(new Date(iso).getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}) }) + ' ' + new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
-export function When({ iso }: { iso: string | null | undefined }) {
-  return <time dateTime={iso ?? undefined} title={fmtAbs(iso)}>{fmtWhen(iso)}</time>;
-}
 
 /* ------------------------------------------------------------------ plain-language change list */
 

@@ -10,6 +10,7 @@ Owner/integrator: the lead architect (Opus). Screen implementers work **only in 
 - **Scenario changes are not model edits:** use `setRecord`, `patchOverrides`, `setOverrides`, `clearOverrides`, `setJourneyCursor`, `setProfile`, `select(nodeId, variantId)`, `setCtx({...})`. These do not dirty the project.
 - No fabricated numbers. Counts, page numbers, diagnostics must come from the resolver, `ScenarioEngine`/`buildCube`/`buildLandscape`/`replayJourney` (`@iss/scenarios`) or API responses (`api.*` in `apps/web/src/api/client.ts`). Empty states must be honest ("No matching fixture").
 - Synthetic data label must remain visible (shell provides it). AFP is always "simulation only".
+- **Audit details carry ids, never customer values.** An `audit(...)` entry stores the customer's `recordId` (and counts, ids and kinds), never a name, amount, date or other free text from a customer's data; screens look the name up from the customers the studio holds when they display it, and fall back to the id. `apps/api/test/audit-no-customer-values.test.ts` scans every audit row.
 - Accessibility: every spatial/visual insight needs a keyboard-operable 2D/table alternative; visible focus; labels on controls; no information by colour alone; respect `prefers-reduced-motion` (CSS tokens `--iss-motion-*` already go to 0ms) and `useStudio((s)=>s.reducedMotion)`.
 
 ## Screen skeleton

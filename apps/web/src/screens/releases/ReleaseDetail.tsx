@@ -5,7 +5,7 @@ import { ApiFailure, api, type ReleaseDetailDto } from '../../api/client';
 import { useStudio } from '../../state/store';
 import { Dialog, Tech } from '../../ui/common';
 import { localeLabel } from '../../ui/plain';
-import { fmtAbs, When } from '../../shell/History';
+import { fmtAbs, When } from '../../ui/time';
 import { PackageSection } from './PackageSection';
 import { RuntimeSection } from './RuntimeSection';
 import { HandoverSection } from './HandoverSection';

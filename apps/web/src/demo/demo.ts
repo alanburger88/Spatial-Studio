@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { defaultNode, projectContentDigest, type DocNode } from '@iss/model';
 import { indexTree } from '@iss/resolver';
-import { buildCube, ScenarioEngine } from '@iss/scenarios';
+import { buildCube, buildLandscape, ScenarioEngine } from '@iss/scenarios';
 import { resolve } from '@iss/resolver';
 import { api } from '../api/client';
 import { useStudio } from '../state/store';
@@ -128,7 +128,6 @@ export const DEMO_STEPS: DemoStep[] = [
     proof: 'Σ cluster sizes = evaluated scenarios.',
     run: async (nav) => {
       nav('/studio/aster-card-demo/landscape');
-      const { buildLandscape } = await import('@iss/scenarios');
       const l = buildLandscape(new ScenarioEngine(S().project!, S().records));
       return { ok: l.reconciles, detail: `${l.clusters.length} clusters · Σ ${l.universeSize} = ${l.evaluated} evaluated` };
     },

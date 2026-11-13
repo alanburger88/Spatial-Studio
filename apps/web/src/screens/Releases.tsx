@@ -4,7 +4,7 @@ import { currentRelease, type Role } from '@iss/model';
 import { ApiFailure, api, type ProjectReleasesDto, type ReleaseDetailDto } from '../api/client';
 import { useStudio } from '../state/store';
 import { Empty, ErrorState, Loading, ScreenHeader } from '../ui/common';
-import { useWorkflow } from '../shell/Review';
+import { useWorkflow } from '../shell/workflow';
 import { LiveCards } from './releases/LiveCards';
 import { ReleaseList } from './releases/ReleaseList';
 import { ReleaseDetail } from './releases/ReleaseDetail';
