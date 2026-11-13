@@ -5,6 +5,7 @@ import { resolve, type Resolution } from '@iss/resolver';
 import { api, ApiFailure, type ImportResult, type ProjectSummary, type TemplateInfoDto } from '../api/client';
 import { editBlockedReason, useCan, useStudio } from '../state/store';
 import { ImportDialog } from './gallery/ImportRecords';
+import { SetupDialog } from './gallery/SetupDialog';
 import { CountsList, ImportProjectDialog, SAVE_TEMPLATE_DENIED, SaveTemplateDialog } from './gallery/TemplateDialogs';
 import { Biz, Dialog, Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
@@ -191,8 +192,10 @@ function TemplateThumb({ templateId, documentType, version }: { templateId: stri
   return state ? <PagePreview res={state.res} project={state.project} scale={0.2} showGuides={false} ia={{ selectedId: null }} /> : <div className="gal-paper-skel np-skel"><span className="spinner" /></div>;
 }
 
-function NewProjectDialog({ onClose }: { onClose: () => void }) {
+function NewProjectDialog({ onClose, onDescribe }: { onClose: () => void; onDescribe: () => void }) {
   const navigate = useNavigate();
+  const canEditHere = useCan('edit');
+  const editWhy = useStudio((st) => editBlockedReason(st.session)) ?? 'You do not have permission to create documents';
   const [templates, setTemplates] = useState<TemplateInfoDto[] | null>(null);
   const [canSave, setCanSave] = useState(false);
   const [showRetired, setShowRetired] = useState(false);
@@ -267,6 +270,15 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
     <Dialog title="New project" onClose={onClose} labelledBy="new-project-title"
       footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={create} disabled={busy || !usable || title.trim().length < 2} data-testid="create-project">Create project</button></>}>
       <form className="np-root" onSubmit={(e) => { e.preventDefault(); void create(); }}>
+        <div className="np-describe" data-testid="setup-entry">
+          <div className="np-describe-text">
+            <h3 className="np-heading">Describe your document</h3>
+            <p className="muted">Say what it is for and what it shows; the assistant proposes the fields, layout, messages and rules for you to approve.</p>
+            {!canEditHere && <p className="np-bad" data-testid="setup-open-why">{editWhy}, so this is not available to you.</p>}
+          </div>
+          <button type="button" className="btn primary" onClick={onDescribe} disabled={!canEditHere} title={canEditHere ? 'Describe the document and let the assistant propose a setup' : editWhy} data-testid="setup-open">Describe your document</button>
+        </div>
+        <h3 className="np-heading">Or start from a template</h3>
         {loadErr && <p className="callout error" role="alert">{loadErr}</p>}
         {!templates && !loadErr && <Loading label="Loading templates…" />}
         <div className="np-cards" role="radiogroup" aria-label="Template">
@@ -365,6 +377,10 @@ export function ProjectGallery() {
   const canEdit = useCan('edit');
   const editBlock = useStudio((st) => editBlockedReason(st.session)) ?? 'You do not have permission to import projects';
   const [creating, setCreating] = useState(false);
+  const [describing, setDescribing] = useState(false);
+  const closeDescribe = useCallback(() => setDescribing(false), []);
+  const closeCreating = useCallback(() => setCreating(false), []);
+  const openDescribe = useCallback(() => { setCreating(false); setDescribing(true); }, []);
   const [tick, setTick] = useState(0);
   const closeImportProject = useCallback(() => setImportingProject(false), []);
   useEffect(() => {
@@ -455,7 +471,8 @@ export function ProjectGallery() {
           <p>Both sample projects return to their approved models, issued snapshots are cleared and saved view context is forgotten. Your own projects and imported records are kept. Use this before a stakeholder run.</p>
         </Dialog>
       )}
-      {creating && <NewProjectDialog onClose={() => setCreating(false)} />}
+      {creating && <NewProjectDialog onClose={closeCreating} onDescribe={openDescribe} />}
+      {describing && <SetupDialog onClose={closeDescribe} />}
       {importingProject && <ImportProjectDialog onClose={closeImportProject} />}
       {importing && <ImportDialog onClose={() => setImporting(false)} onDone={recordsChanged} />}
     </section>

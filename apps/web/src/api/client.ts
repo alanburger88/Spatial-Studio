@@ -1,5 +1,5 @@
-import type { DocumentType, Permission, Persona, Project, ProjectDiff, Role, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
-import type { TestResult } from '@iss/scenarios';
+import type { SetupSpec, DocumentType, Permission, Persona, Project, ProjectDiff, Role, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
+import type { RowMatch, SetupOutline, TestResult } from '@iss/scenarios';
 
 /** Typed client for the local Spatial Studio API (/api/v1, proxied by Vite). */
 
@@ -55,6 +55,25 @@ export interface ImportResult {
   imported: Array<{ recordId: string; sourceId: string | null; name: string }>;
   rejected: Array<{ row: number; sourceId: string | null; errors: string[] }>;
 }
+
+/** Sample data a person supplied for a new document: the text of a CSV or JSON file. */
+export interface SetupSampleData { format: 'csv' | 'json'; data: string }
+/** What the supplied rows would become as the new document's own customers. `rejected` lists the first rejected rows with why. */
+export interface SetupSuppliedSummary { total: number; accepted: number; rejectedCount: number; rejected: Array<{ row: number; reasons: string[] }>; matching: RowMatch[]; notes: string[] }
+export interface SetupPreview { customer: { name: string; origin: 'supplied' | 'generated' }; messages: Array<{ section: string; version: string | null }>; blocking: Array<{ code: string; message: string }> }
+/** A proposed document setup. Nothing is stored until it is approved with `createSetup`. */
+export interface SetupProposal {
+  mode: 'proposal'; source: 'ai' | 'builtin'; providerStatus: string; message: string;
+  wouldCreate: { projectId: string; title: string };
+  spec: SetupSpec; project: Project; notes: string[]; outline: SetupOutline;
+  customers: { generated: { count: number }; supplied: SetupSuppliedSummary | null };
+  preview: SetupPreview;
+}
+/** `unavailable` is a normal answer (for example a description with no AI key): nothing was drafted. */
+export type SetupDraftResult = SetupProposal | { mode: 'unavailable'; providerStatus: string; message: string; notes: string[] };
+export interface SetupDraftBody { description?: string; sampleData?: SetupSampleData; title?: string; issuerName?: string; accent?: string; spec?: SetupSpec; source?: 'ai' | 'builtin' }
+export interface SetupCreateBody { spec: SetupSpec; title: string; issuerName?: string; accent?: string; customers: 'generate' | 'supplied' | 'both'; sampleData?: SetupSampleData; source: 'ai' | 'builtin' }
+export interface SetupCreated { project: Project; source: 'ai' | 'builtin'; notes: string[]; customers: { total: number; generated: number; supplied: SetupSuppliedSummary | null; startingCustomerOnly: boolean }; preview: SetupPreview }
 
 export interface ScenarioRequest {
   projectId: string;
@@ -182,6 +201,10 @@ export const api = {
   templateProject: (templateId: string, documentType?: string, version?: number) => json<{ template: TemplateInfoDto; project: Project; version?: number; previewRecord?: SyntheticRecord }>(`/api/v1/templates/${templateId}/project?${new URLSearchParams({ ...(documentType ? { documentType } : {}), ...(version ? { version: String(version) } : {}) })}`),
   /** `issuerName` (2-60 characters) and `accent` (#rrggbb) apply to the Blank project only. A document with its own data answers `customers`: how many it was given. */
   createProject: (body: { templateId: string; title: string; documentType?: string; templateVersion?: number; issuerName?: string; accent?: string }) => json<{ project: Project; createdFrom: string; templateVersion: number | null; customers?: number }>('/api/v1/projects', { method: 'POST', body: JSON.stringify(body) }),
+  /** Drafts a setup for a new document from a description and/or sample data and stores nothing. With `spec` (and `source`) an edited setup is re-checked as it stands and no model is called. */
+  draftSetup: (body: SetupDraftBody, signal?: AbortSignal) => json<SetupDraftResult>('/api/v1/projects/setup/draft', { method: 'POST', body: JSON.stringify(body), signal }),
+  /** Creates the document from the setup a person approved. Needs the right to edit. A 422 (EMPTY_SETUP, INVALID_SETUP) is an `ApiFailure` with a plain message. */
+  createSetup: (body: SetupCreateBody) => json<SetupCreated>('/api/v1/projects/setup', { method: 'POST', body: JSON.stringify(body) }),
   deleteProject: (id: string) => json<{ deleted: boolean }>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
   /** `documentType` may be left out when `projectId` is sent. For a `custom` project `projectId` is required and the rows become that project's own customers; for the built-in kinds `scope: 'project'` does the same. */
   importRecords: (body: { documentType?: string; format: 'json' | 'csv'; data: string; dryRun?: boolean; projectId?: string; scope?: 'project' | 'shared' }) => json<ImportResult>('/api/v1/records/import', { method: 'POST', body: JSON.stringify(body) }),
