@@ -201,3 +201,52 @@ test('U11 Demo tools stays closed when the guided demo starts; Design fits the p
   await expect(page.getByTestId('fit-page')).toHaveAttribute('aria-pressed', 'true');
   expect(parseInt(await page.getByTestId('zoom-value').innerText(), 10)).toBeLessThanOrEqual(width);
 });
+
+test('U13 Document Cube filters: legend and Problems only fade the Grid and hide in 3D; 3D opens on one layer with a stepper', async ({ page }) => {
+  await open(page, 'aster-card-demo', 'cube');
+  const view = page.getByTestId('cube-view');
+  // Grid: every populated cell matches until a filter is switched on
+  await expect(view.locator('[data-testid=cube-matrix] [data-match=no]')).toHaveCount(0);
+  await page.getByTestId('cube-problems-only').click();
+  await expect(page.getByTestId('cube-problems-only')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('cube-filter-status')).toContainText(/Showing \d+ of \d+/);
+  // non-matching cells fade but stay in place; matching ones all carry a problem badge
+  const total = await view.locator('[data-testid=cube-matrix] [data-match]').count();
+  const off = await view.locator('[data-testid=cube-matrix] [data-match=no]').count();
+  expect(off).toBeGreaterThan(0);
+  expect(off).toBeLessThan(total);
+  await expect(view.locator('[data-testid=cube-matrix] [data-match=no]').first()).toHaveClass(/off/);
+  // the detail panel moves to an intersection that matches
+  await expect(page.getByTestId('cube-inspector')).toContainText(/blocking|warning/i);
+  // the table lists matches first
+  await expect(page.getByTestId('cube-row').first()).not.toHaveClass(/cube-row-off/);
+  await page.getByTestId('cube-filter-clear').click();
+  await expect(page.getByTestId('cube-filter-status')).toHaveCount(0);
+
+  // 3D opens on one layer: the previewed customer's, with the other layers as faint outlines
+  await page.getByTestId('cube-view-3d').click();
+  const cells = page.locator('[data-testid=cube-3d-data] [data-testid=cube-cell]');
+  await expect(page.getByTestId('cube-zslice')).toHaveValue(/.+/);
+  const oneLayer = await cells.count();
+  expect(oneLayer).toBeGreaterThan(0);
+  expect(await page.getByTestId('cube-cell-ghost').count()).toBeGreaterThan(0);
+  const first = await page.getByTestId('cube-zslice').inputValue();
+  await page.getByTestId('cube-layer-next').click();
+  await expect(page.getByTestId('cube-zslice')).not.toHaveValue(first);
+  await page.getByTestId('cube-layer-prev').click();
+  await expect(page.getByTestId('cube-zslice')).toHaveValue(first);
+  // all layers on request
+  await page.getByTestId('cube-zslice').selectOption('');
+  await expect(page.getByTestId('cube-cell-ghost')).toHaveCount(0);
+  const all = await cells.count();
+  expect(all).toBeGreaterThan(oneLayer);
+  // a legend switch hides every non-matching cell in 3D
+  await page.getByTestId('cube-legend-outcome').first().click();
+  await expect(page.getByTestId('cube-legend-outcome').first()).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => cells.count()).toBeLessThan(all);
+  const shown = await cells.count();
+  await expect(page.getByTestId('cube-filter-status')).toContainText(`Showing ${shown} of`);
+  // switching the same legend item off restores the full cube
+  await page.getByTestId('cube-legend-outcome').first().click();
+  await expect.poll(() => cells.count()).toBe(all);
+});

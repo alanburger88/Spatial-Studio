@@ -58,7 +58,11 @@ export function DocumentCube() {
   const [selected, setSelected] = useState<string | null>(null);
   const [yaw, setYaw] = useState(DEFAULT_YAW);
   const [tilt, setTilt] = useState(DEFAULT_TILT);
-  const [zSlice, setZSlice] = useState<string | null>(null);
+  // 3D layer: 'auto' follows the selected intersection (so the view opens on the previewed customer's layer), 'all' shows every layer.
+  const [zChoice, setZChoice] = useState<string>('auto');
+  // Declutter filters (local to this screen): outcomes switched on in the legend (none = all) and "problems only".
+  const [outcomeFilter, setOutcomeFilter] = useState<string[]>([]);
+  const [problemsOnly, setProblemsOnly] = useState(false);
   const [hideFront, setHideFront] = useState(false);
   const [showEmpty, setShowEmpty] = useState(true);
   const [view, setViewState] = useState<CubeView>(readView);
@@ -97,18 +101,43 @@ export function DocumentCube() {
   const cellsByKey = useMemo(() => new Map((cube?.cells ?? []).map((c) => [cellKey(c), c])), [cube]);
   const ctxRecordId = useStudio((s) => s.ctx.recordId);
   // Default selection (local state only): the intersection holding the customer chosen in the top bar, else the most populated one.
+  const filtering = outcomeFilter.length > 0 || problemsOnly;
+  // A layer picked with the stepper (3D only) pins the view to it; otherwise the layer follows the selection.
+  const pinnedLayer = view === '3d' && zChoice !== 'auto' && zChoice !== 'all' ? zChoice : null;
+  const matches = useMemo(() => {
+    const want = new Set(outcomeFilter);
+    return (c: CubeCell) => !filtering || (c.count > 0 && (!problemsOnly || c.blocking + c.warnings > 0) && (want.size === 0 || Object.keys(c.outcomes).some((o) => want.has(o))));
+  }, [outcomeFilter, problemsOnly, filtering]);
   const defaultKey = useMemo(() => {
-    const cells = (cube?.cells ?? []).filter((c) => c.count > 0);
+    const cells = (cube?.cells ?? []).filter((c) => c.count > 0 && matches(c) && (!pinnedLayer || c.z === pinnedLayer));
     if (cells.length === 0) return null;
     const best = (list: CubeCell[]) => [...list].sort((a, b) => b.count - a.count || cellKey(a).localeCompare(cellKey(b)))[0];
     const mine = cells.filter((c) => c.recordIds.includes(ctxRecordId));
     const exact = mine.filter((c) => c.scenarios.some((sc) => sc.recordId === ctxRecordId && sc.profileId === profileId && sc.journeyCursor === journeyCursor));
     return cellKey(best(exact.length ? exact : mine.length ? mine : cells));
-  }, [cube, ctxRecordId, profileId, journeyCursor]);
-  const effectiveKey = selected && cellsByKey.has(selected) ? selected : defaultKey;
+  }, [cube, ctxRecordId, profileId, journeyCursor, matches, pinnedLayer]);
+  // A selection that the filters (or a pinned 3D layer) hide falls back to the best visible intersection, so the detail panel never shows a hidden cell.
+  const selCell = selected ? cellsByKey.get(selected) : undefined;
+  const effectiveKey = selCell && matches(selCell) && (!pinnedLayer || selCell.z === pinnedLayer) ? selected : defaultKey;
   const selectedCell: CubeCell | null = effectiveKey ? cellsByKey.get(effectiveKey) ?? null : null;
 
-  useEffect(() => { if (zSlice && cube && !cube.axes[2].categories.some((c) => c.key === zSlice)) setZSlice(null); }, [zSlice, cube]);
+  useEffect(() => { if (zChoice !== 'auto' && zChoice !== 'all' && cube && !cube.axes[2].categories.some((c) => c.key === zChoice)) setZChoice('auto'); }, [zChoice, cube]);
+  // Outcomes that no longer exist (axes or filters changed) drop out of the legend filter.
+  useEffect(() => { if (cube && outcomeFilter.some((o) => !cube.cells.some((c) => o in c.outcomes))) setOutcomeFilter((f) => f.filter((o) => cube.cells.some((c) => o in c.outcomes))); }, [cube, outcomeFilter]);
+  const zCats = cube?.axes[2].categories ?? [];
+  const zSlice: string | null = zChoice === 'all' ? null : zChoice === 'auto' ? (selectedCell?.z ?? zCats[0]?.key ?? null) : zChoice;
+  const zIndex = zSlice ? zCats.findIndex((c) => c.key === zSlice) : -1;
+  /** Selecting an intersection anywhere makes the 3D layer follow it (unless every layer is shown). */
+  const select = (k: string) => { setSelected(k); if (zChoice !== 'all') setZChoice('auto'); };
+  /** Step to the neighbouring layer, keeping the same row and column selected when that intersection is visible there. */
+  const stepLayer = (dir: -1 | 1) => {
+    const n = zCats.length; if (!n) return;
+    const next = zCats[zIndex < 0 ? 0 : (zIndex + dir + n) % n].key;
+    const same = selectedCell ? cellsByKey.get([selectedCell.x, selectedCell.y, next].join(SEP)) : undefined;
+    if (same && same.count > 0 && matches(same)) { setSelected(cellKey(same)); setZChoice('auto'); } else setZChoice(next);
+  };
+  const toggleOutcome = (o: string) => setOutcomeFilter((f) => (f.includes(o) ? f.filter((x) => x !== o) : [...f, o]));
+  const clearLocal = () => { setOutcomeFilter([]); setProblemsOnly(false); };
 
   const outcomeIndex = useMemo(() => {
     const names = [...new Set((cube?.cells ?? []).flatMap((c) => Object.keys(c.outcomes)))].sort();
@@ -143,7 +172,7 @@ export function DocumentCube() {
     const nextFilters = { ...filters }; delete nextFilters[dim];
     setCtx({ cubeAxes: next, spatialFilters: nextFilters });
     setOffsets((o) => { const n = [...o] as [number, number, number]; n[idx] = 0; return n; });
-    setSelected(null); setZSlice(null); setYKey(null);
+    setSelected(null); setZChoice('auto'); setYKey(null);
   };
   const setFilter = (dim: DimensionId, value: string) => {
     const next = { ...filters };
@@ -173,13 +202,14 @@ export function DocumentCube() {
   const rows = (() => {
     const list = (cube?.cells ?? []).filter((c) => showEmpty || c.count > 0);
     const val = (c: CubeCell): string | number => sort.key === 'count' ? c.count : sort.key === 'issues' ? c.blocking * 1000 + c.warnings : sort.key === 'outcome' ? c.dominantOutcome ?? '' : sort.key === 'x' ? cube!.axes[0].categories.findIndex((k) => k.key === c.x) : sort.key === 'y' ? cube!.axes[1].categories.findIndex((k) => k.key === c.y) : cube!.axes[2].categories.findIndex((k) => k.key === c.z);
-    return [...list].sort((a, b) => { const va = val(a), vb = val(b); const r = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb)); return (r || cellKey(a).localeCompare(cellKey(b))) * sort.dir; });
+    return [...list].sort((a, b) => { const ma = matches(a) ? 0 : 1, mb = matches(b) ? 0 : 1; if (ma !== mb) return ma - mb; const va = val(a), vb = val(b); const r = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb)); return (r || cellKey(a).localeCompare(cellKey(b))) * sort.dir; });
   })();
 
   const labelOf = (ai: number, key: string) => plainCat(cube?.axes[ai].categories.find((c) => c.key === key)?.label ?? key, viewMode === 'technical');
 
   const nonEmpty = (cube?.cells ?? []).filter((c) => c.count > 0).length;
   const total = (cube?.cells ?? []).length;
+  const matchCount = (cube?.cells ?? []).filter((c) => c.count > 0 && matches(c)).length;
 
   return (
     <section className="screen" data-testid="cube-view">
@@ -223,6 +253,12 @@ export function DocumentCube() {
               <button aria-pressed={view === '3d'} onClick={() => setView('3d')} data-testid="cube-view-3d">Explore in 3D</button>
             </span>
             {cube && <span className="cube-status">{cube.universeSize} synthetic scenarios · {nonEmpty} of {total} intersections populated<Tech> · {cube.universeSize} evaluated / {cube.plannedSize} planned</Tech></span>}
+            {cube && filtering && (
+              <span className="cube-leg-result" role="status" data-testid="cube-filter-status">
+                Showing {matchCount} of {nonEmpty}
+                <button type="button" className="btn sm" onClick={clearLocal} data-testid="cube-filter-clear">Clear</button>
+              </span>
+            )}
           <details className="cube-filters">
             <summary className="btn sm" data-testid="cube-filters-toggle">Filters{Object.keys(filters).length > 0 ? ` (${Object.keys(filters).length})` : ''}</summary>
             <div className="cube-filters-pop">
@@ -241,10 +277,17 @@ export function DocumentCube() {
           </div>
 
           {cube && cube.errors.length === 0 && cube.universeSize > 0 && (
-            <div className="cube-legend-bar" data-testid="cube-legend" aria-label="Outcome legend">
-                            {[...outcomeIndex.keys()].map((o) => { const st = outcomeStyle(o); return <span key={o} className="cube-leg-item" title={o}><span className="cube-mark" style={{ ['--mk' as string]: st.color }}>{st.letter}</span><span className={viewMode === 'technical' ? 'mono' : ''}>{outcomeName(o)}</span></span>; })}
-              <span className="cube-leg-item"><span className="cube-badge" aria-hidden="true">!</span>Blocking</span>
-              <span className="cube-leg-item"><span className="cube-mark none" aria-hidden="true">0</span>No records</span>
+            <div className="cube-legend-bar" data-testid="cube-legend" role="group" aria-label="Outcome legend and filters">
+              {[...outcomeIndex.keys()].map((o) => {
+                const st = outcomeStyle(o); const on = outcomeFilter.includes(o);
+                return (
+                  <button key={o} type="button" className={`cube-leg-item cube-leg-btn${on ? ' on' : ''}${outcomeFilter.length > 0 && !on ? ' off' : ''}`} aria-pressed={on} onClick={() => toggleOutcome(o)} title={on ? `Showing ${outcomeName(o)} — click to remove this filter` : `Show only intersections with ${outcomeName(o)}`} data-testid="cube-legend-outcome" data-outcome={o}>
+                    <span className="cube-mark" style={{ ['--mk' as string]: st.color }}>{st.letter}</span><span className={viewMode === 'technical' ? 'mono' : ''}>{outcomeName(o)}</span>
+                  </button>
+                );
+              })}
+              <button type="button" className={`cube-leg-item cube-leg-btn${problemsOnly ? ' on' : ''}`} aria-pressed={problemsOnly} onClick={() => setProblemsOnly((v) => !v)} title="Show only intersections with blocking issues or warnings" data-testid="cube-problems-only"><span className="cube-badge" aria-hidden="true">!</span>Problems only</button>
+              {nonEmpty < total && <span className="cube-leg-item cube-leg-static"><span className="cube-mark none" aria-hidden="true">0</span>No records</span>}
             </div>
           )}
 
@@ -252,25 +295,29 @@ export function DocumentCube() {
           {cube && cube.errors.length === 0 && cube.universeSize === 0 && <div className="cube-msg"><Empty title="No matching fixture" message="The active filters leave no seeded records. Clear a filter to repopulate the cube." /></div>}
 
           {cube && cube.errors.length === 0 && cube.universeSize > 0 && view === 'grid' && (
-            <CubeMatrix cube={cube} activeY={activeY} onY={setYKey} selected={effectiveKey} onSelect={(k) => setSelected(k)} outcomeStyle={outcomeStyle} outcomeName={outcomeName} />
+            <CubeMatrix cube={cube} activeY={activeY} onY={setYKey} selected={effectiveKey} onSelect={select} outcomeStyle={outcomeStyle} outcomeName={outcomeName} matches={matches} />
           )}
 
           {cube && cube.errors.length === 0 && cube.universeSize > 0 && view === '3d' && (
             <>
               <div className="stage cube-stage" aria-label="Document cube, three-dimensional view">
                 <div className="stage-grid" />
-                <CubeScene cube={cube} yaw={yaw} tilt={tilt} zSlice={zSlice} hideFront={hideFront} selected={effectiveKey} onSelect={setSelected} outcomeStyle={outcomeStyle} />
+                <CubeScene cube={cube} yaw={yaw} tilt={tilt} zSlice={zSlice} hideFront={hideFront} selected={effectiveKey} onSelect={select} outcomeStyle={outcomeStyle} matches={matches} filtering={filtering} />
+                {filtering && matchCount === 0 && <div className="cube-nomatch" role="status" data-testid="cube-no-match">No intersections match these filters. <button type="button" className="btn sm" onClick={clearLocal}>Clear filters</button></div>}
+                {filtering && matchCount > 0 && zSlice && !(cube.cells.some((c) => c.z === zSlice && c.count > 0 && matches(c))) && <div className="cube-nomatch" role="status" data-testid="cube-no-match-layer">Nothing in this layer matches the filters. <button type="button" className="btn sm" onClick={() => setZChoice('all')}>Show all layers</button></div>}
               </div>
               <div className="cube-controls" role="group" aria-label="Cube view controls">
                 <label className="cube-slider">Yaw<input type="range" min={-55} max={55} value={yaw} onChange={(e) => setYaw(+e.target.value)} aria-label="Rotate cube left or right" data-testid="cube-yaw" /><output>{yaw}°</output></label>
                 <label className="cube-slider">Tilt<input type="range" min={-50} max={20} value={tilt} onChange={(e) => setTilt(+e.target.value)} aria-label="Tilt cube up or down" data-testid="cube-tilt" /><output>{tilt}°</output></label>
                 <button className="btn sm" onClick={() => { setYaw(DEFAULT_YAW); setTilt(DEFAULT_TILT); }} data-testid="cube-reset-camera"><Icon.reset width={14} height={14} /> Reset camera</button>
-                <label className="cube-slicer">Slice Z
-                  <select className="select" value={zSlice ?? ''} onChange={(e) => setZSlice(e.target.value || null)} data-testid="cube-zslice" aria-label="Show a single Z layer or all layers">
+                <span className="cube-slicer" role="group" aria-label={`${cube.axes[2].label} layer`}>Layer
+                  <button type="button" className="btn sm icon ghost" onClick={() => stepLayer(-1)} disabled={zCats.length < 2} aria-label="Previous layer" data-testid="cube-layer-prev"><Icon.chevron width={14} height={14} style={{ transform: 'rotate(180deg)' }} /></button>
+                  <select className="select" value={zSlice ?? ''} onChange={(e) => setZChoice(e.target.value || 'all')} data-testid="cube-zslice" aria-label="Show a single layer or all layers">
+                    {zCats.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
                     <option value="">All layers</option>
-                    {cube?.axes[2].categories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
                   </select>
-                </label>
+                  <button type="button" className="btn sm icon ghost" onClick={() => stepLayer(1)} disabled={zCats.length < 2} aria-label="Next layer" data-testid="cube-layer-next"><Icon.chevron width={14} height={14} /></button>
+                </span>
                 <button className="btn sm" aria-pressed={hideFront} onClick={() => setHideFront((v) => !v)} data-testid="cube-hide-front">Hide front planes</button>
               </div>
             </>
@@ -279,7 +326,7 @@ export function DocumentCube() {
           <div className="panel cube-table-panel">
             <div className="panel-head">
               <span>Intersections</span>
-              <span className="sub">{nonEmpty} populated of {total} · keyboard alternative to the {view === 'grid' ? 'grid' : '3D view'}</span>
+              <span className="sub">{filtering ? `${matchCount} of ${nonEmpty} populated match the filters` : `${nonEmpty} populated of ${total}`} · keyboard alternative to the {view === 'grid' ? 'grid' : '3D view'}</span>
               <span className="right"><label className="cube-check"><input type="checkbox" checked={showEmpty} onChange={(e) => setShowEmpty(e.target.checked)} /> Include empty</label></span>
             </div>
             <div className="cube-table-scroll">
@@ -302,7 +349,7 @@ export function DocumentCube() {
                     const key = cellKey(c);
                     const st = outcomeStyle(c.dominantOutcome);
                     return (
-                      <tr key={key} className={effectiveKey === key ? 'selected' : c.count === 0 ? 'cube-row-empty' : ''} onClick={() => { setSelected(key); setYKey(c.y); }} data-testid="cube-row">
+                      <tr key={key} className={`${effectiveKey === key ? 'selected' : c.count === 0 ? 'cube-row-empty' : ''}${filtering && !matches(c) ? ' cube-row-off' : ''}`} onClick={() => { select(key); setYKey(c.y); }} data-testid="cube-row">
                         <td className="cube-wrap" title={labelOf(0, c.x)}>{labelOf(0, c.x)}</td><td className="cube-wrap" title={labelOf(1, c.y)}>{labelOf(1, c.y)}</td><td className="cube-wrap" title={labelOf(2, c.z)}>{labelOf(2, c.z)}</td>
                         <td className="num"><strong>{c.count}</strong></td>
                         <td>{c.count === 0 ? <span className="muted">No matching fixture</span> : <span className="cube-outcome-cell"><span className="cube-mark sm" style={{ ['--mk' as string]: st.color }}>{st.letter}</span><span className={viewMode === 'technical' ? 'mono' : ''}>{outcomeName(c.dominantOutcome)}</span>{c.simulationOnly && <span className="chip sim">SIMULATION ONLY</span>}</span>}</td>
@@ -323,7 +370,7 @@ export function DocumentCube() {
           <div className="panel-head">Selected intersection</div>
           <div className="panel-body">
             {!selectedCell || !cube ? (
-              <Empty title="No populated intersections" message="No seeded record resolves under the current axes and filters." />
+              <Empty title={filtering ? 'Nothing to show here' : 'No populated intersections'} message={filtering ? (pinnedLayer ? 'No intersection in this layer matches the filters. Step to another layer or clear the filters.' : 'No intersection matches the filters. Clear a filter to see more.') : 'No seeded record resolves under the current axes and filters.'} />
             ) : (
               <Inspector cell={selectedCell} cube={cube} engineProject={project} engine={engine} outcomeStyle={outcomeStyle} outcomeName={outcomeName} onOpen={openScenario} />
             )}
@@ -338,8 +385,8 @@ export function DocumentCube() {
 
 type OutcomeStyleFn = (o: string | null) => { color: string; letter: string };
 
-function CubeScene(props: { cube: CubeResult; yaw: number; tilt: number; zSlice: string | null; hideFront: boolean; selected: string | null; onSelect: (k: string) => void; outcomeStyle: OutcomeStyleFn }) {
-  const { cube, yaw, tilt, zSlice, hideFront, selected, onSelect, outcomeStyle } = props;
+function CubeScene(props: { cube: CubeResult; yaw: number; tilt: number; zSlice: string | null; hideFront: boolean; selected: string | null; onSelect: (k: string) => void; outcomeStyle: OutcomeStyleFn; matches: (c: CubeCell) => boolean; filtering: boolean }) {
+  const { cube, yaw, tilt, zSlice, hideFront, selected, onSelect, outcomeStyle, matches, filtering } = props;
   const [ax, ay, az] = cube.axes;
   const nx = Math.max(ax.categories.length, 1), ny = Math.max(ay.categories.length, 1), nz = Math.max(az.categories.length, 1);
   const P = 56; // grid pitch: one category = one equal step (discrete grid, not physical distance)
@@ -388,10 +435,12 @@ function CubeScene(props: { cube: CubeResult; yaw: number; tilt: number; zSlice:
         {cube.cells.map((c) => {
           const i = ax.categories.findIndex((k) => k.key === c.x), j = ay.categories.findIndex((k) => k.key === c.y), k = az.categories.findIndex((kk) => kk.key === c.z);
           const key = cellKey(c);
-          const dimmed = sliceZ >= 0 && k !== sliceZ;
+          // Filtered-out cells are hidden in 3D. With one layer shown, the other layers' cells stay as faint outlines for context.
+          if (filtering && !matches(c)) return null;
+          const ghost = sliceZ >= 0 && k !== sliceZ;
+          if (ghost) return c.count === 0 ? null : <div key={cellKey(c)} className="cube-cell-wrap" style={{ transform: bb(px(i), py(j), zPos(k), 4) }} aria-hidden="true"><span className="cube-ghost" data-testid="cube-cell-ghost" /></div>;
           const st = outcomeStyle(c.dominantOutcome);
           const label = `${ax.label} ${labelFor(ax, c.x)}, ${ay.label} ${labelFor(ay, c.y)}, ${az.label} ${labelFor(az, c.z)}: ${c.count === 0 ? 'no matching fixture' : `${c.count} scenarios, dominant outcome ${c.dominantOutcome}${c.blocking ? `, ${c.blocking} blocking` : ''}`}`;
-          if (dimmed) return null;
           return (
             <div key={key} className="cube-cell-wrap" style={{ transform: bb(px(i), py(j), zPos(k), 4) }}>
               <button
@@ -420,13 +469,13 @@ const labelFor = (ax: CubeResult['axes'][number], key: string) => ax.categories.
 
 /* ------------------------------------------------------------------ matrix (default view) */
 
-function CubeMatrix(props: { cube: CubeResult; activeY: string; onY: (k: string) => void; selected: string | null; onSelect: (k: string) => void; outcomeStyle: OutcomeStyleFn; outcomeName: (o: string | null) => string }) {
-  const { cube, activeY, onY, selected, onSelect, outcomeStyle, outcomeName } = props;
+function CubeMatrix(props: { cube: CubeResult; activeY: string; onY: (k: string) => void; selected: string | null; onSelect: (k: string) => void; outcomeStyle: OutcomeStyleFn; outcomeName: (o: string | null) => string; matches: (c: CubeCell) => boolean }) {
+  const { cube, activeY, onY, selected, onSelect, outcomeStyle, outcomeName, matches } = props;
   const technical = useStudio((s) => s.viewMode) === 'technical';
   const pc = (l: string) => plainCat(l, technical);
   const [ax, ay, az] = cube.axes;
   const byKey = new Map(cube.cells.map((c) => [cellKey(c), c]));
-  const yTotal = (k: string) => cube.cells.filter((c) => c.y === k).reduce((n, c) => n + c.count, 0);
+  const yTotal = (k: string) => cube.cells.filter((c) => c.y === k && matches(c)).reduce((n, c) => n + c.count, 0);
   return (
     <div className="cube-matrix-wrap" data-testid="cube-matrix">
       <div className="cube-ytabs" role="tablist" aria-label={`${ay.label} (Y axis)`}>
@@ -452,7 +501,8 @@ function CubeMatrix(props: { cube: CubeResult; activeY: string; onY: (k: string)
               return (
                 <div key={z.key} role="gridcell" className="cube-mx-gc">
                   <button
-                    className={`cube-mx-cell${c.count === 0 ? ' vacant' : ''}${selected === key ? ' selected' : ''}`}
+                    className={`cube-mx-cell${c.count === 0 ? ' vacant' : ''}${selected === key ? ' selected' : ''}${matches(c) ? '' : ' off'}`}
+                    data-match={matches(c) ? 'yes' : 'no'}
                     style={{ ['--mk' as string]: st.color }}
                     aria-label={label} aria-pressed={selected === key} title={label}
                     data-testid={c.count === 0 ? 'cube-cell-empty' : 'cube-cell'}

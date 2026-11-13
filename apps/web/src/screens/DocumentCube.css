@@ -178,3 +178,22 @@
 .cube-stage:has(.cube-tick.slant) { height: 390px; }
 @media (max-height: 800px) { .cube-stage:has(.cube-tick.slant) { height: 360px; } }
 .cube-viewport:has(.cube-tick.slant) .cube-world { top: 38%; }
+
+/* Declutter filters: the legend doubles as on/off switches; "Problems only" keeps cells with blocking issues or warnings. */
+.cube-leg-btn { appearance: none; font: inherit; color: inherit; cursor: pointer; padding: 3px 9px 3px 5px; border-radius: 999px; border: 1px solid var(--iss-border); background: transparent; transition: background var(--iss-motion-fast, .12s), opacity var(--iss-motion-fast, .12s); }
+.cube-leg-btn:hover { background: var(--iss-surface-hover); }
+.cube-leg-btn:focus-visible { outline: none; box-shadow: var(--iss-focus); }
+.cube-leg-btn.on { border-color: var(--iss-accent); background: var(--iss-accent-soft); font-weight: 600; }
+.cube-leg-btn.off { opacity: .55; }
+.cube-leg-static { color: var(--iss-text-muted); }
+.cube-leg-result { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; white-space: nowrap; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--iss-accent-soft); }
+.cube-leg-result .btn { min-height: 22px; padding: 0 8px; }
+/* Grid and table: non-matching intersections fade but keep their place. 3D hides them (see CubeScene). */
+.cube-mx-cell.off { opacity: .22; filter: grayscale(1); }
+.cube-mx-cell.off:hover, .cube-mx-cell.off:focus-visible { opacity: .6; }
+.cube-row-off td { opacity: .38; }
+.cube-row-off:hover td { opacity: .7; }
+/* 3D, one layer shown: the other layers' populated cells remain as faint outlines. */
+.cube-ghost { position: absolute; left: -7px; top: -5px; width: 14px; height: 10px; border-radius: 4px; border: 1px solid var(--iss-text-muted); opacity: .28; pointer-events: none; }
+.cube-nomatch { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 10px; background: var(--iss-surface); border: 1px solid var(--iss-border-strong); font-size: 12.5px; z-index: 3; }
+.cube-slicer .btn.icon { min-width: 24px; min-height: 24px; padding: 0; }

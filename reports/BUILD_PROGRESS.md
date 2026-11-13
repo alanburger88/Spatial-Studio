@@ -22,7 +22,7 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
 | Unit tests | 114/114 |
-| Browser tests | 90/90 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 12 v0.4 UX tests) |
+| Browser tests | 91/91 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests) |
 | Build | OK |
 
 ## v0.2 additions (all verified by the tests above)
@@ -62,6 +62,7 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 - 3D Cube: a crowded X axis shows full persona names, slanted; a wireframe plane no longer hides labels.
 - Export history: a rebuilt PDF hides the earlier entry but its file and link keep working.
 - Logo: the official InfoSlips artwork was supplied afterwards and is now in the top bar, the sign-in page and the browser tab (D53). Exported documents keep the issuer's own brand.
+- Document Cube: legend switches and *Problems only* filter the Grid, 3D view and table; the 3D view opens on one layer with a stepper (D54).
 
 ## Not verified / open
 
