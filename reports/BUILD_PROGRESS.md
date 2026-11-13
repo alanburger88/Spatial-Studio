@@ -22,7 +22,7 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
 | Unit tests | 139/139 |
-| Browser tests | 91/91 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests) |
+| Browser tests | 127/127 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests + 36 v0.5 tests: blockers 3, HTML web 18, translations 6, Email & SMS 9) |
 | Build | OK |
 
 ## v0.2 additions (all verified by the tests above)
@@ -72,6 +72,7 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 - **Interactive HTML (D62):** web-style structure and interactions; device frames in the studio.
 - **Cross-customer blocker list (D55):** *All customers* view in Validate & Compare.
 - **Exploded Document:** states that versions are the same for every output and shows the document language.
+- **First download:** 486 kB → 525 kB (160 kB → 172 kB compressed): the language table and wording catalogue load with the shell.
 
 ## Not verified / open
 
