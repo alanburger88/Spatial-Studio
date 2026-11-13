@@ -18,7 +18,7 @@ import type { GeneratedCustomer, TestDataOptions, TestDataPlan, TestDataTarget }
  * customer data contract and confirmed with the resolver before it is returned.
  */
 
-const { Env, targetsOf, dnf, shiftDay, show, contradiction, treeOf, stepLabel, blockingKey, listOf, q, and, not, TRUE } = coverageKit;
+const { Env, targetsOf, dnf, holds, shiftDay, show, contradiction, treeOf, stepLabel, blockingKey, listOf, q, and, or, not, TRUE } = coverageKit;
 const FALSE: Predicate = { op: 'or', args: [] };
 
 const DEFAULT_MAX = 200;
@@ -165,15 +165,18 @@ interface Goal {
 
 interface Edge {
   target: TestDataTarget;
-  owner: Owner | null;
-  leaf: Predicate | null;
+  /** Every condition that reads this value, with the comparison that does. The first one sets the scene. */
+  readers: Array<{ owner: Owner; leaf: Predicate }>;
   /** The path that is set (a list's row count for an empty list). */
   path: string;
   value: unknown;
-  readers: Owner[];
   /** Set when no customer can be built at all. */
   never?: string;
+  /** Per level of `scenes`: the combinations of other conditions a customer for this value should satisfy. */
+  scenes?: CoverageConj[][];
 }
+
+interface Built { record: SyntheticRecord; res: Resolution; changes: number }
 
 interface Entry {
   record: SyntheticRecord;
@@ -247,10 +250,46 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
   };
   const LIMIT = 'No customer reached it within the search limit.';
 
+  /**
+   * A changed value can break something the document checks about the data: a balance (new balance = previous +
+   * purchases − payments + fees) or two fields that must agree (missed payments on an account that is "current").
+   * When a built record has a blocking issue its starting customer did not have, one neighbouring field is adjusted (an
+   * amount by the same difference, or another allowed value of a choice or yes/no) and the first variant the resolver
+   * accepts without a blocking issue, and that still reaches the target, is used instead.
+   */
+  const settle = (base: number, built: Built, changes: Change[], keeps: (record: SyntheticRecord, res: Resolution) => boolean): Built => {
+    if (!isBlocking(built.res) || base < 0 || baseBlocked[base]) return built;
+    const before = env.baseCtx(base);
+    const now = buildContext(built.record);
+    const touched = new Set(changes.map(([path]) => path));
+    for (const amounts of [true, false]) {
+      for (const [path, value] of changes) {
+        const old = getPath(before, path) as unknown;
+        const delta = fields.get(path)?.type === 'cents' && typeof value === 'number' && typeof old === 'number' ? value - old : 0;
+        const group = path.slice(0, path.lastIndexOf('.') + 1);
+        for (const near of fields.values()) {
+          if (near.derived || touched.has(near.path) || !near.path.startsWith(group) || near.path.slice(group.length).includes('.')) continue;
+          const cur = getPath(now, near.path) as unknown;
+          const options: unknown[] = amounts ? (near.type === 'cents' && delta && typeof cur === 'number' ? [cur + delta, cur - delta] : [])
+            : near.type === 'enum' ? (near.enumValues ?? []).filter((v) => v !== cur)
+            : near.type === 'bool' && typeof cur === 'boolean' ? [!cur] : [];
+          for (const option of options) {
+            const record = deepClone(built.record);
+            setField(record as unknown as Record<string, unknown>, near.path, option);
+            if (invalid(record)) continue;
+            const res = resolved(record);
+            if (!isBlocking(res) && keeps(record, res)) return { record, res, changes: built.changes + 1 };
+          }
+        }
+      }
+    }
+    return built;
+  };
+
   /* ------------------------------------------------------------------ outcomes */
 
   /** The coverage search, accepting only records the customer import would accept. */
-  const attempt = (alts: Predicate[], reached: (res: Resolution) => boolean): { record: SyntheticRecord | null; res: Resolution | null; changes: number; satisfiable: boolean; rejected: string | null } => {
+  const attempt = (alts: Predicate[], reached: (res: Resolution) => boolean): { built: Built | null; satisfiable: boolean; rejected: string | null } => {
     let rejected: string | null = null;
     const found = env.search(alts, (res) => {
       if (!reached(res)) return false;
@@ -258,13 +297,15 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
       if (problem) { rejected ??= problem; return false; }
       return true;
     });
-    return { record: found.hit?.res.effectiveRecord ?? null, res: found.hit?.res ?? null, changes: found.hit?.changes.length ?? 0, satisfiable: found.satisfiable, rejected };
+    const hit = found.hit;
+    const built = hit ? settle(bases.indexOf(hit.record), { record: hit.res.effectiveRecord, res: hit.res, changes: hit.changes.length }, hit.changes, (_, res) => reached(res)) : null;
+    return { built, satisfiable: found.satisfiable, rejected };
   };
 
   const goals: Goal[] = [];
   const goal = (g: Omit<Goal, 'check' | 'why'>): void => { goals.push({ ...g, check: g.reached, why: () => LIMIT }); };
   const reasonFor = (g: Goal, strong: ReturnType<typeof attempt>, weak: ReturnType<typeof attempt> | null): string => {
-    if (g.target.kind === 'variant' && weak?.record) return 'The rule that selects this message can match, but another rule or an earlier condition always takes precedence, so the message is never chosen.';
+    if (g.target.kind === 'variant' && weak?.built) return 'The rule that selects this message can match, but another rule or an earlier condition always takes precedence, so the message is never chosen.';
     if (strong.rejected || weak?.rejected) {
       if (g.target.kind === 'language') {
         const allowed = (fields.get('customer.locale')?.enumValues ?? []).map(languageName);
@@ -313,41 +354,44 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
   }
 
   /* one candidate customer per target, then the fewest candidates that cover everything */
-  interface Candidate { record: SyntheticRecord; res: Resolution; changes: number; covers: number[] }
+  interface Candidate extends Built { covers: number[] }
   const candidates = new Map<string, Candidate>();
   goals.forEach((g) => {
     if (g.never) { const never = g.never; g.why = () => never; return; }
     const strong = attempt(g.alts, g.reached);
     let found = strong;
     let weak: ReturnType<typeof attempt> | null = null;
-    if (!strong.record && g.weak) {
+    if (!strong.built && g.weak) {
       weak = attempt(g.weak.alts, g.weak.reached);
-      if (weak.record && g.weak.accept) { found = weak; g.check = g.weak.reached; }
+      if (weak.built && g.weak.accept) { found = weak; g.check = g.weak.reached; }
     }
-    if (!found.record || !found.res) { g.why = () => reasonFor(g, strong, weak); return; }
-    const key = canonicalJson(found.record);
-    if (!candidates.has(key)) candidates.set(key, { record: found.record, res: found.res, changes: found.changes, covers: [] });
+    if (!found.built) { g.why = () => reasonFor(g, strong, weak); return; }
+    const key = canonicalJson(found.built.record);
+    if (!candidates.has(key)) candidates.set(key, { ...found.built, covers: [] });
   });
   const pool = [...candidates.values()];
   for (const c of pool) c.covers = goals.flatMap((g, i) => (!g.never && g.check(c.res) ? [i] : []));
 
   const entries: Entry[] = [];
   const open = new Set(pool.flatMap((c) => c.covers));
-  const unused = new Set(pool.map((_, i) => i));
-  while (open.size) {
-    let best = -1;
-    let gain = 0;
-    for (const i of unused) {
-      const n = pool[i].covers.filter((x) => open.has(x)).length;
-      if (n > gain || (n === gain && n > 0 && pool[i].changes < pool[best].changes)) { best = i; gain = n; }
+  // Customers without a blocking issue first; one with an issue only for what nothing else reaches.
+  for (const blocked of [false, true]) {
+    const unused = new Set(pool.flatMap((c, i) => (isBlocking(c.res) === blocked ? [i] : [])));
+    while (open.size) {
+      let best = -1;
+      let gain = 0;
+      for (const i of unused) {
+        const n = pool[i].covers.filter((x) => open.has(x)).length;
+        if (n > gain || (n === gain && n > 0 && pool[i].changes < pool[best].changes)) { best = i; gain = n; }
+      }
+      if (best < 0) break;
+      unused.delete(best);
+      const c = pool[best];
+      const mine = c.covers.filter((x) => open.has(x)).map((x) => goals[x]);
+      c.covers.forEach((x) => open.delete(x));
+      const first = [...mine].sort((a, b) => LABEL_ORDER.indexOf(a.target.kind) - LABEL_ORDER.indexOf(b.target.kind))[0];
+      entries.push({ record: c.record, ctx: buildContext(c.record), blocked, changes: c.changes, label: first.label, goals: mine, edges: [] });
     }
-    if (best < 0) break;
-    unused.delete(best);
-    const c = pool[best];
-    const mine = c.covers.filter((x) => open.has(x)).map((x) => goals[x]);
-    c.covers.forEach((x) => open.delete(x));
-    const first = [...mine].sort((a, b) => LABEL_ORDER.indexOf(a.target.kind) - LABEL_ORDER.indexOf(b.target.kind))[0];
-    entries.push({ record: c.record, ctx: buildContext(c.record), blocked: isBlocking(c.res), changes: c.changes, label: first.label, goals: mine, edges: [] });
   }
 
   /* ------------------------------------------------------------------ edges */
@@ -383,36 +427,41 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
   }
 
   const edges: Edge[] = [];
-  const edgeIds = new Set<string>();
-  const readers = new Map<string, Array<{ owner: Owner; leaf: Predicate }>>();
-  const settable = (path: string): boolean => path !== 'documentType' && path !== 'recordId' && fields.has(path);
+  const edgeById = new Map<string, Edge>();
+  const readers = new Map<string, Edge['readers']>();
+  const say = (f: FieldDef, v: unknown): string => (f.path === 'customer.locale' && typeof v === 'string' ? languageName(v) : show(f, v));
   for (const owner of owners) {
     for (const leaf of leavesOf(owner.pred)) {
       const f = fields.get(leaf.path);
-      if (!f || !settable(leaf.path)) continue;
-      readers.set(leaf.path, [...(readers.get(leaf.path) ?? []), { owner, leaf: leaf.node }]);
+      if (!f || leaf.path === 'documentType' || leaf.path === 'recordId') continue;
+      const reader = { owner, leaf: leaf.node };
+      if (!readers.get(leaf.path)?.some((r) => r.owner === owner)) readers.set(leaf.path, [...(readers.get(leaf.path) ?? []), reader]);
+      // The same value of the same field is one target, whoever reads it.
       const add = (suffix: string, title: string, value: unknown, never?: string): void => {
-        const id = `edge:${owner.key}:${leaf.path}:${suffix}`;
-        if (edgeIds.has(id)) return;
-        edgeIds.add(id);
+        const id = `edge:${leaf.path}:${suffix}`;
+        const known = edgeById.get(id);
+        if (known) { if (!known.readers.some((r) => r.owner === owner)) known.readers.push(reader); return; }
         const calc = f.derived && !env.overridable(leaf.path) ? `${plain(f.label)} is calculated from other fields and cannot be set on a customer.` : undefined;
-        edges.push({ target: { id, kind: 'edge', targetId: leaf.path, title, customer: null }, owner, leaf: leaf.node, path: leaf.path, value, readers: [owner], never: never ?? calc });
+        const edge: Edge = { target: { id, kind: 'edge', targetId: leaf.path, title, customer: null }, readers: [reader], path: leaf.path, value, never: never ?? calc };
+        edgeById.set(id, edge);
+        edges.push(edge);
       };
       const name = plain(f.label);
       const counted = f.type === 'int' || f.type === 'points';
+      const below0 = (x: number): string | undefined => (counted && x < 0 ? `${name} cannot be less than 0.` : undefined);
       for (const v of leaf.values) {
         if (v === null) continue;
         if (leaf.op !== 'in' && NUMERIC.has(f.type) && typeof v === 'number' && Number.isInteger(v)) {
-          add(`below:${v}`, `${name} just below ${show(f, v)}`, v - 1, counted && v - 1 < 0 ? `${name} cannot be less than 0, so there is no value just below ${show(f, v)}.` : undefined);
-          add(`on:${v}`, `${name} exactly ${show(f, v)}`, v, counted && v < 0 ? `${name} cannot be less than 0.` : undefined);
-          add(`above:${v}`, `${name} just above ${show(f, v)}`, v + 1, counted && v + 1 < 0 ? `${name} cannot be less than 0.` : undefined);
+          add(`below:${v}`, `${name} just below ${say(f, v)}`, v - 1, counted && v - 1 < 0 ? `${name} cannot be less than 0, so there is no value just below ${say(f, v)}.` : undefined);
+          add(`on:${v}`, `${name} exactly ${say(f, v)}`, v, below0(v));
+          add(`above:${v}`, `${name} just above ${say(f, v)}`, v + 1, below0(v + 1));
         } else if (leaf.op !== 'in' && f.type === 'date' && typeof v === 'string' && shiftDay(v, 0)) {
-          add(`below:${v}`, `${name} just before ${show(f, v)}`, shiftDay(v, -1));
-          add(`on:${v}`, `${name} exactly ${show(f, v)}`, shiftDay(v, 0));
-          add(`above:${v}`, `${name} just after ${show(f, v)}`, shiftDay(v, 1));
+          add(`below:${v}`, `${name} just before ${say(f, v)}`, shiftDay(v, -1));
+          add(`on:${v}`, `${name} exactly ${say(f, v)}`, shiftDay(v, 0));
+          add(`above:${v}`, `${name} just after ${say(f, v)}`, shiftDay(v, 1));
         } else if (f.type === 'bool' || typeof v === 'boolean') {
-          for (const b of [true, false]) add(`is:${b}`, `${name} is ${show(f, b)}`, b);
-        } else add(`is:${String(v)}`, `${name} is ${show(f, v)}`, v);
+          for (const b of [true, false]) add(`is:${b}`, `${name} is ${say(f, b)}`, b);
+        } else add(`is:${String(v)}`, `${name} is ${say(f, v)}`, v);
       }
     }
   }
@@ -420,58 +469,60 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
   for (const [path, who] of readers) {
     const f = fields.get(path)!;
     const list = f.type === 'array' ? f : path.endsWith('.count') ? fields.get(path.slice(0, -6)) : undefined;
-    const isList = list?.type === 'array';
-    const subject = isList ? list! : f;
-    if (subject.required) continue;
+    const subject = list?.type === 'array' ? list : f;
+    const isList = subject.type === 'array';
     const id = `empty:${subject.path}`;
-    if (edgeIds.has(id)) continue;
-    edgeIds.add(id);
-    const setPath = isList ? `${subject.path}.count` : path;
+    if (subject.required || edgeById.has(id)) continue;
     const never = !isList && f.derived ? `${plain(f.label)} is calculated from other fields, so it cannot be left empty on a customer.` : undefined;
-    edges.push({
+    const edge: Edge = {
       target: { id, kind: 'empty', targetId: subject.path, title: `${plain(subject.label)} is ${show(subject, isList ? [] : null)}`, customer: null },
-      owner: who[0].owner, leaf: who[0].leaf, path: setPath, value: isList ? 0 : null, readers: [...new Set(who.map((w) => w.owner))], never,
-    });
+      readers: who, path: isList ? `${subject.path}.count` : path, value: isList ? 0 : null, never,
+    };
+    edgeById.set(id, edge);
+    edges.push(edge);
   }
 
   /** Combinations of the other conditions, without anything they say about the field that is being set. */
-  const contexts = (preds: Predicate[], path: string): CoverageConj[] => {
+  const contexts = (pred: Predicate, path: string): CoverageConj[] => {
     const out: CoverageConj[] = [];
     const seen = new Set<string>();
-    for (const p of preds) {
-      for (const conj of dnf(p, false, () => true)) {
-        const rest = conj.filter((l) => l.path !== path);
-        const key = JSON.stringify(rest);
-        if (seen.has(key) || !env.satisfiable(rest)) continue;
-        seen.add(key);
-        out.push(rest);
-        if (out.length >= SEARCH_WIDTH) return out;
-      }
+    for (const conj of dnf(pred, false, () => true)) {
+      const rest = conj.filter((l) => l.path !== path);
+      const key = JSON.stringify(rest);
+      if (seen.has(key) || !env.satisfiable(rest)) continue;
+      seen.add(key);
+      out.push(rest);
+      if (out.length >= SEARCH_WIDTH) break;
     }
     return out;
   };
-  /** 2 = the value decides the outcome and nothing overrules it; 1 = it decides this condition; 0 = it does not. */
-  const decides = (e: Edge, ctx: unknown): number => {
-    if (!e.owner || !e.leaf) return 0;
-    if (evaluatePredicate(replaced(e.owner.pred, e.leaf, TRUE), ctx) === evaluatePredicate(replaced(e.owner.pred, e.leaf, FALSE), ctx)) return 0;
-    return e.owner.rivals.some((p) => evaluatePredicate(p, ctx)) ? 1 : 2;
+  /**
+   * What should hold around the value, best first: for every condition that reads it, the other conditions hold (so the
+   * value decides) and no rival overrules; then the same without the rivals; then for the first reader only; then anything.
+   */
+  const scenesOf = (e: Edge): CoverageConj[][] => {
+    const parts = e.readers.map(({ owner, leaf }) => {
+      const yes = replaced(owner.pred, leaf, TRUE);
+      const no = replaced(owner.pred, leaf, FALSE);
+      return { decisive: or([and([yes, not(no)]), and([not(yes), no])]), quiet: owner.rivals.map(not) };
+    });
+    const preds = [
+      and([...parts.map((p) => p.decisive), ...parts.flatMap((p) => p.quiet)]), and(parts.map((p) => p.decisive)),
+      and([parts[0].decisive, ...parts[0].quiet]), parts[0].decisive, TRUE,
+    ];
+    const seen = new Set<string>();
+    return preds.filter((p) => { const key = JSON.stringify(p); if (seen.has(key)) return false; seen.add(key); return true; }).map((p) => contexts(p, e.path));
   };
 
-  const build = (e: Edge): { record: SyntheticRecord; res: Resolution; changes: number } | { reason: string } => {
-    if (!e.owner || !e.leaf) return { reason: LIMIT };
-    const yes = replaced(e.owner.pred, e.leaf, TRUE);
-    const no = replaced(e.owner.pred, e.leaf, FALSE);
-    const decisive = [and([yes, not(no)]), and([not(yes), no])];
-    // Best first: the other conditions hold and no rival overrules; the other conditions hold; any customer.
-    const levels = [...(e.owner.rivals.length ? [decisive.map((d) => and([d, ...e.owner!.rivals.map(not)]))] : []), decisive, [TRUE]];
+  const build = (e: Edge): (Built & { level: number }) | { reason: string } => {
+    const scenes = (e.scenes ??= scenesOf(e));
     let rejected: string | null = null;
-    for (const preds of levels) {
-      const conjs = contexts(preds, e.path);
+    for (let level = 0; level < scenes.length; level++) {
       const options: Array<{ i: number; changes: Change[]; distance: number }> = [];
       bases.forEach((_, i) => {
         const ctx = env.baseCtx(i);
         let plan: Change[] | null = null;
-        for (const conj of conjs) { const p = env.plan(conj, ctx); if (p && (!plan || p.length < plan.length)) plan = p; }
+        for (const conj of scenes[level]) { const p = env.plan(conj, ctx); if (p && (!plan || p.length < plan.length)) plan = p; }
         if (!plan) return;
         const cur = getPath(ctx, e.path) as unknown;
         const distance = typeof cur === 'number' && typeof e.value === 'number' ? Math.abs(cur - e.value) : 0;
@@ -479,37 +530,43 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
       });
       // Fewest changes; then the customer whose own value is nearest (the rest of its data tends to fit); then one without issues.
       options.sort((a, b) => a.changes.length - b.changes.length || a.distance - b.distance || Number(baseBlocked[a.i]) - Number(baseBlocked[b.i]) || a.i - b.i);
-      let fallback: { record: SyntheticRecord; res: Resolution; changes: number } | null = null;
+      let fallback: (Built & { level: number }) | null = null;
       let tried = 0;
       for (const o of options) {
         if (tried >= EDGE_TRIES) break;
         const patch = env.toOverrides(bases[o.i], o.changes);
         if (!patch) continue;
         const record = deepPatch(bases[o.i], patch.overrides);
+        // The value is there, and what was arranged around it still holds.
+        const fitsScene = (r: SyntheticRecord): boolean => { const ctx = buildContext(r); return same(getPath(ctx, e.path), e.value) && scenes[level].some((conj) => conj.every((l) => holds(l, getPath(ctx, l.path)))); };
         if (!same(getPath(buildContext(record), e.path), e.value)) continue;
         const problem = invalid(record);
         if (problem) { rejected ??= problem; continue; }
         tried++;
-        const res = resolved(record);
-        const built = { record, res, changes: o.changes.length };
-        if (!isBlocking(res)) return built;
+        const built = { ...settle(o.i, { record, res: resolved(record), changes: o.changes.length }, patch.told, fitsScene), level };
+        if (!isBlocking(built.res)) return built;
         fallback ??= built;
       }
       if (fallback) return fallback;
     }
-    return { reason: rejected ? `The customer data contract does not accept a record with this value. ${rejected}` : calculated([e.owner.pred]) ?? 'No starting customer could be given this value.' };
+    return { reason: rejected ? `The customer data contract does not accept a record with this value. ${rejected}` : calculated(e.readers.map((r) => r.owner.pred)) ?? 'No starting customer could be given this value.' };
   };
 
   const edgeReasons = new Map<Edge, string>();
   for (const e of edges) {
     if (e.never) { edgeReasons.set(e, e.never); continue; }
     const built = build(e);
-    const fresh = 'record' in built ? { ...built, ctx: buildContext(built.record) } : null;
-    const need = fresh ? decides(e, fresh.ctx) : 0;
-    // An existing customer that already has the value, in a situation at least as telling, is the edge customer.
-    const reuse = entries.find((x) => same(getPath(x.ctx, e.path), e.value) && decides(e, x.ctx) >= need && (!fresh || !x.blocked || isBlocking(fresh.res)));
+    const fresh = 'record' in built ? built : null;
+    // An existing customer that already has the value, in a setting at least as telling, is the edge customer.
+    const fits = (x: Entry): boolean => {
+      if (!same(getPath(x.ctx, e.path), e.value)) return false;
+      if (!fresh) return true;
+      if (x.blocked && !isBlocking(fresh.res)) return false;
+      return (e.scenes ?? []).slice(0, fresh.level + 1).some((conjs) => conjs.some((conj) => conj.every((l) => holds(l, getPath(x.ctx, l.path)))));
+    };
+    const reuse = entries.find(fits);
     if (reuse) reuse.edges.push(e);
-    else if (fresh) entries.push({ record: fresh.record, ctx: fresh.ctx, blocked: isBlocking(fresh.res), changes: fresh.changes, label: e.target.title, goals: [], edges: [e] });
+    else if (fresh) entries.push({ record: fresh.record, ctx: buildContext(fresh.record), blocked: isBlocking(fresh.res), changes: fresh.changes, label: e.target.title, goals: [], edges: [e] });
     else if ('reason' in built) edgeReasons.set(e, built.reason);
   }
 
@@ -541,7 +598,7 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
       if (res && same(getPath(ctx, e.path), e.value)) {
         placed.set(e.target, index);
         targets.push(e.target.id);
-        observed.set(e.target, [...new Set(e.readers.map((o) => o.observe(res)))].slice(0, 3).join('; '));
+        observed.set(e.target, [...new Set(e.readers.map((r) => r.owner.observe(res)))].slice(0, 3).join('; '));
       } else failed.add(e.target);
     }
     if (targets.length) customers.push({ record, label: entry.label, targets });
