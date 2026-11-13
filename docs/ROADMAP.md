@@ -1,6 +1,6 @@
 # Roadmap: from proof of concept to a product that leads
 
-Status: **proposed order, awaiting the product owner's approval. Nothing in this document is built unless it says so.**
+Status: **wave order approved by the product owner on 2026-11-13 ("as proposed"). Nothing in this document is built unless it says so.**
 Written 2026-11-13 after a critical review and ten decisions taken one by one with the product owner.
 A comparison with named competitors is in `docs/research/COMPETITORS.md`. **It rests on search-result summaries only:** the vendors' own pages could not be opened from the build environment (their sites are outside its allowed network), so every finding there needs confirming on the source page before it is used in a sales claim.
 
@@ -41,13 +41,13 @@ Source: `docs/research/COMPETITORS.md` (107 public sources, search-result summar
 
 | Their strength | Who | The studio today | In the roadmap? |
 |---|---|---|---|
-| Comparing whole output runs between versions, in a release pipeline | Quadient (Compare Bundle, StreamDiff, DocDiff), OpenText (Output Compare) | One customer at a time; change summary in words | Partly: "Before and after" (wave 1). **A whole-base check before Production is not yet in it** |
+| Comparing whole output runs between versions, in a release pipeline | Quadient (Compare Bundle, StreamDiff, DocDiff), OpenText (Output Compare) | One customer at a time; change summary in words | Partly: "Before and after" (wave 1). The whole-base check is held for later |
 | Print streams and finishing (AFP, PostScript, PCL, barcodes, OMR, inserts, postal presort) | Quadient, OpenText, Papyrus | PDF only; AFP is a simulation | Wave 5, needs a print partner |
 | Finding duplicate wording across thousands of templates; AI-assisted migration | Messagepoint (Rationalizer), Quadient (InspireXpress+), Precisely | Nothing | Wave 3 |
 | Variants that inherit from a master | Messagepoint (patented) | Nothing | Wave 5; the patent needs a legal look before design |
-| AI writing help with governance: tone and sentiment scoring, 80–100+ languages, personal-data detection, a record of AI changes | All four main vendors | Rewrite, translation, proposals a person approves, AI labelled in Activity. No sentiment score, **no personal-data check on what is sent to the model** | Partly: wording checker (wave 2) |
-| Business users editing only the regions a designer unlocks, for one-off letters | OpenText (Empower), SmartCOMM (Draft Editor), Quadient | Nothing | **Not in the roadmap** |
-| Approval chains: several approvers, in parallel or in sequence, observers | SmartCOMM, OpenText, Quadient | One approval by one person with the right role | **Not in the roadmap** (four-eyes was not chosen) |
+| AI writing help with governance: tone and sentiment scoring, 80–100+ languages, personal-data detection, a record of AI changes | All four main vendors | Rewrite, translation, proposals a person approves, AI labelled in Activity. No sentiment score, no personal-data check on what is sent to the model | Partly: wording checker (wave 2). The guard is held for later |
+| Business users editing only the regions a designer unlocks, for one-off letters | OpenText (Empower), SmartCOMM (Draft Editor), Quadient | Nothing | Held for later |
+| Approval chains: several approvers, in parallel or in sequence, observers | SmartCOMM, OpenText, Quadient | One approval by one person with the right role | Held for later |
 | Accessible PDF at volume, with a validator | Papyrus, OpenText, Quadient (as a separate product) | Tagged by the browser, never validated | Wave 2 |
 | Archive with retention and legal holds | Quadient | Nothing | Partly: "Proof for any customer" (wave 1) is a record, not an archive |
 | Right-to-left languages | Papyrus only | None | Wave 5 |
@@ -78,6 +78,17 @@ Already agreed and carried into the waves: **blockers phases 2–6** (`docs/desi
 - **Security and operations plan** (single sign-on, API keys for other systems, encryption, backups, automated build). Needed before any deployment; deployment itself needs explicit approval.
 - **Studio accessibility and other browsers.** Only Chromium has been tested and no screen-reader pass has been done.
 - **Four-eyes approval.** Today a person with the right role can approve their own change.
+
+## Held for later: to be raised when all five waves are done
+
+Decided by the product owner on 2026-11-13: record these four, do not add them to a wave, and bring them up again at the end of the current waves.
+
+| Item | What it is | Who has it today |
+|---|---|---|
+| Whole-base check before Production | Compare every customer's documents between two releases and show who changes and how, as a gate before Production | Quadient, OpenText |
+| Personal-data guard and AI record | Check what is sent to the AI model for personal data, mask or block it, and keep a record of every AI-assisted change | Quadient, Smart Communications, Precisely |
+| Approval chains | Several approvers in sequence or in parallel, observers, no approving your own change | SmartCOMM, OpenText, Quadient |
+| Editing in unlocked regions | A business user writes a one-off letter and can change only what a designer unlocked | OpenText, SmartCOMM, Quadient |
 
 ## Waves
 
