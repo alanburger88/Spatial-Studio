@@ -48,6 +48,19 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
       { screen: 'S19', why: 'see where an open document stands and what to do next' },
     ],
   },
+  S25: {
+    purpose: 'The things many documents share: a brand, building blocks such as a header or a contact panel, wording with its translations, glossaries, the house wording rules and lookup tables. Each item has numbered versions; an approved version is frozen, and a document takes a newer one only through a reviewed update.',
+    actions: [
+      'Choose an item to see its versions, a preview of each and every document that uses it, with those that are behind.',
+      'Start a new version as a draft, or edit the draft, by typing it or taking it from a document (authors).',
+      'Approve a draft to freeze it, or discard it (approvers and admins).',
+      'Add the first item with “Add to library” in a document, or with New item here.',
+    ],
+    next: [
+      { screen: 'S02', why: 'use a building block from the library, or add a component to it' },
+      { screen: 'S19', why: 'see whether a document has library updates waiting' },
+    ],
+  },
   S19: {
     purpose: 'Where a document stands and what to do next. Every line is worked out from the document, its customers and its releases; nothing is stored or guessed.',
     actions: [
@@ -65,7 +78,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     purpose: 'Lay out the document and edit what it says. Pick a component on the page to change its position, its text, its data and the rules that decide whether it shows.',
     actions: [
       'Select a component on the page or in the Layers list, then edit it in the panel on the right.',
-      'Add components from the Components list. Open Page setup to choose the paper, margins, columns and backgrounds, and drag the edges of the flow area or the letterhead zone, or type the measurements.',
+      'Add components from the Components list, or a building block with From the library (it stays linked and read-only until you unlink it). Open Page setup to choose the paper, margins, columns and backgrounds, and drag the edges of the flow area or the letterhead zone, or type the measurements.',
       'Edit text, and add an alternative version of a message for a section that changes by customer.',
       'Open Styles & brand to change text styles and brand settings.',
       'Use Explore variants to see every alternative a selected section can show.',

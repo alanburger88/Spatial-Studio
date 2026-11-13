@@ -133,6 +133,15 @@ const ROUTES: Record<string, Need> = {
   'POST /api/v1/proofs/import': 'any',
   'POST /api/v1/proofs/:proofId/verify': 'any',
   'POST /api/v1/proofs/reset': 'manage_users',
+  // Shared library: anyone signed in reads it; authors propose items and versions; approvers and admins approve them.
+  'POST /api/v1/library': 'edit',
+  'PUT /api/v1/library/:itemId/draft': 'edit',
+  // Discarding a draft: authors, approvers and admins (checked in the handler, with a plain refusal).
+  'DELETE /api/v1/library/:itemId/draft': 'any',
+  'POST /api/v1/library/:itemId/approve': 'approve',
+  // A dry run: it computes the impact of an update and stores nothing.
+  'POST /api/v1/library/:itemId/impact': 'any',
+  'POST /api/v1/library/reset': 'manage_users',
 };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Routes not listed above: reads need a session; anything that writes needs edit rights (safe default for new modules). */
@@ -147,7 +156,11 @@ function isReadLike(method: string, route: string | undefined): boolean {
   return need === 'public' || (need === 'any' && !(route ?? '').endsWith('/workflow'));
 }
 
-function forbiddenMessage(role: Role, need: Permission): string {
+function forbiddenMessage(role: Role, need: Permission, route?: string): string {
+  if (route?.startsWith('/api/v1/library')) {
+    if (need === 'edit') return `${ROLE_LABEL[role]}s cannot add to the library or draft a new version; ask an author.`;
+    if (need === 'approve') return 'Only approvers and admins can approve a library version.';
+  }
   if (role === 'reviewer' && need === 'edit') return 'Reviewers can comment but not edit.';
   if (need === 'edit') return `${ROLE_LABEL[role]}s cannot change documents; ask an author.`;
   if (need === 'manage_users') return 'Only admins can manage users.';
@@ -212,7 +225,7 @@ export function registerAuth(app: FastifyInstance, { store, ApiError, enabled }:
     if (!req.url.startsWith('/api/') || !req.user) return;
     const need = needFor(req.method, req.routeOptions?.url);
     if (need === 'public' || need === 'any') return;
-    if (!roleCan(req.user.role, need)) throw new ApiError(403, 'FORBIDDEN', forbiddenMessage(req.user.role, need), { role: req.user.role, needs: need });
+    if (!roleCan(req.user.role, need)) throw new ApiError(403, 'FORBIDDEN', forbiddenMessage(req.user.role, need, req.routeOptions?.url), { role: req.user.role, needs: need });
   });
 
   /** Generic fallback so every successful mutating request is in the audit log, including routes added by other modules. */

@@ -13,6 +13,7 @@ import { useDocumentBlockers } from './blockers/useBlockers';
 import { clockTime, fullCheckOf, useFullCheck } from './blockers/fullCheck';
 import { auditSentence, customerNamesOf } from './Activity';
 import './Overview.css';
+import { LibraryUpdatesLine } from './library/OverviewLine';
 
 /**
  * Overview (S19): the document's home. Where it stands, what to do next, and a few facts at a glance.
@@ -264,6 +265,7 @@ export function Overview() {
                 </span>}
           </div>
         </div>
+        <LibraryUpdatesLine project={project} />
 
         <div className="ov-grid">
           {/* ---------------------------------------------------------------- next steps */}

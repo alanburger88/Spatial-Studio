@@ -1,4 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { libraryOwnership } from '@iss/model';
+import { LibraryChip } from './library/LinkUI';
+import { WholeDocumentLibrary } from './library/DocumentLibrary';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AVAILABLE_LANGUAGES, checkTokens, languageName, languageShortName, projectLanguages, toTranslationCsv, translationStatus, usageEntryFromResolution, type TranslationRow, type TranslationUsageEntry } from '@iss/model';
 import { resolve } from '@iss/resolver';
@@ -46,7 +49,9 @@ const KIND_COUNT: Record<TranslationFlag['kind'], [string, string]> = { length: 
 function GlossaryDialog({ locale, langName, entries, onClose, onSaved }: { locale: string; langName: string; entries: Array<{ source: string; target: string; note?: string }>; onClose: () => void; onSaved: () => void }) {
   const [rows, setRows] = useState<Array<{ source: string; target: string; note: string }>>(() => entries.map((e) => ({ source: e.source, target: e.target, note: e.note ?? '' })));
   const [error, setError] = useState<string | null>(null);
-  const blocked = editBlockedReason(useStudio((x) => x.session));
+  // Shared library: a glossary that comes from the library is read-only here.
+  const glossaryLink = useStudio((x) => x.project?.libraryLinks?.find((l) => l.kind === 'glossary'));
+  const blocked = editBlockedReason(useStudio((x) => x.session)) ?? (glossaryLink ? `This glossary comes from the library (“${glossaryLink.title}” version ${glossaryLink.version}). Unlink it in Content & Translations to change it here, or change it in the library` : null);
   const set = (i: number, k: 'source' | 'target' | 'note', v: string) => { setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x))); setError(null); };
   const save = () => {
     const items = rows.filter((r) => r.source.trim() || r.target.trim() || r.note.trim()).map((r) => ({ source: r.source, target: r.target, ...(r.note.trim() ? { note: r.note } : {}) }));
@@ -172,6 +177,8 @@ export function Translations() {
   }, [project?.rules, project?.nodes, project?.journey, project?.contentParts.length, records]);
 
   const st = useMemo(() => (project && LOCALE ? translationStatus(project, LOCALE, usage) : null), [project, usage, LOCALE]);
+  // Shared library: texts that come from the library are read-only here (and left out of drafting and approving in bulk).
+  const libOwn = useMemo(() => (project?.libraryLinks?.length ? libraryOwnership(project) : null), [project]);
 
   if (!project) return <section className="screen" data-testid="translations-view"><Loading label="Loading content…" /></section>;
 
@@ -302,7 +309,7 @@ export function Translations() {
       setLastProvider(r.providerStatus);
       let applied = 0;
       if (r.mode !== 'unavailable' && r.drafts.length) {
-        const res = dispatch({ type: 'SET_TRANSLATION_DRAFTS', locale: forLocale, items: r.drafts.map((d) => ({ id: d.id, text: d.text })), origin: r.mode });
+        const res = dispatch({ type: 'SET_TRANSLATION_DRAFTS', locale: forLocale, items: r.drafts.filter((d) => !libOwn?.textOf(d.id)).map((d) => ({ id: d.id, text: d.text })), origin: r.mode });
         if (res.ok) {
           applied = r.drafts.length;
           for (const d of r.drafts) { stopTimer(d.id); clearEdit(d.id); setErr(d.id, null); }
@@ -382,7 +389,7 @@ export function Translations() {
 
   // Drafts a person can approve in one go: stored drafts whose data fields match English.
   const draftRows = st.rows.filter((r) => r.status.draftText?.trim() && (r.status.status === 'draft' || r.status.pendingDraft));
-  const approvable = draftRows.filter((r) => r.status.tokenCheck.ok);
+  const approvable = draftRows.filter((r) => r.status.tokenCheck.ok && !libOwn?.textOf(r.partId));
   const approvableUntouched = approvable.filter((r) => r.origin).length;
   const blockedDrafts = draftRows.length - approvable.length;
   const approveAll = () => {
@@ -439,6 +446,7 @@ export function Translations() {
             <button className="btn" onClick={runCheck} disabled={checking} aria-busy={checking} data-testid="tr-check" title="Looks for texts that deserve a second look. It never changes or approves anything.">
               {checking ? <><span className="spinner" aria-hidden="true" /> Checking…</> : <><Icon.validate width={14} height={14} /> Check drafts</>}
             </button>
+            <WholeDocumentLibrary project={project} kind="glossary" />
             <button className="btn" onClick={() => setDialog('glossary')} data-testid="tr-glossary-open">Glossary <span className="chip count" data-testid="tr-glossary-count" aria-label={`${glossaryCount} ${glossaryCount === 1 ? 'term' : 'terms'}`}>{glossaryCount}</span></button>
             <span className="muted tr-ai-status" data-testid="tr-ai-status" data-live={liveOn === null ? 'unknown' : liveOn ? 'on' : 'off'} title={lastProvider ?? undefined}>
               {liveOn === null ? 'Checking whether live AI is on…' : liveOn ? `Live AI is on${aiStatus?.model ? ` (${aiStatus.model})` : ''}.` : 'Live AI is off: no AI key is set. The two sample projects can load labelled sample drafts for Spanish.'}
@@ -533,6 +541,7 @@ export function Translations() {
                           <div className="tr-title">
                             <strong title={r.title}>{r.title}</strong>
                             {r.status.mandatory && <span className="chip error tr-mand" title={r.status.mandatoryReasons.join('; ')} data-testid="tr-mandatory">{Req}</span>}
+                            {libOwn?.textOf(r.partId) && <LibraryChip link={libOwn.textOf(r.partId)!} />}
                             <Tech><span className="chip code" title={r.kind === 'string' ? 'Text id' : 'Content part id and version'}>{r.kind === 'string' ? r.partId : `${r.partId} · v${r.version}`}</span></Tech>
                           </div>
                           <p className="tr-en" lang="en-US"><Highlighted text={r.sourceText} /></p>
@@ -543,7 +552,7 @@ export function Translations() {
                           </div>
                         </td>
                         <td className="tr-edit">
-                          <textarea className="textarea tr-input" lang={LOCALE} rows={lines} value={val} placeholder="Type the translation…" aria-label={`${langLabel(LOCALE)} translation of ${r.title}`} data-testid="tr-draft-input"
+                          <textarea className="textarea tr-input" lang={LOCALE} rows={lines} value={val} placeholder="Type the translation…" aria-label={`${langLabel(LOCALE)} translation of ${r.title}`} data-testid="tr-draft-input" readOnly={!!libOwn?.textOf(r.partId)} title={libOwn?.textOf(r.partId) ? 'Comes from the library: read-only here. Change it in the library, or unlink it.' : undefined}
                             onFocus={() => setFocusId(r.partId)}
                             onBlur={(e) => { setFocusId((f) => (f === r.partId ? null : f)); autosave(r, e.target.value); }}
                             onChange={(e) => {
