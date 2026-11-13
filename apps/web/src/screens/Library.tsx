@@ -6,7 +6,7 @@ import { Dialog, ErrorState, Loading, ScreenHeader } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { fmtAbs, When } from '../ui/time';
 import { DraftEditor } from './library/DraftEditor';
-import { errorText, useLibrary } from './library/libraryData';
+import { errorText, useLibrary, useLibraryCan } from './library/libraryData';
 import { ContentPreview } from './library/Preview';
 import './Library.css';
 
@@ -17,7 +17,7 @@ import './Library.css';
  */
 export function Library() {
   const items = useLibrary((s) => s.items);
-  const can = useLibrary((s) => s.can);
+  const can = useLibraryCan();
   const status = useLibrary((s) => s.status);
   const error = useLibrary((s) => s.error);
   const [params, setParams] = useSearchParams();
@@ -49,7 +49,7 @@ export function Library() {
           <div className="screen-body workbench lib-body">
             <aside className="panel lib-list" aria-label="Library items" data-side="left" data-side-title="Items">
               <div className="panel-head">Items <span className="sub">{shown.length} of {items.length}</span></div>
-              <div className="panel-body">
+              <div className="panel-body lib-filterbox">
                 <div className="lib-filters">
                   <label className="sr-only" htmlFor="lib-kind">Kind</label>
                   <select id="lib-kind" className="select" value={kind} onChange={(e) => setKind(e.target.value as LibraryKind | '')} data-testid="lib-filter-kind">
@@ -94,7 +94,7 @@ export function Library() {
 /* ------------------------------------------------------------------ one item */
 
 function ItemDetail({ item }: { item: LibraryItemDto }) {
-  const can = useLibrary((s) => s.can);
+  const can = useLibraryCan();
   const [usage, setUsage] = useState<LibraryUsage[] | null>(null);
   const [version, setVersion] = useState<number>(item.draft ?? item.latest ?? item.versions[0]?.version ?? 1);
   const [content, setContent] = useState<{ v: number; content: LibraryContent } | null>(null);

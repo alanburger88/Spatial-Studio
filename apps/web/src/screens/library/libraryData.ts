@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { create } from 'zustand';
 import { linkStatus, type LibraryKind, type LibraryLink, type LinkStatus } from '@iss/model';
 import { api, ApiFailure, type LibraryCan, type LibraryItemDto } from '../../api/client';
+import { useCan } from '../../state/store';
 
 /**
  * The library items as the studio last read them, shared by every screen that shows a link or offers "From the library".
@@ -33,10 +34,17 @@ export const useLibrary = create<{
 /** The library items, loaded the first time a screen asks. */
 export function useLibraryItems(): { items: LibraryItemDto[]; can: LibraryCan; ready: boolean } {
   const items = useLibrary((s) => s.items);
-  const can = useLibrary((s) => s.can);
+  const can = useLibraryCan();
   const status = useLibrary((s) => s.status);
   useEffect(() => { if (status === 'idle') void useLibrary.getState().load(); }, [status]);
   return { items, can, ready: status === 'ready' };
+}
+
+/** What this person may do in the library: what the server says, and what the signed-in role allows (the screens follow both). */
+export function useLibraryCan(): LibraryCan {
+  const server = useLibrary((s) => s.can);
+  const edit = useCan('edit'), approve = useCan('approve');
+  return { create: server.create && edit, approve: server.approve && approve };
 }
 
 /** How a link stands against the library. */

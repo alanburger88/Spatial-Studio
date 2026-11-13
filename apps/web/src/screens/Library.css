@@ -76,3 +76,4 @@
 .lib-doc { gap: 6px; align-items: center; margin-bottom: 10px; }
 .lib-doc-label { font-size: 12.5px; }
 .lib-ov-line { margin: 0 0 12px; }
+.lib-list > .lib-filterbox { flex: none; }

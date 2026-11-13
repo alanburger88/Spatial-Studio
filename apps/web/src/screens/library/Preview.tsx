@@ -40,7 +40,7 @@ function BlockPreview({ content, hostProjectId }: { content: LibraryBlockContent
       if (!recs.length) throw new Error('The document has no customers to preview with.');
       // An empty page of that document, then the block linked into it: what any document gets when it inserts it.
       const page: Project = { ...host, libraryLinks: undefined, nodes: host.nodes.map((n) => (n.id === host.rootNodeId ? { ...n, children: [] } : n)) };
-      const r = applyCommand(page, { type: 'LINK_LIBRARY_ITEM', item: { id: 'preview-block', kind: 'block', title: 'Preview' }, version: 1, content, placement: { parentId: host.rootNodeId }, linkId: 'lkpreview' });
+      const r = applyCommand(page, { type: 'LINK_LIBRARY_ITEM', item: { id: 'preview-block', kind: 'block', title: 'Preview' }, version: 1, content, placement: { parentId: host.rootNodeId }, linkId: 'lkblock1' });
       if (!r.ok) throw new Error(r.message);
       return { project: r.project, res: resolve({ project: r.project, record: recs[0] }) };
     })().then((s) => { if (live) setState(s); }).catch((e) => { if (live) setState({ error: errorText(e) }); });
