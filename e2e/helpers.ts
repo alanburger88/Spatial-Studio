@@ -39,9 +39,14 @@ export async function pdfText(bytes: Buffer): Promise<{ pages: string[] }> {
   return { pages };
 }
 
+/** The Design Studio's components/layers panel starts closed on windows under 1500px: open it if it is closed. */
+export async function showLeftPanel(page: Page) {
+  if (!(await page.getByRole('complementary', { name: 'Components and layers' }).count())) await page.getByTestId('toggle-palette').click();
+  await expect(page.getByRole('complementary', { name: 'Components and layers' })).toBeVisible();
+}
+
 export async function dragAfter(page: Page, sourceTestId: string, targetTestId: string, where: 'after' | 'center' = 'after') {
-  // The component list starts closed on windows under 1500px: open it before dragging from it.
-  if (sourceTestId.startsWith('palette-') && !(await page.getByTestId('component-palette').count())) await page.getByTestId('toggle-palette').click();
+  if (sourceTestId.startsWith('palette-')) await showLeftPanel(page);
   const target = page.getByTestId(targetTestId).first();
   const box = (await target.boundingBox())!;
   await page.getByTestId(sourceTestId).dragTo(target, { targetPosition: { x: Math.min(40, box.width / 2), y: where === 'after' ? box.height - 2 : box.height / 2 } });

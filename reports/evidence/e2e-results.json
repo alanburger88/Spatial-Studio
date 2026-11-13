@@ -89,12 +89,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1420,
+                  "duration": 1487,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:36:51.486Z",
+                  "startTime": "2026-11-13T02:58:57.222Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -123,12 +123,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1483,
+                  "duration": 1514,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:36:53.017Z",
+                  "startTime": "2026-11-13T02:58:58.807Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -143,7 +143,7 @@
         },
         {
           "title": "AT-03 resize, align and nudge a C06 Bound Field; undo/redo restores geometry",
-          "ok": true,
+          "ok": false,
           "tags": [],
           "tests": [
             {
@@ -156,18 +156,45 @@
                 {
                   "workerIndex": 0,
                   "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 1643,
-                  "errors": [],
+                  "status": "timedOut",
+                  "duration": 120154,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/user/Spatial-Studio/e2e/acceptance.spec.ts",
+                        "column": 48,
+                        "line": 60
+                      },
+                      "message": "Error: locator.click: Test timeout of 120000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('insert-bound-field')\u001b[22m\n\n\n  58 | test('AT-03 resize, align and nudge a C06 Bound Field; undo/redo restores geometry', async ({ page }) => {\n  59 |   await open(page, 'aster-card-demo', 'design');\n> 60 |   await page.getByTestId('insert-bound-field').click();\n     |                                                ^\n  61 |   const id = (await state(page)).ctx.selectedNodeId as string;\n  62 |   await page.getByTestId('insp-tab-layout').click();\n  63 |   await page.getByTestId('layout-mode').selectOption('fixed');\n    at /home/user/Spatial-Studio/e2e/acceptance.spec.ts:60:48"
+                    }
+                  ],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:36:54.516Z",
+                  "startTime": "2026-11-13T02:59:00.336Z",
                   "annotations": [],
-                  "attachments": []
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-03-resiz-bee25-undo-redo-restores-geometry/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-03-resiz-bee25-undo-redo-restores-geometry/error-context.md"
+                    }
+                  ]
                 }
               ],
-              "status": "expected"
+              "status": "unexpected"
             }
           ],
           "id": "c2aef79390210f75b232-371aabba432a1d2f61a7",
@@ -188,15 +215,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 1,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 948,
+                  "duration": 1091,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:36:56.171Z",
+                  "startTime": "2026-11-13T03:01:00.985Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -211,7 +238,7 @@
         },
         {
           "title": "AT-05 insert {{customer.givenName}} token: fixture value renders with correct lineage",
-          "ok": true,
+          "ok": false,
           "tags": [],
           "tests": [
             {
@@ -222,20 +249,47 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 1,
                   "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 1261,
-                  "errors": [],
+                  "status": "timedOut",
+                  "duration": 120175,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/user/Spatial-Studio/e2e/acceptance.spec.ts",
+                        "column": 46,
+                        "line": 102
+                      },
+                      "message": "Error: locator.click: Test timeout of 120000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('insert-rich-text')\u001b[22m\n\n\n  100 | test('AT-05 insert {{customer.givenName}} token: fixture value renders with correct lineage', async ({ page }) => {\n  101 |   await open(page, 'aster-card-demo', 'design');\n> 102 |   await page.getByTestId('insert-rich-text').click();\n      |                                              ^\n  103 |   const id = (await state(page)).ctx.selectedNodeId as string;\n  104 |   await page.getByTestId('edit-rich-text').click();\n  105 |   await page.getByTestId('rich-text-editor').press('End');\n    at /home/user/Spatial-Studio/e2e/acceptance.spec.ts:102:46"
+                    }
+                  ],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:36:57.129Z",
+                  "startTime": "2026-11-13T03:01:02.179Z",
                   "annotations": [],
-                  "attachments": []
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-05-inser-d09d6-enders-with-correct-lineage/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-05-inser-d09d6-enders-with-correct-lineage/error-context.md"
+                    }
+                  ]
                 }
               ],
-              "status": "expected"
+              "status": "unexpected"
             }
           ],
           "id": "c2aef79390210f75b232-0550d06313a9b7f3e9dc",
@@ -245,7 +299,7 @@
         },
         {
           "title": "AT-06 unknown token path is caught by binding validation",
-          "ok": true,
+          "ok": false,
           "tags": [],
           "tests": [
             {
@@ -256,20 +310,47 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 2,
                   "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 1059,
-                  "errors": [],
+                  "status": "timedOut",
+                  "duration": 120196,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/user/Spatial-Studio/e2e/acceptance.spec.ts",
+                        "column": 51,
+                        "line": 10
+                      },
+                      "message": "Error: locator.click: Test timeout of 120000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tab', { name: 'Layers' })\u001b[22m\n\n\n   8 |\n   9 | async function layer(page: Page, id: string) {\n> 10 |   await page.getByRole('tab', { name: 'Layers' }).click();\n     |                                                   ^\n  11 |   await page.getByTestId(`layer-${id}`).click();\n  12 | }\n  13 |\n    at layer (/home/user/Spatial-Studio/e2e/acceptance.spec.ts:10:51)\n    at /home/user/Spatial-Studio/e2e/acceptance.spec.ts:117:9"
+                    }
+                  ],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:36:58.401Z",
+                  "startTime": "2026-11-13T03:03:02.827Z",
                   "annotations": [],
-                  "attachments": []
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-06-unkno-bfb9f-aught-by-binding-validation/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-06-unkno-bfb9f-aught-by-binding-validation/error-context.md"
+                    }
+                  ]
                 }
               ],
-              "status": "expected"
+              "status": "unexpected"
             }
           ],
           "id": "c2aef79390210f75b232-f2f3643a776826841d38",
@@ -279,7 +360,7 @@
         },
         {
           "title": "AT-07 create 3 variants for a Conditional Region; all appear in editor and Exploded view",
-          "ok": true,
+          "ok": false,
           "tags": [],
           "tests": [
             {
@@ -290,20 +371,47 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 3,
                   "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 5107,
-                  "errors": [],
+                  "status": "timedOut",
+                  "duration": 120164,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/user/Spatial-Studio/e2e/acceptance.spec.ts",
+                        "column": 55,
+                        "line": 130
+                      },
+                      "message": "Error: locator.click: Test timeout of 120000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('insert-conditional-region')\u001b[22m\n\n\n  128 | test('AT-07 create 3 variants for a Conditional Region; all appear in editor and Exploded view', async ({ page }) => {\n  129 |   await open(page, 'aster-card-demo', 'design');\n> 130 |   await page.getByTestId('insert-conditional-region').click();\n      |                                                       ^\n  131 |   const id = (await state(page)).ctx.selectedNodeId as string;\n  132 |   const add = async (title: string, path?: string, op?: string, value?: string) => {\n  133 |     await page.getByTestId('new-variant-title').fill(title);\n    at /home/user/Spatial-Studio/e2e/acceptance.spec.ts:130:55"
+                    }
+                  ],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:36:59.471Z",
+                  "startTime": "2026-11-13T03:05:03.556Z",
                   "annotations": [],
-                  "attachments": []
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-07-creat-4c6a1-in-editor-and-Exploded-view/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-07-creat-4c6a1-in-editor-and-Exploded-view/error-context.md"
+                    }
+                  ]
                 }
               ],
-              "status": "expected"
+              "status": "unexpected"
             }
           ],
           "id": "c2aef79390210f75b232-26d033a10af224d54ccf",
@@ -324,15 +432,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 4,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1244,
+                  "duration": 1312,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:04.591Z",
+                  "startTime": "2026-11-13T03:07:04.269Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -358,15 +466,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 4,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1470,
+                  "duration": 1459,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:05.846Z",
+                  "startTime": "2026-11-13T03:07:05.682Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -392,15 +500,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 4,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 948,
+                  "duration": 949,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:07.328Z",
+                  "startTime": "2026-11-13T03:07:07.161Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -415,7 +523,7 @@
         },
         {
           "title": "AT-11 unrelated chart style change leaves financial digest values unchanged",
-          "ok": true,
+          "ok": false,
           "tags": [],
           "tests": [
             {
@@ -426,20 +534,47 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 4,
                   "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 1094,
-                  "errors": [],
+                  "status": "timedOut",
+                  "duration": 120136,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/user/Spatial-Studio/e2e/acceptance.spec.ts",
+                        "column": 51,
+                        "line": 10
+                      },
+                      "message": "Error: locator.click: Test timeout of 120000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tab', { name: 'Layers' })\u001b[22m\n\n\n   8 |\n   9 | async function layer(page: Page, id: string) {\n> 10 |   await page.getByRole('tab', { name: 'Layers' }).click();\n     |                                                   ^\n  11 |   await page.getByTestId(`layer-${id}`).click();\n  12 | }\n  13 |\n    at layer (/home/user/Spatial-Studio/e2e/acceptance.spec.ts:10:51)\n    at /home/user/Spatial-Studio/e2e/acceptance.spec.ts:185:9"
+                    }
+                  ],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:08.286Z",
+                  "startTime": "2026-11-13T03:07:08.129Z",
                   "annotations": [],
-                  "attachments": []
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-11-unrel-451ef-ial-digest-values-unchanged/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-11-unrel-451ef-ial-digest-values-unchanged/error-context.md"
+                    }
+                  ]
                 }
               ],
-              "status": "expected"
+              "status": "unexpected"
             }
           ],
           "id": "c2aef79390210f75b232-5273720aec494cb556ec",
@@ -460,15 +595,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 5,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2304,
+                  "duration": 2514,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:09.396Z",
+                  "startTime": "2026-11-13T03:09:08.739Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -483,7 +618,7 @@
         },
         {
           "title": "AT-13 repeated expand/collapse under reduced motion: no lost edits, flat alternative works",
-          "ok": true,
+          "ok": false,
           "tags": [],
           "tests": [
             {
@@ -494,20 +629,47 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 5,
                   "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 2951,
-                  "errors": [],
+                  "status": "timedOut",
+                  "duration": 120079,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/user/Spatial-Studio/e2e/acceptance.spec.ts",
+                        "column": 46,
+                        "line": 210
+                      },
+                      "message": "Error: locator.click: Test ended.\nCall log:\n\u001b[2m  - waiting for getByTestId('insert-rich-text')\u001b[22m\n\n\n  208 |   const page = await ctx.newPage();\n  209 |   await open(page, 'aster-card-demo', 'design');\n> 210 |   await page.getByTestId('insert-rich-text').click();\n      |                                              ^\n  211 |   const before = await state(page);\n  212 |   for (let i = 0; i < 3; i++) {\n  213 |     await layer(page, 'payment-guidance');\n    at /home/user/Spatial-Studio/e2e/acceptance.spec.ts:210:46"
+                    }
+                  ],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:11.713Z",
+                  "startTime": "2026-11-13T03:09:11.364Z",
                   "annotations": [],
-                  "attachments": []
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-13-repea-73527-dits-flat-alternative-works/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-13-repea-73527-dits-flat-alternative-works/error-context.md"
+                    }
+                  ]
                 }
               ],
-              "status": "expected"
+              "status": "unexpected"
             }
           ],
           "id": "c2aef79390210f75b232-1833caa9a9f9555c42fd",
@@ -528,15 +690,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2872,
+                  "duration": 2942,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:14.674Z",
+                  "startTime": "2026-11-13T03:11:11.949Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -562,15 +724,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2694,
+                  "duration": 2939,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:17.558Z",
+                  "startTime": "2026-11-13T03:11:15.002Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -596,15 +758,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 731,
+                  "duration": 845,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:20.264Z",
+                  "startTime": "2026-11-13T03:11:17.953Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -630,15 +792,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 841,
+                  "duration": 851,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:21.006Z",
+                  "startTime": "2026-11-13T03:11:18.807Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -664,15 +826,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2969,
+                  "duration": 4959,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:21.856Z",
+                  "startTime": "2026-11-13T03:11:19.669Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -698,15 +860,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2497,
+                  "duration": 2461,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:24.833Z",
+                  "startTime": "2026-11-13T03:11:24.640Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -732,15 +894,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2773,
+                  "duration": 2760,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:27.341Z",
+                  "startTime": "2026-11-13T03:11:27.119Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -766,15 +928,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1216,
+                  "duration": 1309,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:30.126Z",
+                  "startTime": "2026-11-13T03:11:29.892Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -800,15 +962,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 919,
+                  "duration": 980,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:31.354Z",
+                  "startTime": "2026-11-13T03:11:31.212Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -834,15 +996,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 166,
+                  "duration": 194,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:32.281Z",
+                  "startTime": "2026-11-13T03:11:32.201Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -868,15 +1030,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 450,
+                  "duration": 481,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:32.461Z",
+                  "startTime": "2026-11-13T03:11:32.403Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -902,15 +1064,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1387,
+                  "duration": 1454,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:32.920Z",
+                  "startTime": "2026-11-13T03:11:32.897Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -936,15 +1098,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 976,
+                  "duration": 974,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:34.321Z",
+                  "startTime": "2026-11-13T03:11:34.360Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -970,15 +1132,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 879,
+                  "duration": 799,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:35.309Z",
+                  "startTime": "2026-11-13T03:11:35.346Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -993,7 +1155,7 @@
         },
         {
           "title": "AT-29 EOB-0002 with \"$300 owed\" and unconfirmed liability is blocked by domain validation",
-          "ok": true,
+          "ok": false,
           "tags": [],
           "tests": [
             {
@@ -1004,20 +1166,47 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 6,
                   "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 1206,
-                  "errors": [],
+                  "status": "timedOut",
+                  "duration": 120151,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/user/Spatial-Studio/e2e/acceptance.spec.ts",
+                        "column": 51,
+                        "line": 423
+                      },
+                      "message": "Error: locator.click: Test timeout of 120000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('insert-summary-metric')\u001b[22m\n\n\n  421 |   await open(page, 'harborcare-demo', 'design');\n  422 |   await pickRecord(page, 'EOB-0002');\n> 423 |   await page.getByTestId('insert-summary-metric').click();\n      |                                                   ^\n  424 |   await page.getByTestId('field-label').fill('Amount you owe');\n  425 |   await page.getByTestId('field-label').press('Enter');\n  426 |   await page.getByTestId('binding-select').selectOption('claim.amountUnderReviewCents');\n    at /home/user/Spatial-Studio/e2e/acceptance.spec.ts:423:51"
+                    }
+                  ],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:36.198Z",
+                  "startTime": "2026-11-13T03:11:36.156Z",
                   "annotations": [],
-                  "attachments": []
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-29-EOB-0-6fc3c-locked-by-domain-validation/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-29-EOB-0-6fc3c-locked-by-domain-validation/error-context.md"
+                    }
+                  ]
                 }
               ],
-              "status": "expected"
+              "status": "unexpected"
             }
           ],
           "id": "c2aef79390210f75b232-1a04983d448bae8eb880",
@@ -1038,15 +1227,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 7,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 878,
+                  "duration": 944,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:37.421Z",
+                  "startTime": "2026-11-13T03:13:36.793Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1072,15 +1261,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 7,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 971,
+                  "duration": 962,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:38.308Z",
+                  "startTime": "2026-11-13T03:13:37.838Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1106,15 +1295,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 7,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 794,
+                  "duration": 789,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:39.289Z",
+                  "startTime": "2026-11-13T03:13:38.813Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1129,7 +1318,7 @@
         },
         {
           "title": "AT-33 keyboard: navigate node tree and spatial alternative without the 3D camera",
-          "ok": true,
+          "ok": false,
           "tags": [],
           "tests": [
             {
@@ -1140,20 +1329,47 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 7,
                   "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 1545,
-                  "errors": [],
+                  "status": "timedOut",
+                  "duration": 120158,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/user/Spatial-Studio/e2e/acceptance.spec.ts",
+                        "column": 51,
+                        "line": 476
+                      },
+                      "message": "Error: locator.click: Test timeout of 120000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tab', { name: 'Layers' })\u001b[22m\n\n\n  474 | test('AT-33 keyboard: navigate node tree and spatial alternative without the 3D camera', async ({ page }) => {\n  475 |   await open(page, 'aster-card-demo', 'design');\n> 476 |   await page.getByRole('tab', { name: 'Layers' }).click();\n      |                                                   ^\n  477 |   await page.getByTestId('layer-doc-root').focus();\n  478 |   for (let i = 0; i < 40 && !(await page.getByTestId('layer-payment-guidance').evaluate((e) => e === document.activeElement)); i++) await page.keyboard.press('ArrowDown');\n  479 |   await page.keyboard.press('Enter');\n    at /home/user/Spatial-Studio/e2e/acceptance.spec.ts:476:51"
+                    }
+                  ],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:40.096Z",
+                  "startTime": "2026-11-13T03:13:39.613Z",
                   "annotations": [],
-                  "attachments": []
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-33-keybo-acdbf-ative-without-the-3D-camera/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-33-keybo-acdbf-ative-without-the-3D-camera/error-context.md"
+                    }
+                  ]
                 }
               ],
-              "status": "expected"
+              "status": "unexpected"
             }
           ],
           "id": "c2aef79390210f75b232-ef268a1b3010074a6bf6",
@@ -1174,15 +1390,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 8,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 709,
+                  "duration": 806,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:41.657Z",
+                  "startTime": "2026-11-13T03:15:40.217Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1197,7 +1413,7 @@
         },
         {
           "title": "AT-35 reload after edit and save: edit persists; default fixture can be restored",
-          "ok": true,
+          "ok": false,
           "tags": [],
           "tests": [
             {
@@ -1208,20 +1424,47 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 8,
                   "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 2266,
-                  "errors": [],
+                  "status": "timedOut",
+                  "duration": 120156,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 120000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "/home/user/Spatial-Studio/e2e/acceptance.spec.ts",
+                        "column": 51,
+                        "line": 10
+                      },
+                      "message": "Error: locator.click: Test timeout of 120000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tab', { name: 'Layers' })\u001b[22m\n\n\n   8 |\n   9 | async function layer(page: Page, id: string) {\n> 10 |   await page.getByRole('tab', { name: 'Layers' }).click();\n     |                                                   ^\n  11 |   await page.getByTestId(`layer-${id}`).click();\n  12 | }\n  13 |\n    at layer (/home/user/Spatial-Studio/e2e/acceptance.spec.ts:10:51)\n    at /home/user/Spatial-Studio/e2e/acceptance.spec.ts:501:9"
+                    }
+                  ],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:42.377Z",
+                  "startTime": "2026-11-13T03:15:41.127Z",
                   "annotations": [],
-                  "attachments": []
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-35-reloa-f1c49-ult-fixture-can-be-restored/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/Spatial-Studio/test-results/e2e-acceptance-AT-35-reloa-f1c49-ult-fixture-can-be-restored/error-context.md"
+                    }
+                  ]
                 }
               ],
-              "status": "expected"
+              "status": "unexpected"
             }
           ],
           "id": "c2aef79390210f75b232-fdfc33037b7592c499c7",
@@ -1242,15 +1485,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 24168,
+                  "duration": 24202,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:37:44.657Z",
+                  "startTime": "2026-11-13T03:17:41.747Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1284,15 +1527,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1081,
+                  "duration": 1213,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:08.842Z",
+                  "startTime": "2026-11-13T03:18:06.058Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1318,15 +1561,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 925,
+                  "duration": 908,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:09.955Z",
+                  "startTime": "2026-11-13T03:18:07.327Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1352,15 +1595,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1426,
+                  "duration": 1454,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:10.899Z",
+                  "startTime": "2026-11-13T03:18:08.245Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1386,15 +1629,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 20,
+                  "duration": 21,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:12.333Z",
+                  "startTime": "2026-11-13T03:18:09.712Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1428,15 +1671,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1428,
+                  "duration": 1518,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:12.365Z",
+                  "startTime": "2026-11-13T03:18:09.748Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1462,15 +1705,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1502,
+                  "duration": 1566,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:13.803Z",
+                  "startTime": "2026-11-13T03:18:11.276Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1496,15 +1739,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2080,
+                  "duration": 2198,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:15.315Z",
+                  "startTime": "2026-11-13T03:18:12.854Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1530,15 +1773,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1441,
+                  "duration": 1457,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:17.405Z",
+                  "startTime": "2026-11-13T03:18:15.068Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1564,15 +1807,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 762,
+                  "duration": 883,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:18.857Z",
+                  "startTime": "2026-11-13T03:18:16.541Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1606,15 +1849,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 897,
+                  "duration": 1005,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:19.643Z",
+                  "startTime": "2026-11-13T03:18:17.443Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1640,15 +1883,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1020,
+                  "duration": 1017,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:20.555Z",
+                  "startTime": "2026-11-13T03:18:18.458Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1674,15 +1917,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 992,
+                  "duration": 1083,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:21.586Z",
+                  "startTime": "2026-11-13T03:18:19.486Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1708,15 +1951,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1400,
+                  "duration": 1449,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:22.588Z",
+                  "startTime": "2026-11-13T03:18:20.580Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1742,15 +1985,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1010,
+                  "duration": 1001,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:24.000Z",
+                  "startTime": "2026-11-13T03:18:22.041Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1776,15 +2019,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 106,
+                  "duration": 137,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:25.020Z",
+                  "startTime": "2026-11-13T03:18:23.053Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1810,15 +2053,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 941,
+                  "duration": 963,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:25.136Z",
+                  "startTime": "2026-11-13T03:18:23.198Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1844,15 +2087,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1707,
+                  "duration": 1569,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:26.094Z",
+                  "startTime": "2026-11-13T03:18:24.171Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1886,15 +2129,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1201,
+                  "duration": 1189,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:27.817Z",
+                  "startTime": "2026-11-13T03:18:25.763Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1920,15 +2163,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1148,
+                  "duration": 1087,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:29.031Z",
+                  "startTime": "2026-11-13T03:18:26.963Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1954,15 +2197,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2275,
+                  "duration": 2188,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:30.190Z",
+                  "startTime": "2026-11-13T03:18:28.059Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -1988,15 +2231,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2136,
+                  "duration": 2236,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:32.483Z",
+                  "startTime": "2026-11-13T03:18:30.263Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2022,15 +2265,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1478,
+                  "duration": 1626,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:34.632Z",
+                  "startTime": "2026-11-13T03:18:32.510Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2056,15 +2299,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1834,
+                  "duration": 1849,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:36.118Z",
+                  "startTime": "2026-11-13T03:18:34.147Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2090,15 +2333,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 10990,
+                  "duration": 10918,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:37.966Z",
+                  "startTime": "2026-11-13T03:18:36.006Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2124,15 +2367,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1242,
+                  "duration": 1263,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:48.968Z",
+                  "startTime": "2026-11-13T03:18:46.938Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2158,15 +2401,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2811,
+                  "duration": 2776,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:50.225Z",
+                  "startTime": "2026-11-13T03:18:48.211Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2200,15 +2443,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1507,
+                  "duration": 1567,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:53.054Z",
+                  "startTime": "2026-11-13T03:18:51.004Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2234,15 +2477,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2994,
+                  "duration": 2967,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:54.570Z",
+                  "startTime": "2026-11-13T03:18:52.584Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2276,15 +2519,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2083,
+                  "duration": 2141,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:57.578Z",
+                  "startTime": "2026-11-13T03:18:55.569Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2318,15 +2561,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 893,
+                  "duration": 899,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:38:59.681Z",
+                  "startTime": "2026-11-13T03:18:57.735Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2352,15 +2595,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1258,
+                  "duration": 1219,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:00.584Z",
+                  "startTime": "2026-11-13T03:18:58.646Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2386,15 +2629,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 990,
+                  "duration": 1093,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:01.852Z",
+                  "startTime": "2026-11-13T03:18:59.877Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2420,15 +2663,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 3529,
+                  "duration": 3482,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:02.852Z",
+                  "startTime": "2026-11-13T03:19:00.993Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2454,15 +2697,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2034,
+                  "duration": 2184,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:06.390Z",
+                  "startTime": "2026-11-13T03:19:04.485Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2488,15 +2731,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 4308,
+                  "duration": 4493,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:08.434Z",
+                  "startTime": "2026-11-13T03:19:06.680Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2522,15 +2765,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1628,
+                  "duration": 2091,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:12.754Z",
+                  "startTime": "2026-11-13T03:19:11.186Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2540,7 +2783,7 @@
           ],
           "id": "19495ed0c614f83e42dd-e0900d9f13d2e25e611e",
           "file": "e2e/ux.spec.ts",
-          "line": 90,
+          "line": 93,
           "column": 1
         },
         {
@@ -2556,15 +2799,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 733,
+                  "duration": 780,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:14.400Z",
+                  "startTime": "2026-11-13T03:19:13.289Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2574,7 +2817,7 @@
           ],
           "id": "19495ed0c614f83e42dd-eeee036b5c16ae191baa",
           "file": "e2e/ux.spec.ts",
-          "line": 111,
+          "line": 122,
           "column": 1
         },
         {
@@ -2590,15 +2833,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 831,
+                  "duration": 943,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:15.148Z",
+                  "startTime": "2026-11-13T03:19:14.078Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2608,7 +2851,7 @@
           ],
           "id": "19495ed0c614f83e42dd-671c017aa8b087883646",
           "file": "e2e/ux.spec.ts",
-          "line": 131,
+          "line": 142,
           "column": 1
         },
         {
@@ -2624,15 +2867,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 750,
+                  "duration": 800,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:15.991Z",
+                  "startTime": "2026-11-13T03:19:15.034Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2642,7 +2885,7 @@
           ],
           "id": "19495ed0c614f83e42dd-46b95ce7e7418b2c4940",
           "file": "e2e/ux.spec.ts",
-          "line": 148,
+          "line": 159,
           "column": 1
         },
         {
@@ -2658,15 +2901,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 1300,
+                  "duration": 1324,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:16.751Z",
+                  "startTime": "2026-11-13T03:19:15.846Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2676,7 +2919,7 @@
           ],
           "id": "19495ed0c614f83e42dd-649d22a2ebb807126022",
           "file": "e2e/ux.spec.ts",
-          "line": 156,
+          "line": 167,
           "column": 1
         }
       ]
@@ -2700,15 +2943,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2215,
+                  "duration": 2219,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:18.071Z",
+                  "startTime": "2026-11-13T03:19:17.187Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2734,15 +2977,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 136,
+                  "duration": 141,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:20.297Z",
+                  "startTime": "2026-11-13T03:19:19.415Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2776,15 +3019,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 410,
+                  "duration": 520,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:20.446Z",
+                  "startTime": "2026-11-13T03:19:19.568Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2810,15 +3053,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 789,
+                  "duration": 727,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:20.867Z",
+                  "startTime": "2026-11-13T03:19:20.096Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2844,15 +3087,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 996,
+                  "duration": 877,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:21.666Z",
+                  "startTime": "2026-11-13T03:19:20.830Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2878,15 +3121,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 2312,
+                  "duration": 2677,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:22.675Z",
+                  "startTime": "2026-11-13T03:19:21.724Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2912,15 +3155,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 778,
+                  "duration": 924,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:24.999Z",
+                  "startTime": "2026-11-13T03:19:24.415Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2946,15 +3189,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 667,
+                  "duration": 656,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:25.789Z",
+                  "startTime": "2026-11-13T03:19:25.349Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -2980,15 +3223,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 672,
+                  "duration": 645,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:26.463Z",
+                  "startTime": "2026-11-13T03:19:26.014Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -3014,7 +3257,7 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
                   "duration": 703,
@@ -3022,7 +3265,7 @@
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:27.143Z",
+                  "startTime": "2026-11-13T03:19:26.671Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -3048,15 +3291,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 651,
+                  "duration": 701,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:27.855Z",
+                  "startTime": "2026-11-13T03:19:27.383Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -3082,15 +3325,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 700,
+                  "duration": 737,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:28.516Z",
+                  "startTime": "2026-11-13T03:19:28.096Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -3116,15 +3359,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 551,
+                  "duration": 584,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:29.225Z",
+                  "startTime": "2026-11-13T03:19:28.851Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -3150,15 +3393,15 @@
               "projectName": "",
               "results": [
                 {
-                  "workerIndex": 0,
+                  "workerIndex": 9,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 577,
+                  "duration": 528,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-11-12T20:39:29.786Z",
+                  "startTime": "2026-11-13T03:19:29.449Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -3176,11 +3419,11 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-11-12T20:36:50.939Z",
-    "duration": 159507.272,
-    "expected": 89,
+    "startTime": "2026-11-13T02:58:56.102Z",
+    "duration": 1233961.7750000001,
+    "expected": 80,
     "skipped": 0,
-    "unexpected": 0,
+    "unexpected": 9,
     "flaky": 0
   }
 }

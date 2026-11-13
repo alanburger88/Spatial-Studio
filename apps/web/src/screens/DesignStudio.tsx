@@ -279,7 +279,7 @@ export function DesignStudio() {
               <button role="tab" aria-selected={leftTab === 'palette'} onClick={() => setLeftTab('palette')}>Components</button>
               <button role="tab" aria-selected={leftTab === 'layers'} onClick={() => setLeftTab('layers')}>Layers</button>
             </div>
-            <button className="btn sm ghost icon ds-collapse" onClick={togglePalette} aria-expanded={true} aria-label="Collapse component list" title="Collapse the component list to give the page more room" data-testid="toggle-palette"><Icon.chevron width={14} height={14} style={{ transform: 'rotate(180deg)' }} /></button>
+            <button className="btn sm ghost icon ds-collapse" onClick={togglePalette} aria-expanded={true} aria-label="Hide components and layers" title="Hide the component list and layer tree to give the page more room" data-testid="toggle-palette"><Icon.chevron width={14} height={14} style={{ transform: 'rotate(180deg)' }} /></button>
           </div>
           {leftTab === 'palette' ? (
             <div className="panel-body" data-testid="component-palette">
@@ -309,7 +309,7 @@ export function DesignStudio() {
 
         <div className="design-stage">
           <div className="ds-toolbar" role="toolbar" aria-label="Canvas">
-            {paletteCollapsed && <button className="btn sm" onClick={togglePalette} aria-expanded={false} aria-label="Expand component list" title="Show the component list" data-testid="toggle-palette"><Icon.chevron width={14} height={14} /> Components</button>}
+            {paletteCollapsed && <button className="btn sm" onClick={togglePalette} aria-expanded={false} aria-label="Show components and layers" title="Show the component list and the layer tree" data-testid="toggle-palette"><Icon.chevron width={14} height={14} /> Components &amp; layers</button>}
             <span className="chip count" title={isHtml ? 'Interactive HTML profile' : 'US Letter portrait · paged profile · page 1 of the composed document'}>{isHtml ? 'Interactive HTML' : 'Page 1 · Letter'}</span>
             {!isHtml && <>
               <div className="segmented ds-group" role="group" aria-label="Zoom">

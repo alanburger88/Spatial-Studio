@@ -3,10 +3,11 @@
  * (contracts/ACCEPTANCE_MATRIX.json). Every test drives the real running application.
  */
 import { test, expect } from '@playwright/test';
-import { API, EXPECTED, cardAction, demoTool, dragAfter, node, open, pdfText, resetAll, state, pickRecord } from './helpers';
+import { API, EXPECTED, cardAction, demoTool, dragAfter, node, open, pdfText, resetAll, state, pickRecord, showLeftPanel } from './helpers';
 import type { Page } from '@playwright/test';
 
 async function layer(page: Page, id: string) {
+  await showLeftPanel(page);
   await page.getByRole('tab', { name: 'Layers' }).click();
   await page.getByTestId(`layer-${id}`).click();
 }
@@ -57,6 +58,7 @@ test('AT-02 drag C02 Rich Text into the flow region; saved model contains a real
 
 test('AT-03 resize, align and nudge a C06 Bound Field; undo/redo restores geometry', async ({ page }) => {
   await open(page, 'aster-card-demo', 'design');
+  await showLeftPanel(page);
   await page.getByTestId('insert-bound-field').click();
   const id = (await state(page)).ctx.selectedNodeId as string;
   await page.getByTestId('insp-tab-layout').click();
@@ -99,6 +101,7 @@ test('AT-04 dropping into a protected disclosure is blocked with a reason; model
 
 test('AT-05 insert {{customer.givenName}} token: fixture value renders with correct lineage', async ({ page }) => {
   await open(page, 'aster-card-demo', 'design');
+  await showLeftPanel(page);
   await page.getByTestId('insert-rich-text').click();
   const id = (await state(page)).ctx.selectedNodeId as string;
   await page.getByTestId('edit-rich-text').click();
@@ -127,6 +130,7 @@ test('AT-06 unknown token path is caught by binding validation', async ({ page, 
 
 test('AT-07 create 3 variants for a Conditional Region; all appear in editor and Exploded view', async ({ page }) => {
   await open(page, 'aster-card-demo', 'design');
+  await showLeftPanel(page);
   await page.getByTestId('insert-conditional-region').click();
   const id = (await state(page)).ctx.selectedNodeId as string;
   const add = async (title: string, path?: string, op?: string, value?: string) => {
@@ -207,6 +211,7 @@ test('AT-13 repeated expand/collapse under reduced motion: no lost edits, flat a
   const ctx = await browser.newContext({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } });
   const page = await ctx.newPage();
   await open(page, 'aster-card-demo', 'design');
+  await showLeftPanel(page);
   await page.getByTestId('insert-rich-text').click();
   const before = await state(page);
   for (let i = 0; i < 3; i++) {
@@ -420,6 +425,7 @@ test('AT-29 EOB-0002 with "$300 owed" and unconfirmed liability is blocked by do
   // Author inserts an "amount owed" metric in the UI
   await open(page, 'harborcare-demo', 'design');
   await pickRecord(page, 'EOB-0002');
+  await showLeftPanel(page);
   await page.getByTestId('insert-summary-metric').click();
   await page.getByTestId('field-label').fill('Amount you owe');
   await page.getByTestId('field-label').press('Enter');
@@ -473,6 +479,7 @@ test('AT-32 provider disconnected: labelled offline fallback still performs scen
 
 test('AT-33 keyboard: navigate node tree and spatial alternative without the 3D camera', async ({ page }) => {
   await open(page, 'aster-card-demo', 'design');
+  await showLeftPanel(page);
   await page.getByRole('tab', { name: 'Layers' }).click();
   await page.getByTestId('layer-doc-root').focus();
   for (let i = 0; i < 40 && !(await page.getByTestId('layer-payment-guidance').evaluate((e) => e === document.activeElement)); i++) await page.keyboard.press('ArrowDown');
