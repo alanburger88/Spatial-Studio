@@ -1,5 +1,5 @@
 import type { Project } from '@iss/model';
-import type { RBlock, RInline, RNode, Resolution } from '@iss/resolver';
+import type { ChannelTexts, RBlock, RInline, RNode, Resolution } from '@iss/resolver';
 import { formatCents } from '@iss/resolver';
 import { esc, imageSrc } from './html-common';
 
@@ -29,6 +29,8 @@ export interface ChannelFacts {
   notABill: boolean; claimId?: string; dueDate?: ChannelFact;
   keyFacts: ChannelFact[]; greeting: RBlock[]; sections: ChannelSection[]; actions: ChannelAction[];
   disclosures: ChannelDisclosure[]; summaries: ChannelSummaryLine[]; tables: ChannelTable[];
+  /** Editable, translated wording (subject, preview text, heading, opening, closing, SMS) and the email section choices. */
+  texts?: ChannelTexts;
 }
 
 export interface EmailRender {
@@ -98,10 +100,26 @@ export function extractChannelFacts(res: Resolution, project: Project): ChannelF
     ...(typeof claimId === 'string' ? { claimId } : {}),
     dueDate: fact('payment-due-date'),
     keyFacts, greeting: nodes.get('greeting')?.text ?? [], sections, actions, disclosures, summaries, tables,
+    ...(res.channelTexts ? { texts: res.channelTexts } : {}),
   };
 }
 
+/** The "label: value" list of the key figures; an unconfirmed amount is never shown as a number. */
+export const keyFactsLine = (f: ChannelFacts): string => f.keyFacts.map((k) => `${k.label}: ${k.guarded ? NOT_DETERMINED : k.display}`).join(' · ');
+
+/**
+ * Fills the two channel tokens the resolver leaves in place: `{{keyFacts}}` and `{{link}}` (the first https action link).
+ * Without a link, the sentence part that holds the token is dropped, so no dangling "Details:" is left behind.
+ */
+export function fillChannelText(text: string, f: ChannelFacts): string {
+  const url = f.actions[0]?.url;
+  let t = text.replace(/\{\{\s*keyFacts\s*\}\}/g, keyFactsLine(f));
+  t = url ? t.replace(/\{\{\s*link\s*\}\}/g, url) : t.replace(/\s*[^.!?]*\{\{\s*link\s*\}\}[^.!?]*/g, '');
+  return t.replace(/[ \t]{2,}/g, ' ').trim();
+}
+
 export function emailSubject(f: ChannelFacts): string {
+  if (f.texts) return fillChannelText(f.texts.subject, f);
   if (f.documentType === 'eob') return `Your ${f.issuer} Explanation of Benefits is ready — this is not a bill`;
   const due = f.keyFacts.find((k) => k.nodeId === 'payment-due');
   const date = f.dueDate;
@@ -109,9 +127,14 @@ export function emailSubject(f: ChannelFacts): string {
 }
 
 export function emailPreheader(f: ChannelFacts): string {
-  if (f.documentType === 'eob') return `THIS IS NOT A BILL. ${f.keyFacts.map((k) => `${k.label}: ${k.guarded ? NOT_DETERMINED : k.display}`).join(' · ')}`.slice(0, 140);
-  return f.keyFacts.map((k) => `${k.label}: ${k.display}`).join(' · ').slice(0, 140);
+  if (f.texts) return fillChannelText(f.texts.preheader, f).slice(0, 140);
+  if (f.documentType === 'eob') return `THIS IS NOT A BILL. ${keyFactsLine(f)}`.slice(0, 140);
+  return keyFactsLine(f).slice(0, 140);
 }
+
+const DEFAULT_SECTIONS: NonNullable<ChannelFacts['texts']>['sections'] = [{ id: 'keyFacts', show: true }, { id: 'messages', show: true }, { id: 'tables', show: true }, { id: 'summaries', show: true }, { id: 'actions', show: true }];
+/** The generated email sections that are switched on, in the chosen order. */
+export const emailSectionOrder = (f: ChannelFacts) => (f.texts?.sections ?? DEFAULT_SECTIONS).filter((x) => x.show).map((x) => x.id);
 
 /* ------------------------------------------------------------------ HTML */
 
@@ -148,7 +171,7 @@ export function emailHtml(f: ChannelFacts, subject: string, preheader: string): 
   const parts: string[] = [];
   // header
   parts.push(`<tr><td style="padding:20px 24px;border-bottom:4px solid ${A};background-color:#ffffff;">${f.logo ? `<img src="${esc(f.logo.src)}" width="150" height="40" alt="${esc(f.logo.alt)}" style="display:block;border:0;outline:none;height:40px;width:150px;max-width:100%;">` : `<span style="${FONT}font-size:20px;font-weight:bold;color:${A};">${esc(f.issuer)}</span>`}</td></tr>`);
-  const title = f.documentType === 'eob' ? 'Your Explanation of Benefits is ready' : 'Your statement is ready';
+  const title = f.texts?.title || (f.documentType === 'eob' ? 'Your Explanation of Benefits is ready' : 'Your statement is ready');
   parts.push(row(`<h1 style="margin:0;${FONT}font-size:22px;line-height:28px;color:${INK};">${esc(title)}</h1>`, '24px 24px 12px'));
   if (f.notABill) {
     const banner = f.disclosures.find((d) => d.banner);
@@ -156,28 +179,45 @@ export function emailHtml(f: ChannelFacts, subject: string, preheader: string): 
   }
   // greeting
   parts.push(row(f.greeting.length ? blocksEmail(f.greeting, A) : `<p style="margin:0;${FONT}font-size:15px;line-height:22px;color:${INK};">Hello ${esc(f.customerName)},</p>`, '0 24px 16px'));
-  // key facts
-  if (f.keyFacts.length) {
-    const rows = f.keyFacts.map((k) => `<tr><td style="padding:10px 0;border-top:1px solid ${LINE};${FONT}font-size:14px;line-height:20px;color:${MUTED};">${esc(k.label)}</td><td align="right" style="padding:10px 0;border-top:1px solid ${LINE};${FONT}font-size:${k.guarded ? 14 : 18}px;line-height:22px;font-weight:bold;color:${INK};" data-fact="${esc(k.nodeId)}">${esc(k.guarded ? NOT_DETERMINED : k.display)}</td></tr>`).join('');
-    parts.push(row(`${h2('Key facts')}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-bottom:1px solid ${LINE};">${rows}</table>`));
+  // optional opening text
+  if (f.texts?.intro.length) parts.push(row(blocksEmail(f.texts.intro, A), '0 24px 16px'));
+  // generated sections, in the order chosen for the email
+  for (const id of emailSectionOrder(f)) {
+    if (id === 'keyFacts') {
+    // key facts
+    if (f.keyFacts.length) {
+      const rows = f.keyFacts.map((k) => `<tr><td style="padding:10px 0;border-top:1px solid ${LINE};${FONT}font-size:14px;line-height:20px;color:${MUTED};">${esc(k.label)}</td><td align="right" style="padding:10px 0;border-top:1px solid ${LINE};${FONT}font-size:${k.guarded ? 14 : 18}px;line-height:22px;font-weight:bold;color:${INK};" data-fact="${esc(k.nodeId)}">${esc(k.guarded ? NOT_DETERMINED : k.display)}</td></tr>`).join('');
+      parts.push(row(`${h2(f.texts?.keyFactsHeading || 'Key facts')}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-bottom:1px solid ${LINE};">${rows}</table>`));
+    }
+    }
+    if (id === 'messages') {
+    // selected variants
+    for (const s of f.sections) {
+      parts.push(row(`<h2 style="margin:0 0 8px;${FONT}font-size:17px;line-height:24px;color:${INK};">${esc(s.title)}</h2>${blocksEmail(s.blocks, A)}${s.missingLocale ? `<p style="margin:0;${FONT}font-size:13px;color:${MUTED};">[Approved translation missing — English approved text shown]</p>` : ''}`));
+    }
+    }
+    if (id === 'tables') {
+    // small tables
+    for (const t of f.tables) {
+      const th = t.columns.map((c) => `<th scope="col" align="${c.align === 'right' ? 'right' : 'left'}" style="padding:6px 6px;border-bottom:2px solid ${INK};${FONT}font-size:13px;color:${INK};">${esc(c.label)}</th>`).join('');
+      const body = t.rows.map((r) => `<tr>${r.map((c, i) => `<td align="${t.columns[i].align === 'right' ? 'right' : 'left'}" style="padding:6px;border-bottom:1px solid ${LINE};${FONT}font-size:13px;color:${INK};">${esc(c)}</td>`).join('')}</tr>`).join('');
+      parts.push(row(`${h2(t.caption)}<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>${t.totalDisplay ? `<p style="margin:8px 0 0;${FONT}font-size:13px;color:${MUTED};">Total ${esc(t.totalDisplay)}</p>` : ''}`));
+    }
+    }
+    if (id === 'summaries') {
+    // interactive-only content becomes summary lines
+    const lines = f.summaries;
+    if (lines.length) parts.push(row(lines.map((s) => `<p style="margin:0 0 8px;${FONT}font-size:14px;line-height:20px;color:${MUTED};">${esc(s.text)}</p>`).join('')));
+    }
+    if (id === 'actions') {
+    // actions
+    for (const a of f.actions) {
+      parts.push(row(`<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${A}" style="background-color:${A};border-radius:4px;"><a href="${esc(a.url)}" style="display:inline-block;padding:12px 20px;${FONT}font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;">${esc(a.label)}</a></td></tr></table><p style="margin:8px 0 0;${FONT}font-size:12px;line-height:18px;color:${MUTED};">${esc(a.url)}</p>`));
+    }
+    }
   }
-  // selected variants
-  for (const s of f.sections) {
-    parts.push(row(`<h2 style="margin:0 0 8px;${FONT}font-size:17px;line-height:24px;color:${INK};">${esc(s.title)}</h2>${blocksEmail(s.blocks, A)}${s.missingLocale ? `<p style="margin:0;${FONT}font-size:13px;color:${MUTED};">[Approved translation missing — English approved text shown]</p>` : ''}`));
-  }
-  // small tables
-  for (const t of f.tables) {
-    const th = t.columns.map((c) => `<th scope="col" align="${c.align === 'right' ? 'right' : 'left'}" style="padding:6px 6px;border-bottom:2px solid ${INK};${FONT}font-size:13px;color:${INK};">${esc(c.label)}</th>`).join('');
-    const body = t.rows.map((r) => `<tr>${r.map((c, i) => `<td align="${t.columns[i].align === 'right' ? 'right' : 'left'}" style="padding:6px;border-bottom:1px solid ${LINE};${FONT}font-size:13px;color:${INK};">${esc(c)}</td>`).join('')}</tr>`).join('');
-    parts.push(row(`${h2(t.caption)}<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>${t.totalDisplay ? `<p style="margin:8px 0 0;${FONT}font-size:13px;color:${MUTED};">Total ${esc(t.totalDisplay)}</p>` : ''}`));
-  }
-  // interactive-only content becomes summary lines
-  const lines = f.summaries;
-  if (lines.length) parts.push(row(lines.map((s) => `<p style="margin:0 0 8px;${FONT}font-size:14px;line-height:20px;color:${MUTED};">${esc(s.text)}</p>`).join('')));
-  // actions
-  for (const a of f.actions) {
-    parts.push(row(`<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${A}" style="background-color:${A};border-radius:4px;"><a href="${esc(a.url)}" style="display:inline-block;padding:12px 20px;${FONT}font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;">${esc(a.label)}</a></td></tr></table><p style="margin:8px 0 0;${FONT}font-size:12px;line-height:18px;color:${MUTED};">${esc(a.url)}</p>`));
-  }
+  // optional closing text
+  if (f.texts?.closing.length) parts.push(row(blocksEmail(f.texts.closing, A)));
   // disclosures
   const disc = f.disclosures.filter((d) => !d.banner);
   if (disc.length) parts.push(row(`<div style="border-top:1px solid ${LINE};padding-top:16px;">${disc.map((d) => `<h3 style="margin:0 0 6px;${FONT}font-size:14px;line-height:20px;color:${INK};">${esc(d.title)}</h3><div style="${FONT}font-size:13px;line-height:19px;color:${MUTED};">${blocksEmail(d.blocks, A).replace(/font-size:15px;line-height:22px;color:#1a202c/g, `font-size:13px;line-height:19px;color:${MUTED}`)}</div>`).join('')}</div>`));
@@ -212,13 +252,15 @@ export function emailText(f: ChannelFacts, subject: string): string {
   L.push(f.issuer.toUpperCase(), subject, '');
   if (f.notABill) L.push('THIS IS NOT A BILL.', '');
   L.push(f.greeting.length ? blocksText(f.greeting) : `Hello ${f.customerName},`, '');
-  if (f.keyFacts.length) { L.push('KEY FACTS'); for (const k of f.keyFacts) L.push(`${k.label}: ${k.guarded ? NOT_DETERMINED : k.display}`); L.push(''); }
-  for (const s of f.sections) { L.push(`== ${s.title} ==`, blocksText(s.blocks), ""); }
-  for (const t of f.tables) { L.push(`== ${t.caption} ==`); L.push(t.columns.map((c) => c.label).join(' | ')); for (const r of t.rows) L.push(r.join(' | ')); if (t.totalDisplay) L.push(`Total ${t.totalDisplay}`); L.push(''); }
-  for (const s of f.summaries) L.push(s.text);
-  if (f.summaries.length) L.push('');
-  for (const a of f.actions) L.push(`${a.label}: ${a.url}`);
-  if (f.actions.length) L.push('');
+  if (f.texts?.intro.length) L.push(blocksText(f.texts.intro), '');
+  for (const id of emailSectionOrder(f)) {
+    if (id === 'keyFacts') { if (f.keyFacts.length) { L.push((f.texts?.keyFactsHeading || 'Key facts').toUpperCase()); for (const k of f.keyFacts) L.push(`${k.label}: ${k.guarded ? NOT_DETERMINED : k.display}`); L.push(''); } }
+    if (id === 'messages') { for (const s of f.sections) { L.push(`== ${s.title} ==`, blocksText(s.blocks), ""); } }
+    if (id === 'tables') { for (const t of f.tables) { L.push(`== ${t.caption} ==`); L.push(t.columns.map((c) => c.label).join(' | ')); for (const r of t.rows) L.push(r.join(' | ')); if (t.totalDisplay) L.push(`Total ${t.totalDisplay}`); L.push(''); } }
+    if (id === 'summaries') { for (const s of f.summaries) L.push(s.text); if (f.summaries.length) L.push(''); }
+    if (id === 'actions') { for (const a of f.actions) L.push(`${a.label}: ${a.url}`); if (f.actions.length) L.push(''); }
+  }
+  if (f.texts?.closing.length) L.push(blocksText(f.texts.closing), '');
   for (const d of f.disclosures.filter((x) => !x.banner)) L.push(`== ${d.title} ==`, blocksText(d.blocks), "");
   L.push('--', `DEMO DATA. ${SYNTHETIC_CUE}`, `Sent by ${f.issuer} (fictional).`);
   return L.join('\n');
@@ -231,7 +273,9 @@ export function renderEmail(res: Resolution, project: Project): EmailRender {
   if (blocking.length) warnings.push(`${blocking.length} blocking finding(s) in this run — treat this email as a draft.`);
   if (!facts.logo) warnings.push('No issuer image available; the issuer name is shown as text.');
   else warnings.push('The issuer logo is an embedded data-URI image; some email clients (e.g. Gmail) do not display data-URI SVG, so the alt text is the fallback.');
-  if (facts.lang !== 'en-US') warnings.push(`Subject, greeting and section labels are English channel chrome: the model has no approved ${facts.lang} text for them. Selected content and disclosures use approved ${facts.lang} text where it exists.`);
+  const untranslated = (res.translation?.missing ?? []).filter((id) => id.startsWith('@email/'));
+  if (facts.lang !== 'en-US' && untranslated.length) warnings.push(`${untranslated.length} piece${untranslated.length === 1 ? '' : 's'} of email wording ${untranslated.length === 1 ? 'has' : 'have'} no approved ${facts.lang} text; the English wording is shown.`);
+  if ((res.translation?.draftsShown ?? []).length) warnings.push('This preview shows unapproved translation drafts. A clean export uses approved text only.');
   for (const s of facts.sections) if (s.missingLocale) warnings.push(`Section “${s.title}” has no approved ${facts.lang} text; English approved text is shown.`);
   for (const s of facts.summaries.filter((x) => x.kind === 'table')) warnings.push(`Table ${s.nodeId} is longer than ${TABLE_INLINE_MAX_ROWS} rows and is summarised, not listed.`);
   if (!facts.actions.length) warnings.push('No https action link in the model; the email has no call-to-action.');

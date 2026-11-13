@@ -1,7 +1,7 @@
 import type { Project } from '@iss/model';
 import type { Resolution } from '@iss/resolver';
 import { formatCents } from '@iss/resolver';
-import { extractChannelFacts, NOT_DETERMINED, type ChannelFacts, type EmailRender } from './email';
+import { extractChannelFacts, fillChannelText, NOT_DETERMINED, type ChannelFacts, type EmailRender } from './email';
 
 export const SMS_RENDERER_VERSION = 'sms-renderer/1';
 
@@ -39,6 +39,7 @@ export interface SmsRender {
 }
 
 export function smsText(f: ChannelFacts): string {
+  if (f.texts) return fillChannelText(f.texts.sms, f);
   const url = f.actions[0]?.url;
   if (f.documentType === 'eob') {
     return `DEMO ${f.issuer}: Your Explanation of Benefits${f.claimId ? ` for claim ${f.claimId}` : ''} is ready. THIS IS NOT A BILL.${url ? ` Details: ${url}` : ''}`;
@@ -58,7 +59,8 @@ export function renderSms(res: Resolution, project: Project): SmsRender {
   if (enc.encoding === 'UCS-2') warnings.push(`Non-GSM character${enc.nonGsm.length > 1 ? 's' : ''} ${[...new Set(enc.nonGsm.map((n) => `“${n.char}” (${n.codePoint})`))].join(', ')} force UCS-2 encoding: ${enc.perSegment === 70 ? '70' : '67'} characters per segment instead of ${enc.perSegment === 160 ? '160' : '153'}.`);
   if (enc.segments > 2) warnings.push(`${enc.segments} segments: messages above 2 segments cost more and are more likely to be split or dropped.`);
   if (!facts.actions.length) warnings.push('No https action link in the model; the message has no link.');
-  if (facts.lang !== 'en-US') warnings.push(`Message wording is English channel chrome: the model has no approved ${facts.lang} SMS text. Amounts and dates are ${facts.lang}-formatted.`);
+  if (facts.lang !== 'en-US' && (res.translation?.missing ?? []).includes('@sms/text')) warnings.push(`The SMS message has no approved ${facts.lang} text; the English wording is shown. Amounts and dates are ${facts.lang}-formatted.`);
+  if ((res.translation?.draftsShown ?? []).includes('@sms/text')) warnings.push('This preview shows an unapproved translation draft of the SMS message.');
   return { text, encoding: enc.encoding, length: enc.length, segments: enc.segments, perSegment: enc.perSegment, nonGsm: enc.nonGsm, warnings, facts, renderer: SMS_RENDERER_VERSION, lang: facts.lang };
 }
 
