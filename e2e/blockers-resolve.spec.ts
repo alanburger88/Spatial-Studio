@@ -8,12 +8,15 @@ const TIE = 'priority-tie~R03+R04';
 const DATA = 'inconsistent-payment-state~payment-guidance';
 const OVERFLOW = 'flow-overflow-no-continuation~transaction-table';
 
-test.beforeEach(async ({ request }) => { await resetAll(request); });
-test.afterEach(async ({ request }) => {
+/** The card sample's own customers removed and both samples restored (which also clears their known data problems). */
+async function clean(request: APIRequestContext) {
   const recs = (await (await request.get(`${API}/records?documentType=credit-statement&full=1&projectId=${P}`)).json()).records as any[];
   for (const r of recs.filter((x) => x.projectId)) await request.delete(`${API}/projects/${P}/records/${r.recordId}`);
+  await request.delete(`${API}/records/imported?documentType=credit-statement`);
   await resetAll(request);
-});
+}
+test.beforeEach(async ({ request }) => { await clean(request); });
+test.afterEach(async ({ request }) => { await clean(request); });
 
 const store = <T = any>(page: Page, expr: string) => page.evaluate((e) => new Function(`return (${e})`)(), expr) as Promise<T>;
 const past = (page: Page) => store<number>(page, 'window.__iss.store.getState().past.length');

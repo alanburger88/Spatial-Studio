@@ -8,13 +8,15 @@ const DATA = 'inconsistent-payment-state~payment-guidance';
 const SPANISH = 'required-translation-missing~billing-summary~es-US';
 const IMPORTED = { givenName: 'Ottoline', familyName: 'Quillfeather' };
 
-test.beforeEach(async ({ request }) => { await resetAll(request); });
-test.afterEach(async ({ request }) => {
+/** The card sample's own and imported customers removed, and both samples restored (which also clears their known data problems). */
+async function clean(request: APIRequestContext) {
   const recs = (await (await request.get(`${API}/records?documentType=credit-statement&full=1&projectId=${P}`)).json()).records as any[];
   for (const r of recs.filter((x) => x.projectId)) await request.delete(`${API}/projects/${P}/records/${r.recordId}`);
   await request.delete(`${API}/records/imported?documentType=credit-statement`);
-  await resetAll(request); // also clears the known data problems of the sample projects
-});
+  await resetAll(request);
+}
+test.beforeEach(async ({ request }) => { await clean(request); });
+test.afterEach(async ({ request }) => { await clean(request); });
 
 /** An editable copy of a sample customer whose own data contradicts itself. */
 async function badCopy(request: APIRequestContext, missed = 3) {

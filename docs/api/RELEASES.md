@@ -55,9 +55,12 @@ Types are exported from `@iss/model` (`ReleaseInfo`, `ReleaseStageState`, `Relea
   "documentRemoved": false,
   "documentRemovedAt": null,
   "package": { /* ReleasePackageStatus */ },
-  "handover": { "received": false, "live": false, "entries": 0 }
+  "handover": { "received": false, "live": false, "entries": 0 },
+  "knownDataProblems": []                   // frozen with the release; absent on releases made before it was recorded (below)
 }
 ```
+
+`knownDataProblems` lists the customers' data problems an approver had set aside (known data problems in force) when the release was made: `{ blockerId, blocker, customer, reason, markedBy, markedAt }`. `customer` is `{ "kind": "sample" | "generated", "id" }` for a built-in sample or engine-generated customer, and `{ "kind": "imported" | "supplied" }` with no id and no name for any other customer, whose name and id are also replaced by “the customer” in `reason`. The package manifest carries the same list. See `docs/api/KNOWN_DATA_PROBLEMS.md`.
 
 A stage state is `{ status: "current" | "superseded" | "withdrawn", since, by, reason?, supersededBy? }`. `reason` is set when withdrawn; `supersededBy` is the release number that took its place.
 
@@ -271,6 +274,7 @@ Reasons and notes a person typed are kept on the release (history and handover l
 - `DELETE /api/v1/projects/:projectId`: adds `releasesKept` to the answer.
 - New documents (create, import, duplicate, set up) never get the id of a deleted document that has releases.
 - `GET /api/v1/session`: admins have the extra permission `promote_release`.
+- Approving (and creating a release from the approved version) records the known data problems in force for that version on the release, frozen like the rest (`knownDataProblems`).
 
 ## How releases relate to "Publish"
 
