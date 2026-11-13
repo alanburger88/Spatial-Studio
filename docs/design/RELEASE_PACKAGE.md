@@ -360,6 +360,20 @@ nothing from the library produces exactly the package it did before.
 - There is still no `library/` folder: the content of each item is in `template.json`, where it is used, so a copy of
   it would only repeat it. `notIncluded` keeps naming `library/`.
 
+### Additions for wording rules (wave 2, section 4)
+
+No reader of format 1 can misread a package because of these, so `formatVersion` stays **1**. A template with no wording
+rules produces exactly the package it did before.
+
+- `template.json` may carry `wordingRules`: the document's own wording rules (same shape as `houseWordingRules`).
+- `manifest.json`: `wordingRules`, absent when the template has no wording rule: `{ house, houseKept, own, mustFindings,
+  shouldFindings, textsChecked }`. `house` is the house rules' library item `{ linkId, itemId, title, version, rules }`
+  (null when not linked); `houseKept` counts house rules kept without a link (0 today: unlinking makes them the
+  document's own); `own` is the document's own rules in full; the two counts are what the studio's wording checker found
+  in the approved content (a release is only approved with `mustFindings` 0). Only rule ids, phrases and counts: never a
+  customer's data.
+- `README.html` gains a "Wording rules" paragraph (and the document's own rules as a list) when there are rules.
+
 ## Limits
 
 - **Caps.** 24 scenarios and 8 sets of reference outputs. A document with many rules will have outcomes that are in `scenarios.json` but have no reference output, and may have scenarios named in `omittedByCap`.

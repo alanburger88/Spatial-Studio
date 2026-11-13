@@ -76,7 +76,7 @@ function HouseRules({ project, rules }: { project: Project; rules: RuleInForce[]
       )}
       {rules.length > 0 && (
         <ul className="wr-readonly-list" data-testid="wr-house-list" aria-label="House rules (read-only)">
-          {rules.map((r) => <li key={r.key} data-testid="wr-house-rule" data-rule={r.rule.id}><RuleLine r={r} />{r.link && <LibraryChip link={linkOfKind(project, 'wording-rules')!} />}</li>)}
+          {rules.map((r) => <li key={r.key} data-testid="wr-house-rule" data-rule={r.rule.id}><RuleLine r={r} /></li>)}
         </ul>
       )}
       {picking && (
@@ -116,7 +116,7 @@ function OwnRules({ project }: { project: Project }) {
       <h3 className="section-title" id="wr-own-h">This document’s own rules</h3>
       <p className="muted">They add to the house rules; they cannot weaken a house “must”.</p>
       {own.length === 0 && !draft && <p className="muted" data-testid="wr-own-empty">None yet.</p>}
-      <ol className="wr-rules">
+      <ol className="wr-rules wr-readonly-list">
         {own.map((x, i) => editing?.id === x.id ? (
           <li key={x.id} className="wr-rule-row" data-testid="wr-own-rule" data-rule={x.id} data-editing="true">
             <RuleFields rule={editing.rule} idx={i} canSetSeverity languages={project.languages} onChange={(rule) => setEditing({ id: x.id, rule })} />
@@ -126,8 +126,8 @@ function OwnRules({ project }: { project: Project }) {
             </span>
           </li>
         ) : (
-          <li key={x.id} className="wr-readonly-list" data-testid="wr-own-rule" data-rule={x.id}>
-            <span className="row wrap" style={{ gap: 6, padding: '5px 0' }}>
+          <li key={x.id} data-testid="wr-own-rule" data-rule={x.id}>
+            <>
               <RuleLine r={{ rule: x, label: ruleText(x) }} />
               {canEdit && (
                 <span className="wr-rule-move">
@@ -137,7 +137,7 @@ function OwnRules({ project }: { project: Project }) {
                   <button type="button" className="btn sm ghost icon" onClick={() => run(dispatch({ type: 'REMOVE_WORDING_RULE', ruleId: x.id }).ok)} aria-label={`Remove ${ruleText(x)}`} data-testid="wr-own-remove"><Icon.trash width={14} height={14} /></button>
                 </span>
               )}
-            </span>
+            </>
           </li>
         ))}
       </ol>

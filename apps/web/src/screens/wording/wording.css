@@ -41,6 +41,8 @@
 .wr-readonly-list { list-style: none; margin: 0; padding: 0; }
 .wr-readonly-list li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--iss-row-border); font-size: 13px; }
 .wr-readonly-list li:last-child { border-bottom: 0; }
+.wr-readonly-list .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.wr-readonly-list li.wr-rule-row { display: flex; }
 .wr-summary-list { list-style: none; margin: 0; padding: 0; }
 .wr-summary-list > li { border-bottom: 1px solid var(--iss-row-border); }
 .wr-summary-list > li:last-child { border-bottom: 0; }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  AVAILABLE_LANGUAGES, SOURCE_LANGUAGE, WORDING_RULE_KIND_LABEL, WORDING_RULE_KINDS_LIST, WORDING_RULE_SCOPE_LABEL, WORDING_RULE_SCOPES_LIST, checkWordingRule,
+  AVAILABLE_LANGUAGES, SOURCE_LANGUAGE, WORDING_RULE_KIND_LABEL, languageName, WORDING_RULE_KINDS_LIST, WORDING_RULE_SCOPE_LABEL, WORDING_RULE_SCOPES_LIST, checkWordingRule,
   type Project, type WordingRule, type WordingRuleKind, type WordingRuleScope,
 } from '@iss/model';
 import { checkWording, wordingRuleLabel, type RuleInForce, type WordingTextScope } from '@iss/scenarios';
@@ -88,7 +88,7 @@ export function RuleFields({ rule, onChange, canSetSeverity, languages, idx }: {
       {rule.kind !== 'reading-level' && rule.kind !== 'tone' && (
         <label className="field">Language
           <select className="select" value={rule.language ?? SOURCE_LANGUAGE} onChange={(e) => set({ language: e.target.value === SOURCE_LANGUAGE ? undefined : e.target.value })} aria-label={name('Language')} data-testid="wr-field-language">
-            {[SOURCE_LANGUAGE, ...langs.filter((l) => l !== SOURCE_LANGUAGE)].map((l) => <option key={l} value={l}>{AVAILABLE_LANGUAGES.find((x) => x.code === l)?.name ?? l}{l === SOURCE_LANGUAGE ? ' (the source)' : ''}</option>)}
+            {[SOURCE_LANGUAGE, ...langs.filter((l) => l !== SOURCE_LANGUAGE)].map((l) => <option key={l} value={l}>{languageName(l)}{l === SOURCE_LANGUAGE ? ' (the source)' : ''}</option>)}
           </select>
         </label>
       )}

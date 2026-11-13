@@ -48,7 +48,7 @@ Refusals are in plain words: "Reviewers cannot add to the library or draft a new
 Errors have the studio's usual shape `{ "error": { "code", "message", "correlationId", ... } }`.
 
 ### `GET /api/v1/library?kind=&q=&state=`
-Items (filters: `kind`; `q` in the title or description; `state` = `approved` or `draft`), sorted by title. Each is a `LibraryItemInfo` (`id, kind, title, description, createdAt, createdBy, source, latest, draft, versions[]`, newest first; a version is `{ version, state, note, createdAt, createdBy, updatedAt, approvedAt, approvedBy, fingerprint }`) plus `usage: { documents, links, behind }`. Also `can: { create, approve }` for the caller.
+Items (filters: `kind`; `q` in the title or description; `state` = `approved` or `draft`), sorted by title. Each is a `LibraryItemInfo` (`id, kind, title, description, createdAt, createdBy, source, latest, draft, versions[]`, newest first; a version is `{ version, state, note, createdAt, createdBy, updatedAt, approvedAt, approvedBy, fingerprint }`) plus `usage: { documents, links, behind }`. Also `can: { create, approve, setSeverity }` for the caller (`setSeverity`: admins only, see below).
 
 ### `GET /api/v1/library/:itemId`
 `{ item, usage: LibraryUsage[], can }`. A `LibraryUsage` is `{ projectId, title, linkId, version, behind }` (from each document's last saved version).
@@ -61,6 +61,8 @@ Items (filters: `kind`; `q` in the title or description; `state` = `approved` or
 
 ### `POST /api/v1/library` (authors, admins)
 Body `{ kind, title, description?, note?, content }`, or `{ kind, title, projectId, ref? }` to take the content from a saved document (`ref` is the component, message or lookup table; not needed for brand and glossary). `source: { projectId, ref }` records where it was taken from, so that document can link to it in place once approved. `201 { item }` with version 1 as a draft. `409 LIBRARY_NAME_TAKEN` for the same kind and name; `422 INVALID_CONTENT` with `problems`.
+
+**House wording rules: only an admin sets "must" or "should".** For a `wording-rules` item, this route and `PUT …/draft` refuse with `403 SEVERITY_ADMIN_ONLY` when a caller who is not an admin makes a new rule a "must" or changes the severity of a rule that is in the draft being edited (or, when there is none, in the latest approved version). Authors add rules as "should"; an admin raises them. Approvers approve a version as it is and never edit drafts (`wordingSeverityProblem` in `@iss/model`).
 
 ### `PUT /api/v1/library/:itemId/draft` (authors, admins)
 Body `{ content }` or `{ projectId, ref }`, with `note?`, `title?`, `description?`. Edits the draft, or starts the next version when there is none. `{ item, version, created }`.
@@ -75,7 +77,7 @@ Body `{ note? }`. The draft becomes the next approved version. `{ item, version,
 A dry run. Body `{ projectId, version?, linkId?, project? }` (`version` defaults to the latest approved; `project` is the document as it is being edited). Answers `{ linkId, title, kind, from, to, comparison, changes, content, version }`: `comparison` is the Before & after engine's `VersionComparison` of the document and the updated document over its synthetic customers (`compareVersions`), `changes` the change in plain words (`summarizeChanges`), `content` the approved content to send in `UPDATE_LIBRARY_LINK`. Nothing is stored. `404 NOT_LINKED`, `409 NOT_APPROVED`, `409 CANNOT_UPDATE` (with the command's refusal).
 
 ### `GET /api/v1/releases/:releaseId/library`
-What a release took from the library, from its frozen content: `{ library: [{ itemId, title, kind, version, inLibrary }] }`.
+What a release took from the library, from its frozen content: `{ library: [{ itemId, title, kind, version, inLibrary }], wordingRules }`. `wordingRules` is the wording rules in force when it was approved and what the checker found in the frozen content (the same record as the package manifest's `wordingRules`), or null.
 
 ### `POST /api/v1/library/reset` (admins; tests and demos only)
 Body `{ "confirm": true }`. Refused with `403 RESET_DISABLED` unless the server runs with `LIBRARY_RESET=allow`.
