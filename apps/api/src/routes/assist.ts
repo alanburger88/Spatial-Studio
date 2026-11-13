@@ -30,7 +30,7 @@ export function registerAssistRoutes(app: FastifyInstance, deps: RouteDeps): voi
     if (!style || !kind) throw new ApiError(400, 'INVALID', `"style" must be one of ${STYLES.join(', ')} and "kind" one of ${KINDS.join(', ')}.`);
     const locale = typeof b.locale === 'string' ? b.locale : 'en-US';
     if (!isSupportedLanguage(locale) || (locale !== 'en-US' && !projectLanguages(project).includes(locale))) throw new ApiError(400, 'INVALID_LOCALE', `Unsupported language ${locale}.`);
-    return rewriteText(cfgOf(b), model, { text: text(b.text, 'The text', 4000), style, kind, locale });
+    return rewriteText(cfgOf(b), model, { text: text(b.text, 'The text', 4000), style, kind, locale, documentType: project.documentType });
   });
 
   app.post('/api/v1/projects/:projectId/assist/new-version', async (req) => {

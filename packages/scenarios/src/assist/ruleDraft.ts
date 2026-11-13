@@ -473,6 +473,16 @@ function buildVocab(project: Project): Vocab {
     const bw = bare.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
     if (bw.length >= 2) heads.set(bw[bw.length - 1], [...(heads.get(bw[bw.length - 1]) ?? []), f.path]);
   }
+  // The number of rows of one of the project's own lists can be tested too ("booked sessions count is more than 3",
+  // "number of booked sessions"); naming just the list is read as its number of rows, and the draft says so.
+  for (const f of fields.values()) {
+    const list = f.derived && f.path.startsWith('custom.') && f.path.endsWith('.count') ? fields.get(f.path.slice(0, -6)) : undefined;
+    if (list?.type !== 'array') continue;
+    add(f.label, f.path, false);
+    add(`number of ${list.label}`, f.path, false);
+    add(`${list.label} rows`, f.path, false);
+    add(`~${list.label}`, f.path, false);
+  }
   // A head noun shared by several fields ("balance", "status") is an ambiguous way to name any of them.
   for (const [head, paths] of heads) if (paths.length >= 2) for (const p of paths) add(head, p, true);
 

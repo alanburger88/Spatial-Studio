@@ -450,6 +450,11 @@ export function renderInteractiveHtml(res: Resolution, project: Project, opts?: 
   const menu = present.length > 1 ? `<nav class="iss-menu" aria-label="${T('menuLabel')}" data-iss-menu><ul>${present.map((d) => `<li><a href="#sec-${d.key}">${T(d.label)}</a></li>`).join('')}</ul></nav>` : '';
   const bar = `<div class="iss-bar" role="region" aria-label="${T('barLabel')}" data-iss-bar><div class="iss-bar-main"><div class="iss-bar-id" aria-hidden="true"><span class="iss-bar-issuer">${esc(issuer)}</span>${fact}</div>${barAction}</div>${menu}</div>`;
 
+  // The first heading of the header area is the page's main heading.
+  const headerHtml = areas.header.map((n) => card(n)).join('').replace(/<h2>([\s\S]*?)<\/h2>/, '<h1>$1</h1>');
+  let sectionsHtml = present.map(sectionHtml).join('\n');
+  // A document with its own data starts without a header area: then the first heading of its text is the main heading.
+  if (ownData && !headerHtml.includes('<h1>')) sectionsHtml = sectionsHtml.replace(/(<div class="(?:[^"]* )?iss-rich">)<h2>([\s\S]*?)<\/h2>/, '$1<h1>$2</h1>');
   const title = fmtString(strings[ownData ? 'docTitleDocument' : isEob ? 'docTitleEob' : 'docTitleStatement'], { issuer, title: project.title });
   const manifestJson = JSON.stringify({ runId: res.runId, contentDigest: res.contentDigest, renderer: HTML_RENDERER_VERSION, resolverManifest: res.semanticManifest }).replace(/</g, '\\u003c');
   // The page carries only the fixed wording a document of its kind can show.
@@ -468,10 +473,10 @@ ${screenOverrides()}</style></head>
 <aside class="iss-demo-ribbon" aria-label="${T('syntheticNoticeLabel')}">${T('syntheticNotice', { issuer: project.issuer?.name ?? '' })}${isEob ? T('syntheticNoticeNotBill') : ''}${res.translation?.draftsShown.length ? ' · DRAFT — UNAPPROVED TRANSLATIONS' : ''}</aside>
 ${bar}
 <div class="iss-shell">
-${ownData && !areas.header.length ? '' : `<header class="iss-head" aria-label="${T('documentHeaderLabel')}">${areas.header.map((n) => card(n)).join('').replace(/<h2>([\s\S]*?)<\/h2>/, '<h1>$1</h1>')}</header>`}
+${ownData && !areas.header.length ? '' : `<header class="iss-head" aria-label="${T('documentHeaderLabel')}">${headerHtml}</header>`}
 <main id="iss-main" aria-label="${T('mainLabel')}">
 ${groups.pre.length ? `<div class="iss-pre iss-sec-body">${groups.pre.join('')}</div>` : ''}
-${present.map(sectionHtml).join('\n')}
+${sectionsHtml}
 </main>
 <footer class="iss-foot">${groups.foot.join('')}
 <p class="iss-meta">${T('composedBy', { run: res.runId, digest: res.contentDigest.slice(0, 16), rules: res.rulesDigest.slice(0, 12), model: res.modelVersion })}</p>
