@@ -16,6 +16,7 @@ const CATEGORIES: Array<{ id: string; label: string }> = [
   { id: '', label: 'Everything' },
   { id: 'project.', label: 'Saves & versions' },
   { id: 'template.', label: 'Templates' },
+  { id: 'testdata.', label: 'Test customers' },
   { id: 'workflow.', label: 'Review & approval' },
   { id: 'comment.', label: 'Comments' },
   { id: 'records.', label: 'Imported records' },
@@ -52,6 +53,8 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
     case 'project.reset': return `Restored the approved sample as ${v}`;
     case 'project.create': return `Created “${d.title ?? e.projectId}” from the template “${d.templateTitle ?? d.templateId}”${d.templateVersion ? ` v${d.templateVersion}` : ''}`;
     case 'project.import': return `Imported “${d.title ?? e.projectId}” from a project file (“${d.fromTitle}” v${d.fromVersion})`;
+    case 'testdata.generate': return `Generated ${plural(Number(d.customers ?? 0), 'test customer')} for this document${d.replaced ? ` (replacing ${d.replaced})` : ''}${d.unreachable ? `; ${plural(Number(d.unreachable), 'outcome')} could not be reached` : ''}`;
+    case 'testdata.clear': return `Removed ${plural(Number(d.removed ?? 0), 'generated test customer')}`;
     case 'template.save': return d.newTemplate ? `Saved a new template “${d.title}” (v${d.version})` : `Saved version ${d.version} of the template “${d.title}”`;
     case 'template.retire': return `Retired the template “${d.title}”`;
     case 'template.unretire': return `Brought back the template “${d.title}”`;

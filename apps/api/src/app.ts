@@ -19,6 +19,7 @@ import { registerTemplateRoutes } from './routes/templates';
 import { registerChannelRoutes } from './routes/channels';
 import { registerTranslationRoutes } from './routes/translations';
 import { registerAssistRoutes } from './routes/assist';
+import { registerTestDataRoutes } from './routes/testData';
 import type { RouteDeps } from './routes/deps';
 import { handleMessage, providerConfig, providerStatus, type Proposal } from './assistant';
 import { registerAuth, audit } from './auth';
@@ -206,6 +207,7 @@ export async function buildApp(opts: AppOptions = {}) {
   registerChannelRoutes(app, deps);
   registerTranslationRoutes(app, deps);
   registerAssistRoutes(app, deps);
+  registerTestDataRoutes(app, deps);
 
   /* ------------------------------------------------ version history, review workflow, comments, audit */
 

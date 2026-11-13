@@ -330,7 +330,7 @@ describe('a document with no sample customers', () => {
 
   it('the starting record uses field examples, sensible values by type and three rows per list', () => {
     const base = customerOf(plan, 'rule:R01').record;
-    expect(base.card).toMatchObject({ maskedAccount: '•••• 1842', currency: 'USD', tier: 'standard', paymentStatus: 'current', missedPayments: 0, assistanceRequested: false, statementStart: '2026-01-01', statementEnd: '2026-01-11' });
+    expect(base.card).toMatchObject({ maskedAccount: '•••• 1842', currency: 'USD', paymentStatus: 'current', missedPayments: 0, assistanceRequested: false, statementStart: '2026-01-01', statementEnd: '2026-01-11' });
     expect(base.card!.transactions.length).toBe(3);
     expect(base.card!.transactions[0]).toEqual({ id: 'Sample transaction id 1', date: '2026-01-01', merchant: 'Sample description 1', amountCents: 0 });
     expect(base.customer.locale).toBe('en-US');
@@ -492,19 +492,47 @@ describe('document languages', () => {
     expect(target(plan, 'rule:R07')).toMatchObject({ customer: null, reason: expect.stringContaining('Spanish (United States) is not a language of this project') });
   });
 
-  it('a language the customer data contract cannot name is reported, unless a rule switches to it', () => {
+  it('every project language gets a customer who prefers it, not only the two the samples use', () => {
     const french: Project = { ...card, languages: ['es-US', 'fr-FR'] };
     const plan = planTestData(french, RECORDS, BOTH);
     verify(french, plan);
-    expect(target(plan, 'language:fr-FR')).toMatchObject({ customer: null, title: 'Document in French (France)', reason: 'A customer record can only name English (United States) and Spanish (United States) as the preferred language, and no rule switches a document to French (France).' });
+    expect(target(plan, 'language:fr-FR')).toMatchObject({ title: 'Document in French (France)' });
+    const reader = customerOf(plan, 'language:fr-FR');
+    expect(reader.record.customer.locale).toBe('fr-FR');
+    expect(issue(french, reader).locale).toBe('fr-FR');
     expect(target(plan, 'language:es-US').customer).not.toBeNull();
-    const byRule = withRules(french, { ...hint('R21', 'Premium customers read French', { op: 'eq', path: 'card.tier', value: 'premium' }), then: { op: 'setApprovedLocale', locale: 'fr-FR' } });
-    const plan2 = planTestData(byRule, RECORDS, BOTH);
-    verify(byRule, plan2);
-    const reader = customerOf(plan2, 'language:fr-FR');
-    expect(reader.record.card!.tier).toBe('premium');
-    expect(issue(byRule, reader).locale).toBe('fr-FR');
-    expect(['en-US', 'es-US']).toContain(reader.record.customer.locale);
+    expect(target(plan, 'language:en-US').customer).not.toBeNull();
+  });
+});
+
+describe('nested conditions and a section with its own condition', () => {
+  const rules = withRules(card,
+    hint('R21', 'Premium with rewards, or paper only', { op: 'or', args: [{ op: 'and', args: [{ op: 'eq', path: 'card.tier', value: 'premium' }, { op: 'gte', path: 'card.rewardsBalance', value: 1000 }] }, { op: 'not', arg: { op: 'in', path: 'card.channelPreference', value: ['email', 'digital'] } }] }),
+    hint('R22', 'No credit limit on file', { op: 'isNull', path: 'card.creditLimitCents' }));
+  const p: Project = { ...rules, nodes: rules.nodes.map((n) => (n.id === 'payment-qr' ? { ...n, visibleWhen: { op: 'lte', path: 'card.dueDate', value: '2026-12-01' } } : n)) };
+  const plan = planTestData(p, RECORDS, BOTH);
+
+  it('or / not / one-of / is-empty are solved, and every claim still holds', () => {
+    verify(p, plan);
+    expect(plan.summary.outcomes).toEqual({ total: 29, reached: 29 });
+    expect(customerOf(plan, 'rule:R22').record.card!.creditLimitCents ?? null).toBeNull();
+    expect(target(plan, 'empty:card.creditLimitCents').observed).toBe('Rule “No credit limit on file” applies');
+    // a threshold inside "premium AND rewards ≥ 1000": the customers around it are premium, so the points decide
+    const three = ['below', 'on', 'above'].map((x) => customerOf(plan, `edge:card.rewardsBalance:${x}:1000`));
+    expect(three.map((c) => [c.record.card!.tier, c.record.card!.rewardsBalance])).toEqual([['premium', 999], ['premium', 1000], ['premium', 1001]]);
+    expect(three.map((c) => issue(p, c).result.matchedRuleIds.includes('R21'))).toEqual([false, true, true]);
+    // each value of a "one of" list gets a customer
+    expect(plan.targets.filter((t) => t.id.startsWith('edge:card.channelPreference:is:')).map((t) => t.id.split(':')[3]).sort()).toEqual(['digital', 'email', 'print']);
+  });
+
+  it('a date condition on a section: shown up to the day, hidden the day after', () => {
+    const three = ['below', 'on', 'above'].map((x) => customerOf(plan, `edge:card.dueDate:${x}:2026-12-01`));
+    expect(three.map((c) => c.record.card!.dueDate)).toEqual(['2026-11-30', '2026-12-01', '2026-12-02']);
+    expect(three.map((c) => !!node(issue(p, c), 'payment-qr')?.visible)).toEqual([true, true, false]);
+    expect(['below', 'on', 'above'].map((x) => target(plan, `edge:card.dueDate:${x}:2026-12-01`).observed)).toEqual(['Shows “Payment QR code”', 'Shows “Payment QR code”', 'Hides “Payment QR code”']);
+    expect(target(plan, 'section-shown:payment-qr').customer).not.toBeNull();
+    expect(target(plan, 'section-hidden:payment-qr').customer).not.toBeNull();
+    expect(plan.targets.map((t) => t.id)).not.toContain('empty:card.dueDate'); // a required field is never left empty
   });
 });
 
@@ -516,5 +544,8 @@ describe('names that a condition reads', () => {
     const jordan = customerOf(plan, 'rule:R21');
     expect(jordan.record.customer.givenName).toBe('Jordan');
     expect(issue(p, jordan).result.matchedRuleIds).toContain('R21');
+    expect(customerOf(plan, 'edge:customer.givenName:is:Jordan').record.customer.givenName).toBe('Jordan');
+    // everyone who does not need that name still gets one of their own
+    expect(plan.customers.filter((c) => c.record.customer.givenName === 'Jordan').length).toBe(1);
   });
 });

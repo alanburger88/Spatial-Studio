@@ -43,6 +43,7 @@ export class Store {
       CREATE INDEX IF NOT EXISTS audit_by_project ON audit(project_id, id);
       CREATE TABLE IF NOT EXISTS project_records(record_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, document_type TEXT NOT NULL, origin TEXT NOT NULL, json TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS project_records_by_project ON project_records(project_id);
+      CREATE TABLE IF NOT EXISTS counters(name TEXT PRIMARY KEY, value INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS project_test_data(project_id TEXT PRIMARY KEY, json TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS templates(template_id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL, document_type TEXT NOT NULL, retired INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS template_versions(template_id TEXT NOT NULL, version INTEGER NOT NULL, json TEXT NOT NULL, meta TEXT NOT NULL, saved_at TEXT NOT NULL, PRIMARY KEY(template_id, version));
@@ -122,10 +123,13 @@ export class Store {
     const r = this.db.prepare('SELECT json FROM project_records WHERE record_id=?').get(recordId) as any;
     return r ? JSON.parse(r.json) : undefined;
   }
-  /** Adds records for one project, giving each a studio-wide unique id `<PREFIX>-6xxxx`. Returns the stored records. */
+  /** Adds records for one project, giving each a studio-wide unique, never reused id `<PREFIX>-6xxxx`. Returns the stored records. */
   addProjectRecords(projectId: string, prefix: string, origin: 'generated' | 'supplied', records: Array<Omit<SyntheticRecord, 'recordId'>>): SyntheticRecord[] {
     const now = new Date().toISOString();
-    const max = (this.db.prepare('SELECT record_id FROM project_records').all() as any[]).reduce((m, r) => Math.max(m, Number(String(r.record_id).split('-')[1]) || 0), 60000);
+    // Ids are never reused, even after a set is replaced or removed: an old run or pinned test must not silently point at a different customer.
+    const inUse = (this.db.prepare('SELECT record_id FROM project_records').all() as any[]).reduce((m, r) => Math.max(m, Number(String(r.record_id).split('-')[1]) || 0), 60000);
+    const max = Math.max(inUse, Number((this.db.prepare("SELECT value FROM counters WHERE name='project_record'").get() as any)?.value ?? 0));
+    this.db.prepare("INSERT INTO counters(name,value) VALUES ('project_record',?) ON CONFLICT(name) DO UPDATE SET value=excluded.value").run(max + records.length);
     const st = this.db.prepare('INSERT INTO project_records(record_id,project_id,document_type,origin,json,created_at) VALUES (?,?,?,?,?,?)');
     return records.map((r, i) => {
       const rec = { ...r, recordId: `${prefix}-${max + 1 + i}`, projectId } as SyntheticRecord;

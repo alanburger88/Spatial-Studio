@@ -33,6 +33,13 @@ export interface ProjectSummary {
 export interface TemplateVersionDto { version: number; savedAt: string; savedBy: { id: string; name: string } | null; note: string; from: { projectId: string; title: string; modelVersion: number }; counts: { components: number; rules: number; messages: number; languages: number; tests: number } }
 /** `source: 'saved'` templates were published from a document; they have numbered, frozen versions (newest first). */
 export interface TemplateInfoDto { id: string; title: string; documentType: 'credit-statement' | 'eob'; description: string; source?: 'builtin' | 'saved'; version?: number; versions?: TemplateVersionDto[]; retired?: boolean }
+/** One thing the generated customers should exercise. `recordId` is the generated customer that does (null = nothing reaches it; `reason` says why). */
+export interface TestDataTargetDto { id: string; kind: 'rule' | 'variant' | 'section-shown' | 'section-hidden' | 'language' | 'edge' | 'empty'; targetId: string; title: string; customer: number | null; recordId: string | null; reason?: string; observed?: string }
+export interface TestDataResult {
+  summary: { outcomes: { total: number; reached: number }; edges: { total: number; reached: number }; unreachable: number; capped: boolean } | null;
+  targets: TestDataTargetDto[];
+  customers: Array<{ recordId: string | null; name: string; label: string; locale: string; targets: number }>;
+}
 export interface ProjectImportReport { from: { projectId: string; title: string; modelVersion: number }; counts: TemplateVersionDto['counts']; warnings: string[]; notImported: string[] }
 
 export interface ImportResult {
@@ -142,6 +149,13 @@ export const api = {
   resetProject: (id: string) => json<{ project: Project; reset: boolean; seedDigest: string }>(`/api/v1/projects/${id}/reset`, { method: 'POST', body: JSON.stringify({ confirm: true }) }),
   duplicateProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}/duplicate`, { method: 'POST', body: JSON.stringify({ title }) }),
   renameProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) }),
+  /** What generating test customers would create for this project (stores nothing). Pass the unsaved model to plan for what is on screen. */
+  planTestData: (projectId: string, body: { project?: Project; outcomes: boolean; edges: boolean }) => json<TestDataResult & { existing: number }>(`/api/v1/projects/${projectId}/test-data/plan`, { method: 'POST', body: JSON.stringify(body) }),
+  /** Generates and stores test customers for this project only, replacing its previous generated set. */
+  generateTestData: (projectId: string, body: { project?: Project; outcomes: boolean; edges: boolean }) => json<TestDataResult & { generated: number; replaced: number }>(`/api/v1/projects/${projectId}/test-data`, { method: 'POST', body: JSON.stringify(body) }),
+  /** The project's current generated customers and what the last generation covered. `stale` = the saved document changed since. */
+  testData: (projectId: string) => json<TestDataResult & { count: number; generatedAt: string | null; options: { outcomes: boolean; edges: boolean } | null; forModelVersion: number | null; stale: boolean }>(`/api/v1/projects/${projectId}/test-data`),
+  clearTestData: (projectId: string) => json<{ removed: number }>(`/api/v1/projects/${projectId}/test-data`, { method: 'DELETE' }),
   /** Built-in starters, then saved templates. `canSave` = this user may save a document as a template (approvers and admins). */
   templates: (includeRetired = false) => json<{ templates: TemplateInfoDto[]; canSave: boolean }>(`/api/v1/templates${includeRetired ? '?includeRetired=true' : ''}`),
   /** Saves the document's LAST SAVED version as a template. With `templateId` it adds the next version to that saved template. Errors: 403, 409 TEMPLATE_NAME_TAKEN, 400 DOCUMENT_TYPE_MISMATCH. */

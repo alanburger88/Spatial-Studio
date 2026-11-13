@@ -573,34 +573,39 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
 
   const capped = entries.length > max;
   const kept = entries.slice(0, max);
-  // A condition that reads a name decides it; otherwise every customer gets a name of its own.
+  // Every customer gets a name of its own, unless a condition reads the name and the customer needs the one it has.
   const read = new Set([...project.rules.map((r) => r.when), ...project.nodes.flatMap((n) => [...(n.visibleWhen ? [n.visibleWhen] : []), ...Object.values(n.variantConditions ?? {})])].flatMap((p) => predicatePaths(p)));
+  const readsName = read.has('customer.givenName') || read.has('customer.familyName');
   const customers: GeneratedCustomer[] = [];
   const placed = new Map<TestDataTarget, number>();
   const observed = new Map<TestDataTarget, string>();
   const failed = new Set<TestDataTarget>();
   kept.forEach((entry, n) => {
-    const { recordId: _id, personaId: _persona, imported: _imported, sourceId: _source, ...rest } = deepClone(entry.record);
-    const record: Omit<SyntheticRecord, 'recordId'> = { ...rest, documentType: docType };
-    if (!read.has('customer.givenName')) record.customer.givenName = GIVEN[n % GIVEN.length];
-    if (!read.has('customer.familyName')) record.customer.familyName = FAMILY[n % FAMILY.length];
-    // The record as it will be stored, as issued: no what-if, no journey step.
-    const issuedRecord: SyntheticRecord = { ...record, recordId: `TEST-${String(n + 1).padStart(4, '0')}` };
-    const res = invalid(issuedRecord) ? null : resolve({ project, record: issuedRecord });
-    const ctx = buildContext(issuedRecord);
+    /** The finished record, checked as it will be stored and issued: no what-if, no journey step. */
+    const finished = (keepReadNames: boolean): { record: Omit<SyntheticRecord, 'recordId'>; goals: Goal[]; edges: Array<[Edge, string]> } => {
+      const { recordId: _id, personaId: _persona, imported: _imported, sourceId: _source, ...rest } = deepClone(entry.record);
+      const record: Omit<SyntheticRecord, 'recordId'> = { ...rest, documentType: docType };
+      if (!(keepReadNames && read.has('customer.givenName'))) record.customer.givenName = GIVEN[n % GIVEN.length];
+      if (!(keepReadNames && read.has('customer.familyName'))) record.customer.familyName = FAMILY[n % FAMILY.length];
+      const issuedRecord: SyntheticRecord = { ...record, recordId: `TEST-${String(n + 1).padStart(4, '0')}` };
+      if (invalid(issuedRecord)) return { record, goals: [], edges: [] };
+      const res = resolve({ project, record: issuedRecord });
+      const ctx = buildContext(issuedRecord);
+      return {
+        record, goals: entry.goals.filter((g) => g.check(res)),
+        edges: entry.edges.filter((e) => same(getPath(ctx, e.path), e.value)).map((e) => [e, [...new Set(e.readers.map((r) => r.owner.observe(res)))].slice(0, 3).join('; ')]),
+      };
+    };
+    let done = finished(false);
+    if (readsName && done.goals.length + done.edges.length < entry.goals.length + entry.edges.length) done = finished(true);
     const index = customers.length;
-    const targets: string[] = [];
-    for (const g of entry.goals) {
-      if (res && g.check(res)) { placed.set(g.target, index); targets.push(g.target.id); } else failed.add(g.target);
-    }
+    for (const g of entry.goals) { if (done.goals.includes(g)) placed.set(g.target, index); else failed.add(g.target); }
     for (const e of entry.edges) {
-      if (res && same(getPath(ctx, e.path), e.value)) {
-        placed.set(e.target, index);
-        targets.push(e.target.id);
-        observed.set(e.target, [...new Set(e.readers.map((r) => r.owner.observe(res)))].slice(0, 3).join('; '));
-      } else failed.add(e.target);
+      const seen = done.edges.find(([x]) => x === e);
+      if (seen) { placed.set(e.target, index); observed.set(e.target, seen[1]); } else failed.add(e.target);
     }
-    if (targets.length) customers.push({ record, label: entry.label, targets });
+    const targets = [...done.goals.map((g) => g.target.id), ...done.edges.map(([e]) => e.target.id)];
+    if (targets.length) customers.push({ record: done.record, label: entry.label, targets });
   });
 
   const dropped = new Set(entries.slice(max).flatMap((x) => [...x.goals.map((g) => g.target.id), ...x.edges.map((e) => e.target.id)]));

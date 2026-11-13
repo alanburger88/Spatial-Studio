@@ -3,6 +3,7 @@ import { fieldsFor, type FieldDef, type FieldType } from './fields';
 /** Standard contract for the document type plus any extra (custom) fields of the target project. */
 const contract = (documentType: DocumentType, extra: FieldDef[] = []) => [...fieldsFor(documentType), ...extra];
 import { buildContext, getPath } from './data';
+import { isSupportedLanguage } from './languages';
 import type { DocumentType, SyntheticRecord } from './types';
 
 /**
@@ -53,7 +54,9 @@ export function validateRecordShape(raw: unknown, documentType: DocumentType, ex
       continue;
     }
     if (f.required && (v === null || v === '')) { errors.push(`Missing required field ${f.label} (${f.path}).`); continue; }
-    const e = checkType(f, v, `${f.label} (${f.path})`);
+    // A customer may prefer any language the studio supports, not only the two the samples use.
+    const asText = f.path === 'customer.locale' && typeof v === 'string' && isSupportedLanguage(v);
+    const e = checkType(asText ? { ...f, type: 'string', enumValues: undefined } : f, v, `${f.label} (${f.path})`);
     if (e) errors.push(e);
   }
   return errors;
