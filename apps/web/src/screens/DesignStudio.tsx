@@ -325,7 +325,7 @@ export function DesignStudio() {
                 <button aria-pressed={showHidden} onClick={toggleHidden} data-testid="toggle-hidden-sections" aria-label="Show hidden sections" title={`Show hidden sections as ghosts in the page (${hiddenCount} hidden for this customer). Off: shown as ⊘ margin markers.`}>⊘ Hidden{hiddenCount ? ` · ${hiddenCount}` : ''}</button>
               </div>
             </>}
-            {isHtml && <div className="segmented" role="group" aria-label="Device width">{([1200, 768, 390] as const).map((w) => <button key={w} aria-pressed={device === w} onClick={() => setDevice(w)}>{w === 1200 ? 'Desktop' : w === 768 ? 'Tablet' : 'Mobile'}</button>)}</div>}
+            {isHtml && <div className="segmented" role="group" aria-label="Device shape and width">{([[390, 'phone', 'Phone'], [768, 'tablet', 'Tablet'], [1200, 'desktop', 'Desktop']] as const).map(([w, id, label]) => <button key={w} aria-pressed={device === w} onClick={() => setDevice(w)} title={`${label} · ${w}px wide`} data-testid={`html-device-${id}`}>{label}</button>)}</div>}
             <span style={{ flex: 1, order: 7 }} />
             {canExplode && !hintSeen && <span className="ds-break" />}
             {canExplode && !hintSeen && (
@@ -395,9 +395,29 @@ function HtmlProfileCanvas({ res, project, width, selected, onSelect }: { res: R
     f.addEventListener('load', onLoad);
     return () => f.removeEventListener('load', onLoad);
   }, [html, selected, onSelect]);
+  // Device frame: the page keeps the device's true CSS width (so breakpoints behave), is scaled down to fit and scrolls inside the frame.
+  const holder = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: 1200, h: 800 });
+  useEffect(() => {
+    const el = holder.current?.parentElement;
+    if (!el) return;
+    const measure = () => setBox({ w: el.clientWidth, h: el.clientHeight });
+    const ro = new ResizeObserver(measure);
+    ro.observe(el); measure();
+    return () => ro.disconnect();
+  }, []);
+  const kind = width === 390 ? 'phone' : width === 768 ? 'tablet' : 'desktop';
+  const bezel = kind === 'desktop' ? 0 : kind === 'phone' ? 12 : 14;
+  const barH = kind === 'desktop' ? 34 : 0;
+  const scale = Math.min(1, Math.max(0.3, (box.w - 40 - bezel * 2 - 2) / width));
+  const screenH = Math.round(Math.min(kind === 'phone' ? 800 : 1000, Math.max(420, box.h - 32 - barH - bezel * 2 - 4)));
   return (
-    <div className="html-canvas" style={{ width }}>
-      <iframe ref={ref} title="Interactive HTML profile preview" srcDoc={html} sandbox="allow-scripts allow-same-origin" style={{ width, height: 1100 }} data-testid="html-profile-frame" />
+    <div className={`html-canvas html-dev html-dev--${kind}`} ref={holder} data-device={kind} style={{ padding: bezel }}>
+      {kind === 'desktop' && <div className="html-dev-bar" aria-hidden="true"><i /><i /><i /><span>Interactive HTML · {width}px wide</span></div>}
+      {kind === 'phone' && <span className="html-dev-notch" aria-hidden="true" />}
+      <div className="html-dev-screen" style={{ width: width * scale, height: screenH }}>
+        <iframe ref={ref} title="Interactive HTML profile preview" srcDoc={html} sandbox="allow-scripts allow-same-origin" style={{ width, height: screenH / scale, transform: `scale(${scale})`, transformOrigin: '0 0' }} data-testid="html-profile-frame" />
+      </div>
     </div>
   );
 }

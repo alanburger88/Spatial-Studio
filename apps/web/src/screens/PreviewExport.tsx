@@ -10,7 +10,7 @@ import './PreviewExport.css';
 
 type Tab = 'pdf' | 'html' | 'email' | 'sms' | 'afp' | 'batch';
 type Device = 'desktop' | 'tablet' | 'mobile';
-const DEVICES: Record<Device, { label: string; width: number }> = { desktop: { label: 'Desktop 1200', width: 1200 }, tablet: { label: 'Tablet 768', width: 768 }, mobile: { label: 'Mobile 390', width: 390 } };
+const DEVICES: Record<Device, { label: string; width: number; id: 'phone' | 'tablet' | 'desktop' }> = { mobile: { label: 'Phone', width: 390, id: 'phone' }, tablet: { label: 'Tablet', width: 768, id: 'tablet' }, desktop: { label: 'Desktop', width: 1200, id: 'desktop' } };
 const AFP_LABEL = 'AFP simulation only — no MO:DCA / AFP print stream generated';
 
 interface Issue { code?: string; severity?: string; message?: string; nodeId?: string }
@@ -444,15 +444,18 @@ function HtmlTab({ job, want, now, who, stale, onRun, onCancel, device, setDevic
     return () => ro.disconnect();
   }, [r]);
   const w = DEVICES[device].width;
-  const scale = Math.min(1, (avail - 24) / w);
-  const H = 640;
+  const kind = DEVICES[device].id;
+  const bezel = kind === 'desktop' ? 0 : kind === 'phone' ? 12 : 14;
+  const barH = kind === 'desktop' ? 34 : 0;
+  const scale = Math.min(1, (avail - 24 - bezel * 2 - 2) / w);
+  const H = kind === 'phone' ? 700 : 640; // visible screen height in px; the page scrolls inside the frame
   return (
     <>
       <JobBar job={job} label="HTML" onRun={() => onRun(false)} onCancel={onCancel} testId="export-html" runLabel={r ? 'Rebuild HTML' : 'Build HTML'} fresh={<Fresh job={job} want={want} now={now} testId="stale-html" />}
         extra={<>
           {r && <a className="btn" href={r.bin.url} download={r.bin.filename} data-testid="download-html"><Icon.download /> Download HTML</a>}
           <div className="segmented" role="group" aria-label="Device width">
-            {(Object.keys(DEVICES) as Device[]).map((d) => <button key={d} aria-pressed={device === d} onClick={() => setDevice(d)} data-testid={`device-${d}`}>{DEVICES[d].label}</button>)}
+            {(Object.keys(DEVICES) as Device[]).map((d) => <button key={d} aria-pressed={device === d} onClick={() => setDevice(d)} title={`${DEVICES[d].label} · ${DEVICES[d].width}px wide`} data-testid={`html-device-${DEVICES[d].id}`}><span data-testid={`device-${d}`}>{DEVICES[d].label}</span></button>)}
           </div>
         </>} />
       <IssuesBlock job={job} kind="HTML" onDraft={() => onRun(true)} />
@@ -466,10 +469,14 @@ function HtmlTab({ job, want, now, who, stale, onRun, onCancel, device, setDevic
               <span className="ox-proof">Run <span className="chip code">{r.bin.runId}</span> · digest <span className="chip code" title={r.bin.contentDigest}>{short(r.bin.contentDigest, 16)}…</span> · SHA-256 <span className="chip code" title={r.bin.sha256}>{short(r.bin.sha256, 16)}…</span> · <span className="chip code">{r.bin.filename}</span></span>
             </Proof>
           </div>
-          <div className={'ox-viewer ox-html' + (stale ? ' is-stale' : '')} ref={box} style={{ height: H + 24 }} data-testid="html-preview">
-            <div className="ox-device" style={{ width: w * scale, height: H }}>
-              <iframe title={`Interactive HTML preview at ${w}px`} sandbox="allow-scripts allow-popups" srcDoc={r.text}
-                style={{ width: w, height: H / scale, transform: `scale(${scale})`, transformOrigin: '0 0' }} data-testid="html-iframe" />
+          <div className={'ox-viewer ox-html' + (stale ? ' is-stale' : '')} ref={box} style={{ height: H + barH + bezel * 2 + 28 }} data-testid="html-preview">
+            <div className={`ox-device ox-device--${kind}`} data-device={kind} style={{ padding: bezel }}>
+              {kind === 'desktop' && <div className="ox-device-bar" aria-hidden="true"><i /><i /><i /><span>Interactive HTML · {w}px wide</span></div>}
+              {kind === 'phone' && <span className="ox-device-notch" aria-hidden="true" />}
+              <div className="ox-device-screen" style={{ width: w * scale, height: H }}>
+                <iframe title={`Interactive HTML preview at ${w}px`} sandbox="allow-scripts allow-popups" srcDoc={r.text}
+                  style={{ width: w, height: H / scale, transform: `scale(${scale})`, transformOrigin: '0 0' }} data-testid="html-iframe" />
+              </div>
             </div>
             {stale && <div className="ox-stale-veil">OUT OF DATE</div>}
           </div>

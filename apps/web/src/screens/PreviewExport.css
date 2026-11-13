@@ -22,8 +22,18 @@ a.btn { text-decoration: none; }
 .ox-viewer.is-stale iframe { opacity: .55; filter: grayscale(.4); }
 .ox-stale-veil { position: absolute; top: 12px; right: 12px; background: var(--iss-warning-soft); border: 1px solid var(--iss-warning); color: var(--iss-warning-fg); font-weight: 800; letter-spacing: .14em; font-size: 12px; padding: 4px 10px; border-radius: 999px; pointer-events: none; }
 .ox-html { min-height: 0; flex: none; padding: 12px; display: flex; justify-content: center; align-items: flex-start; background: var(--iss-stage-bg); }
-.ox-device { position: relative; background: var(--iss-paper); border-radius: 8px; overflow: hidden; box-shadow: var(--iss-shadow-paper); flex: none; }
+.ox-device { position: relative; box-sizing: content-box; background: var(--iss-text); border: 1px solid var(--iss-border-strong); border-radius: 10px; overflow: hidden; box-shadow: var(--iss-shadow-paper); flex: none; height: fit-content; }
+.ox-device--phone { border-radius: 38px; }
+.ox-device--tablet { border-radius: 26px; }
+.ox-device--desktop { background: var(--iss-paper); }
+.ox-device-screen { position: relative; overflow: hidden; background: var(--iss-paper); }
+.ox-device--phone .ox-device-screen { border-radius: 28px; }
+.ox-device--tablet .ox-device-screen { border-radius: 14px; }
 .ox-device iframe { min-height: 0; position: absolute; left: 0; top: 0; }
+.ox-device-bar { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; background: var(--iss-surface-sunken); border-bottom: 1px solid var(--iss-border); color: var(--iss-text-muted); font-size: 12px; }
+.ox-device-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--iss-border-strong); display: block; }
+.ox-device-bar span { margin-left: 10px; padding: 2px 14px; border-radius: 999px; background: var(--iss-surface); border: 1px solid var(--iss-border); }
+.ox-device-notch { position: absolute; top: 5px; left: 50%; width: 64px; height: 6px; margin-left: -32px; border-radius: 6px; background: var(--iss-border-strong); opacity: .6; z-index: 1; }
 
 .ox-pending { flex: 1; min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--iss-text-muted); border-radius: 12px; padding: 24px; background: var(--iss-overlay-1); }
 .ox-pending strong { color: var(--iss-text); font-size: 15px; }

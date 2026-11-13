@@ -24,18 +24,31 @@ export const isStringId = (id: string): boolean => id.startsWith('@');
 /** Restricted rich text → the safe markup `richFromMarkup` reads (`# heading`, `- bullet`, `**bold**`, `*italic*`, `[label](url)`, `{{path}}`). */
 export function richToMarkup(doc: RichDoc | undefined): string {
   if (!doc) return '';
-  const inline = (xs: Array<RichBlock | RichInline> | undefined): string => (xs ?? []).map((x) => {
-    const n = x as RichInline;
-    if (n.type === 'hardBreak') return ' ';
-    const marks = n.marks ?? [];
-    let t = n.type === 'token' ? `{{${n.attrs?.path ?? ''}}}` : (n.text ?? '');
-    if (!t) return '';
-    const link = marks.find((m) => m.type === 'link');
-    if (marks.some((m) => m.type === 'italic')) t = `*${t}*`;
-    if (marks.some((m) => m.type === 'bold')) t = `**${t}**`;
-    if (link?.attrs?.href) t = `[${t}](${link.attrs.href})`;
-    return t;
-  }).join('');
+  const inline = (xs: Array<RichBlock | RichInline> | undefined): string => {
+    // Adjacent runs with the same marks are one run for a translator: "**a b**", never "**a**** ****b**".
+    const runs: Array<{ key: string; bold: boolean; italic: boolean; href?: string; text: string }> = [];
+    for (const x of xs ?? []) {
+      const n = x as RichInline;
+      const t = n.type === 'hardBreak' ? ' ' : n.type === 'token' ? `{{${n.attrs?.path ?? ''}}}` : (n.text ?? '');
+      if (!t) continue;
+      const marks = n.type === 'hardBreak' ? [] : n.marks ?? [];
+      const bold = marks.some((m) => m.type === 'bold'), italic = marks.some((m) => m.type === 'italic');
+      const href = marks.find((m) => m.type === 'link')?.attrs?.href;
+      const key = `${bold}|${italic}|${href ?? ''}`;
+      const last = runs[runs.length - 1];
+      // whitespace between two runs of the same style joins them
+      if (last && (last.key === key || !t.trim())) last.text += t; else runs.push({ key, bold, italic, href, text: t });
+    }
+    return runs.map((r) => {
+      const lead = /^\s*/.exec(r.text)![0], trail = /\s*$/.exec(r.text.slice(lead.length))![0];
+      let t = r.text.slice(lead.length, r.text.length - trail.length);
+      if (!t) return r.text;
+      if (r.italic) t = `*${t}*`;
+      if (r.bold) t = `**${t}**`;
+      if (r.href) t = `[${t}](${r.href})`;
+      return lead + t + trail;
+    }).join('');
+  };
   const lines: string[] = [];
   for (const b of doc.content ?? []) {
     if (b.type === 'heading') lines.push(`${'#'.repeat(Math.max(1, Math.min(3, (b.attrs?.level ?? 2) - 1)))} ${inline(b.content)}`);

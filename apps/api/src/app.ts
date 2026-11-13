@@ -51,7 +51,7 @@ function checkDraftProject(p: any, projectId: string): Project {
   return p as Project;
 }
 
-export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides env AUTH=on (tests). */ auth?: boolean }
+export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides env AUTH=on (tests). */ auth?: boolean; /** Replaces the AI translation call (tests). */ translator?: import('./translate').Translator }
 
 export async function buildApp(opts: AppOptions = {}) {
   const store = new Store(opts.dataDir ?? process.env.DATA_DIR ?? path.resolve(here, '../../../.data'));
@@ -196,7 +196,7 @@ export async function buildApp(opts: AppOptions = {}) {
   });
 
   /* Feature route modules (each owns its own file; see routes/deps.ts for the shared helpers they receive). */
-  const deps: RouteDeps = { store, composer, ApiError, projectOr404, recordOr404, allRecords, checkDraftProject, runFor: (b) => runFor(ResolveBody.parse(b)) };
+  const deps: RouteDeps = { store, composer, ApiError, projectOr404, recordOr404, allRecords, checkDraftProject, runFor: (b) => runFor(ResolveBody.parse(b)), translator: opts.translator };
   registerTemplateRoutes(app, deps);
   registerChannelRoutes(app, deps);
   registerTranslationRoutes(app, deps);

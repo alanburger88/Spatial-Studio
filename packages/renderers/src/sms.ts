@@ -1,7 +1,7 @@
 import type { Project } from '@iss/model';
 import type { Resolution } from '@iss/resolver';
 import { formatCents } from '@iss/resolver';
-import { extractChannelFacts, fillChannelText, NOT_DETERMINED, type ChannelFacts, type EmailRender } from './email';
+import { extractChannelFacts, fillChannelText, notABillPhrase, NOT_DETERMINED, type ChannelFacts, type EmailRender } from './email';
 
 export const SMS_RENDERER_VERSION = 'sms-renderer/1';
 
@@ -114,10 +114,11 @@ export function checkChannelParity(res: Resolution, email: EmailRender, sms: Sms
     add({ id: 'member-liability', label: 'Unconfirmed member liability is never shown as an amount', status: shownOk && !leaked && !/\$/.test(sms.text) ? 'match' : 'mismatch', blocking: true, expected: m.guardedLiabilityNodeIds, email: { shownAsUnderReview: shownOk, leakedAmount: leaked }, sms: { containsAmount: /\$/.test(sms.text) } });
   } else add({ id: 'member-liability', label: 'Unconfirmed member liability is never shown as an amount', status: 'not-applicable', blocking: false });
 
-  // not a bill
+  // not a bill: the banner wording of the document language must appear in the email (HTML and text) and in the SMS
   if (email.facts.notABill) {
-    const ok = /THIS IS NOT A BILL/.test(et) && eh.includes('THIS IS NOT A BILL') && /NOT A BILL/.test(sms.text);
-    add({ id: 'not-a-bill', label: 'THIS IS NOT A BILL in email and SMS', status: ok ? 'match' : 'mismatch', blocking: true, expected: true });
+    const phrase = notABillPhrase(email.facts);
+    const ok = et.includes(phrase) && eh.includes(phrase) && sms.text.toLocaleUpperCase().includes(phrase.toLocaleUpperCase());
+    add({ id: 'not-a-bill', label: `${phrase} in email and SMS`, status: ok ? 'match' : 'mismatch', blocking: true, expected: true });
   } else add({ id: 'not-a-bill', label: 'THIS IS NOT A BILL in email and SMS', status: 'not-applicable', blocking: false });
 
   // selected variants: manifest-selected variants' titles appear in the email.

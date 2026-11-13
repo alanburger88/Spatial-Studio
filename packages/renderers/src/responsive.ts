@@ -286,7 +286,7 @@ details.iss-expl summary{cursor:pointer;display:flex;flex-direction:column;justi
 details.iss-expl[open] summary{padding-bottom:4px}
 .iss-expl-title{font-weight:700;color:#0F172A}.iss-expl-summary{font-size:14px;color:#475569}
 .iss-tools{display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap}
-.iss-shell .iss-chart--bar svg{max-width:100%;width:100%;height:auto}
+.iss-shell .iss-chart--bar svg{max-width:min(100%,460px);width:100%;height:auto;display:block}
 .iss-shell .iss-chart--donut{flex-wrap:wrap}
 .iss-shell .iss-chart--donut svg{width:140px;height:140px}
 .iss-shell .iss-legend{font-size:14px}

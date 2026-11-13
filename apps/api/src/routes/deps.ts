@@ -17,4 +17,6 @@ export interface RouteDeps {
   checkDraftProject(p: unknown, projectId: string): Project;
   /** Resolves a ResolveBody-shaped request (projectId, recordId, overrides?, journeyCursor?, project?, outputContext?) and records an immutable run. */
   runFor(body: unknown): { res: Resolution; project: Project; request: any };
+  /** The AI translation call; tests replace it. */
+  translator?: import('../translate').Translator;
 }

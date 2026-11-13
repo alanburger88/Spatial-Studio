@@ -47,8 +47,20 @@
 .pull-handle:hover { transform: translateY(-50%) translateX(3px) scale(1.06); }
 @keyframes pull-pulse { 0%, 100% { box-shadow: var(--iss-shadow-pop), 0 0 0 0 var(--iss-green-medium); } 50% { box-shadow: var(--iss-shadow-pop), 0 0 0 8px transparent; } }
 @media (prefers-reduced-motion: reduce) { .pull-handle { animation: none; } }
-.html-canvas { background: var(--iss-paper); border-radius: 10px; overflow: hidden; box-shadow: var(--iss-shadow-paper); flex: 0 0 auto; height: fit-content; transition: width var(--iss-motion-mid) var(--iss-ease); }
-.html-canvas iframe { border: 0; display: block; }
+
+/* interactive HTML shown as a device: bezel, rounded screen, scrolls inside */
+.html-canvas { flex: 0 0 auto; height: fit-content; box-sizing: content-box; position: relative; background: var(--iss-text); border: 1px solid var(--iss-border-strong); border-radius: 10px; box-shadow: var(--iss-shadow-paper); overflow: hidden; }
+.html-dev--phone { border-radius: 38px; }
+.html-dev--tablet { border-radius: 26px; }
+.html-dev-screen { position: relative; overflow: hidden; background: var(--iss-paper); }
+.html-dev--phone .html-dev-screen { border-radius: 28px; }
+.html-dev--tablet .html-dev-screen { border-radius: 14px; }
+.html-canvas iframe { border: 0; display: block; background: var(--iss-paper); }
+.html-dev-bar { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; background: var(--iss-surface-sunken); border-bottom: 1px solid var(--iss-border); margin: 0 0 0; color: var(--iss-text-muted); font-size: 12px; }
+.html-dev-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--iss-border-strong); display: block; }
+.html-dev-bar span { margin-left: 10px; padding: 2px 14px; border-radius: 999px; background: var(--iss-surface); border: 1px solid var(--iss-border); }
+.html-dev--desktop { background: var(--iss-paper); }
+.html-dev-notch { position: absolute; top: 5px; left: 50%; width: 64px; height: 6px; margin-left: -32px; border-radius: 6px; background: var(--iss-border-strong); opacity: .6; }
 
 /* inspector */
 .insp .insp-id { padding: 10px 12px; border-bottom: 1px solid var(--iss-border); }

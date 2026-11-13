@@ -118,6 +118,13 @@ export function fillChannelText(text: string, f: ChannelFacts): string {
   return t.replace(/[ \t]{2,}/g, ' ').trim();
 }
 
+/** The "not a bill" banner wording in the document language (the banner disclosure's own text), without closing punctuation. */
+export function notABillPhrase(f: ChannelFacts): string {
+  const banner = f.disclosures.find((d) => d.banner);
+  const text = banner ? blocksText(banner.blocks).trim().replace(/[.!]+$/, '') : '';
+  return text || 'THIS IS NOT A BILL';
+}
+
 export function emailSubject(f: ChannelFacts): string {
   if (f.texts) return fillChannelText(f.texts.subject, f);
   if (f.documentType === 'eob') return `Your ${f.issuer} Explanation of Benefits is ready — this is not a bill`;
@@ -250,7 +257,7 @@ ${parts.join('\n')}
 export function emailText(f: ChannelFacts, subject: string): string {
   const L: string[] = [];
   L.push(f.issuer.toUpperCase(), subject, '');
-  if (f.notABill) L.push('THIS IS NOT A BILL.', '');
+  if (f.notABill) L.push(`${notABillPhrase(f)}.`, '');
   L.push(f.greeting.length ? blocksText(f.greeting) : `Hello ${f.customerName},`, '');
   if (f.texts?.intro.length) L.push(blocksText(f.texts.intro), '');
   for (const id of emailSectionOrder(f)) {
