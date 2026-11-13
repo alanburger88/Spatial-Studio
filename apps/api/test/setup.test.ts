@@ -479,3 +479,36 @@ describe('setting a document up: who may do what', () => {
     expect((await inj('GET', '/api/v1/projects/by-an-author/workflow?checks=0', undefined, { cookie: admin })).json().state).toBe('draft');
   });
 });
+
+describe('setup: re-checking an edited setup', () => {
+  let ctx: Awaited<ReturnType<typeof buildApp>>;
+  beforeAll(async () => { ctx = await buildApp({ dataDir: mkdtempSync(path.join(tmpdir(), 'iss-setup-edit-')), logger: false, auth: false }); });
+  afterAll(async () => { await ctx.app.close(); });
+  const inj = (method: any, url: string, payload?: any) => ctx.app.inject({ method, url, payload });
+
+  it('an edited setup is rebuilt and previewed as it stands, without a model and without storing anything', async () => {
+    const data = JSON.stringify([{ firstName: 'Ada', lastName: 'Okoye', plan: 'Flex', monthlyFee: 49.5, renewalDate: '2026-12-01' }]);
+    const first = (await inj('POST', '/api/v1/projects/setup/draft', { sampleData: { format: 'json', data }, title: 'Gym renewal' })).json();
+    expect(first.mode).toBe('proposal');
+    const before = (await inj('GET', '/api/v1/projects')).json().projects.length;
+    // the person removes a field and a section, and rewrites the heading
+    const dropped = first.spec.fields[0].label;
+    const spec = { ...first.spec, fields: first.spec.fields.slice(1), sections: first.spec.sections.filter((s: any) => s.type !== 'keyFigures').map((s: any) => (s.type === 'heading' ? { ...s, text: 'Your renewal' } : s)) };
+    const again = (await inj('POST', '/api/v1/projects/setup/draft', { spec, source: 'builtin', sampleData: { format: 'json', data }, title: 'Gym renewal' })).json();
+    expect(again).toMatchObject({ mode: 'proposal', source: 'builtin' });
+    expect(again.spec.fields.map((f: any) => f.label)).not.toContain(dropped);
+    expect(again.outline.fields).toHaveLength(first.outline.fields.length - 1);
+    expect(JSON.stringify(again.outline.sections)).toContain('Your renewal');
+    expect(again.outline.sections.some((s: any) => /key figures/i.test(s.kind))).toBe(false);
+    expect(again.preview.blocking).toEqual([]);
+    expect((await inj('GET', '/api/v1/projects')).json().projects.length).toBe(before);
+    // junk in an edited setup is cleaned and noted, never trusted
+    const junk = (await inj('POST', '/api/v1/projects/setup/draft', { spec: { ...spec, documentType: 'eob', sections: [...spec.sections, { type: 'table', list: 'No such list' }, { type: 'action', label: 'Go', url: 'javascript:alert(1)' }] }, title: 'Gym renewal' })).json();
+    expect(junk.mode).toBe('proposal');
+    expect(junk.project.documentType).toBe('custom');
+    expect(junk.notes.length).toBeGreaterThan(0);
+    expect(JSON.stringify(junk.project)).not.toContain('javascript:');
+    expect((await inj('POST', '/api/v1/projects/setup/draft', { spec: 'nope' })).statusCode).toBe(400);
+  });
+});
+

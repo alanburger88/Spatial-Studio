@@ -138,7 +138,10 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
     if (b.description !== undefined && b.description !== null && typeof b.description !== 'string') throw new ApiError(400, 'INVALID', 'The description must be text.');
     if (description.length > SETUP_DESCRIPTION_MAX) throw new ApiError(400, 'TOO_LONG', 'The description is limited to 2,000 characters.');
     const rows = rowsOf(b.sampleData);
-    if (!description && !rows) throw new ApiError(400, 'NOTHING_TO_SET_UP', 'Describe the document, supply sample data, or both.');
+    // A setup the person has edited is re-checked as it stands: no model is called and nothing is inferred again.
+    const edited = b.spec !== undefined && b.spec !== null;
+    if (edited && (typeof b.spec !== 'object' || Array.isArray(b.spec))) throw new ApiError(400, 'INVALID_SETUP', 'The setup must be one object.');
+    if (!edited && !description && !rows) throw new ApiError(400, 'NOTHING_TO_SET_UP', 'Describe the document, supply sample data, or both.');
     const title = b.title === undefined || b.title === null || b.title === '' ? undefined : titleOf(b.title);
     const issuer = issuerOf(b);
     const cfg = providerConfig();
@@ -150,8 +153,12 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
     let rawSpec: unknown;
     let message: string;
     const notes: string[] = [];
-    const ai = description && live ? await draftSetupSpec(cfg, model, { description, dataShape: rows ? dataShapeOf(rows) : undefined, title, issuerName: issuer.issuerName }) : null;
-    if (ai?.mode === 'ai' && ai.spec) {
+    const ai = !edited && description && live ? await draftSetupSpec(cfg, model, { description, dataShape: rows ? dataShapeOf(rows) : undefined, title, issuerName: issuer.issuerName }) : null;
+    if (edited) {
+      source = b.source === 'ai' ? 'ai' : 'builtin';
+      rawSpec = b.spec;
+      message = 'Your changes were checked. Nothing is created until you choose to create the document.';
+    } else if (ai?.mode === 'ai' && ai.spec) {
       source = 'ai';
       rawSpec = ai.spec;
       message = ai.message;

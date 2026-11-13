@@ -51,7 +51,7 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
     case 'project.save': return `Saved ${v} (${changeSummary(d.changes)})${d.workflow ? ` — moved back to draft from ${String(d.workflow.from).replace('_', ' ')}` : ''}`;
     case 'project.restore': return `Restored v${d.restoredVersion} as ${v}`;
     case 'project.reset': return `Restored the approved sample as ${v}`;
-    case 'project.create': return `Created “${d.title ?? e.projectId}” from the template “${d.templateTitle ?? d.templateId}”${d.templateVersion ? ` v${d.templateVersion}` : ''}`;
+    case 'project.create': return d.setup ? `Created “${d.title ?? e.projectId}” from a ${d.setup === 'ai' ? 'description, set up by the assistant (AI suggestion, approved by this person)' : 'data file, set up by the studio (built-in)'}` : `Created “${d.title ?? e.projectId}” from the template “${d.templateTitle ?? d.templateId}”${d.templateVersion ? ` v${d.templateVersion}` : ''}`;
     case 'project.import': return `Imported “${d.title ?? e.projectId}” from a project file (“${d.fromTitle}” v${d.fromVersion})`;
     case 'records.add': return d.copyOf ? `Made an editable copy of a customer (${d.name})` : `Added the customer ${d.name}`;
     case 'records.edit': return `Edited the customer ${d.name}${d.wasGenerated ? ' (a generated customer, now kept as this document’s own)' : ''}`;
