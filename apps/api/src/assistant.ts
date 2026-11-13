@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { projectFieldIndex, validateRule, RECORD_ID_PATTERN, type Project, type Rule, type SyntheticRecord } from '@iss/model';
 import { describePredicate, explainNode, resolve, type Explanation, type Resolution } from '@iss/resolver';
+import { dated } from './issueDate';
 import { EDGE_CASE_PRESETS, DIMENSIONS } from '@iss/scenarios';
 import { PERSONAS } from '@iss/model/fixtures';
 
@@ -33,6 +34,8 @@ export interface AssistantContext {
   overrides: Record<string, unknown>;
   journeyCursor: number | null;
   selectedNodeId?: string | null;
+  /** "As issued on": the document's date the studio previews with (documents that use dates). Every resolve here uses it. */
+  issueDate?: string | null;
 }
 
 export interface Proposal {
@@ -258,10 +261,10 @@ export function offlineInterpret(message: string, ctx: AssistantContext): Offlin
       const rec = ctx.records.find((r) => r.recordId === ctx.recordId);
       if (rec && ownData) {
         // Names, not ids: the customer and the rules as the author named them.
-        const r = resolve({ project: ctx.project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor });
+        const r = resolve({ ...dated(ctx.issueDate), project: ctx.project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor });
         const titles = r.result.matchedRuleIds.map((id) => { const rule = ctx.project.rules.find((x) => x.id === id); return rule?.title ? `“${rule.title}”` : id; });
         facts.push(!ctx.project.rules.length ? 'This document has no rules yet, so every customer gets the same document.' : `For ${fullName(rec) || 'this customer'} the engine matched ${titles.length ? titles.join(', ') : 'no rules'} (run ${r.runId}).`);
-      } else if (rec) { const r = resolve({ project: ctx.project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor }); facts.push(`For ${ctx.recordId} the engine matched ${r.result.matchedRuleIds.length ? r.result.matchedRuleIds.join(', ') : 'no rules'} (run ${r.runId}).`); }
+      } else if (rec) { const r = resolve({ ...dated(ctx.issueDate), project: ctx.project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor }); facts.push(`For ${ctx.recordId} the engine matched ${r.result.matchedRuleIds.length ? r.result.matchedRuleIds.join(', ') : 'no rules'} (run ${r.runId}).`); }
     }
   }
   if (/\b(validat\w*|run checks?|check (the|this|my) (document|statement|eob|design|template)|compliance|compliant|preflight|lint|qa)\b/.test(n)) { actions.push({ action: 'run_validation' }); notes.push('run validation'); }
@@ -342,6 +345,8 @@ export function assistantModelContext(ctx: AssistantContext, res: Resolution) {
     // `about` says why a generated test customer exists ("Reaches “Payment support”"); a document with its own data has no persona or status to go by.
     records: [...(current ? [current] : []), ...ofType.filter((r) => r !== current)].slice(0, 150).map((r) => ({ id: r.recordId, name: nameOf(r), persona: personaOf(r) ?? r.personaId, locale: r.customer.locale, status: (r.card as any)?.paymentStatus ?? (r.claims?.[0] as any)?.status, ...(r.generated?.label ? { about: r.generated.label } : {}) })),
     currentRun: { runId: res.runId, selectedVariants: res.result.selectedVariants, matchedRuleIds: res.result.matchedRuleIds },
+    // The preview date the studio set ("as issued on"), only for a document that uses dates. A day the person chose, not customer data.
+    ...(ctx.issueDate && ctx.project.documentDate ? { asIssuedOn: ctx.issueDate } : {}),
   };
 }
 
@@ -404,8 +409,8 @@ export function buildProposal(act: Extract<AssistantAction, { action: 'propose_r
     const sample: Proposal['impact']['sample'] = [];
     let changed = 0;
     for (const r of recs) {
-      const b = resolve({ project: ctx.project, record: r });
-      const a = resolve({ project: afterProject, record: r });
+      const b = resolve({ ...dated(ctx.issueDate), project: ctx.project, record: r });
+      const a = resolve({ ...dated(ctx.issueDate), project: afterProject, record: r });
       const bv = pvs ? b.result.selectedVariants[pvs] : null, av = pvs ? a.result.selectedVariants[pvs] : null;
       if (bv !== av || b.result.diagnostics.length !== a.result.diagnostics.length) { changed++; if (sample.length < 6) sample.push({ recordId: r.recordId, before: bv, after: av }); }
     }
@@ -422,7 +427,7 @@ export function buildProposal(act: Extract<AssistantAction, { action: 'propose_r
 export async function handleMessage(message: string, ctx: AssistantContext, cfg: ProviderConfig): Promise<AssistantReply> {
   const requestId = `ai-${Date.now().toString(36)}-${(++seq).toString(36)}`;
   const record = ctx.records.find((r) => r.recordId === ctx.recordId)!;
-  const res = resolve({ project: ctx.project, record, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor });
+  const res = resolve({ ...dated(ctx.issueDate), project: ctx.project, record, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor });
   const status = providerStatus(cfg);
   let mode: 'external' | 'offline' = 'offline';
   let providerNote = status.label;
@@ -445,12 +450,12 @@ export async function handleMessage(message: string, ctx: AssistantContext, cfg:
     if (a.action === 'set_scenario_fields') previewOverrides = mergeDeep(previewOverrides ?? ctx.overrides, fieldsToOverrides(a.fields));
   }
   if (previewOverrides && ctx.records.find((r) => r.recordId === previewRecord)?.documentType === ctx.project.documentType) {
-    const pr = resolve({ project: ctx.project, record: ctx.records.find((r) => r.recordId === previewRecord)!, overrides: previewOverrides });
+    const pr = resolve({ ...dated(ctx.issueDate), project: ctx.project, record: ctx.records.find((r) => r.recordId === previewRecord)!, overrides: previewOverrides });
     reply.scenarioPreview = { recordId: previewRecord, overrides: previewOverrides, runId: pr.runId, selectedVariants: pr.result.selectedVariants, matchedRuleIds: pr.result.matchedRuleIds };
   }
   const explain = ok.find((a) => a.action === 'explain_resolution') as Extract<AssistantAction, { action: 'explain_resolution' }> | undefined;
   if (explain) {
-    const target = reply.scenarioPreview ? resolve({ project: ctx.project, record: ctx.records.find((r) => r.recordId === reply.scenarioPreview!.recordId)!, overrides: reply.scenarioPreview.overrides }) : res;
+    const target = reply.scenarioPreview ? resolve({ ...dated(ctx.issueDate), project: ctx.project, record: ctx.records.find((r) => r.recordId === reply.scenarioPreview!.recordId)!, overrides: reply.scenarioPreview.overrides }) : res;
     reply.explanation = explainNode(target, explain.nodeId);
   }
   const prop = ok.find((a) => a.action === 'propose_rule_edit' || a.action === 'propose_content_edit') as Extract<AssistantAction, { action: 'propose_rule_edit' | 'propose_content_edit' }> | undefined;

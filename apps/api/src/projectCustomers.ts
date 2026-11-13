@@ -9,7 +9,8 @@ import type { Store } from './db';
  * so it is given its first customers when it is created and is never left without one.
  */
 
-export interface TestDataChoice { outcomes: boolean; edges: boolean }
+/** What to generate. `issueDate`: "as issued on" (documents that use dates); the outcomes are reached on that day. */
+export interface TestDataChoice { outcomes: boolean; edges: boolean; issueDate?: string | null }
 
 /** Shared customers of this kind of document that the generator may start from (never earlier generated ones). */
 export const baseRecordsFor = (store: Store, project: Project): SyntheticRecord[] =>
@@ -18,7 +19,7 @@ export const baseRecordsFor = (store: Store, project: Project): SyntheticRecord[
 export const publicPlan = (plan: TestDataPlan, ids: string[] = []) => ({
   summary: plan.summary,
   targets: plan.targets.map((t) => ({ ...t, recordId: t.customer === null ? null : ids[t.customer] ?? null })),
-  customers: plan.customers.map((c, i) => ({ recordId: ids[i] ?? null, name: `${c.record.customer.givenName} ${c.record.customer.familyName}`, label: c.label, locale: c.record.customer.locale, targets: c.targets.length })),
+  customers: plan.customers.map((c, i) => ({ recordId: ids[i] ?? null, name: `${c.record.customer.givenName} ${c.record.customer.familyName}`, label: c.label, locale: c.record.customer.locale, targets: c.targets.length, ...(c.issueDate ? { issueDate: c.issueDate } : {}) })),
 });
 
 const prefixOf = (project: Project): string => RECORD_ID_PREFIX[project.documentType] ?? 'REC';

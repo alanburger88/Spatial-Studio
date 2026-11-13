@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { customFieldDefs, deepClone, projectFieldIndex, validateRecordShape, type Project, type SyntheticRecord } from '@iss/model';
 import { resolve } from '@iss/resolver';
 import { audit } from '../auth';
+import { dated, issueDateFrom } from '../issueDate';
 import type { RouteDeps } from './deps';
 
 const PREFIX: Record<string, string> = { 'credit-statement': 'CARD', eob: 'EOB' };
@@ -46,10 +47,10 @@ export function registerRecordRoutes(app: FastifyInstance, deps: RouteDeps): voi
     if (problems.length) throw new ApiError(422, 'INVALID_RECORD', `${problems.length} value${problems.length === 1 ? ' does' : 's do'} not fit the data fields.`, { problems });
     return data;
   };
-  /** What the document does for this customer as issued: the messages chosen and any blocking issue. Never throws. */
-  const outcomeOf = (project: Project, record: SyntheticRecord) => {
+  /** What the document does for this customer as issued (on `issueDate`, when one is given): the messages chosen and any blocking issue. Never throws. */
+  const outcomeOf = (project: Project, record: SyntheticRecord, issueDate: string | null = null) => {
     try {
-      const res = resolve({ project, record });
+      const res = resolve({ project, record, ...dated(issueDate) });
       return {
         messages: Object.entries(res.result.selectedVariants).map(([nodeId, variantId]) => ({ nodeId, node: project.nodes.find((n) => n.id === nodeId)?.name ?? nodeId, variantId, variant: variantId ? project.contentParts.find((c) => c.id === variantId)?.title ?? variantId : null })),
         blocking: res.findings.filter((f) => f.severity === 'blocking').map((f) => ({ code: f.code, message: f.message })),
@@ -72,15 +73,17 @@ export function registerRecordRoutes(app: FastifyInstance, deps: RouteDeps): voi
   /** Check a customer against the document's data fields and say what the document would do for them. Stores nothing. */
   app.post<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/records/check', async (req) => {
     const project = projectOr404(req.params.projectId);
+    const issueDate = issueDateFrom(req.body?.issueDate, ApiError);
     const data = dataOf(req.body?.record);
     const problems = problemsOf(data, project);
-    return { problems, outcome: problems.length ? null : outcomeOf(project, { ...(data as any), recordId: 'CHECK-0000', documentType: project.documentType }) };
+    return { problems, outcome: problems.length ? null : outcomeOf(project, { ...(data as any), recordId: 'CHECK-0000', documentType: project.documentType }, issueDate) };
   });
 
   /** Add a customer that belongs to this document: from the data sent, or as an editable copy of an existing customer (`copyOf`). */
   app.post<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/records', async (req, reply) => {
     const project = projectOr404(req.params.projectId);
     const b = req.body ?? {};
+    const issueDate = issueDateFrom(b.issueDate, ApiError);
     let data: Record<string, unknown>;
     let copiedFrom: SyntheticRecord | undefined;
     if (typeof b.copyOf === 'string') {
@@ -91,18 +94,19 @@ export function registerRecordRoutes(app: FastifyInstance, deps: RouteDeps): voi
     const [stored] = store.addProjectRecords(project.projectId, PREFIX[project.documentType] ?? 'REC', 'supplied', [{ ...(data as any), documentType: project.documentType }]);
     audit(store, req, 'records.add', { projectId: project.projectId, detail: { recordId: stored.recordId, copyOf: copiedFrom?.recordId ?? null } });
     reply.status(201);
-    return { record: stored, origin: 'supplied', copiedFrom: copiedFrom?.recordId ?? null, outcome: outcomeOf(project, stored) };
+    return { record: stored, origin: 'supplied', copiedFrom: copiedFrom?.recordId ?? null, outcome: outcomeOf(project, stored, issueDate) };
   });
 
   /** Save changes to one of this document's own customers. An edited generated customer becomes the document's own. */
   app.put<{ Params: { projectId: string; recordId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/records/:recordId', async (req) => {
     const project = projectOr404(req.params.projectId);
+    const issueDate = issueDateFrom(req.body?.issueDate, ApiError);
     const { origin, record: before } = ownOr404(project, req.params.recordId);
     const data = checked(project, dataOf(req.body?.record));
     const next = { ...(data as any), recordId: before.recordId, documentType: project.documentType, projectId: project.projectId } as SyntheticRecord;
     store.updateProjectRecord(project.projectId, next);
     audit(store, req, 'records.edit', { projectId: project.projectId, detail: { recordId: next.recordId, wasGenerated: origin === 'generated' } });
-    return { record: next, origin: 'supplied', wasGenerated: origin === 'generated', outcome: outcomeOf(project, next) };
+    return { record: next, origin: 'supplied', wasGenerated: origin === 'generated', outcome: outcomeOf(project, next, issueDate) };
   });
 
   /** Remove one of this document's own customers. Sample and imported customers cannot be removed here. */
