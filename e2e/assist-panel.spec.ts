@@ -148,9 +148,13 @@ test('A04 change summary: both edits under the right areas with an impact line; 
   await page.getByTestId('workflow-status').click();
   const review = page.getByTestId('review-panel');
   await expect(review).toBeVisible();
-  const submit = review.getByTestId('workflow-action-submit');
-  await expect(submit).toBeEnabled();
-  await submit.click();
+  // (a project reset does not clear the review state, so the document may already be in review from an earlier run)
+  await expect(review.getByTestId('review-state')).toBeVisible();
+  if ((await review.getByTestId('review-state').getAttribute('data-state')) !== 'in_review') {
+    const submit = review.getByTestId('workflow-action-submit');
+    await expect(submit).toBeEnabled();
+    await submit.click();
+  }
   await expect(review.getByTestId('review-state')).toHaveAttribute('data-state', 'in_review');
   await expect(review.getByTestId('review-summary').getByTestId('change-summary')).toBeVisible();
   await expect(review.getByTestId('review-summary')).toContainText(/Rule|rule/);
