@@ -313,6 +313,36 @@ describe('the runnable package (composition replaced by a stub)', () => {
     }
   });
 
+  it('round trip: the proof records the package wrote are added to the studio and verify there as the same, on a release approved with drafts', async () => {
+    const text = readFileSync(path.join(work, 'out', 'proof.jsonl'), 'utf8');
+    const proofs = readJsonl(path.join(work, 'out', 'proof.jsonl')) as ProofRecord[];
+    const dry = await json('POST', '/api/v1/proofs/import', { text });
+    expect(dry).toMatchObject({ dryRun: true, lines: 8, new: 8, refused: 0, unknownRelease: 0, added: 0 });
+    const added = await json('POST', '/api/v1/proofs/import', { text, dryRun: false });
+    expect(added).toMatchObject({ added: 8, refused: 0, producers: { studio: 0, runtime: 8 } });
+    expect((await json('POST', '/api/v1/proofs/import', { text, dryRun: false })).added).toBe(0); // adding the same file again stores nothing
+
+    // The data each line was produced from, by the reference the run was given.
+    const supplied = new Map<string, unknown>(readFileSync(path.join(work, 'customers.jsonl'), 'utf8').split('\n').filter(Boolean).flatMap((l) => {
+      try { const v = JSON.parse(l); return [[String(v.customerRef ?? v.recordId), v.data ?? v] as [string, unknown]]; } catch { return []; }
+    }));
+    for (const proof of proofs) {
+      const v = await json('POST', `/api/v1/proofs/${proof.proofId}/verify`, { record: supplied.get(proof.customerRef) });
+      expect(v.same, `${proof.customerRef}: ${JSON.stringify(v.differences)}`).toBe(true);
+      expect(v.differences).toEqual([]);
+    }
+    // The same record with one value changed is not the same, and the answer says it is the data.
+    const first = proofs.find((x) => x.produced)!;
+    const changed = structuredClone(supplied.get(first.customerRef)) as any;
+    changed.customer.givenName = 'Changed';
+    const bad = await json('POST', `/api/v1/proofs/${first.proofId}/verify`, { record: changed });
+    expect(bad.same).toBe(false);
+    expect((bad.differences as Array<{ kind: string }>).map((d) => d.kind)).toContain('data');
+    // Found again by the reference the producing system used.
+    const found = await json('GET', `/api/v1/proofs?customerRef=acct-spanish`);
+    expect(JSON.stringify(found)).toContain(proofs.find((x) => x.customerRef === 'acct-spanish')!.proofId);
+  });
+
   it('verify passes on the untouched package and names what differs after tampering with the template, an expected output or the engine', () => {
     const ok = node(pkgDir, ['verify', '--without-pdf']);
     expect(ok.code, ok.out + ok.err).toBe(0);

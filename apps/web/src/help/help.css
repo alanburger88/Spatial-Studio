@@ -1,5 +1,5 @@
 /* Help sheet: a searchable list of every screen, the selected screen's help, shortcuts and glossary. Tokens only. */
-.help-dialog { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+.dialog.help-dialog { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: hidden; display: flex; flex-direction: column; }
 .help-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 0; flex: 1; overflow: hidden; border-top: 1px solid var(--iss-border); }
 .help-rail { display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow: auto; border-right: 1px solid var(--iss-border); background: var(--iss-surface-sunken); min-height: 0; }
 .help-search .input { width: 100%; }

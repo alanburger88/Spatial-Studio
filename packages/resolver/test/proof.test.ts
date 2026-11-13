@@ -80,6 +80,8 @@ describe('proof records', () => {
     expect(proofRecordProblems({ ...proof, customer: { displayName: 'A' } }).join(' ')).toMatch(/Unexpected fields: customer/);
     expect(proofRecordProblems({ ...proof, dataFingerprint: 'abc' }).join(' ')).toMatch(/dataFingerprint/);
     expect(proofRecordProblems({ ...proof, outputs: [{ channel: 'fax', kind: 'bytes', sha256: proof.contentDigest }] }).join(' ')).toMatch(/outputs/);
+    expect(proofRecordProblems({ ...proof, decisions: [{ ...proof.decisions[0], testedValue: 'Jordan' }] }).join(' ')).toMatch(/decision carries unexpected fields: testedValue/);
+    expect(proofRecordProblems({ ...proof, outputs: [{ ...proof.outputs[0], text: 'Dear Jordan' }] }).join(' ')).toMatch(/output fingerprint carries unexpected fields: text/);
     void applyCommand;
   });
 });

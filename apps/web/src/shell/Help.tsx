@@ -237,7 +237,8 @@ export function SettingsMenu() {
     const i = items.indexOf(document.activeElement as HTMLButtonElement);
     items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
   };
-  const pick = (fn: () => void) => () => { setOpen(false); fn(); };
+  // Focus goes back to the button first, so whatever the item opens (help, the tour) returns focus there when it closes.
+  const pick = (fn: () => void) => () => { setOpen(false); btn.current?.focus(); fn(); };
   const about = () => {
     const d = document.querySelector<HTMLDetailsElement>('.screen-about');
     if (!d) return;

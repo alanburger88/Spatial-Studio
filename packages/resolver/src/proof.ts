@@ -166,6 +166,11 @@ export function proofRecordProblems(raw: unknown): string[] {
   if (!Array.isArray(r.blockedBy) || r.blockedBy.some((c) => typeof c !== 'string')) p.push('“blockedBy” must be a list of issue codes.');
   if (!Array.isArray(r.decisions) || r.decisions.length > 2000 || r.decisions.some((d) => !d || typeof d !== 'object' || typeof (d as ProofDecision).nodeId !== 'string' || !((d as ProofDecision).variantId === null || typeof (d as ProofDecision).variantId === 'string') || !Array.isArray((d as ProofDecision).ruleIds) || (d as ProofDecision).ruleIds.some((x) => typeof x !== 'string'))) p.push('“decisions” is not a list of decisions.');
   if (!Array.isArray(r.outputs) || r.outputs.length > 8 || r.outputs.some((o) => !o || typeof o !== 'object' || !PROOF_CHANNELS.includes((o as ProofOutput).channel) || !['bytes', 'content'].includes((o as ProofOutput).kind) || !/^[0-9a-f]{64}$/.test(String((o as ProofOutput).sha256)))) p.push('“outputs” is not a list of output fingerprints.');
+  const extraKeys = (list: unknown, keys: string[]): string[] => (Array.isArray(list) ? [...new Set(list.flatMap((x) => (x && typeof x === 'object' ? Object.keys(x).filter((k) => !keys.includes(k)) : [])))] : []);
+  const inDecisions = extraKeys(r.decisions, ['nodeId', 'variantId', 'ruleIds']);
+  if (inDecisions.length) p.push(`A decision carries unexpected fields: ${inDecisions.slice(0, 5).join(', ')}.`);
+  const inOutputs = extraKeys(r.outputs, ['channel', 'kind', 'sha256', 'size', 'pages']);
+  if (inOutputs.length) p.push(`An output fingerprint carries unexpected fields: ${inOutputs.slice(0, 5).join(', ')}.`);
   const allowed = new Set(['schema', 'proofId', 'releaseId', 'documentId', 'releaseNumber', 'releaseDigest', 'engineVersion', 'producer', 'producedAt', 'customerRef', 'dataFingerprint', 'runId', 'locale', 'profileId', 'produced', 'blockedBy', 'decisions', 'contentDigest', 'outputs']);
   const extra = Object.keys(r).filter((k) => !allowed.has(k));
   if (extra.length) p.push(`Unexpected fields: ${extra.slice(0, 5).join(', ')}. A proof record must not carry anything else (it holds no customer data).`);
