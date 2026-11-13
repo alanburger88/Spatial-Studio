@@ -1,6 +1,6 @@
 # Page design depth, accessible PDF, shared library, wording rules
 
-Status: **design for roadmap wave 2, second half (`docs/ROADMAP.md`). Not built yet.**
+Status: **built in roadmap wave 2 (`docs/ROADMAP.md`); see the "As built" note at the end of each section.**
 Decisions by the product owner on 2026-11-13 (D92): accessible PDF is proven by **the studio's own checks, plus veraPDF when it is installed**; wording rules are **house rules in the shared library, each set to block or warn**. The shared library itself follows decision 3 and the library rules of `docs/design/TEMPLATES_AND_CCM.md`.
 
 ## 1. Page design depth

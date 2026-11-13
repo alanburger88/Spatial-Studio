@@ -1,6 +1,6 @@
 # Rules and data depth: calculated fields, effective dates, lookup tables
 
-Status: **design for roadmap wave 2, first half (`docs/ROADMAP.md`). Not built yet.**
+Status: **built in roadmap wave 2 (`docs/ROADMAP.md`); see the "As built" notes.**
 Decisions by the product owner on 2026-11-13: calculations are written in a **guided builder with a formula view**; effective dates follow **the document's own date**.
 
 ## What stays true

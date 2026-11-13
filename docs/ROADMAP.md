@@ -113,6 +113,8 @@ The things that make the studio unlike a template tool, plus the navigation they
 
 ### Wave 2 — Real documents
 
+**Status: built and verified on 2026-11-13** (949 unit tests, 335 browser tests, lint, build, pack and app checks). What was and was not verified is in `reports/BUILD_PROGRESS.md` (v0.12) and decisions D92–D99. Not proven: a real veraPDF run, and PDF/UA conformance (the composing browser cannot write the identifier).
+
 What a production statement, bill or letter needs that the samples do not.
 
 | Item | Size | Notes | Depends on |

@@ -1,5 +1,5 @@
-// Captures evidence screenshots of roadmap wave 2 (v0.12) from the running app: Calculations, Lookup tables, Dates
-// (the timeline and "As issued on"), the Page panel, PDF accessibility on Validate, and the Library.
+// Captures evidence screenshots of roadmap wave 2 (v0.12) from the running app: Calculations, Lookup tables, the Page
+// panel, PDF accessibility on Validate, Dates (the timeline and "As issued on"), wording rules, and the Library.
 // Usage: node scripts/screens-wave2.mjs [outDir]      (best on a clean stack: node scripts/dev-isolated.mjs <slot>)
 // Everything it adds to the sample document is unsaved working-version state, and the sample is reset afterwards.
 // Library items it creates stay in the local data folder unless the stack allows LIBRARY_RESET.
@@ -69,12 +69,24 @@ try {
   await p.getByTestId('dates-issue-date').blur();
   await shot('05-dates-timeline');
 
-  // 6. The Library: a notice taken from the sample document and approved, and a glossary left as a draft.
+  // 6. Wording rules: two of the document's own rules, one of which the sample breaks, on Content & Translations.
+  await dispatch({ type: 'ADD_WORDING_RULE', rule: { id: 'no-hello', kind: 'banned', severity: 'should', phrase: 'Hello', replacement: 'Dear' } });
+  await dispatch({ type: 'ADD_WORDING_RULE', rule: { id: 'short-sentences', kind: 'sentence-length', severity: 'should', limit: 25 } });
+  await p.getByTestId('nav-section-design').click();
+  await p.getByTestId('nav-S13').click();
+  await p.getByTestId('wr-panel-toggle').waitFor();
+  if (!(await p.locator('details.wr-panel[open]').count())) await p.getByTestId('wr-panel-toggle').click();
+  await p.getByTestId('wr-panel-toggle').scrollIntoViewIfNeeded();
+  const check = p.getByTestId('wr-check');
+  if (await check.count()) await check.first().click().catch(() => {});
+  await shot('06-wording-rules');
+
+  // 7. The Library: a notice taken from the sample document and approved, and a glossary left as a draft.
   const notice = await post('/library', { kind: 'wording', title: 'Payment due notice', description: 'The standard payment reminder used on every statement.', projectId: A, ref: 'payment-standard' });
   if (notice.item) await post(`/library/${notice.item.id}/approve`, { note: 'First version' });
   await post('/library', { kind: 'glossary', title: 'Aster Spanish terms', content: { entries: { 'es-US': [{ source: 'statement', target: 'estado de cuenta' }, { source: 'minimum payment', target: 'pago mínimo' }] } } });
   await p.goto(`${B}/library`, { waitUntil: 'networkidle' });
-  await shot('06-library');
+  await shot('07-library');
 } finally {
   await b.close();
   await post(`/projects/${A}/reset`, { confirm: true });
