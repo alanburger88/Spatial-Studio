@@ -583,8 +583,9 @@ export function Translations() {
                           <span className="tr-pending tr-saved" data-testid="tr-saved" aria-live="polite">{d ? 'Saving…' : saved[r.partId] && r.status.draftText ? 'Draft saved' : ''}</span>
                           {active && (
                             <span className="tr-actions">
-                              <button className="btn sm primary" onClick={() => approve(r)} disabled={!canApprove} data-testid="tr-approve">Approve</button>
-                              <button className="btn sm ghost" onClick={() => discard(r)} disabled={!r.status.draftText && !d} data-testid="tr-discard">Discard draft</button>
+                              {/* Pressing these must not take focus from the text box first: that would save the draft, re-flow the page and let the click land on nothing. Both actions save or drop the typed text themselves. */}
+                              <button className="btn sm primary" onMouseDown={(e) => e.preventDefault()} onClick={() => approve(r)} disabled={!canApprove} data-testid="tr-approve">Approve</button>
+                              <button className="btn sm ghost" onMouseDown={(e) => e.preventDefault()} onClick={() => discard(r)} disabled={!r.status.draftText && !d} data-testid="tr-discard">Discard draft</button>
                             </span>
                           )}
                           {r.status.status === 'missing' && !d && (

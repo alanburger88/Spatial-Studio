@@ -1,6 +1,6 @@
 # Autonomous implementation checkpoint
 
-**Status:** POC v0.9 (Data Explorer, documents with their own data, setup from a description; on top of v0.8) built and verified locally (2026-11-13). Branch `claude/magical-franklin-aonsol`.
+**Status:** POC v0.10 (releases and the release package; the Blockers screen; on top of v0.9) built and verified locally (2026-11-13). Branch `claude/magical-franklin-aonsol`.
 
 ## Gate log
 
@@ -21,8 +21,8 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | Pack validation | PASS |
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
-| Unit tests | 556/556 |
-| Browser tests | 204/204 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests + 36 v0.5 tests + 25 v0.6 assistant tests + 9 v0.7 tests + 11 v0.8 tests + 32 v0.9 tests: Data Explorer 17, own-data documents 8, setup from a description 7) |
+| Unit tests | 636/636 |
+| Browser tests | 222/222 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests + 36 v0.5 tests + 25 v0.6 assistant tests + 9 v0.7 tests + 11 v0.8 tests + 32 v0.9 tests + 18 v0.10 tests: Blockers screen 11, Releases 7) |
 | Build | OK |
 
 ## v0.2 additions (all verified by the tests above)
@@ -112,8 +112,17 @@ Engines are pure functions in `packages/scenarios/src/assist/`; model-backed fea
 - **Set up a document from a description or a data file** (New project → Describe your document): a proposal of fields, sections, messages with conditions and email/SMS wording that the person reviews, edits, re-checks and approves before anything is created.
 - **Live AI on screen, checked on purpose:** `scripts/live-ui-check.mjs` drove the real screens against Claude Opus 5.5 and all four checks passed (a described document proposed and created; the assistant panel answering about the current customer; a rewrite suggestion; a translation draft for one text). Screenshots: `reports/evidence/screens/live-0*.png`.
 
+## v0.10 additions (D80–D83)
+
+- **Releases and the release package** (template work, phase 2): approving a document creates a frozen, numbered release at stage Test; admins move a release to Production or withdraw it; a handover log; a downloadable package (template, wording per language, data dictionary, test scenarios, reference outputs, README) built on request and kept once built. Releases screen under Check & publish. API in `docs/api/RELEASES.md`, package format in `docs/design/RELEASE_PACKAGE.md`.
+- **Blockers screen** (blockers design, phase 1): one always-current list for the whole document, one blocker per root cause, sorted by kind of fix, alternative fixes side by side, and a link to it from every place that shows a blocker.
+- **Design Studio** is the screen's name in the menu, heading and approved contract (D80).
+- **Fix found by the gate:** pressing Approve or Discard on a translation could do nothing when saving the draft re-flowed the page under the pointer; both buttons no longer depend on the layout holding still.
+- **Designs agreed, not built:** blockers phases 2–6 (`docs/design/BLOCKERS.md`); template phases 3–7 (`docs/design/TEMPLATES_AND_CCM.md`).
+
 ## Not verified / open
 
+- **v0.10, not verified:** Releases — the PDF preview inside the screen (the test browser cannot show PDFs in a frame; the file itself was checked), the "package failed" state, "Check it again", a document approved before releases existed, keyboard-only use and an accessibility scan; automatic release on approval and admin-only promotion are recommended defaults the product owner has not explicitly confirmed; releases are not linked to the older "publish" action. Blockers — the links from Preview & Export and batch runs were checked once by script, not in the suite; a tie among three or more rules shows as more than one blocker; the status bar opens Blockers only when the previewed customer is blocked; phases 2–6 are not built.
 - **v0.9, not verified:** Data Explorer — the browser Back button does not warn about unsaved edits; no accessibility scan; imported customers and the server-rejection display were not exercised in the browser. Own-data documents — dark mode, Technical view and 1280×720 were not checked by eye; the PDF's appearance was checked by text and parity checks, not by eye across layouts; the page's letterhead zone cannot be resized. Setup — column matching cannot be overridden by hand; the built-in reader assumes dollars and ISO dates; generated list rows are placeholders with zero amounts; the slow-request busy state was not observed beyond the live run (about 17 seconds).
 - **Live AI on screen:** only the four flows above were looked at with a live model. An AI image description, an SMS fitted by AI, subject lines, a new message version, a rule drafted from a free sentence and meaning flags were verified against the live model at the server (`scripts/live-ai-check.mjs`) but not rendered on screen from a live reply.
 - **Generated test customers (v0.8):** three states were never triggered in a test or screenshot: the collapse of more than five unreachable items, the "limit reached" note, and the "document has changed since" note. Nothing larger than the two samples plus a few added rules was generated for, so timing on a large document is unknown.
