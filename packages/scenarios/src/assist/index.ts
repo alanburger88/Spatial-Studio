@@ -12,3 +12,5 @@ export * from './writing';
 export { explainNode as explainInPlainWords } from './explain';
 export * from './ruleDraft';
 export * from './ruleReview';
+export * from './setupFromData';
+export * from './setupOutline';
