@@ -6,3 +6,4 @@ export * from './parity';
 export * from './afp';
 export * from './email';
 export * from './sms';
+export * from './html-strings';

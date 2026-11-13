@@ -2,6 +2,7 @@ import qrcode from 'qrcode-generator';
 import type { Project } from '@iss/model';
 import type { RBlock, RInline, RNode } from '@iss/resolver';
 import { formatCents } from '@iss/resolver';
+import { HTML_STRINGS, fmtString, type HtmlStringKey } from './html-strings';
 
 export function esc(s: unknown): string {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -149,6 +150,14 @@ export function chartSvg(node: RNode, interactive: boolean): string {
 export interface RenderMode {
   target: 'paged' | 'html';
   project: Project;
+  /** Optional translated fixed strings (interactive HTML); English defaults apply when absent. */
+  strings?: Partial<Record<HtmlStringKey, string>>;
+}
+
+/** Fixed text for a render mode: caller strings first, English default otherwise. */
+export function modeText(mode: RenderMode, key: HtmlStringKey, vars?: Record<string, string | number>): string {
+  const o = mode.strings?.[key];
+  return fmtString(typeof o === 'string' && o !== '' ? o : HTML_STRINGS[key], vars);
 }
 
 /** Common semantic markup for one node (without the outer flow/fixed positioning wrapper). */
@@ -180,12 +189,12 @@ function nodeInnerHtmlBase(n: RNode, mode: RenderMode, renderChild: (c: RNode) =
     case 'variant-set':
     case 'conditional-region': {
       const v = n.variants;
-      if (v?.unresolved) return `<div class="iss-unresolved" role="alert">Unresolved variant: blocking rule conflict — no outcome is shown.</div>`;
+      if (v?.unresolved) return `<div class="iss-unresolved" role="alert">${esc(modeText(mode, 'unresolvedVariant'))}</div>`;
       const sel = v?.items.filter((x) => x.selected) ?? [];
       const banner = n.type === 'variant-set' ? ' iss-variant--guidance' : '';
       const title = sel.map((x) => esc(x.title)).join(' · ');
       const body = n.text?.length ? blocksHtml(n.text) : '';
-      const missingLoc = sel.some((x) => x.missingLocale) ? `<p class="iss-locale-missing">[Approved translation missing — English approved text shown]</p>` : '';
+      const missingLoc = sel.some((x) => x.missingLocale) ? `<p class="iss-locale-missing">${esc(modeText(mode, 'translationMissing'))}</p>` : '';
       return `<section class="iss-variant${banner}" aria-label="${title}"><h2 class="iss-variant-title">${title}</h2>${body}${missingLoc}</section>`;
     }
     case 'disclosure': {
@@ -214,7 +223,7 @@ function nodeInnerHtmlBase(n: RNode, mode: RenderMode, renderChild: (c: RNode) =
       const useBrandLogo = !!brand?.logoDataUri && n.image!.src.startsWith('asset:');
       const src = imageSrc(useBrandLogo ? brand!.logoDataUri! : n.image!.src, accent);
       const alt = useBrandLogo ? (brand!.logoAlt ?? n.image!.alt) : n.image!.alt;
-      return src ? `<img class="iss-img" src="${src}" alt="${esc(alt)}" style="object-fit:${esc(n.image!.fit)}"/>` : `<div class="iss-img-missing">Image unavailable</div>`;
+      return src ? `<img class="iss-img" src="${src}" alt="${esc(alt)}" style="object-fit:${esc(n.image!.fit)}"/>` : `<div class="iss-img-missing">${esc(modeText(mode, 'imageUnavailable'))}</div>`;
     }
     case 'shape': {
       const s = n.shape!;
@@ -232,16 +241,16 @@ function nodeInnerHtmlBase(n: RNode, mode: RenderMode, renderChild: (c: RNode) =
 
 export function tableHtml(n: RNode, mode: RenderMode): string {
   const t = n.table!;
-  const head = `<thead><tr>${t.columns.map((c) => `<th scope="col" class="${c.align === 'right' ? 'num' : ''}" data-key="${esc(c.key)}">${mode.target === 'html' && t.sortable ? `<button type="button" class="iss-sort" data-sort-key="${esc(c.key)}" aria-label="Sort by ${esc(c.label)}">${esc(c.label)}<span aria-hidden="true" class="iss-sort-ind"></span></button>` : esc(c.label)}</th>`).join('')}</tr></thead>`;
+  const head = `<thead><tr>${t.columns.map((c) => `<th scope="col" class="${c.align === 'right' ? 'num' : ''}" data-key="${esc(c.key)}">${mode.target === 'html' && t.sortable ? `<button type="button" class="iss-sort" data-sort-key="${esc(c.key)}" aria-label="${esc(modeText(mode, 'tableSortBy', { label: c.label }))}">${esc(c.label)}<span aria-hidden="true" class="iss-sort-ind"></span></button>` : esc(c.label)}</th>`).join('')}</tr></thead>`;
   const body = t.rows.map((r) => `<tr data-row-id="${esc(r.id)}">${t.columns.map((c) => {
     const cell = r.cells[c.key];
     const sortVal = cell?.cents ?? (typeof cell?.raw === 'number' ? cell.raw : cell?.raw ?? '');
     return `<td class="${c.align === 'right' ? 'num' : ''}${cell?.guarded ? ' guarded' : ''}" data-sort="${esc(sortVal)}"${cell?.cents !== undefined ? ` data-cents="${cell.cents}"` : ''}>${esc(cell?.display ?? '')}</td>`;
   }).join('')}</tr>`).join('');
-  const empty = t.rows.length ? '' : `<tr class="iss-empty"><td colspan="${t.columns.length}">No items in this period.</td></tr>`;
+  const empty = t.rows.length ? '' : `<tr class="iss-empty"><td colspan="${t.columns.length}">${esc(modeText(mode, 'tableEmpty'))}</td></tr>`;
   const amountCol = t.columns.findIndex((c) => c.key === 'amountCents' || c.key === 'billedCents');
   const foot = t.totalCents !== undefined && amountCol >= 0
-    ? `<tfoot><tr><th scope="row" colspan="${amountCol}">Total ${esc(t.columns[amountCol].label.toLowerCase())} · ${t.rows.length} listed item${t.rows.length === 1 ? '' : 's'}</th><td class="num" data-table-total-cents="${t.totalCents}">${esc(formatCents(t.totalCents))}</td>${t.columns.length - amountCol - 1 > 0 ? `<td colspan="${t.columns.length - amountCol - 1}"></td>` : ''}</tr></tfoot>`
+    ? `<tfoot><tr><th scope="row" colspan="${amountCol}">${esc(modeText(mode, t.rows.length === 1 ? 'tableTotalOne' : 'tableTotalMany', { label: t.columns[amountCol].label.toLowerCase(), count: t.rows.length }))}</th><td class="num" data-table-total-cents="${t.totalCents}">${esc(formatCents(t.totalCents))}</td>${t.columns.length - amountCol - 1 > 0 ? `<td colspan="${t.columns.length - amountCol - 1}"></td>` : ''}</tr></tfoot>`
     : '';
   return `<div class="iss-table-wrap"><div class="iss-table-caption">${esc(t.caption)}</div><table class="iss-table" data-table-id="${esc(n.id)}">${head}<tbody>${body}${empty}</tbody>${foot}</table></div>`;
 }

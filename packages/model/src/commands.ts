@@ -3,6 +3,10 @@ import { CATALOG_BY_TYPE } from './catalog';
 import { digestOf } from './digest';
 import { isSafeUrl, sanitizeRichDoc, tokensIn } from './rich';
 import { projectFieldIndex, validateCustomFields } from './fields';
+import { isSupportedLanguage, languageName, languageShortName, projectLanguages, SOURCE_LANGUAGE } from './languages';
+import { isStringId, translatableStrings } from './strings';
+import { CHANNEL_TEXT_LIMITS, CHANNEL_TOKENS, EMAIL_SECTION_IDS } from './channels';
+import type { ChannelConfig, TranslationOrigin } from './types';
 import type { BrandKit, ContentPart, CustomField, DocNode, Locale, TestCase, TextStyle, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
 import { validatePredicate, validateRule } from './validate';
 
@@ -32,8 +36,14 @@ export type Command =
   | { type: 'SET_BRAND'; brand: BrandKit | null }
   | { type: 'UPSERT_TEST_CASE'; testCase: TestCase }
   | { type: 'DELETE_TEST_CASE'; testCaseId: string }
-  | { type: 'SET_TRANSLATION_DRAFT'; partId: string; locale: Locale; text: string | null }
+  /** `partId` is a content-part id or a string id (`@node/field`, `@email/subject`, …). `origin` marks an untouched AI or sample draft. */
+  | { type: 'SET_TRANSLATION_DRAFT'; partId: string; locale: Locale; text: string | null; origin?: TranslationOrigin }
   | { type: 'APPROVE_TRANSLATION'; partId: string; locale: Locale }
+  /** Many drafts in one undoable step (AI first pass, bundled samples, CSV). Never approves anything. */
+  | { type: 'SET_TRANSLATION_DRAFTS'; locale: Locale; items: Array<{ id: string; text: string }>; origin?: TranslationOrigin }
+  | { type: 'ADD_LANGUAGE'; locale: Locale }
+  | { type: 'REMOVE_LANGUAGE'; locale: Locale }
+  | { type: 'SET_CHANNELS'; channels: ChannelConfig }
   | { type: 'RESTORE_SNAPSHOT'; project: Project; label: string };
 
 export type CommandResult =
@@ -332,37 +342,140 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
       return { ok: true, label: `Delete test “${t.name}”`, project: bump(project, (d) => { d.testCases = (d.testCases ?? []).filter((x) => x.id !== cmd.testCaseId); }) };
     }
     case 'SET_TRANSLATION_DRAFT': {
-      const part = project.contentParts.find((c) => c.id === cmd.partId);
-      if (!part) return reject('NOT_FOUND', `Unknown content part ${cmd.partId}.`);
-      if (!['en-US', 'es-US'].includes(cmd.locale)) return reject('INVALID_LOCALE', `Unsupported locale ${cmd.locale}.`);
+      const target = translationTarget(project, cmd.partId);
+      if (!target) return reject('NOT_FOUND', `Unknown text ${cmd.partId}.`);
+      const bad = localeProblem(project, cmd.locale);
+      if (bad) return reject('INVALID_LOCALE', bad);
       if (cmd.text !== null && cmd.text.length > 4000) return reject('TOO_LONG', 'Translations are limited to 4,000 characters.');
-      return { ok: true, label: `${cmd.text === null ? 'Discard' : 'Draft'} ${cmd.locale} for “${part.title}”`, project: bump(project, (d) => {
-        const c = d.contentParts.find((x) => x.id === cmd.partId)!;
-        const drafts = { ...(c.draftLocales ?? {}) };
-        if (cmd.text === null || !cmd.text.trim()) delete drafts[cmd.locale]; else drafts[cmd.locale] = cmd.text;
-        if (Object.keys(drafts).length) c.draftLocales = drafts; else delete c.draftLocales;
-      }) };
+      return { ok: true, label: `${cmd.text === null ? 'Discard' : 'Draft'} ${cmd.locale} for “${target.title}”`, project: bump(project, (d) => { writeDraft(d, cmd.partId, cmd.locale, cmd.text, cmd.origin); }) };
+    }
+    case 'SET_TRANSLATION_DRAFTS': {
+      const bad = localeProblem(project, cmd.locale);
+      if (bad) return reject('INVALID_LOCALE', bad);
+      if (!cmd.items.length) return reject('EMPTY', 'There is nothing to add.');
+      for (const it of cmd.items) {
+        if (!translationTarget(project, it.id)) return reject('NOT_FOUND', `Unknown text ${it.id}.`);
+        if (it.text.length > 4000) return reject('TOO_LONG', 'Translations are limited to 4,000 characters.');
+      }
+      return { ok: true, label: `${cmd.items.length} ${languageShortName(cmd.locale)} draft${cmd.items.length === 1 ? '' : 's'}${cmd.origin === 'ai' ? ' from AI' : cmd.origin === 'sample' ? ' from the sample set' : ''}`, project: bump(project, (d) => { for (const it of cmd.items) writeDraft(d, it.id, cmd.locale, it.text, cmd.origin); }) };
     }
     case 'APPROVE_TRANSLATION': {
-      const part = project.contentParts.find((c) => c.id === cmd.partId);
-      const draft = part?.draftLocales?.[cmd.locale];
-      if (!part) return reject('NOT_FOUND', `Unknown content part ${cmd.partId}.`);
-      if (!draft?.trim()) return reject('NO_DRAFT', `There is no ${cmd.locale} draft to approve for “${part.title}”.`);
+      const target = translationTarget(project, cmd.partId);
+      if (!target) return reject('NOT_FOUND', `Unknown text ${cmd.partId}.`);
+      const draft = target.draft(cmd.locale);
+      if (!draft?.trim()) return reject('NO_DRAFT', `There is no ${cmd.locale} draft to approve for “${target.title}”.`);
       const tokensOf = (t: string) => [...t.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]).sort().join(',');
-      const source = part.approvedLocales['en-US'];
-      if (source && tokensOf(source) !== tokensOf(draft)) return reject('TOKEN_MISMATCH', `The ${cmd.locale === 'es-US' ? 'Spanish' : cmd.locale} text must use the same data tokens as the English text (${tokensOf(source) || 'none'}).`);
-      return { ok: true, label: `Approve ${cmd.locale} for “${part.title}”`, project: bump(project, (d) => {
-        const c = d.contentParts.find((x) => x.id === cmd.partId)!;
-        c.approvedLocales = { ...c.approvedLocales, [cmd.locale]: draft };
-        c.version += 1;
-        const drafts = { ...(c.draftLocales ?? {}) }; delete drafts[cmd.locale];
-        if (Object.keys(drafts).length) c.draftLocales = drafts; else delete c.draftLocales;
+      const source = target.source;
+      if (source && tokensOf(source) !== tokensOf(draft)) return reject('TOKEN_MISMATCH', `The ${languageShortName(cmd.locale)} text must use the same data tokens as the English text (${tokensOf(source) || 'none'}).`);
+      return { ok: true, label: `Approve ${cmd.locale} for “${target.title}”`, project: bump(project, (d) => {
+        if (isStringId(cmd.partId)) {
+          const all = { ...(d.strings ?? {}) };
+          const t = { ...(all[cmd.partId] ?? {}) };
+          t.approved = { ...(t.approved ?? {}), [cmd.locale]: draft };
+          t.basedOn = { ...(t.basedOn ?? {}), [cmd.locale]: source };
+          const drafts = { ...(t.draft ?? {}) }; delete drafts[cmd.locale];
+          if (Object.keys(drafts).length) t.draft = drafts; else delete t.draft;
+          all[cmd.partId] = t; d.strings = all;
+        } else {
+          const c = d.contentParts.find((x) => x.id === cmd.partId)!;
+          c.approvedLocales = { ...c.approvedLocales, [cmd.locale]: draft };
+          c.version += 1;
+          const drafts = { ...(c.draftLocales ?? {}) }; delete drafts[cmd.locale];
+          if (Object.keys(drafts).length) c.draftLocales = drafts; else delete c.draftLocales;
+        }
+        clearOrigin(d, cmd.locale, cmd.partId);
       }) };
+    }
+    case 'ADD_LANGUAGE': {
+      if (cmd.locale === SOURCE_LANGUAGE) return reject('INVALID_LOCALE', 'English is the source language of every project.');
+      if (!isSupportedLanguage(cmd.locale)) return reject('INVALID_LOCALE', `${cmd.locale} is not in the list of supported languages.`);
+      const current = projectLanguages(project);
+      if (current.includes(cmd.locale)) return reject('DUPLICATE', `${languageName(cmd.locale)} is already a language of this project.`);
+      return { ok: true, label: `Add language ${languageName(cmd.locale)}`, project: bump(project, (d) => { d.languages = [...current, cmd.locale]; }) };
+    }
+    case 'REMOVE_LANGUAGE': {
+      const current = projectLanguages(project);
+      if (!current.includes(cmd.locale)) return reject('NOT_FOUND', `${languageName(cmd.locale)} is not a language of this project.`);
+      if (project.rules.some((r) => r.then.op === 'setApprovedLocale' && r.then.locale === cmd.locale)) return reject('IN_USE', `A rule selects ${languageName(cmd.locale)} for some customers. Remove or change that rule first.`);
+      // Translations already written are kept, so adding the language back restores them.
+      return { ok: true, label: `Remove language ${languageName(cmd.locale)}`, project: bump(project, (d) => { d.languages = current.filter((l) => l !== cmd.locale); }) };
+    }
+    case 'SET_CHANNELS': {
+      const c = cmd.channels;
+      if (!c?.email || !c?.sms) return reject('INVALID', 'Email and SMS settings are both required.');
+      const texts: Array<[string, string, number]> = [
+        ['Email subject', c.email.subject, CHANNEL_TEXT_LIMITS.subject], ['Email preview text', c.email.preheader, CHANNEL_TEXT_LIMITS.preheader], ['Email heading', c.email.title, CHANNEL_TEXT_LIMITS.title],
+        ['Email opening text', c.email.intro, CHANNEL_TEXT_LIMITS.intro], ['Email closing text', c.email.closing, CHANNEL_TEXT_LIMITS.closing], ['Key figures heading', c.email.keyFactsHeading, CHANNEL_TEXT_LIMITS.keyFactsHeading], ['SMS message', c.sms.text, CHANNEL_TEXT_LIMITS.sms],
+      ];
+      const known = projectFieldIndex(project);
+      for (const [name, text, max] of texts) {
+        if (typeof text !== 'string') return reject('INVALID', `${name} must be text.`);
+        if (text.length > max) return reject('TOO_LONG', `${name} is limited to ${max} characters.`);
+        if (/[<>]/.test(text)) return reject('INVALID', `${name} cannot contain < or >.`);
+        for (const m of text.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)) if (!known.has(m[1]) && !(CHANNEL_TOKENS as readonly string[]).includes(m[1])) return reject('INVALID_BINDING', `${name} uses “{{${m[1]}}}”, which is not a data field of this document.`);
+      }
+      if (!c.email.subject.trim()) return reject('INVALID', 'The email needs a subject line.');
+      if (!c.email.title.trim()) return reject('INVALID', 'The email needs a heading.');
+      if (!c.sms.text.trim()) return reject('INVALID', 'The SMS needs a message.');
+      const ids = c.email.sections.map((x) => x.id);
+      if (ids.length !== EMAIL_SECTION_IDS.length || EMAIL_SECTION_IDS.some((id) => !ids.includes(id))) return reject('INVALID', 'Every email section must be listed exactly once.');
+      const clean: ChannelConfig = {
+        email: { subject: c.email.subject, preheader: c.email.preheader, title: c.email.title, intro: c.email.intro, closing: c.email.closing, keyFactsHeading: c.email.keyFactsHeading, sections: c.email.sections.map((x) => ({ id: x.id, show: !!x.show })) },
+        sms: { text: c.sms.text },
+      };
+      return { ok: true, label: 'Edit email and SMS wording', project: bump(project, (d) => { d.channels = clean; }) };
     }
     case 'RESTORE_SNAPSHOT': {
       return { ok: true, label: cmd.label, project: { ...cmd.project, modelVersion: project.modelVersion + 1 } };
     }
   }
+}
+
+/* ------------------------------------------------------------ translations */
+
+/** A content part or a translatable string, addressed by one id. */
+function translationTarget(project: Project, id: string): { title: string; source: string; draft(locale: string): string | undefined } | null {
+  if (isStringId(id)) {
+    const s = translatableStrings(project).find((x) => x.id === id);
+    return s ? { title: s.title, source: s.source, draft: (l) => project.strings?.[id]?.draft?.[l] } : null;
+  }
+  const part = project.contentParts.find((c) => c.id === id);
+  return part ? { title: part.title, source: part.approvedLocales[SOURCE_LANGUAGE] ?? '', draft: (l) => part.draftLocales?.[l] } : null;
+}
+
+function localeProblem(project: Project, locale: string): string | null {
+  if (locale === SOURCE_LANGUAGE) return null;
+  if (!isSupportedLanguage(locale)) return `Unsupported locale ${locale}.`;
+  if (!projectLanguages(project).includes(locale)) return `${languageName(locale)} is not a language of this project. Add it first.`;
+  return null;
+}
+
+function clearOrigin(d: Project, locale: string, id: string) {
+  const key = `${locale}|${id}`;
+  if (!d.translationOrigins || !(key in d.translationOrigins)) return;
+  const o = { ...d.translationOrigins }; delete o[key];
+  if (Object.keys(o).length) d.translationOrigins = o; else delete d.translationOrigins;
+}
+
+/** Writes (or with null/blank, discards) one draft. A draft typed by a person carries no origin. */
+function writeDraft(d: Project, id: string, locale: string, text: string | null, origin?: TranslationOrigin) {
+  const blank = text === null || !text.trim();
+  if (isStringId(id)) {
+    const all = { ...(d.strings ?? {}) };
+    const t = { ...(all[id] ?? {}) };
+    const drafts = { ...(t.draft ?? {}) };
+    if (blank) delete drafts[locale]; else drafts[locale] = text!;
+    if (Object.keys(drafts).length) t.draft = drafts; else delete t.draft;
+    if (Object.keys(t).length) all[id] = t; else delete all[id];
+    if (Object.keys(all).length) d.strings = all; else delete d.strings;
+  } else {
+    const c = d.contentParts.find((x) => x.id === id)!;
+    const drafts = { ...(c.draftLocales ?? {}) };
+    if (blank) delete drafts[locale]; else drafts[locale] = text!;
+    if (Object.keys(drafts).length) c.draftLocales = drafts; else delete c.draftLocales;
+  }
+  if (!blank && origin) d.translationOrigins = { ...(d.translationOrigins ?? {}), [`${locale}|${id}`]: origin };
+  else clearOrigin(d, locale, id);
 }
 
 /** Digest of the authorable content (excludes version counters and save timestamps). */

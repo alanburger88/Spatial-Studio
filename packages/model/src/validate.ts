@@ -1,3 +1,4 @@
+import { isSupportedLanguage } from './languages';
 import { fieldIndex, projectFieldIndex, type FieldDef } from './fields';
 import type { DocumentType, Predicate, Project, Rule } from './types';
 
@@ -73,7 +74,7 @@ export function validateRule(rule: Rule, project: Project): string[] {
       if (!Array.isArray(a.nodeIds) || !a.nodeIds.length) errors.push('requireNodes needs node IDs.');
       break;
     case 'setApprovedLocale':
-      if (!['en-US', 'es-US'].includes(a.locale)) errors.push('Unsupported locale.');
+      if (!isSupportedLanguage(a.locale)) errors.push('Unsupported locale.');
       break;
     case 'setPresentationHint':
       if (!/^[a-z0-9-]{3,64}$/.test(a.hint)) errors.push('Presentation hint must be a kebab-case identifier.');

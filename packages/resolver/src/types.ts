@@ -16,7 +16,7 @@ export interface CoreDiagnostic {
 /** Full finding used by Validate & Compare and the inspector. */
 export interface Finding extends CoreDiagnostic {
   message: string;
-  source: 'resolver' | 'domain' | 'binding' | 'composer' | 'parity' | 'accessibility' | 'rules-static';
+  source: 'resolver' | 'domain' | 'binding' | 'composer' | 'parity' | 'accessibility' | 'rules-static' | 'translation';
   suggestion?: string;
   page?: number;
   details?: Record<string, unknown>;
@@ -145,6 +145,15 @@ export interface ResolveInput {
   journeyCursor?: number | null;
   claimIndex?: number;
   profileId?: ProfileId;
+  /** Previews only: also show unapproved translation drafts (reported as a finding). Clean exports never set this. */
+  includeDrafts?: boolean;
+}
+
+/** Email and SMS wording resolved for this customer and language. `{{keyFacts}}` and `{{link}}` are filled by the channel renderers. */
+export interface ChannelTexts {
+  subject: string; preheader: string; title: string; keyFactsHeading: string;
+  intro: RBlock[]; closing: RBlock[]; sms: string;
+  sections: Array<{ id: import('@iss/model').EmailSectionId; show: boolean }>;
 }
 
 export interface Resolution {
@@ -168,4 +177,8 @@ export interface Resolution {
   journeySteps: JourneyStep[];
   /** Effective record after overrides and journey (synthetic). */
   effectiveRecord: import('@iss/model').SyntheticRecord;
+  /** Email and SMS wording for this customer and language. */
+  channelTexts: ChannelTexts;
+  /** Which texts of the document language are drafts or still English. */
+  translation: { locale: string; draftsShown: string[]; missing: string[] };
 }

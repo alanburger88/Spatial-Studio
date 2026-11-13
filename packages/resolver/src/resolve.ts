@@ -1,9 +1,10 @@
 import {
   applyJourney, buildContext, deepPatch, digestOf, projectFieldIndex, getPath, inlineFromMarkup, isSafeUrl, projectContentDigest, richToPlain, shortDigest,
+  languageShortName, localizeProject, projectLanguages, SOURCE_LANGUAGE,
   type ContentPart, type DocNode, type FieldDef, type Predicate, type Project, type RichBlock, type RichDoc, type RichInline, type Rule,
 } from '@iss/model';
 import { formatCents, formatValue } from './format';
-import type { CoreDiagnostic, CoreResult, Finding, RBlock, RInline, RNode, RTableRow, RVariant, Resolution, ResolveInput, SemanticManifest, TraceEntry } from './types';
+import type { ChannelTexts, CoreDiagnostic, CoreResult, Finding, RBlock, RInline, RNode, RTableRow, RVariant, Resolution, ResolveInput, SemanticManifest, TraceEntry } from './types';
 
 export const ENGINE_VERSION = 'iss-resolver/1.0.0';
 const DEBT_LANGUAGE = /\b(you owe|owed|amount due|balance due|pay this amount|amount you owe|payment due now)\b/i;
@@ -165,8 +166,8 @@ export function resolve(input: ResolveInput): Resolution {
   }
   // 3. Derived fields (versioned pure registry).
   const ctx = buildContext(effective, claimIndex);
-  const nodes = new Map(project.nodes.map((n) => [n.id, n]));
-  const parts = new Map(project.contentParts.map((p) => [p.id, p]));
+  let nodes = new Map(project.nodes.map((n) => [n.id, n]));
+  let parts = new Map(project.contentParts.map((p) => [p.id, p]));
 
   // 4. Evaluate every rule against the snapshot.
   const trace: TraceEntry[] = [];
@@ -270,19 +271,48 @@ export function resolve(input: ResolveInput): Resolution {
     if (claim.status === 'processed-covered' && (claim.billedCents !== claim.allowedCents + claim.contractualAdjustmentCents || claim.allowedCents !== claim.planPaidCents + claim.patientResponsibilityCents)) findings.push({ code: 'CLAIM_RECONCILIATION_FAILED', severity: 'blocking', nodeId: 'totals-and-terms', source: 'domain', message: `Claim ${claim.claimId} does not reconcile: billed = adjustment + allowed and allowed = plan paid + member responsibility must hold.` });
   }
 
+  // Document language: a rule may set it (R07); otherwise a customer whose preferred language is one of the project's
+  // languages gets the document in that language, under the same obligations.
+  const preferred = effective.customer?.locale as string | undefined;
+  if (!approvedLocale && preferred && preferred !== SOURCE_LANGUAGE && projectLanguages(project).includes(preferred)) { approvedLocale = preferred; translationRuleId = 'project-language'; }
+
   // Translation obligations (R07 does not authorize runtime machine translation).
   if (translationRuleId && approvedLocale) {
     const required = new Set<string>(mandatory);
     Object.values(selected).forEach((v) => v && required.add(v));
     for (const id of [...required].sort()) {
       const part = parts.get(id);
-      if (part && !part.approvedLocales[approvedLocale as 'en-US']) findings.push({ code: 'REQUIRED_TRANSLATION_MISSING', severity: 'blocking', nodeId: id, locale: approvedLocale, source: 'resolver', message: `No approved ${approvedLocale} version of “${part.title}” (${id}). Runtime machine translation is not permitted.`, suggestion: 'Add an approved translation to the content part.' });
+      if (part && !part.approvedLocales[approvedLocale as 'en-US']) findings.push({ code: 'REQUIRED_TRANSLATION_MISSING', severity: 'blocking', nodeId: id, locale: approvedLocale, source: 'resolver', message: `No approved ${approvedLocale} version of “${part.title}” (${id}). Runtime machine translation is not permitted.`, suggestion: `Open Content & Translations, write or draft the ${languageShortName(approvedLocale)} text and approve it.` });
     }
   }
 
-  const c: Ctx = { project, ctx, locale: approvedLocale ?? (effective.customer?.locale as string) ?? 'en-US', approvedLocale, fields: projectFieldIndex(project), findings, parts, liabilityConfirmed };
+  // Everything a customer reads, in the document language. Obligations above were checked against approved text only;
+  // previews (includeDrafts) may additionally show unapproved drafts, which is reported and never reaches a clean export.
+  const localized = localizeProject(project, approvedLocale, { includeDrafts: input.includeDrafts === true });
+  nodes = new Map(localized.project.nodes.map((n) => [n.id, n]));
+  parts = new Map(localized.project.contentParts.map((p) => [p.id, p]));
+  if (approvedLocale && approvedLocale !== SOURCE_LANGUAGE) {
+    const lang = languageShortName(approvedLocale);
+    if (localized.draftsShown.length) findings.push({ code: 'UNAPPROVED_TRANSLATION_SHOWN', severity: 'warning', locale: approvedLocale, source: 'translation', message: `This preview shows ${localized.draftsShown.length} ${lang} text${localized.draftsShown.length === 1 ? '' : 's'} that ${localized.draftsShown.length === 1 ? 'is' : 'are'} not approved yet. Exports use approved text only.`, suggestion: 'Review the drafts in Content & Translations and approve them.', details: { ids: localized.draftsShown } });
+    if (localized.missing.length) findings.push({ code: 'TRANSLATION_MISSING_TEXT', severity: 'warning', locale: approvedLocale, source: 'translation', message: `${localized.missing.length} label${localized.missing.length === 1 ? '' : 's'} or other text${localized.missing.length === 1 ? ' has' : 's have'} no approved ${lang} translation; the English text is shown.`, suggestion: `Open Content & Translations and translate the remaining ${lang} texts.`, details: { ids: localized.missing } });
+  }
+
+  const c: Ctx = { project: localized.project, ctx, locale: approvedLocale ?? (effective.customer?.locale as string) ?? 'en-US', approvedLocale, fields: projectFieldIndex(project), findings, parts, liabilityConfirmed };
   const requiredSet = new Set(mandatory);
   for (const n of project.nodes) if (n.required) requiredSet.add(n.id);
+
+  // Email and SMS wording, resolved with the same field formatting and guards as document text. `{{keyFacts}}` and
+  // `{{link}}` stay in place for the channel renderers, which know the document's key figures and action links.
+  const quiet: Ctx = { ...c, findings: [] };
+  const issuerText = (t: string) => t.replace(/\{\{\s*issuer\.name\s*\}\}/g, project.issuer?.name ?? 'Issuer').replace(/\{\{\s*issuer\.product\s*\}\}/g, project.issuer?.product ?? project.issuer?.name ?? 'Issuer');
+  const chBlocks = (t: string, id: string) => (t.trim() ? textBlocks(quiet, issuerText(t), id, []) : []);
+  const chPlain = (t: string, id: string) => chBlocks(t, id).map((b) => (b.inlines ?? []).map((i) => i.text).join('')).join(' ').trim();
+  const ch = localized.channels;
+  const channelTexts: ChannelTexts = {
+    subject: chPlain(ch.email.subject, '@email/subject'), preheader: chPlain(ch.email.preheader, '@email/preheader'), title: chPlain(ch.email.title, '@email/title'),
+    keyFactsHeading: chPlain(ch.email.keyFactsHeading, '@email/keyFactsHeading'), intro: chBlocks(ch.email.intro, '@email/intro'), closing: chBlocks(ch.email.closing, '@email/closing'),
+    sms: chPlain(ch.sms.text, '@sms/text'), sections: ch.email.sections,
+  };
 
   // 6. Resolved communication tree.
   const ruleTargets = new Map<string, string[]>();
@@ -521,7 +551,7 @@ export function resolve(input: ResolveInput): Resolution {
   const manifest = buildResolverManifest(project, effective, root, result, c.locale);
   const projectDigest = projectContentDigest(project);
   const rulesDigest = digestOf(project.rules);
-  const runId = 'run-' + shortDigest({ projectDigest, recordId: effective.recordId, overrides: input.overrides ?? {}, journeyCursor, claimIndex, profileId, engine: ENGINE_VERSION }, 16);
+  const runId = 'run-' + shortDigest({ projectDigest, recordId: effective.recordId, overrides: input.overrides ?? {}, journeyCursor, claimIndex, profileId, engine: ENGINE_VERSION, ...(input.includeDrafts === true ? { includeDrafts: true } : {}) }, 16);
   // Content digest is content-addressed: excludes producer and the model version counter.
   const { producer: _p, modelVersion: _mv, ...manifestCore } = manifest;
 
@@ -529,6 +559,7 @@ export function resolve(input: ResolveInput): Resolution {
     runId, projectId: project.projectId, modelVersion: project.modelVersion, projectDigest, recordId: effective.recordId, profileId, journeyCursor,
     rulesDigest, engineVersion: ENGINE_VERSION, locale: c.locale, hints, result, trace, findings, root, semanticManifest: manifest,
     contentDigest: digestOf(manifestCore), journeySteps: steps, effectiveRecord: effective,
+    channelTexts, translation: { locale: c.locale, draftsShown: localized.draftsShown, missing: localized.missing },
   };
 }
 

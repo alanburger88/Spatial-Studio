@@ -1,5 +1,7 @@
 import type { ContentPart, Locale, Project } from './types';
 import { parseCsv } from './importRecords';
+import { translatableStrings } from './strings';
+import type { TranslationOrigin } from './types';
 
 /** Translation workflow helpers (C1). Pure: derive everything from the project (and, optionally, resolver-derived usage). */
 
@@ -42,6 +44,13 @@ export interface TranslationRow {
   /** Number of synthetic records that currently see the part (null when no usage was supplied). */
   seenByRecords: number | null;
   status: LocaleStatus;
+  /** 'part' = content part (message, disclosure); 'string' = any other customer-visible text (`partId` then holds the string id). */
+  kind?: 'part' | 'string';
+  group?: 'messages' | 'labels' | 'channels';
+  /** Set while the draft is exactly what the AI or the bundled sample produced: no person has edited or approved it. */
+  origin?: TranslationOrigin;
+  /** The English text changed after this translation was approved. */
+  sourceChanged?: boolean;
 }
 
 export interface TranslationSummary { locale: Locale; total: number; approved: number; drafts: number; missing: number; mandatoryMissing: number; affectedRecords: number; usageKnown: boolean }
@@ -50,6 +59,7 @@ export interface TranslationStatus { locale: Locale; rows: TranslationRow[]; sum
 
 export const TRANSLATION_MAX_CHARS = 4000;
 export const SOURCE_LOCALE: Locale = 'en-US';
+/** @deprecated Use `projectLanguages(project)`; kept for older callers. */
 export const TARGET_LOCALES: Locale[] = ['es-US'];
 
 const TOKEN_RE = /\{\{\s*([\w.]+)\s*\}\}/g;
@@ -130,6 +140,30 @@ export function translationStatus(project: Project, locale: Locale = 'es-US', us
       },
     });
   }
+  for (const r of rows) { r.kind = 'part'; r.group = 'messages'; const o = project.translationOrigins?.[`${locale}|${r.partId}`]; if (o && r.status.status === 'draft') r.origin = o; }
+  // Everything else a customer reads: labels, headings, table titles, link text, and the email and SMS wording.
+  for (const s of translatableStrings(project)) {
+    const t = project.strings?.[s.id];
+    const approvedText = t?.approved?.[locale];
+    const draftText = t?.draft?.[locale];
+    const status: TranslationState = approvedText?.trim() ? 'approved' : draftText?.trim() ? 'draft' : 'missing';
+    const textToCheck = draftText?.trim() ? draftText : approvedText ?? '';
+    const origin = project.translationOrigins?.[`${locale}|${s.id}`];
+    rows.push({
+      partId: s.id, title: s.title, type: 'text', version: 0, kind: 'string', group: s.kind === 'channel' ? 'channels' : 'labels',
+      usedAs: ['node'], nodeIds: s.nodeId ? [s.nodeId] : [], sourceText: s.source, sourceTokens: tokensOfText(s.source),
+      seenByRecords: null,
+      ...(origin && status === 'draft' ? { origin } : {}),
+      ...(status === 'approved' && t?.basedOn?.[locale] !== undefined && t.basedOn[locale] !== s.source ? { sourceChanged: true } : {}),
+      status: {
+        locale, status, approvedText, draftText,
+        pendingDraft: !!draftText?.trim() && draftText !== approvedText,
+        mandatory: false, mandatoryReasons: [],
+        tokenCheck: textToCheck ? checkTokens(s.source, textToCheck) : { ok: true, missing: [], extra: [] },
+        affectedRecordIds: [],
+      },
+    });
+  }
   const missing = rows.filter((r) => r.status.status === 'missing');
   const mandatoryMissing = rows.filter((r) => r.status.mandatory && r.status.status !== 'approved');
   const affected = new Set(rows.flatMap((r) => r.status.affectedRecordIds));
@@ -171,10 +205,12 @@ export function fromTranslationCsv(project: Project, csv: string, locale: Locale
   const locCol = head.findIndex((h) => h.toLowerCase() === locale.toLowerCase());
   if (idCol < 0 || locCol < 0) { res.errors.push({ row: 1, partId: '', code: 'BAD_HEADER', message: `Expected columns “partId” and “${locale}”.` }); return res; }
   const seen = new Set<string>();
+  const strings = translatableStrings(project);
   rows.slice(1).forEach((r, i) => {
     const row = i + 2, partId = (r[idCol] ?? '').trim(), text = r[locCol] ?? '';
-    const part = project.contentParts.find((c) => c.id === partId);
-    if (!part) { res.errors.push({ row, partId, code: 'UNKNOWN_ID', message: `Unknown content part “${partId}”.` }); return; }
+    const str = partId.startsWith('@') ? strings.find((x) => x.id === partId) : undefined;
+    const part = str ? { approvedLocales: { [SOURCE_LOCALE]: str.source, [locale]: project.strings?.[partId]?.approved?.[locale] } as Record<string, string | undefined>, draftLocales: project.strings?.[partId]?.draft } : project.contentParts.find((c) => c.id === partId);
+    if (!part) { res.errors.push({ row, partId, code: 'UNKNOWN_ID', message: `Unknown text “${partId}”.` }); return; }
     if (!text.trim()) { res.skipped++; return; }
     if (seen.has(partId)) { res.errors.push({ row, partId, code: 'DUPLICATE', message: `“${partId}” appears more than once; only the first row is used.` }); return; }
     seen.add(partId);
