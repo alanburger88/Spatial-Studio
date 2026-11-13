@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CATALOG_BY_TYPE, projectFields, tableColumnsFor, defaultFormatterFor, getPath, nodeMap, requiredNodeIds, applyCommand, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
+import { CATALOG_BY_TYPE, projectFields, tableColumnsFor, defaultFormatterFor, getPath, nodeMap, requiredNodeIds, applyCommand, effectivePageDesign, pagedProfileOf, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
 import { useScenarioEngine, useStudio } from '../../state/store';
 import { Icon } from '../../ui/icons';
@@ -81,12 +81,12 @@ const TABS: Array<[Tab, string, string]> = [['content', 'Content', 'insp-tab-con
 /** Last-used tab survives selection changes and leaving/re-entering the screen (session only). */
 let lastTab: Tab = 'content';
 
-function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return <div className="field"><label>{label}{children}</label>{hint && <span className="hint">{hint}</span>}</div>;
 }
 
 /** Text input that commits one command on blur/Enter (one undo step per edit, not per keystroke). */
-function CommitInput({ value, onCommit, type = 'text', ariaLabel, testId, inject }: { value: string | number | undefined; onCommit: (v: string) => void; type?: string; ariaLabel?: string; testId?: string; /** Text a person accepted from a suggestion: it goes into the field as an edit, committed on blur or Enter like typing. */ inject?: { text: string; n: number } }) {
+export function CommitInput({ value, onCommit, type = 'text', ariaLabel, testId, inject }: { value: string | number | undefined; onCommit: (v: string) => void; type?: string; ariaLabel?: string; testId?: string; /** Text a person accepted from a suggestion: it goes into the field as an edit, committed on blur or Enter like typing. */ inject?: { text: string; n: number } }) {
   const [draft, setDraft] = useState<string | null>(null);
   const el = useRef<HTMLInputElement>(null);
   useEffect(() => { if (inject && inject.n > 0) { setDraft(inject.text); el.current?.focus(); } }, [inject?.n]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -695,8 +695,38 @@ function RulesTab({ node, project, res }: { node: DocNode; project: Project; res
 
 /* ------------------------------------------------------------------- layout */
 
+/** Keeping things together (page design): keep together, start on a new page or column, span the columns, text that splits by lines. */
+function PageFlowControls({ node, pl, set }: { node: DocNode; pl: NonNullable<NonNullable<DocNode['layout']>['paged']>; set: (layout: any) => void }) {
+  const textLike = ['rich-text', 'disclosure', 'variant-set', 'conditional-region', 'expandable-explanation'].includes(node.type);
+  const num = (v: string) => Math.max(1, Math.min(10, Math.round(Number(v) || 2)));
+  return (
+    <div className="insp-pageflow" data-testid="layout-page-flow">
+      <div className="section-title">Pages and columns</div>
+      <label className="row" style={{ gap: 6, fontSize: 12.5 }}><input type="checkbox" checked={!!pl.keepTogether} onChange={(e) => set({ keepTogether: e.target.checked })} data-testid="layout-keep-together" /> Keep together (never split across columns or pages)</label>
+      <Field label="Start">
+        <select className="select" value={pl.breakBefore ?? ''} onChange={(e) => set({ breakBefore: e.target.value || undefined })} data-testid="layout-break-before">
+          <option value="">Where the content before it ends</option><option value="column">In a new column</option><option value="page">On a new page</option>
+        </select>
+      </Field>
+      <label className="row" style={{ gap: 6, fontSize: 12.5 }}><input type="checkbox" checked={!!pl.spanColumns} onChange={(e) => set({ spanColumns: e.target.checked })} data-testid="layout-span" /> Span all columns</label>
+      {textLike && (
+        <>
+          <label className="row" style={{ gap: 6, fontSize: 12.5 }}><input type="checkbox" checked={!!pl.splitText} disabled={!!pl.keepTogether} onChange={(e) => set(e.target.checked ? { splitText: true, minLinesLeft: pl.minLinesLeft ?? 2, minLinesCarried: pl.minLinesCarried ?? 2 } : { splitText: false })} data-testid="layout-split-text" /> Let the text continue in the next column or page</label>
+          {pl.splitText && !pl.keepTogether && (
+            <div className="layout-grid">
+              <Field label="Lines left behind"><CommitInput type="number" value={pl.minLinesLeft ?? 2} onCommit={(v) => set({ minLinesLeft: num(v) })} testId="layout-lines-left" ariaLabel="Minimum lines left at the bottom before a break" /></Field>
+              <Field label="Lines carried over"><CommitInput type="number" value={pl.minLinesCarried ?? 2} onCommit={(v) => set({ minLinesCarried: num(v) })} testId="layout-lines-carried" ariaLabel="Minimum lines carried to the top after a break" /></Field>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function LayoutTab({ node, project }: { node: DocNode; project: Project }) {
   const dispatch = useStudio((s) => s.dispatch);
+  const page = effectivePageDesign(pagedProfileOf(project));
   const profileId = useStudio((s) => s.ctx.profileId);
   const [profile, setProfile] = useState<'paged' | 'html'>(profileId === 'html-responsive' ? 'html' : 'paged');
   const pl = node.layout?.paged ?? { mode: 'flow' as const };
@@ -722,11 +752,11 @@ function LayoutTab({ node, project }: { node: DocNode; project: Project }) {
               <div className="layout-grid">
                 {(['xPt', 'yPt', 'wPt', 'hPt'] as const).map((k) => <Field key={k} label={k.replace('Pt', ' (pt)')}><CommitInput type="number" value={Math.round((pl as any)[k] ?? 0)} onCommit={(v) => set({ [k]: num(v) })} testId={`layout-${k}`} /></Field>)}
               </div>
-              <Field label="Pages"><select className="select" value={pl.pages ?? 'first'} onChange={(e) => set({ pages: e.target.value })}><option value="first">First page</option><option value="all">All pages</option><option value="following">Following pages</option></select></Field>
+              <Field label="Pages"><select className="select" value={pl.pages ?? 'first'} onChange={(e) => set({ pages: e.target.value })} data-testid="layout-pages"><option value="first">First page</option><option value="all">All pages</option><option value="following">Following pages</option><option value="last">Last page</option></select></Field>
               <div className="row"><span className="muted" style={{ fontSize: 12 }}>Align on page</span>
-                <button className="btn sm icon" aria-label="Align left margin" onClick={() => set({ xPt: 40 })}><Icon.alignL /></button>
-                <button className="btn sm icon" aria-label="Align page centre" onClick={() => set({ xPt: Math.round((612 - (pl.wPt ?? 100)) / 2) })}><Icon.alignC /></button>
-                <button className="btn sm icon" aria-label="Align right margin" onClick={() => set({ xPt: Math.round(572 - (pl.wPt ?? 100)) })}><Icon.alignR /></button>
+                <button className="btn sm icon" aria-label="Align left margin" onClick={() => set({ xPt: page.margins.left })}><Icon.alignL /></button>
+                <button className="btn sm icon" aria-label="Align page centre" onClick={() => set({ xPt: Math.round((page.widthPt - (pl.wPt ?? 100)) / 2) })}><Icon.alignC /></button>
+                <button className="btn sm icon" aria-label="Align right margin" onClick={() => set({ xPt: Math.round(page.widthPt - page.margins.right - (pl.wPt ?? 100)) })}><Icon.alignR /></button>
               </div>
               <p className="muted" style={{ fontSize: 12 }}>Keyboard: arrows nudge 1 pt, Shift+arrows 10 pt.</p>
             </>
@@ -738,6 +768,7 @@ function LayoutTab({ node, project }: { node: DocNode; project: Project }) {
               </div>
               <Field label="Space before (pt)"><CommitInput type="number" value={pl.spaceBeforePt ?? 8} onCommit={(v) => set({ spaceBeforePt: Math.max(0, Math.min(72, num(v))) })} /></Field>
               <label className="row" style={{ gap: 6, fontSize: 12.5 }}><input type="checkbox" checked={!!pl.keepWithNext} onChange={(e) => set({ keepWithNext: e.target.checked })} /> Keep with next</label>
+              {isRoot && <PageFlowControls node={node} pl={pl} set={set} />}
               {node.type === 'container' && <Field label="Child direction"><select className="select" value={pl.direction ?? 'column'} onChange={(e) => set({ direction: e.target.value })}><option value="column">column</option><option value="row">row</option></select></Field>}
               <p className="muted" style={{ fontSize: 12 }}>Keyboard: Alt+↑/↓ reorders · Shift+←/→ width ±5%.</p>
             </>

@@ -2,6 +2,8 @@ export * from './html-common';
 export * from './paged';
 export * from './responsive';
 export * from './paginator-source';
+export * from './paginator-design-source';
+export * from './pageChecks';
 export * from './parity';
 export * from './afp';
 export * from './email';

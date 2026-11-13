@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ComposedPages } from '../../api/client';
 import { useStudio } from '../../state/store';
 import { wordDiff } from './wordDiff';
+import { pageBoxFromCss } from '../../doc/pageBox';
 
 /**
  * The panes of the side-by-side view. Each one shows a real composition of one side and can outline parts of it by
@@ -24,9 +25,7 @@ export interface PaneProps {
 }
 
 const SAFE_ID = /^[\w.-]+$/;
-const PX_PER_PT = 96 / 72;
-const PAGE_W = Math.round(612 * PX_PER_PT);
-const PAGE_H = Math.round(792 * PX_PER_PT);
+// The page size comes from the composed CSS: the two versions compared may use different paper.
 
 const fixCss = (css: string) => css.replace(/:root/g, ':host').replace(/(^|[\s,}])body\{/g, '$1:host{');
 
@@ -76,6 +75,7 @@ function useMarkColours(scrollerRef: React.RefObject<HTMLElement>) {
 
 function PageHost({ css, html, scale, extra, index, total }: { css: string; html: string; scale: number; extra: string; index: number; total: number }) {
   const ref = useRef<HTMLDivElement>(null);
+  const box = useMemo(() => pageBoxFromCss(css), [css]);
   useLayoutEffect(() => {
     const host = ref.current;
     if (!host) return;
@@ -85,8 +85,8 @@ function PageHost({ css, html, scale, extra, index, total }: { css: string; html
   return (
     <figure className="cmp-page" data-page={index}>
       <figcaption className="muted">Page {index} of {total}</figcaption>
-      <div className="cmp-page-frame" style={{ width: PAGE_W * scale, height: PAGE_H * scale }} role="img" aria-label={`Composed page ${index} of ${total}`}>
-        <div ref={ref} className="cmp-page-host" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scale})` }} />
+      <div className="cmp-page-frame" style={{ width: box.w * scale, height: box.h * scale }} role="img" aria-label={`Composed page ${index} of ${total}`}>
+        <div ref={ref} className="cmp-page-host" style={{ width: box.w, height: box.h, transform: `scale(${scale})` }} />
       </div>
     </figure>
   );
@@ -96,7 +96,7 @@ export function PagesPane({ data, marks, focusId, register, onFound }: PaneProps
   const scroller = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const w = useWidth(scroller);
-  const scale = Math.min(1, Math.max(0.2, (w - 28) / PAGE_W));
+  const scale = Math.min(1, Math.max(0.2, (w - 28) / pageBoxFromCss(data.snapshot.css).w));
   const { mark, focus, soft } = useMarkColours(scroller);
   const extra = useMemo(() => markCss(marks, focusId, mark, focus, soft), [marks, focusId, mark, focus, soft]);
   const pages = data.snapshot.pages;

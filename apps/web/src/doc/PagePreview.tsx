@@ -1,6 +1,6 @@
 import { memo, useMemo, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from 'react';
-import type { Project } from '@iss/model';
-import { nodeInnerHtml, documentCss, type RenderMode } from '@iss/renderers';
+import { effectivePageDesign, fixedItemTemplates, PAGE_TEMPLATE_LABEL, pagedProfileOf, type PageTemplateId, type Project } from '@iss/model';
+import { imageSrc, nodeInnerHtml, documentCss, type RenderMode } from '@iss/renderers';
 import type { RNode, Resolution } from '@iss/resolver';
 import './PagePreview.css';
 
@@ -196,42 +196,61 @@ export interface PagePreviewProps {
   onBackgroundClick?: () => void;
   pageRef?: React.Ref<HTMLDivElement>;
   dropLineY?: number | null;
+  /** Which page template to show (default: First page). Following and Last pages show their fixed items and flow area; the composer places the flowing content. */
+  template?: PageTemplateId;
+  /** Drawn on top of the page in page points (zone handles of the Design Studio). */
+  overlay?: ReactNode;
 }
 
-/** Renders page 1 (fixed anchors + flow region) at `scale`. */
-export function PagePreview({ res, project, scale, ia, showGuides = true, showGrid = false, onPageDragOver, onPageDrop, onBackgroundClick, pageRef, dropLineY }: PagePreviewProps) {
-  const profile = project.presentationProfiles.find((p) => p.id === 'paged-pdf');
-  const flow = profile?.flowRegion ?? { firstPageTopPt: 184, otherPagesTopPt: 84, bottomPt: 738 };
-  const left = Math.round(((profile?.pageMarginsMm?.[3] ?? 14) * 72) / 25.4);
-  const width = PAGE_W_PT - left * 2;
+/** Renders one page template (default page 1: fixed anchors + flow region) at `scale`, at the paper size of the paged profile. */
+export function PagePreview({ res, project, scale, ia, showGuides = true, showGrid = false, onPageDragOver, onPageDrop, onBackgroundClick, pageRef, dropLineY, template = 'first', overlay }: PagePreviewProps) {
+  const design = useMemo(() => effectivePageDesign(pagedProfileOf(project)), [project]);
+  const tpl = (template === 'last' ? design.last : null) ?? (template === 'following' ? design.following : template === 'last' ? design.following : design.first);
+  const area = tpl.flow;
+  const flow = { firstPageTopPt: area.yPt, bottomPt: area.yPt + area.hPt };
+  const left = area.xPt;
+  const width = area.wPt;
+  const margins = design.margins;
+  const pageW = design.widthPt, pageH = design.heightPt;
   const mode: RenderMode = useMemo(() => ({ target: 'paged', project }), [project]);
   const css = useMemo(() => documentCss(project.issuer?.accent ?? '#277656', project), [project]);
-  const fixed = res.root.children.filter((n) => n.layout?.paged?.mode === 'fixed' && (n.layout.paged.pages ?? 'first') !== 'following');
-  const flowNodes = res.root.children.filter((n) => n.layout?.paged?.mode !== 'fixed');
+  const fixed = res.root.children.filter((n) => n.layout?.paged?.mode === 'fixed' && fixedItemTemplates(n.layout.paged.pages).includes(template));
+  const flowNodes = template === 'first' ? res.root.children.filter((n) => n.layout?.paged?.mode !== 'fixed') : [];
+  const bg = tpl.background;
+  const bgSrc = bg?.kind === 'image' ? imageSrc(bg.image ?? '', project.issuer?.accent ?? '#277656') : null;
+  const bgStyle: CSSProperties | null = !bg ? null : bg.kind === 'tint'
+    ? { background: bg.color, opacity: bg.opacityPct / 100 }
+    : bgSrc ? { backgroundImage: `url("${bgSrc}")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'center', backgroundSize: bg.fit === 'contain' ? 'contain' : 'cover', opacity: bg.opacityPct / 100 } : null;
+  const colW = (area.wPt - (tpl.columns - 1) * tpl.columnGapPt) / tpl.columns;
   const toPt = (e: DragEvent<HTMLDivElement>) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     return { x: (e.clientX - r.left) / (PT * scale), y: (e.clientY - r.top) / (PT * scale) };
   };
   return (
-    <div className="pv-wrap" style={{ width: PAGE_W_PT * PT * scale, minHeight: PAGE_H_PT * PT * scale }}>
+    <div className="pv-wrap" style={{ width: pageW * PT * scale, minHeight: pageH * PT * scale }} data-template={template} data-paper={design.paper} data-orientation={design.orientation}>
       <style>{css}</style>
       <div
         className={`pv-page${showGrid ? ' show-grid' : ''}`}
         ref={pageRef}
-        style={{ transform: `scale(${scale})` }}
+        style={{ transform: `scale(${scale})`, width: `${pageW}pt`, minHeight: `${pageH}pt` }}
         onClick={() => onBackgroundClick?.()}
         onDragOver={(e) => { const p = toPt(e); onPageDragOver?.(e, p.y < flow.firstPageTopPt ? 'fixed' : 'flow', p.x, p.y); }}
         onDrop={(e) => { const p = toPt(e); onPageDrop?.(e, p.y < flow.firstPageTopPt ? 'fixed' : 'flow', p.x, p.y); }}
         data-testid="page-surface"
       >
-        {showGuides && <div className="pv-margin" style={{ left: `${left}pt`, right: `${left}pt`, top: `${left}pt`, bottom: `${left}pt` }} aria-hidden="true" />}
+        {bgStyle && <div className="pv-bg" style={bgStyle} aria-hidden="true" data-testid="page-background" />}
+        {showGuides && <div className="pv-margin" style={{ left: `${margins.left}pt`, width: `${pageW - margins.left - margins.right}pt`, top: `${margins.top}pt`, height: `${pageH - margins.top - margins.bottom}pt` }} aria-hidden="true" />}
         {fixed.map((n) => <FixedBox key={n.id} n={n} mode={mode} ia={ia} />)}
-        <div className="pv-flow" style={{ left: `${left}pt`, top: `${flow.firstPageTopPt}pt`, width: `${width}pt`, minHeight: `${flow.bottomPt - flow.firstPageTopPt}pt` }} data-testid="flow-region">
-          {showGuides && <div className="pv-flow-label" aria-hidden="true">Flow region · continues on following pages</div>}
-          {renderNodes(flowNodes, mode, ia, 0)}
+        <div className="pv-flow" style={{ left: `${left}pt`, top: `${flow.firstPageTopPt}pt`, width: `${width}pt`, minHeight: `${flow.bottomPt - flow.firstPageTopPt}pt` }} data-testid="flow-region" data-columns={tpl.columns}>
+          {showGuides && <div className="pv-flow-label" aria-hidden="true">{template === 'first' ? 'Flow region · continues on following pages' : `${PAGE_TEMPLATE_LABEL[template]} · flow area`}{tpl.columns > 1 ? ` · ${tpl.columns} columns` : ''}</div>}
+          {showGuides && tpl.columns > 1 && Array.from({ length: tpl.columns }, (_, i) => <div key={i} className="pv-col-guide" style={{ left: `${i * (colW + tpl.columnGapPt)}pt`, width: `${colW}pt` }} aria-hidden="true" />)}
+          {template === 'first'
+            ? (tpl.columns > 1 ? <div className="pv-flow-cols" style={{ width: `${colW}pt` }}>{renderNodes(flowNodes, mode, ia, 0)}</div> : renderNodes(flowNodes, mode, ia, 0))
+            : showGuides && <div className="pv-flow-note">Content continues here from the page before. Page Composition Stack shows the composed pages.</div>}
           {dropLineY !== null && dropLineY !== undefined && <div className="pv-dropline" style={{ top: dropLineY }} />}
         </div>
-        {showGuides && <div className="pv-pagebreak" style={{ top: `${flow.bottomPt}pt` }} aria-hidden="true"><span>End of page 1 flow region · composer paginates the rest</span></div>}
+        {showGuides && template === 'first' && <div className="pv-pagebreak" style={{ top: `${flow.bottomPt}pt` }} aria-hidden="true"><span>End of page 1 flow region · composer paginates the rest</span></div>}
+        {overlay}
       </div>
     </div>
   );

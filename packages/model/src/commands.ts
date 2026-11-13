@@ -11,6 +11,7 @@ import { RECORD_ID_PATTERN } from './types';
 import type { ChannelConfig, GlossaryEntry, TranslationOrigin } from './types';
 import type { BrandKit, ContentPart, CustomField, DocNode, Locale, TestCase, TextStyle, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
 import { validatePredicate, validateRule } from './validate';
+import { applyPageDesignPatch, pagedFlowProblems, pagedProfileOf, pageDesignLabel, pageDesignProblems, pageSizePt, refitFixedLayouts, type PageDesignPatch } from './pageDesign';
 
 /**
  * Unified typed command bus. Every authoring mutation is one of these commands.
@@ -51,6 +52,8 @@ export type Command =
   | { type: 'SET_GLOSSARY'; locale: Locale; entries: GlossaryEntry[] }
   /** Several commands applied in order as ONE undoable step (assistant fixes). All or nothing: the first rejection rejects the batch. */
   | { type: 'BATCH'; label: string; commands: Command[] }
+  /** Paper, orientation, margins and page templates of the paged outputs (PDF and the AFP simulation together). */
+  | { type: 'SET_PAGE_DESIGN'; patch: PageDesignPatch }
   | { type: 'RESTORE_SNAPSHOT'; project: Project; label: string };
 
 export type CommandResult =
@@ -192,8 +195,12 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
         const next = { ...(node.layout?.paged ?? { mode: 'flow' }), ...cmd.layout } as PagedLayout;
         if (next.mode === 'fixed') {
           if ((next.wPt ?? 0) < 8 || (next.hPt ?? 0) < 4) return reject('INVALID_LAYOUT', 'Fixed elements must be at least 8×4 pt.', cmd.nodeId);
-          if ((next.xPt ?? 0) < 0 || (next.yPt ?? 0) < 0 || (next.xPt ?? 0) + (next.wPt ?? 0) > 612 || (next.yPt ?? 0) + (next.hPt ?? 0) > 792) return reject('INVALID_LAYOUT', 'Fixed element must stay within the US-Letter page (612×792 pt).', cmd.nodeId);
+          const page = pageSizePt(pagedProfileOf(project));
+          if ((next.xPt ?? 0) < 0 || (next.yPt ?? 0) < 0 || (next.xPt ?? 0) + (next.wPt ?? 0) > page.widthPt + 0.01 || (next.yPt ?? 0) + (next.hPt ?? 0) > page.heightPt + 0.01) return reject('INVALID_LAYOUT', page.paper.id === 'US-Letter' && !page.landscape ? 'Fixed element must stay within the US-Letter page (612×792 pt).' : `Fixed element must stay within the ${page.paper.label} page (${Math.round(page.widthPt)}×${Math.round(page.heightPt)} pt).`, cmd.nodeId);
+          if (next.pages !== undefined && !['first', 'all', 'following', 'last'].includes(next.pages)) return reject('INVALID_LAYOUT', 'A fixed element appears on the first, following, last or all pages.', cmd.nodeId);
         }
+        const flowProblem = pagedFlowProblems(cmd.layout as Record<string, unknown>);
+        if (flowProblem) return reject('INVALID_LAYOUT', flowProblem, cmd.nodeId);
         if (next.widthPct !== undefined && (next.widthPct < 10 || next.widthPct > 100)) return reject('INVALID_LAYOUT', 'Flow width must be between 10% and 100%.', cmd.nodeId);
       }
       return { ok: true, label: `Layout ${node.name ?? node.id} (${cmd.profile === 'paged' ? 'paged' : 'HTML'})`, project: bump(project, (d) => {
@@ -303,6 +310,8 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
     }
     case 'UPDATE_PROFILE': {
       if (!project.presentationProfiles.some((p) => p.id === cmd.profileId)) return reject('NOT_FOUND', `Unknown profile ${cmd.profileId}.`);
+      const merged = { ...project.presentationProfiles.find((p) => p.id === cmd.profileId)!, ...cmd.patch };
+      if (merged.kind !== 'responsive') { const e = pageDesignProblems(merged); if (e.length) return reject('INVALID_PAGE_DESIGN', e[0]); }
       return { ok: true, label: `Edit profile ${cmd.profileId}`, project: bump(project, (d) => {
         const i = d.presentationProfiles.findIndex((p) => p.id === cmd.profileId);
         d.presentationProfiles[i] = { ...d.presentationProfiles[i], ...cmd.patch, id: d.presentationProfiles[i].id };
@@ -467,6 +476,19 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
       }
       // one undoable step, one version bump
       return { ok: true, label: cmd.label.slice(0, 160) || `${cmd.commands.length} changes`, project: { ...current, modelVersion: project.modelVersion + 1 } };
+    }
+    case 'SET_PAGE_DESIGN': {
+      const paged = project.presentationProfiles.filter((p) => p.kind === 'paged' || p.kind === 'afp-simulation');
+      if (!paged.length) return reject('NOT_FOUND', 'This document has no paged output.');
+      const next = paged.map((p) => applyPageDesignPatch(p, cmd.patch ?? {}));
+      for (const p of next) { const e = pageDesignProblems(p); if (e.length) return reject('INVALID_PAGE_DESIGN', e[0]); }
+      // Another paper or orientation: fixed items move with the page edges they belong to (one undoable step).
+      const before = pagedProfileOf(project);
+      const moved = before ? refitFixedLayouts(project, before, applyPageDesignPatch(before, cmd.patch ?? {})) : [];
+      return { ok: true, label: pageDesignLabel(before, cmd.patch ?? {}), project: bump(project, (d) => {
+        for (const p of next) { const i = d.presentationProfiles.findIndex((x) => x.id === p.id); d.presentationProfiles[i] = p; }
+        for (const m of moved) { const n = d.nodes.find((x) => x.id === m.nodeId)!; n.layout = { ...n.layout, paged: { ...n.layout!.paged!, ...m.layout } }; }
+      }) };
     }
     case 'RESTORE_SNAPSHOT': {
       return { ok: true, label: cmd.label, project: { ...cmd.project, modelVersion: project.modelVersion + 1 } };

@@ -109,8 +109,8 @@ export interface PagedLayout {
   yPt?: number;
   wPt?: number;
   hPt?: number;
-  /** Fixed: which pages the element appears on. */
-  pages?: 'first' | 'all' | 'following';
+  /** Fixed: which pages the element appears on (`following` = every page after the first; `last` = the last page only). */
+  pages?: 'first' | 'all' | 'following' | 'last';
   /** Flow: width as % of the flow region, alignment and spacing. */
   widthPct?: number;
   align?: 'left' | 'center' | 'right';
@@ -118,6 +118,18 @@ export interface PagedLayout {
   keepWithNext?: boolean;
   /** Container: lay children out in a row. */
   direction?: 'column' | 'row';
+  // Page design (wave 2). All optional: a component without them composes exactly as before.
+  /** Flow: never split across columns or pages (a table moves whole; text does not split). */
+  keepTogether?: boolean;
+  /** Flow: start on a new page, or in the next column (a new page when the flow area has one column). */
+  breakBefore?: 'page' | 'column';
+  /** Flow: span every column of a multi-column flow area. */
+  spanColumns?: boolean;
+  /** Flow, text: may continue in the next column or page, line by line. Off = the component moves whole, as before. */
+  splitText?: boolean;
+  /** Flow, text that splits: at least this many lines stay behind before a break (orphans) and are carried over after it (widows). Default 2. */
+  minLinesLeft?: number;
+  minLinesCarried?: number;
 }
 
 export interface ResponsiveLayout {
@@ -242,13 +254,18 @@ export interface ContentPart {
 export interface PresentationProfile {
   id: ProfileId;
   kind: 'paged' | 'afp-simulation' | 'responsive';
-  paper?: 'US-Letter';
+  /** Absent = US Letter. */
+  paper?: PaperSize;
+  /** Absent = portrait. */
+  orientation?: 'portrait' | 'landscape';
   pageMarginsMm?: [number, number, number, number];
   duplex?: boolean;
   simulationOnly?: boolean;
   breakpointsPx?: number[];
-  /** Paged flow region geometry in points (US Letter 612×792). */
+  /** Paged flow region geometry in points (US Letter 612×792). A page template's own `flowArea` takes precedence. */
   flowRegion?: { firstPageTopPt: number; otherPagesTopPt: number; bottomPt: number };
+  /** Page templates (wave 2; see `pageDesign.ts`). Absent = today's pages. A `last` entry turns the Last page template on. */
+  pageTemplates?: Partial<Record<PageTemplateId, PageTemplate>>;
   afp?: {
     formdef: string;
     pagedef: string;
@@ -467,4 +484,28 @@ export interface CustomField {
   example?: string;
   /** Offer as a Cube/Landscape filter dimension. */
   dimension?: boolean;
+}
+
+/* ------------------------------------------------------------- Page design (wave 2) */
+
+export type PaperSize = 'US-Letter' | 'A4' | 'US-Legal';
+export type PageTemplateId = 'first' | 'following' | 'last';
+/** A rectangle on the page, in points from the top-left corner. */
+export interface FlowArea { xPt: number; yPt: number; wPt: number; hPt: number }
+/** Decoration behind a page: never read out, never in the web page, email or SMS, never compared for parity. */
+export interface PageBackground {
+  kind: 'image' | 'tint';
+  /** Image: a PNG, JPEG or WebP data URI from the image library (or a built-in `asset:` mark). */
+  image?: string;
+  fit?: 'cover' | 'contain';
+  /** Tint: a 6-digit hex colour. */
+  color?: string;
+  opacityPct: number;
+}
+/** One page template (master page): its flow area, columns and background. Fixed items name their pages with `PagedLayout.pages`. */
+export interface PageTemplate {
+  flowArea?: FlowArea;
+  columns?: number;
+  columnGapPt?: number;
+  background?: PageBackground;
 }

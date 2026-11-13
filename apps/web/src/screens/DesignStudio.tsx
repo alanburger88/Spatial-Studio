@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent as RKeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { COMPONENT_CATALOG, CATALOG_BY_TYPE, defaultNode, dropRejection, newNodeId, nodeMap, parentOf, type ComponentType, type DocNode, type Project } from '@iss/model';
+import { COMPONENT_CATALOG, CATALOG_BY_TYPE, defaultNode, dropRejection, effectivePageDesign, newNodeId, nodeMap, PAPER_SIZES, pagedProfileOf, parentOf, type ComponentType, type DocNode, type PageTemplateId, type Project } from '@iss/model';
 import { renderInteractiveHtml } from '@iss/renderers';
 import type { RNode, Resolution } from '@iss/resolver';
 import { useResolution, useStudio } from '../state/store';
 import { ScreenHeader, Tech, Named } from '../ui/common';
 import { nodeTitle } from '../ui/plain';
 import { C, Icon } from '../ui/icons';
-import { PagePreview, PT, PAGE_W_PT, PAGE_H_PT, type NodeInteraction } from '../doc/PagePreview';
+import { PagePreview, PT, type NodeInteraction } from '../doc/PagePreview';
 import { Inspector } from './design/Inspector';
+import { PagePanel, PageZones, TemplateSwitch } from './design/PageDesign';
 import { RichTextEditor } from './design/RichTextEditor';
 import { StylesBrandDialog } from './design/StylesBrand';
 import './DesignStudio.css';
@@ -65,6 +66,12 @@ export function DesignStudio() {
   const [snap, setSnap] = useState(true);
   const [device, setDevice] = useState<1200 | 768 | 390>(1200);
   const [showHidden, setShowHidden] = useState(() => lsGet(LS_HIDDEN) === '1');
+  // Page design: which page template the canvas shows, and whether the Page panel replaces the inspector.
+  const [pageTemplateRaw, setPageTemplate] = useState<PageTemplateId>('first');
+  const [pagePanel, setPagePanel] = useState(false);
+  const design = useMemo(() => effectivePageDesign(pagedProfileOf(project)), [project]);
+  const pageTemplate: PageTemplateId = pageTemplateRaw === 'last' && !design.last ? 'first' : pageTemplateRaw;
+  const PAGE_W_PT = design.widthPt, PAGE_H_PT = design.heightPt;
   // The component list starts closed on laptop-sized windows (under 1500px) so the page shows near full size; an explicit choice is remembered and wins.
   const [paletteCollapsed, setPaletteCollapsed] = useState(() => { const v = lsGet(LS_PALETTE); return v === '1' || (v !== '0' && typeof window !== 'undefined' && window.innerWidth < 1500); });
   const [hintSeen, setHintSeen] = useState(() => lsGet(LS_HINT) === '1');
@@ -101,12 +108,12 @@ export function DesignStudio() {
   const insert = useCallback((type: ComponentType, parentId: string, index?: number, fixedAt?: { x: number; y: number }) => {
     const id = newNodeId(type, new Set(map.keys()));
     const node: DocNode = defaultNode(type, id, project.documentType, project);
-    if (fixedAt) node.layout = { ...node.layout, paged: { mode: 'fixed', xPt: Math.round(Math.min(612 - 170, Math.max(0, fixedAt.x))), yPt: Math.round(Math.min(792 - 50, Math.max(0, fixedAt.y))), wPt: 160, hPt: 40, pages: 'first' } };
+    if (fixedAt) node.layout = { ...node.layout, paged: { mode: 'fixed', xPt: Math.round(Math.min(PAGE_W_PT - 170, Math.max(0, fixedAt.x))), yPt: Math.round(Math.min(PAGE_H_PT - 50, Math.max(0, fixedAt.y))), wPt: 160, hPt: 40, pages: pageTemplate === 'first' ? 'first' : pageTemplate } };
     const r = dispatch({ type: 'INSERT_NODE', node, parentId, index });
     if (r.ok) { select(id); toast({ kind: 'success', title: `${CATALOG_BY_TYPE[type].label} inserted`, message: `${id} added to ${parentId}. One undo step.` }); }
     else setReject({ nodeId: parentId, reason: r.message });
     return r;
-  }, [map, project, dispatch, select, toast]);
+  }, [map, project, dispatch, select, toast, PAGE_W_PT, PAGE_H_PT, pageTemplate]);
 
   const insertViaKeyboard = (type: ComponentType) => {
     // Keyboard alternative to drag: insert after the selected flow node (or into a selected section).
@@ -136,7 +143,7 @@ export function DesignStudio() {
     dropReject: reject,
     editingId,
     transient,
-    onSelect: (id) => { if (editingId && editingId !== id) setEditingId(null); select(id); },
+    onSelect: (id) => { if (editingId && editingId !== id) setEditingId(null); setPagePanel(false); select(id); },
     onDoubleClick: (id) => { if (map.get(id)?.type === 'rich-text') { select(id); setEditingId(id); } },
     onNodeDragStart: (id, e) => { dragging = { kind: 'node', id }; e.dataTransfer.setData('application/x-iss-node', id); e.dataTransfer.effectAllowed = 'move'; select(id); },
     onDragOverNode: (id, e) => {
@@ -170,12 +177,12 @@ export function DesignStudio() {
       const start = { x: e.clientX, y: e.clientY, pl: { ...(node.layout?.paged ?? { mode: 'flow' as const }) } };
       const unit = PT * scale;
       const snapTo = (v: number) => (snap ? Math.round(v / 2) * 2 : Math.round(v));
-      const flowW = 532;
+      const flowW = design.first.flow.wPt;
       let last: any = null;
       const move = (ev: PointerEvent) => {
         const dx = (ev.clientX - start.x) / unit, dy = (ev.clientY - start.y) / unit;
-        if (handle === 'move') last = { xPt: snapTo(Math.max(0, Math.min(612 - (start.pl.wPt ?? 0), (start.pl.xPt ?? 0) + dx))), yPt: snapTo(Math.max(0, Math.min(792 - (start.pl.hPt ?? 0), (start.pl.yPt ?? 0) + dy))) };
-        else if (handle === 'resize') last = { wPt: snapTo(Math.max(8, Math.min(612 - (start.pl.xPt ?? 0), (start.pl.wPt ?? 100) + dx))), hPt: snapTo(Math.max(4, Math.min(792 - (start.pl.yPt ?? 0), (start.pl.hPt ?? 20) + dy))) };
+        if (handle === 'move') last = { xPt: snapTo(Math.max(0, Math.min(PAGE_W_PT - (start.pl.wPt ?? 0), (start.pl.xPt ?? 0) + dx))), yPt: snapTo(Math.max(0, Math.min(PAGE_H_PT - (start.pl.hPt ?? 0), (start.pl.yPt ?? 0) + dy))) };
+        else if (handle === 'resize') last = { wPt: snapTo(Math.max(8, Math.min(PAGE_W_PT - (start.pl.xPt ?? 0), (start.pl.wPt ?? 100) + dx))), hPt: snapTo(Math.max(4, Math.min(PAGE_H_PT - (start.pl.yPt ?? 0), (start.pl.hPt ?? 20) + dy))) };
         else if (handle === 'flow-width') last = { widthPct: Math.max(10, Math.min(100, Math.round(((start.pl.widthPct ?? 100) + (dx / flowW) * 100) / 5) * 5)) };
         setTransient({ [id]: last });
       };
@@ -317,8 +324,10 @@ export function DesignStudio() {
         <div className="design-stage">
           <div className="ds-toolbar" role="toolbar" aria-label="Canvas">
             {paletteCollapsed && <button className="btn sm" onClick={togglePalette} aria-expanded={false} aria-label="Show components and layers" title="Show the component list and the layer tree" data-testid="toggle-palette"><Icon.chevron width={14} height={14} /> Components &amp; layers</button>}
-            <span className="chip count" title={isHtml ? 'Interactive HTML profile' : 'US Letter portrait · paged profile · page 1 of the composed document'}>{isHtml ? 'Interactive HTML' : 'Page 1 · Letter'}</span>
+            <span className="chip count" title={isHtml ? 'Interactive HTML profile' : `${PAPER_SIZES[design.paper].label} ${design.orientation} · paged profile · ${pageTemplate === 'first' ? 'page 1 of the composed document' : `the ${pageTemplate} page template`}`} data-testid="canvas-paper">{isHtml ? 'Interactive HTML' : `${pageTemplate === 'first' ? 'Page 1' : pageTemplate === 'following' ? 'Following' : 'Last'} · ${design.paper === 'US-Letter' ? 'Letter' : PAPER_SIZES[design.paper].label}${design.orientation === 'landscape' ? ' landscape' : ''}`}</span>
             {!isHtml && <>
+              <TemplateSwitch project={project} template={pageTemplate} onTemplate={setPageTemplate} compact />
+              <button className="btn sm ds-page-btn" aria-pressed={pagePanel} onClick={() => setPagePanel(!pagePanel)} data-testid="open-page-panel" title="Paper, margins, page templates, columns and backgrounds">Page setup</button>
               <div className="segmented ds-group" role="group" aria-label="Zoom">
                 <button aria-label="Zoom out" onClick={() => setZoom(Math.max(0.4, scale - 0.1))}>−</button>
                 <span className="ds-zoom" data-testid="zoom-value" title={zoom === null ? (fitMode === 'page' ? 'Fit: whole page' : 'Fit: page width') : 'Manual zoom'} aria-live="polite">{Math.round(scale * 100)}%</span>
@@ -351,12 +360,15 @@ export function DesignStudio() {
               </div>
             )}
             {isHtml ? <HtmlProfileCanvas res={res} project={project} width={device} selected={selected} onSelect={(id) => select(id)} />
-              : <PagePreview res={res} project={project} scale={scale} ia={ia} showGrid={grid} onPageDragOver={onPageDragOver} onPageDrop={onPageDrop} onBackgroundClick={() => { setEditingId(null); }} />}
+              : <PagePreview res={res} project={project} scale={scale} ia={ia} showGrid={grid} onPageDragOver={onPageDragOver} onPageDrop={onPageDrop} onBackgroundClick={() => { setEditingId(null); }} template={pageTemplate}
+                  overlay={pagePanel ? <PageZones project={project} template={pageTemplate} scale={scale} snap={snap} /> : null} />}
           </div>
         </div>
 
         {stylesOpen && <StylesBrandDialog onClose={() => setStylesOpen(false)} />}
-        <Inspector project={project} res={res} nodeId={inspectNodeId} onEditText={(id) => { select(id); setEditingId(id); }} />
+        {pagePanel && !isHtml
+          ? <PagePanel project={project} template={pageTemplate} onTemplate={setPageTemplate} onSelectNode={(id) => { setPagePanel(false); select(id); }} onClose={() => setPagePanel(false)} />
+          : <Inspector project={project} res={res} nodeId={inspectNodeId} onEditText={(id) => { select(id); setEditingId(id); }} />}
       </div>
     </section>
   );

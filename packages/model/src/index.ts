@@ -18,3 +18,4 @@ export * from './setupSpec';
 export * from './diff';
 export * from './collab';
 export * from './releases';
+export * from './pageDesign';

@@ -27,6 +27,8 @@ const KIND_BY_CODE: Record<string, BlockerKind> = {
   UNKNOWN_VARIANT: 'rules', UNKNOWN_SECTION: 'rules', REQUIRED_NODE_MISSING: 'rules',
   // pages and outputs
   FLOW_OVERFLOW_NO_CONTINUATION: 'layout', TABLE_TOTAL_CLIPPED: 'layout', BLOCK_OVERFLOW: 'layout', ROW_TALLER_THAN_REGION: 'layout', ORPHANED_HEADING: 'layout', FIXED_FLOW_ADJUSTED: 'layout', PARITY_MISMATCH: 'layout',
+  // page design (wave 2)
+  KEEP_TOGETHER_CANNOT_FIT: 'layout', FIXED_OFF_PAGE: 'layout', PAGE_DESIGN_INVALID: 'layout',
   // data fields the document reads
   INVALID_BINDING: 'data-fields',
   // the customer's own data
@@ -146,6 +148,10 @@ function wordsFor(project: Project, f: Finding, about: BlockerAbout, n: number):
       return { title: `${q(where)} runs off the page`, explanation: `${q(where)} cannot continue on the next page, so rows are cut off for customers who have more rows than fit. ${who}` };
     case 'TABLE_TOTAL_CLIPPED':
       return { title: `The total row of ${q(where)} does not fit`, explanation: `The total row of ${q(where)} does not fit on its page. ${who}` };
+    case 'KEEP_TOGETHER_CANNOT_FIT':
+      return { title: `${q(where)} is too tall to keep together`, explanation: `${q(where)} is set to keep together, but it is taller than an empty page or column, so it cannot be placed in one piece. ${who}` };
+    case 'FIXED_OFF_PAGE':
+      return { title: `${q(where)} reaches outside the page`, explanation: `${q(where)} is fixed at a place that is partly off the page, so it is cut off. ${who}` };
     case 'PARITY_MISMATCH':
     {
       // The server words it "<what was compared>: PDF and/or HTML differ from the resolved semantic facts."

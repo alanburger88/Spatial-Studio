@@ -51,3 +51,8 @@
 .iss-row > .pv-node.is-drop-before::before, .iss-row > .pv-node.is-drop-after::before { top: -4pt; bottom: -4pt; width: 3px; height: auto; left: auto; right: auto; }
 .iss-row > .pv-node.is-drop-before::before { left: -6px; }
 .iss-row > .pv-node.is-drop-after::before { right: -6px; }
+/* page design (wave 2): background preview, column guides, following/last page note */
+.pv-bg { position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; border-radius: 2px; }
+.pv-col-guide { position: absolute; top: 0; bottom: 0; border-left: 1px dashed color-mix(in srgb, var(--iss-green-medium) 35%, transparent); border-right: 1px dashed color-mix(in srgb, var(--iss-green-medium) 35%, transparent); pointer-events: none; }
+.pv-flow-cols { position: relative; }
+.pv-flow-note { position: relative; margin-top: 8pt; padding: 8pt 10pt; border: 1px dashed color-mix(in srgb, var(--iss-paper-ink) 30%, transparent); border-radius: 4px; font: 600 8pt/1.4 var(--iss-font-ui); color: color-mix(in srgb, var(--iss-paper-ink) 72%, var(--iss-paper)); background: color-mix(in srgb, var(--iss-paper-ink) 3%, transparent); }

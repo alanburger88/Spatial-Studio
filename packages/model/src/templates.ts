@@ -1,6 +1,7 @@
 import { richFromMarkup } from './rich';
 import { deepClone } from './data';
 import { validateCustomFields } from './fields';
+import { pageDesignProblems } from './pageDesign';
 import { SCHEMA_VERSION, isDocumentType } from './types';
 import type { DocNode, DocumentType, PresentationProfile, Project } from './types';
 
@@ -256,6 +257,16 @@ export function projectFileProblems(raw: unknown): ProjectFileProblem[] {
   }
   const logo = p.brand?.logoDataUri;
   if (typeof logo === 'string' && logo && !SAFE_IMAGE.test(logo)) bad('IMAGE', 'The brand logo points outside the file. Only an image stored in the file can be imported.');
+  // Page design (wave 2): paper, margins, page templates and their backgrounds are checked like everything else in a file.
+  for (const prof of p.presentationProfiles as any[]) {
+    if (!prof || typeof prof !== 'object') { bad('PAGE_DESIGN', 'An output profile in the file cannot be read.'); continue; }
+    if (prof.kind === 'responsive') continue;
+    for (const t of Object.values(prof.pageTemplates && typeof prof.pageTemplates === 'object' ? prof.pageTemplates : {}) as any[]) {
+      const img = t?.background?.image;
+      if (typeof img === 'string' && img && !SAFE_IMAGE.test(img) && !/^asset:[a-z0-9-]+$/.test(img)) bad('IMAGE', 'A page background points outside the file. Only an image stored in the file can be imported.');
+    }
+    for (const m of pageDesignProblems(prof).slice(0, 3)) bad('PAGE_DESIGN', `The page design in the file cannot be used: ${m}`);
+  }
   const partIds = new Set<string>();
   for (const c of p.contentParts as any[]) {
     if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !c.id) { bad('MESSAGE', 'A message in the file has no id.'); continue; }
