@@ -50,6 +50,9 @@ export const SCREENS = [
   { id: 'S19', path: 'overview', label: 'Overview', icon: OverviewIcon, group: 'home', hint: 'Where this document stands and what to do next' },
   { id: 'S20', path: 'compare', label: 'Before & after', icon: Icon.compare, group: 'check', hint: 'Compare two releases, or the working version with a release' },
   { id: 'S21', path: 'proof', label: 'Proof', icon: Icon.search, group: 'check', hint: 'What a customer was given, from which release, and why' },
+  { id: 'S22', path: 'calculations', label: 'Calculations', icon: Icon.rules, group: 'build', hint: 'Values worked out from the customer\'s data, for rules and wording' },
+  { id: 'S23', path: 'lookup-tables', label: 'Lookup tables', icon: Icon.rules, group: 'build', hint: 'Small tables, such as a fee by tier, that a calculation reads' },
+  { id: 'S24', path: 'dates', label: 'Dates', icon: Icon.journey, group: 'build', hint: 'The document\'s date, what starts and ends when, and a timeline' },
 ] as const;
 
 /** Overview nav icon: a gauge with a tick. */
@@ -61,7 +64,7 @@ function OverviewIcon(p: SVGProps<SVGSVGElement>) {
 export const TAB_LABEL: Record<string, string> = {
   S01: 'Projects', S19: 'Overview',
   S02: 'Layout', S13: 'Wording & translations', S15: 'Email & SMS',
-  S07: 'Rules', S16: 'Customers', S08: 'Journeys',
+  S07: 'Rules', S16: 'Customers', S08: 'Journeys', S22: 'Calculations', S23: 'Lookup tables', S24: 'Dates',
   S03: 'Exploded', S04: 'Cube', S05: 'Landscape', S06: 'Page stack',
   S17: 'Blockers', S09: 'Validate & compare', S10: 'Preview & export',
   S18: 'Releases', S20: 'Before & after', S21: 'Proof',
@@ -76,7 +79,7 @@ export const SECTIONS = [
   { id: 'projects', label: 'Projects', icon: Icon.gallery, short: 'All documents', hint: 'All projects and samples', screens: ['S01'] },
   { id: 'overview', label: 'Overview', icon: OverviewIcon, short: 'Status and next steps', hint: 'Where this document stands and what to do next', screens: ['S19'] },
   { id: 'design', label: 'Design', icon: Icon.design, short: 'Layout and wording', hint: 'Layout, wording and translations, email and text messages', screens: ['S02', 'S13', 'S15'] },
-  { id: 'rules-data', label: 'Rules & data', icon: Icon.rules, short: 'Rules and customers', hint: 'Who sees what, the customers to test with, and how it plays out over time', screens: ['S07', 'S16', 'S08'] },
+  { id: 'rules-data', label: 'Rules & data', icon: Icon.rules, short: 'Rules and customers', hint: 'Who sees what, the customers to test with, and how it plays out over time', screens: ['S07', 'S16', 'S08', 'S22', 'S23', 'S24'] },
   { id: 'explore', label: 'Explore', icon: Icon.exploded, short: 'Every angle', hint: 'See the document from different angles', screens: ['S03', 'S04', 'S05', 'S06'] },
   { id: 'check', label: 'Check', icon: Icon.validate, short: 'Blockers and previews', hint: 'What stops this document going out, and what it looks like', screens: ['S17', 'S09', 'S10'] },
   { id: 'releases', label: 'Releases', icon: ReleaseIcon, short: 'Versions and proof', hint: 'Approved versions, what changed, and proof of what customers got', screens: ['S18', 'S20', 'S21'] },

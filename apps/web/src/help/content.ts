@@ -8,7 +8,7 @@
  */
 
 export interface HelpLink {
-  /** Screen id (S01 to S21) of the screen to go to. */
+  /** Screen id (S01 to S24) of the screen to go to. */
   screen: string;
   /** One short phrase: why you would go there. */
   why: string;
@@ -310,6 +310,42 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     next: [
       { screen: 'S18', why: 'open the release a record came from' },
       { screen: 'S20', why: 'compare releases' },
+    ],
+  },
+  S22: {
+    purpose: 'Calculations are named values worked out from a customer\'s data, such as the days until a payment is due or the total of this month\'s fees. A calculation can be used in rules and wording wherever a data field can.',
+    actions: [
+      'Add a calculation by picking fields and operations from lists, or by typing a formula.',
+      'Read it back in plain words and see its value for the current customer.',
+      'See its value across every synthetic customer, and who has no value and why.',
+    ],
+    next: [
+      { screen: 'S07', why: 'use a calculation in a rule' },
+      { screen: 'S23', why: 'keep a table of values that a calculation reads' },
+    ],
+  },
+  S23: {
+    purpose: 'Lookup tables are small tables kept with the document, such as a fee by tier or a notice by state. A calculation reads a value from a table.',
+    actions: [
+      'Add a table and say what its key and value columns hold.',
+      'Type the rows or paste them from a spreadsheet.',
+      'See problems such as duplicate keys, overlapping ranges and gaps as you edit.',
+    ],
+    next: [
+      { screen: 'S22', why: 'read the table from a calculation' },
+      { screen: 'S24', why: 'see what changes when a table has dated rows' },
+    ],
+  },
+  S24: {
+    purpose: 'The document\'s date decides which dated rules and wording are in effect. This screen says where that date comes from and shows what changes on which day.',
+    actions: [
+      'Choose where the document\'s date comes from: a date in the customer\'s data, or a date given for each run.',
+      'Preview the document "as issued on" any date.',
+      'Read the timeline of what starts and ends, and how many synthetic customers each change reaches.',
+    ],
+    next: [
+      { screen: 'S07', why: 'put a rule in effect from or until a date' },
+      { screen: 'S17', why: 'check for blockers as issued on a date' },
     ],
   },
   S11: {

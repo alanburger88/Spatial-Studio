@@ -16,7 +16,7 @@ const SECTION_COUNT = [...SHELL.slice(SHELL.indexOf('export const SECTIONS = [')
 
 test.describe('help content', () => {
   test('HP01 every screen in SCREENS has help, written to the brief, and every "where to go next" link is a real screen', () => {
-    expect(SCREEN_IDS.length).toBe(21);
+    expect(SCREEN_IDS.length).toBe(24);
     expect(Object.keys(SCREEN_HELP).sort()).toEqual([...SCREEN_IDS].sort());
     for (const id of SCREEN_IDS) {
       const h = SCREEN_HELP[id];

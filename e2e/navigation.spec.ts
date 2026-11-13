@@ -9,7 +9,7 @@ test.beforeEach(async ({ request }) => { await resetAll(request); });
 
 const SECTIONS: Array<{ id: string; label: string; tabs: string[]; ids: string[] }> = [
   { id: 'design', label: 'Design', tabs: ['Layout', 'Wording & translations', 'Email & SMS'], ids: ['S02', 'S13', 'S15'] },
-  { id: 'rules-data', label: 'Rules & data', tabs: ['Rules', 'Customers', 'Journeys'], ids: ['S07', 'S16', 'S08'] },
+  { id: 'rules-data', label: 'Rules & data', tabs: ['Rules', 'Customers', 'Journeys', 'Calculations', 'Lookup tables', 'Dates'], ids: ['S07', 'S16', 'S08', 'S22', 'S23', 'S24'] },
   { id: 'explore', label: 'Explore', tabs: ['Exploded', 'Cube', 'Landscape', 'Page stack'], ids: ['S03', 'S04', 'S05', 'S06'] },
   { id: 'check', label: 'Check', tabs: ['Blockers', 'Validate & compare', 'Preview & export'], ids: ['S17', 'S09', 'S10'] },
   { id: 'releases', label: 'Releases', tabs: ['Releases', 'Before & after', 'Proof'], ids: ['S18', 'S20', 'S21'] },
@@ -24,6 +24,9 @@ const ROUTES: Array<{ id: string; path: RegExp; heading: string }> = [
   { id: 'S07', path: /\/rules-data$/, heading: 'Rules & Data' },
   { id: 'S16', path: /\/data$/, heading: 'Data Explorer' },
   { id: 'S08', path: /\/journey$/, heading: 'Journey Simulator' },
+  { id: 'S22', path: /\/calculations$/, heading: 'Calculations' },
+  { id: 'S23', path: /\/lookup-tables$/, heading: 'Lookup tables' },
+  { id: 'S24', path: /\/dates$/, heading: 'Dates' },
   { id: 'S03', path: /\/exploded(\/[^/]+)?$/, heading: 'Exploded Document' },
   { id: 'S04', path: /\/cube$/, heading: 'Document Cube' },
   { id: 'S05', path: /\/landscape$/, heading: 'Scenario Landscape' },
