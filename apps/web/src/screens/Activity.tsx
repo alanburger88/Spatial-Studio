@@ -53,6 +53,9 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
     case 'project.reset': return `Restored the approved sample as ${v}`;
     case 'project.create': return `Created “${d.title ?? e.projectId}” from the template “${d.templateTitle ?? d.templateId}”${d.templateVersion ? ` v${d.templateVersion}` : ''}`;
     case 'project.import': return `Imported “${d.title ?? e.projectId}” from a project file (“${d.fromTitle}” v${d.fromVersion})`;
+    case 'records.add': return d.copyOf ? `Made an editable copy of a customer (${d.name})` : `Added the customer ${d.name}`;
+    case 'records.edit': return `Edited the customer ${d.name}${d.wasGenerated ? ' (a generated customer, now kept as this document’s own)' : ''}`;
+    case 'records.delete': return `Removed the customer ${d.name}`;
     case 'testdata.generate': return `Generated ${plural(Number(d.customers ?? 0), 'test customer')} for this document${d.replaced ? ` (replacing ${d.replaced})` : ''}${d.unreachable ? `; ${plural(Number(d.unreachable), 'outcome')} could not be reached` : ''}`;
     case 'testdata.clear': return `Removed ${plural(Number(d.removed ?? 0), 'generated test customer')}`;
     case 'template.save': return d.newTemplate ? `Saved a new template “${d.title}” (v${d.version})` : `Saved version ${d.version} of the template “${d.title}”`;

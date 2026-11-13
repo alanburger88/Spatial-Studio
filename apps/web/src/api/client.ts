@@ -40,6 +40,10 @@ export interface TestDataResult {
   targets: TestDataTargetDto[];
   customers: Array<{ recordId: string | null; name: string; label: string; locale: string; targets: number }>;
 }
+/** One value that does not fit the data fields. `path` is the field it is about (for example `card.dueDate` or `card.transactions[2].amountCents`), when known. */
+export interface RecordProblem { path: string | null; message: string }
+/** What the document does for a customer as issued. */
+export interface RecordOutcome { messages: Array<{ nodeId: string; node: string; variantId: string | null; variant: string | null }>; blocking: Array<{ code: string; message: string }> }
 export interface ProjectImportReport { from: { projectId: string; title: string; modelVersion: number }; counts: TemplateVersionDto['counts']; warnings: string[]; notImported: string[] }
 
 export interface ImportResult {
@@ -149,6 +153,13 @@ export const api = {
   resetProject: (id: string) => json<{ project: Project; reset: boolean; seedDigest: string }>(`/api/v1/projects/${id}/reset`, { method: 'POST', body: JSON.stringify({ confirm: true }) }),
   duplicateProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}/duplicate`, { method: 'POST', body: JSON.stringify({ title }) }),
   renameProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) }),
+  /** Data Explorer. Checks a customer against the document's data fields and says what the document would do for them; stores nothing. */
+  checkRecord: (projectId: string, record: unknown) => json<{ problems: RecordProblem[]; outcome: RecordOutcome | null }>(`/api/v1/projects/${projectId}/records/check`, { method: 'POST', body: JSON.stringify({ record }) }),
+  /** Adds a customer that belongs to this document: from data, or as an editable copy of any customer the document can see (`copyOf`). A 422 carries `body.error.problems`. */
+  addRecord: (projectId: string, body: { record?: unknown; copyOf?: string }) => json<{ record: SyntheticRecord; origin: 'supplied'; copiedFrom: string | null; outcome: RecordOutcome }>(`/api/v1/projects/${projectId}/records`, { method: 'POST', body: JSON.stringify(body) }),
+  /** Saves one of the document's own customers. 409 RECORD_SHARED for sample and imported customers (copy them first). An edited generated customer becomes the document's own. */
+  saveRecord: (projectId: string, recordId: string, record: unknown) => json<{ record: SyntheticRecord; origin: 'supplied'; wasGenerated: boolean; outcome: RecordOutcome }>(`/api/v1/projects/${projectId}/records/${recordId}`, { method: 'PUT', body: JSON.stringify({ record }) }),
+  deleteRecord: (projectId: string, recordId: string) => json<{ removed: string }>(`/api/v1/projects/${projectId}/records/${recordId}`, { method: 'DELETE' }),
   /** What generating test customers would create for this project (stores nothing). Pass the unsaved model to plan for what is on screen. */
   planTestData: (projectId: string, body: { project?: Project; outcomes: boolean; edges: boolean }) => json<TestDataResult & { existing: number }>(`/api/v1/projects/${projectId}/test-data/plan`, { method: 'POST', body: JSON.stringify(body) }),
   /** Generates and stores test customers for this project only, replacing its previous generated set. */

@@ -137,6 +137,17 @@ export class Store {
       return rec;
     });
   }
+  /** Where one of a project's own records came from, or undefined when it is not that project's record. */
+  projectRecordOrigin(projectId: string, recordId: string): 'generated' | 'supplied' | undefined {
+    return (this.db.prepare('SELECT origin FROM project_records WHERE project_id=? AND record_id=?').get(projectId, recordId) as any)?.origin;
+  }
+  /** Replaces one of the project's own records (same id). A record a person has edited is theirs from then on (origin `supplied`), so regenerating never overwrites it. */
+  updateProjectRecord(projectId: string, record: SyntheticRecord): boolean {
+    return Number(this.db.prepare("UPDATE project_records SET json=?, origin='supplied' WHERE project_id=? AND record_id=?").run(JSON.stringify(record), projectId, record.recordId).changes) > 0;
+  }
+  deleteProjectRecord(projectId: string, recordId: string): boolean {
+    return Number(this.db.prepare('DELETE FROM project_records WHERE project_id=? AND record_id=?').run(projectId, recordId).changes) > 0;
+  }
   clearProjectRecords(projectId: string, origin?: 'generated' | 'supplied'): number {
     return Number((origin ? this.db.prepare('DELETE FROM project_records WHERE project_id=? AND origin=?').run(projectId, origin) : this.db.prepare('DELETE FROM project_records WHERE project_id=?').run(projectId)).changes);
   }
