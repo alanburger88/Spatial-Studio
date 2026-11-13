@@ -336,6 +336,30 @@ describe('a blank project with its own data fields', () => {
     expect((await inj('GET', `/api/v1/records/${copied[0].recordId}`)).statusCode).toBe(404);
   });
 
+  it('batch runs, the Spanish document and the translator’s file work on its customers', async () => {
+    const mine = await customers(id);
+    const spanish = mine.find((r) => r.customer.locale === 'es-US')!;
+    const pdf = await inj('POST', '/api/v1/compose/pdf', { projectId: id, recordId: spanish.recordId });
+    expect(pdf.statusCode).toBe(200);
+    expect(pdf.headers['x-draft']).toBe('0');
+    expect((await json('POST', '/api/v1/compose/email', { projectId: id, recordId: spanish.recordId })).locale).toBe('es-US');
+
+    const csv = await inj('GET', `/api/v1/projects/${id}/translations.csv?locale=es-US`);
+    expect(csv.statusCode).toBe(200);
+    expect(csv.payload).toContain('note-pro');
+    expect(csv.payload).toContain('@sys/sectionDetails');
+    expect(csv.payload).not.toContain('@sys/sectionTransactions');
+
+    const pick = mine.slice(0, 2).map((r) => r.recordId);
+    const start = await inj('POST', '/api/v1/batches', { projectId: id, recordIds: pick, outputs: ['pdf', 'html'] });
+    expect(start.statusCode).toBe(202);
+    let job: any;
+    for (let i = 0; i < 120; i++) { job = (await json('GET', `/api/v1/batches/${start.json().batch.batchId}`)).batch; if (job.status !== 'running') break; await new Promise((r) => setTimeout(r, 250)); }
+    expect(job).toMatchObject({ status: 'done', done: 2 });
+    expect(job.items.map((x: any) => x.status)).toEqual(['ok', 'ok']);
+    expect((await inj('POST', '/api/v1/batches', { projectId: id, recordIds: ['CARD-0001'] })).json().error.message).toBe('Not customers of this document: CARD-0001.');
+  }, 120_000);
+
   it('the two sample projects are unaffected: no own-data customers there, and none of theirs here', async () => {
     const card = await customers('aster-card-demo', 'credit-statement');
     const eob = await customers('harborcare-demo', 'eob');
