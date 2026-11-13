@@ -56,7 +56,11 @@ function relAgo(ms: number): string {
 }
 
 /** Plain-language headline for a check code (readable words; the code itself stays beside it as a chip). */
-const BLOCK_TITLE = (code: string): string => { const w = blockWord(code); return w.charAt(0).toUpperCase() + w.slice(1); };
+const BLOCK_TITLE = (code: string, details?: Record<string, unknown>): string => {
+  // The PDF accessibility checks word their own titles.
+  if (code.startsWith('PDF_A11Y_') && typeof details?.title === 'string') return `PDF: ${details.title}`;
+  const w = blockWord(code); return w.charAt(0).toUpperCase() + w.slice(1);
+};
 
 const RESOLVER_SOURCES: Finding['source'][] = ['resolver', 'domain', 'binding', 'composer', 'parity', 'accessibility', 'rules-static', 'translation'];
 const SUITE_SOURCE: Record<Suite, Finding['source']> = { rules: 'resolver', bindings: 'binding', pagination: 'composer', parity: 'parity', accessibility: 'accessibility' };
@@ -350,7 +354,7 @@ export function ValidateCompare() {
                         const i = g.primary;
                         const multi = g.members.length > 1;
                         const sel = selected === i.issueId;
-                        const plain = i.code.startsWith('PDF_A11Y_') && typeof i.details?.title === 'string' ? `PDF: ${i.details.title}` : BLOCK_TITLE(i.code);
+                        const plain = BLOCK_TITLE(i.code, i.details);
                         return (
                           <li key={g.key} className={`vc-item ${sel ? 'selected' : ''}`}>
                             <button type="button" data-issue={i.issueId} data-testid={`issue-${i.code}`} className={`vc-issue ${g.severity}`} aria-current={sel} onClick={() => choose(i.issueId)}
@@ -515,7 +519,7 @@ function BlockersAll({ state, shown, selected, onSelect, onlyBlocking, onToggle 
                 <li key={g.key} className={`vc-item ${sel ? 'selected' : ''}`}>
                   <button type="button" className={`vc-issue ${g.severity}`} data-testid="blocker-group" data-group={g.key} data-code={g.code} data-node={g.nodeId} data-severity={g.severity} aria-current={sel} onClick={() => onSelect(g.key)}>
                     <span className="vc-issue-top"><SeverityLabel severity={g.severity} />
-                      <strong className="vc-title">{BLOCK_TITLE(g.code)}</strong>
+                      <strong className="vc-title">{BLOCK_TITLE(g.code, g.details)}</strong>
                       <Tech><span className="chip code">{g.code}</span></Tech>
                       {g.nodeId && <Named name={nodeTitle(project, g.nodeId)} code={g.nodeId} />}
                       {g.ruleIds.map((r) => <span key={r} className="chip code">{r}</span>)}
@@ -565,7 +569,7 @@ function BlockerDetail({ group: g, data, loading, onlyBlocking, onPreview, onGo,
     <>
       <div className="panel-head"><span id="vc-detail-title">Issue detail</span><div className="right"><SeverityLabel severity={g.severity} /></div></div>
       <div className="panel-body vc-detail" aria-labelledby="vc-detail-title" data-testid="blocker-detail" data-code={g.code}>
-        <h2 className="vc-detail-code">{BLOCK_TITLE(g.code)} <Tech><span className="chip code">{g.code}</span></Tech></h2>
+        <h2 className="vc-detail-code">{BLOCK_TITLE(g.code, g.details)} <Tech><span className="chip code">{g.code}</span></Tech></h2>
         <p className="vc-detail-msg">{g.message}</p>
         {g.suggestion && <><h3 className="section-title">Suggested correction</h3><div className="callout accent" data-testid="issue-suggestion">{g.suggestion}</div></>}
         <h3 className="section-title">Suggested fix</h3>
@@ -664,7 +668,7 @@ function Inspector({ issue: i, members, onGo, onOpenLink, sourceLabel, stale }: 
   const project = useStudio((s) => s.project)!;
   const rep = i.reproduction;
   const finding = useMemo(() => toFinding(i), [i]);
-  const plain = BLOCK_TITLE(i.code);
+  const plain = BLOCK_TITLE(i.code, i.details);
   const suiteLabel = SUITES.find((x) => x.id === i.suite)?.label ?? i.suite;
   const reproduce = () => {
     if (!rep) return;
@@ -889,7 +893,7 @@ export function FixAllDialog({ plan, onClose }: { plan: Plan; onClose: () => voi
           {plan.items.map((it) => (
             <li key={it.group.key + it.proposal.id} className="vc-fixall-item" data-testid="fix-all-item">
               <div className="vc-fixall-top"><strong>{it.proposal.title}</strong><span className="chip">Built-in</span><span className="chip ok">Low risk</span></div>
-              <div className="muted vc-fixall-sub">{BLOCK_TITLE(it.group.finding.code)}{where(it.group.finding.nodeId) ? ` · ${where(it.group.finding.nodeId)}` : ''}</div>
+              <div className="muted vc-fixall-sub">{BLOCK_TITLE(it.group.finding.code, it.group.finding.details)}{where(it.group.finding.nodeId) ? ` · ${where(it.group.finding.nodeId)}` : ''}</div>
               <ImpactLine impact={it.impact} />
             </li>
           ))}
@@ -903,7 +907,7 @@ export function FixAllDialog({ plan, onClose }: { plan: Plan; onClose: () => voi
             <ul className="list-rows">
               {plan.skipped.map((s) => (
                 <li key={s.group.key} className="vc-fixall-item">
-                  <div className="vc-fixall-top"><strong>{BLOCK_TITLE(s.group.finding.code)}</strong>{where(s.group.finding.nodeId) && <span className="muted">{where(s.group.finding.nodeId)}</span>}</div>
+                  <div className="vc-fixall-top"><strong>{BLOCK_TITLE(s.group.finding.code, s.group.finding.details)}</strong>{where(s.group.finding.nodeId) && <span className="muted">{where(s.group.finding.nodeId)}</span>}</div>
                   <div className="muted vc-fixall-sub">{s.reason}</div>
                 </li>
               ))}
