@@ -38,7 +38,7 @@ export interface TestDataTargetDto { id: string; kind: 'rule' | 'variant' | 'sec
 export interface TestDataResult {
   summary: { outcomes: { total: number; reached: number }; edges: { total: number; reached: number }; unreachable: number; capped: boolean } | null;
   targets: TestDataTargetDto[];
-  customers: Array<{ recordId: string | null; name: string; label: string; locale: string; targets: number }>;
+  customers: Array<{ recordId: string | null; name: string; label: string; locale: string; targets: number; /** The document's date this customer reaches its outcomes on (documents whose date is given for each run). */ issueDate?: string }>;
 }
 /** One value that does not fit the data fields. `path` is the field it is about (for example `card.dueDate` or `card.transactions[2].amountCents`), when known. */
 export interface RecordProblem { path: string | null; message: string }
@@ -86,6 +86,8 @@ export interface ScenarioRequest {
   allowDraft?: boolean;
   /** Previews only (with allowDraft): also show unapproved translation drafts; the result is watermarked. */
   includeDrafts?: boolean;
+  /** "As issued on": the document's date for this preview or run (documents that use dates; an ISO day). Part of the run ID. */
+  issueDate?: string;
 }
 
 /** Common part of every model-backed assistant reply. */
@@ -143,6 +145,8 @@ export interface BatchDto {
   batchId: string; projectId: string; projectTitle: string; modelVersion: number; outputs: Array<'pdf' | 'html'>; includeBlocked: boolean;
   status: BatchStatus; total: number; done: number; items: BatchItemDto[];
   startedAt: string; finishedAt: string | null; durationMs: number | null; zipBytes: number | null; zipSha256: string | null; error?: string;
+  /** "As issued on" for the whole batch, when one was given. */
+  issueDate?: string;
 }
 export interface AssetDto { assetId: string; name: string; mime: string; size: number; sha256: string; width: number | null; height: number | null; createdAt: string }
 
@@ -202,21 +206,21 @@ export const api = {
   duplicateProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}/duplicate`, { method: 'POST', body: JSON.stringify({ title }) }),
   renameProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) }),
   /** Data Explorer. Checks a customer against the document's data fields and says what the document would do for them; stores nothing. */
-  checkRecord: (projectId: string, record: unknown) => json<{ problems: RecordProblem[]; outcome: RecordOutcome | null }>(`/api/v1/projects/${projectId}/records/check`, { method: 'POST', body: JSON.stringify({ record }) }),
+  checkRecord: (projectId: string, record: unknown, issueDate?: string | null) => json<{ problems: RecordProblem[]; outcome: RecordOutcome | null }>(`/api/v1/projects/${projectId}/records/check`, { method: 'POST', body: JSON.stringify({ record, ...(issueDate ? { issueDate } : {}) }) }),
   /** Adds a customer that belongs to this document: from data, or as an editable copy of any customer the document can see (`copyOf`). A 422 carries `body.error.problems`. */
-  addRecord: (projectId: string, body: { record?: unknown; copyOf?: string }) => json<{ record: SyntheticRecord; origin: 'supplied'; copiedFrom: string | null; outcome: RecordOutcome }>(`/api/v1/projects/${projectId}/records`, { method: 'POST', body: JSON.stringify(body) }),
+  addRecord: (projectId: string, body: { record?: unknown; copyOf?: string; issueDate?: string }) => json<{ record: SyntheticRecord; origin: 'supplied'; copiedFrom: string | null; outcome: RecordOutcome }>(`/api/v1/projects/${projectId}/records`, { method: 'POST', body: JSON.stringify(body) }),
   /** Known data problems in force for the saved document (lapsed ones are removed by the server, and `note` says so). */
   knownDataProblems: (projectId: string) => json<KnownDataAnswer & { projectId: string; modelVersion: number; knownDataProblems: KnownDataProblemDto[] }>(`/api/v1/projects/${projectId}/known-data-problems`),
   /** Sets one customer-data blocker aside for one customer (approvers only). */
   addKnownDataProblem: (projectId: string, body: { blockerId: string; recordId: string; reason: string }) => json<KnownDataAnswer & { knownDataProblem: KnownDataProblemDto }>(`/api/v1/projects/${projectId}/known-data-problems`, { method: 'POST', body: JSON.stringify(body) }),
   removeKnownDataProblem: (projectId: string, id: string) => json<KnownDataAnswer & { removed: string }>(`/api/v1/projects/${projectId}/known-data-problems/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   /** Saves one of the document's own customers. 409 RECORD_SHARED for sample and imported customers (copy them first). An edited generated customer becomes the document's own. */
-  saveRecord: (projectId: string, recordId: string, record: unknown) => json<{ record: SyntheticRecord; origin: 'supplied'; wasGenerated: boolean; outcome: RecordOutcome }>(`/api/v1/projects/${projectId}/records/${recordId}`, { method: 'PUT', body: JSON.stringify({ record }) }),
+  saveRecord: (projectId: string, recordId: string, record: unknown, issueDate?: string | null) => json<{ record: SyntheticRecord; origin: 'supplied'; wasGenerated: boolean; outcome: RecordOutcome }>(`/api/v1/projects/${projectId}/records/${recordId}`, { method: 'PUT', body: JSON.stringify({ record, ...(issueDate ? { issueDate } : {}) }) }),
   deleteRecord: (projectId: string, recordId: string) => json<{ removed: string }>(`/api/v1/projects/${projectId}/records/${recordId}`, { method: 'DELETE' }),
   /** What generating test customers would create for this project (stores nothing). Pass the unsaved model to plan for what is on screen. */
-  planTestData: (projectId: string, body: { project?: Project; outcomes: boolean; edges: boolean }) => json<TestDataResult & { existing: number }>(`/api/v1/projects/${projectId}/test-data/plan`, { method: 'POST', body: JSON.stringify(body) }),
+  planTestData: (projectId: string, body: { project?: Project; outcomes: boolean; edges: boolean; issueDate?: string }) => json<TestDataResult & { existing: number }>(`/api/v1/projects/${projectId}/test-data/plan`, { method: 'POST', body: JSON.stringify(body) }),
   /** Generates and stores test customers for this project only, replacing its previous generated set. */
-  generateTestData: (projectId: string, body: { project?: Project; outcomes: boolean; edges: boolean }) => json<TestDataResult & { generated: number; replaced: number }>(`/api/v1/projects/${projectId}/test-data`, { method: 'POST', body: JSON.stringify(body) }),
+  generateTestData: (projectId: string, body: { project?: Project; outcomes: boolean; edges: boolean; issueDate?: string }) => json<TestDataResult & { generated: number; replaced: number }>(`/api/v1/projects/${projectId}/test-data`, { method: 'POST', body: JSON.stringify(body) }),
   /** The project's current generated customers and what the last generation covered. `stale` = the saved document changed since. */
   testData: (projectId: string) => json<TestDataResult & { count: number; generatedAt: string | null; options: { outcomes: boolean; edges: boolean } | null; forModelVersion: number | null; stale: boolean }>(`/api/v1/projects/${projectId}/test-data`),
   clearTestData: (projectId: string) => json<RemovalResult>(`/api/v1/projects/${projectId}/test-data`, { method: 'DELETE' }),
@@ -253,7 +257,7 @@ export const api = {
   assistImageDescription: (id: string, body: { nodeId: string; project?: Project }) => json<AssistReply & { text?: string }>(`/api/v1/projects/${id}/assist/image-description`, { method: 'POST', body: JSON.stringify(body) }),
   /** First-pass translation drafts: AI when a key is configured, bundled sample drafts for the sample projects otherwise. Nothing is saved or approved. */
   translate: (id: string, body: { locale: string; ids?: string[]; project?: Project; forceOffline?: boolean }) => json<{ mode: 'ai' | 'sample' | 'unavailable'; locale: string; providerStatus: string; drafts: Array<{ id: string; text: string; tokenCheck: { ok: boolean; missing: string[]; extra: string[] } }>; skipped: Array<{ id: string; reason: string }>; message: string }>(`/api/v1/projects/${id}/translate`, { method: 'POST', body: JSON.stringify(body) }),
-  translationsCsvUrl: (id: string, locale: string) => `/api/v1/projects/${id}/translations.csv?locale=${encodeURIComponent(locale)}`,
+  translationsCsvUrl: (id: string, locale: string, issueDate?: string | null) => `/api/v1/projects/${id}/translations.csv?locale=${encodeURIComponent(locale)}${issueDate ? `&issueDate=${issueDate}` : ''}`,
   importTranslations: (id: string, body: { locale: string; csv: string; project?: Project }) => json<{ locale: string; drafts: Array<{ partId: string; text: string }>; errors: Array<{ row: number; partId: string; code: string; message: string }>; skipped: number; rows: number }>(`/api/v1/projects/${id}/translations/import`, { method: 'POST', body: JSON.stringify(body) }),
   schemas: (id: string) => json<{ fields: any[]; dimensions: any[]; edgeCasePresets: Array<{ id: string; label: string; description: string }> }>(`/api/v1/projects/${id}/schemas`),
   /** Customers for one kind of document. With a project id, also that project's own customers (generated test customers have `generated.label`). */
@@ -268,7 +272,7 @@ export const api = {
   afpSim: (req: ScenarioRequest) => json<any>('/api/v1/compose/afp-sim', { method: 'POST', body: JSON.stringify(req) }),
   parity: (req: ScenarioRequest) => json<any>('/api/v1/parity', { method: 'POST', body: JSON.stringify(req) }),
   validate: (req: ScenarioRequest & { suites?: string[] }) => json<any>('/api/v1/validate', { method: 'POST', body: JSON.stringify(req) }),
-  replayJourney: (req: { projectId: string; recordId: string; overrides?: Record<string, unknown>; project?: Project; journeyCursor?: number | null }) => json<any>('/api/v1/journeys/replay', { method: 'POST', body: JSON.stringify(req) }),
+  replayJourney: (req: { projectId: string; recordId: string; overrides?: Record<string, unknown>; project?: Project; journeyCursor?: number | null; issueDate?: string }) => json<any>('/api/v1/journeys/replay', { method: 'POST', body: JSON.stringify(req) }),
   snapshots: (projectId: string, recordId?: string) => json<{ snapshots: any[] }>(`/api/v1/snapshots?projectId=${projectId}${recordId ? `&recordId=${recordId}` : ''}`),
   resetSnapshots: (projectId: string) => json<{ cleared: boolean }>('/api/v1/snapshots/reset', { method: 'POST', body: JSON.stringify({ projectId, confirm: true }) }),
   generateEdgeCase: (recordId: string, preset: string, seed?: string) => json<{ overrides: Record<string, unknown>; description: string; scenarioHash: string; seed: string; presetId: string }>('/api/v1/scenarios/generate', { method: 'POST', body: JSON.stringify({ recordId, preset, seed }) }),
@@ -277,7 +281,7 @@ export const api = {
   assistantStatus: () => json<{ mode: 'external' | 'offline'; label: string; model?: string }>('/api/v1/assistant/status'),
   assistantMessage: (body: { message: string; context: any; project?: Project; forceOffline?: boolean }) => json<any>('/api/v1/assistant/message', { method: 'POST', body: JSON.stringify(body) }),
   decideProposal: (id: string, approved: boolean, modelVersion: number) => json<any>(`/api/v1/assistant/proposals/${id}/decision`, { method: 'POST', body: JSON.stringify({ approved, modelVersion }) }),
-  startBatch: (body: { projectId: string; project?: Project; recordIds?: string[]; outputs: Array<'pdf' | 'html'>; includeBlocked?: boolean }) => json<{ batch: BatchDto }>('/api/v1/batches', { method: 'POST', body: JSON.stringify(body) }),
+  startBatch: (body: { projectId: string; project?: Project; recordIds?: string[]; outputs: Array<'pdf' | 'html'>; includeBlocked?: boolean; issueDate?: string }) => json<{ batch: BatchDto }>('/api/v1/batches', { method: 'POST', body: JSON.stringify(body) }),
   batch: (id: string) => json<{ batch: BatchDto }>(`/api/v1/batches/${id}`),
   cancelBatch: (id: string) => json<{ batch: BatchDto }>(`/api/v1/batches/${id}/cancel`, { method: 'POST', body: '{}' }),
   batches: () => json<{ batches: Array<Omit<BatchDto, 'items'>> }>('/api/v1/batches'),

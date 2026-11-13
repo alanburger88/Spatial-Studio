@@ -55,3 +55,8 @@
 .tour-card p { margin: 0 0 12px; font-size: 13px; line-height: 1.5; color: var(--iss-text-muted); }
 .tour-actions { display: flex; align-items: center; gap: 6px; }
 .tour-actions .spacer { flex: 1; }
+
+/* Status bar: the preview date ("As issued on"), with a way to clear it. */
+.dock-date { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--iss-info-line, var(--iss-border)); border-radius: 8px; background: var(--iss-info-soft, transparent); }
+.dock-date .dock-btn { color: var(--iss-info-fg, var(--iss-text)); }
+.dock-date-clear { padding: 3px 7px; font-size: 13px; line-height: 1; }

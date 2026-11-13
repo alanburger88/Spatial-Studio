@@ -2,7 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import type { Project, SyntheticRecord } from '@iss/model';
 import { buildContext } from '@iss/model';
 import { api, ApiFailure, type RecordProblem } from '../../api/client';
-import { useStudio } from '../../state/store';
+import { currentPreviewDate, useStudio } from '../../state/store';
 import { Dialog, Tech } from '../../ui/common';
 import { Icon } from '../../ui/icons';
 import { JsonEditor } from './JsonEditor';
@@ -97,7 +97,7 @@ export function Workspace({ project, saved, canEdit, blockedReason, onDirty, onM
     if (now.length || jsonError) { setProblems(now); return; }
     setSaving(true);
     try {
-      const r = await api.saveRecord(project.projectId, saved.recordId, editablePart(draft));
+      const r = await api.saveRecord(project.projectId, saved.recordId, editablePart(draft), currentPreviewDate());
       await refreshRecords();
       setServerProblems([]);
       useStudio.getState().toast({ kind: 'success', title: 'Customer saved', message: r.wasGenerated ? `${recordName(r.record)} is now one of your own customers; generating again will not replace it.` : recordName(r.record) });

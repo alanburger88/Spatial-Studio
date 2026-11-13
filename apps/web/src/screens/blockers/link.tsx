@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { Project, SyntheticRecord } from '@iss/model';
 import type { Finding } from '@iss/resolver';
 import { blockerIdOf, customerBlockers, documentBlockers } from '@iss/scenarios';
-import { useStudio } from '../../state/store';
+import { currentPreviewDate, useStudio } from '../../state/store';
 
 /**
  * ONE place builds the link from a finding to its root cause on the Blockers screen, so the id always matches the engine's
@@ -26,7 +26,8 @@ export const blockerPath = (projectId: string, id: string | null): string => (id
  */
 export function blockerIdFor(project: Project, records: SyntheticRecord[], f: FindingRef): string {
   if (TIE.has(f.code) && !f.ruleIds?.length && !f.ruleId) {
-    const hit = documentBlockers(project, records).blockers.find((b) => b.id.startsWith('priority-tie~') && (b.finding.nodeId === f.nodeId || b.about.component?.id === f.nodeId));
+    const issueDate = currentPreviewDate();
+    const hit = documentBlockers(project, records, issueDate ? { issueDate } : undefined).blockers.find((b) => b.id.startsWith('priority-tie~') && (b.finding.nodeId === f.nodeId || b.about.component?.id === f.nodeId));
     if (hit) return hit.id;
   }
   return blockerIdOf(f);
@@ -66,7 +67,8 @@ export function dataExplorerPath(project: Project, records: SyntheticRecord[], r
   if (blockerId) {
     q.set('blocker', blockerId);
     const record = records.find((r) => r.recordId === recordId);
-    const fields = record ? customerBlockers(project, record).find((b) => b.id === blockerId)?.fields ?? [] : [];
+    const issueDate = currentPreviewDate();
+    const fields = record ? customerBlockers(project, record, issueDate ? { issueDate } : undefined).find((b) => b.id === blockerId)?.fields ?? [] : [];
     if (fields.length) q.set('highlight', fields.join(','));
   }
   return `/studio/${project.projectId}/data?${q.toString()}`;

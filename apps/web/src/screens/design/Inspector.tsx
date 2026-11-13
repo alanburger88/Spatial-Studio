@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CATALOG_BY_TYPE, projectFields, tableColumnsFor, defaultFormatterFor, getPath, nodeMap, requiredNodeIds, applyCommand, effectivePageDesign, pagedProfileOf, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
+import { CATALOG_BY_TYPE, isConditionalSection, projectFields, tableColumnsFor, defaultFormatterFor, getPath, nodeMap, requiredNodeIds, applyCommand, effectivePageDesign, pagedProfileOf, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
 import { useScenarioEngine, useStudio } from '../../state/store';
 import { Icon } from '../../ui/icons';
@@ -16,6 +16,7 @@ import { api } from '../../api/client';
 import { NeedsAi, useBusy } from '../../assist/common';
 import { ComponentBlockers } from '../blockers/ComponentBlockers';
 import { GuardedSuggestion, WritingHelp, recordAssist, useReadOnlyReason } from '../../assist/WritingHelp';
+import { NotInEffectChip, PeriodChip, PeriodEditor } from '../dates/period';
 
 /**
  * The fields a one-line condition can test. The two sample kinds keep their numbers, amounts, choices and yes/no fields;
@@ -410,6 +411,12 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
           return (
             <li key={vid} className={rv?.selected ? 'selected' : ''} data-testid={`variant-${vid}`}>
               <div className="row"><strong className="grow">{p?.title ?? vid}</strong>{rv?.selected && <span className="chip accent">Selected</span>}{node.fallbackVariantId === vid && <span className="chip">Fallback</span>}</div>
+              {project.documentDate && node.variantPeriods?.[vid] && (
+                <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>
+                  <PeriodChip period={node.variantPeriods[vid]} testId={`variant-period-chip-${vid}`} />
+                  <NotInEffectChip period={node.variantPeriods[vid]} day={res.documentDate?.date ?? null} testId={`variant-off-${vid}`} />
+                </div>
+              )}
               <Tech><div className="code-line">{vid} · v{p?.version ?? '?'} · rules: {rv?.candidateRuleIds.join(', ') || (node.variantConditions?.[vid] ? describePredicate(node.variantConditions[vid]) : node.ruleDriven ? 'shown by additive rule' : '—')}</div></Tech>
               <Biz><div className="variant-when muted">{variantWhen(project, node, vid, rv?.candidateRuleIds ?? [])}</div></Biz>
               {editing === vid ? (
@@ -431,6 +438,7 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
                 {node.fallbackVariantId !== vid && <button className="btn sm ghost" onClick={() => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: { fallbackVariantId: vid } })}>Make fallback</button>}
                 {(node.variantIds?.length ?? 0) > 1 && <button className="btn sm ghost" onClick={() => dispatch({ type: 'REMOVE_VARIANT', nodeId: node.id, variantId: vid })} aria-label={`Remove variant ${vid}`}><Icon.trash width={14} height={14} /></button>}
               </div>
+              {project.documentDate && <PeriodEditor compact period={node.variantPeriods?.[vid]} testId={`variant-period-${vid}`} label="In effect" command={(period) => ({ type: 'SET_VARIANT_PERIOD', nodeId: node.id, variantId: vid, period })} />}
               {editCond === vid && <ConditionEditor project={project} label={`Condition for ${p?.title ?? vid}`} initial={node.variantConditions?.[vid]} command={(when) => ({ type: 'SET_VARIANT_CONDITION', nodeId: node.id, variantId: vid, when })} onDone={() => setEditCond(null)} />}
             </li>
           );
@@ -671,6 +679,13 @@ function RulesTab({ node, project, res }: { node: DocNode; project: Project; res
         {!editVis && !node.locked && <button className="btn sm ghost" onClick={() => setEditVis(true)} data-testid="edit-visible-when">Edit condition</button>}
       </div>
       {editVis && <ConditionEditor project={project} label="Visibility condition" initial={node.visibleWhen} command={(when) => ({ type: 'UPDATE_NODE', nodeId: node.id, patch: { visibleWhen: when ?? undefined } })} onDone={() => setEditVis(false)} />}
+      {project.documentDate && isConditionalSection(node) && (
+        <>
+          <div className="section-title">In effect</div>
+          {node.effective && <div className="row wrap" style={{ gap: 4 }}><PeriodChip period={node.effective} testId="section-period-chip" /><NotInEffectChip period={node.effective} day={res.documentDate?.date ?? null} testId="section-off" /></div>}
+          <PeriodEditor compact period={node.effective} testId="section-period" label="Shown" command={(period) => ({ type: 'SET_SECTION_PERIOD', nodeId: node.id, period })} />
+        </>
+      )}
       <div className="section-title">Rules targeting this component</div>
       {!related.length && <p className="muted">No rules target this component.</p>}
       <div className="list-rows insp-rows">

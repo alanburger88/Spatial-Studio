@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  projectFieldIndex, projectFields, getPath, validatePredicate, validateRule, applyCommand,
+  projectFieldIndex, projectFields, getPath, validatePredicate, validateRule, applyCommand, dayWords,
   type ComparisonOp, type DocNode, type DocumentType, type FieldDef, type Locale, type Predicate, type Project, type Rule, type RuleAction, type RuleMode, type Scalar, type SyntheticRecord,
 } from '@iss/model';
 import { describePredicate, resolve, type Finding, type TraceEntry } from '@iss/resolver';
@@ -11,7 +11,8 @@ import { ruleTitle, ruleSentence, predicateSentence, fieldLabel, nodeTitle } fro
 import { Icon } from '../ui/icons';
 import { ImpactPreview } from '../ui/ImpactPreview';
 import { DataFieldsEditor } from './rules/DataFieldsEditor';
-import { useStudio, useResolution, useRecord, editBlockedReason } from '../state/store';
+import { useStudio, useResolution, useRecord, editBlockedReason, usePreviewDate, dated } from '../state/store';
+import { NotInEffectChip, PeriodChip, PeriodEditor } from './dates/period';
 import type { CoverageGap } from '@iss/scenarios';
 import { api } from '../api/client';
 import { DecisionTable } from './rules/DecisionTable';
@@ -214,6 +215,7 @@ export function RulesData() {
   const dispatch = useStudio((s) => s.dispatch);
   const res = useResolution();
   const record = useRecord();
+  const previewDate = usePreviewDate();
   const [params, setParams] = useSearchParams();
 
   const techMode = useStudio((s) => s.viewMode) === 'technical';
@@ -258,6 +260,15 @@ export function RulesData() {
   useEffect(() => {
     if (isNew || !stored) return;
     const dirty = draft && draft.id === stored.id && baseRef.current && JSON.stringify(draft) !== baseRef.current;
+    // A period is changed by its own command (not through the draft): an unsaved draft takes the new period and
+    // version, so applying it later never puts the old period back.
+    if (dirty && draft && (JSON.stringify(draft.effective ?? null) !== JSON.stringify(stored.effective ?? null) || draft.version !== stored.version)) {
+      const base = JSON.parse(baseRef.current) as Rule;
+      const sync = (r: Rule): Rule => { const { effective: _e, ...rest } = r; return { ...rest, version: stored.version, ...(stored.effective ? { effective: stored.effective } : {}) } as Rule; };
+      baseRef.current = JSON.stringify(sync(base));
+      setDraft(sync(draft));
+      return;
+    }
     if (dirty) return;
     baseRef.current = storedJson;
     setDraft(clone(stored));
@@ -402,7 +413,7 @@ export function RulesData() {
 
   const runTest = () => {
     if (!draft || !project || ruleErrors.length || astErrors.length) return;
-    setTestResult(testRule(project, records, draft, record, ctx.overrides));
+    setTestResult(testRule(project, records, draft, record, ctx.overrides, previewDate));
   };
 
   if (!project) return <Loading label="Loading project…" />;
@@ -445,7 +456,7 @@ export function RulesData() {
           </div>
         )}
         <div className="rd-row rd-row1" hidden={view !== 'editor'}>
-          <RuleTree assist={<div className="ra-assist" data-testid="rules-assist"><button className="btn sm" onClick={() => setAssist('describe')} data-testid="rule-describe-button"><Icon.plus /> Describe a rule</button><button className="btn sm" onClick={() => setAssist('review')} data-testid="rules-review"><Icon.target /> Review my rules</button><button className="btn sm" onClick={() => setAssist('coverage')} data-testid="coverage-open"><Icon.list /> Find coverage gaps</button><button className="btn sm" onClick={() => setAssist('testdata')} data-testid="testdata-open"><Icon.plus /> Generate test customers</button></div>} project={project} ruleTrace={ruleTrace} selectedId={isNew ? draft?.id ?? '' : ruleId} newId={isNew ? draft?.id : undefined} onSelect={selectRule} />
+          <RuleTree assist={<div className="ra-assist" data-testid="rules-assist"><button className="btn sm" onClick={() => setAssist('describe')} data-testid="rule-describe-button"><Icon.plus /> Describe a rule</button><button className="btn sm" onClick={() => setAssist('review')} data-testid="rules-review"><Icon.target /> Review my rules</button><button className="btn sm" onClick={() => setAssist('coverage')} data-testid="coverage-open"><Icon.list /> Find coverage gaps</button><button className="btn sm" onClick={() => setAssist('testdata')} data-testid="testdata-open"><Icon.plus /> Generate test customers</button></div>} project={project} ruleTrace={ruleTrace} selectedId={isNew ? draft?.id ?? '' : ruleId} newId={isNew ? draft?.id : undefined} onSelect={selectRule} day={res?.documentDate?.date ?? null} />
 
           <div className="panel rd-editor-panel" data-testid="rule-editor" aria-label="Rule editor">
             {!draft ? (
@@ -507,6 +518,15 @@ export function RulesData() {
                         <input id="rd-group" className="input mono" value={draft.exclusiveGroup ?? ''} readOnly disabled placeholder="—" />
                         <span className="hint">Equals the target node for exclusive rules.</span></div>}
                     </div>
+
+                    {project.documentDate && (
+                      <>
+                        <h3 className="section-title">When — in effect</h3>
+                        <PeriodEditor period={isNew ? undefined : stored?.effective} testId="rule-period"
+                          disabledReason={isNew ? 'Add the rule to the model first, then give it a period.' : stored?.mode === 'obligation' ? 'A rule that enforces mandatory content is always in effect.' : blockedReason ? `${blockedReason}.` : null}
+                          command={(period) => ({ type: 'SET_RULE_PERIOD', ruleId: stored!.id, period })} />
+                      </>
+                    )}
 
                     {allErrors.length > 0 && (
                       <div className="callout error rd-gap" role="alert" data-testid="rule-errors">
@@ -585,7 +605,7 @@ function modeOptions(op: RuleAction['op']): RuleMode[] {
 
 /* ------------------------------------------------------------------ left: tree */
 
-function RuleTree({ assist, project, ruleTrace, selectedId, newId, onSelect }: { assist: React.ReactNode; project: Project; ruleTrace: Map<string, TraceEntry>; selectedId: string; newId?: string; onSelect: (id: string) => void }) {
+function RuleTree({ assist, project, ruleTrace, selectedId, newId, onSelect, day }: { assist: React.ReactNode; project: Project; ruleTrace: Map<string, TraceEntry>; selectedId: string; newId?: string; onSelect: (id: string) => void; /** The document's date of the current preview (periods are marked against it). */ day: string | null }) {
   const nodes = useMemo(() => new Map(project.nodes.map((n) => [n.id, n])), [project.nodes]);
   const exclusive = project.rules.filter((r) => r.mode === 'exclusive');
   const groups = [...new Set(exclusive.map((r) => r.exclusiveGroup ?? ''))];
@@ -612,6 +632,12 @@ function RuleTree({ assist, project, ruleTrace, selectedId, newId, onSelect }: {
           <Tech><span className="rd-prio">P{r.priority}</span></Tech>
           <span className={`rd-state ${state.cls}`} data-testid={`rule-state-${r.id}`}>{state.label}</span>
         </span>
+        {project.documentDate && r.effective && (
+          <span className="rd-rule-meta">
+            <PeriodChip period={r.effective} testId={`rule-period-chip-${r.id}`} />
+            <NotInEffectChip period={r.effective} day={day} testId={`rule-off-${r.id}`} />
+          </span>
+        )}
       </button>
     );
   };
@@ -642,6 +668,7 @@ const outcomeCls = (o: string) => (o === 'selected' || o === 'applied' || o === 
 function ruleState(r: Rule, t: TraceEntry | undefined): { label: string; cls: string } {
   if (r.enabled === false) return { label: 'Off', cls: 'warn' };
   if (!t) return { label: 'Not evaluated', cls: '' };
+  if (t.outcome === 'out-of-scope' && t.period) return { label: 'Not in effect', cls: 'warn' };
   if (!t.matched) return { label: 'Not matched', cls: '' };
   return { label: OUTCOME_WORD[t.outcome] ?? 'Matched', cls: outcomeCls(t.outcome) || 'ok' };
 }
@@ -790,7 +817,7 @@ function ActionEditor({ draft, project, nodes, onChange, locked }: { draft: Rule
 interface TestRow { recordId: string; persona?: string; matched: boolean; outcome: string; inputs: Record<string, unknown>; primaryBefore: string | null; primaryAfter: string | null; changed: boolean; tiesAfter: number; findingsBefore: number; findingsAfter: number; current?: boolean }
 interface TestOutcome { rows: TestRow[]; total: number; matched: number; changed: number; ties: number; primaryNode: string | null; target: string | null; error?: string; ranAt: string; modelVersion: number }
 
-function testRule(project: Project, records: SyntheticRecord[], draft: Rule, current: SyntheticRecord | undefined, overrides: Record<string, unknown>): TestOutcome {
+function testRule(project: Project, records: SyntheticRecord[], draft: Rule, current: SyntheticRecord | undefined, overrides: Record<string, unknown>, issueDate: string | null = null): TestOutcome {
   const exists = project.rules.some((r) => r.id === draft.id);
   const temp: Project = { ...project, rules: exists ? project.rules.map((r) => (r.id === draft.id ? draft : r)) : [...project.rules, draft] };
   const primaryNode = draft.then.op === 'selectVariant' ? draft.then.targetNodeId : project.nodes.find((n) => n.type === 'variant-set')?.id ?? null;
@@ -798,8 +825,8 @@ function testRule(project: Project, records: SyntheticRecord[], draft: Rule, cur
   const ties = (r: ReturnType<typeof resolve>) => r.findings.filter((f) => f.code === 'EXCLUSIVE_PRIORITY_TIE').length;
   const one = (rec: SyntheticRecord, ov: Record<string, unknown>, isCurrent = false): TestRow | null => {
     try {
-      const before = resolve({ project, record: rec, overrides: ov });
-      const after = resolve({ project: temp, record: rec, overrides: ov });
+      const before = resolve({ project, record: rec, overrides: ov, ...dated(issueDate) });
+      const after = resolve({ project: temp, record: rec, overrides: ov, ...dated(issueDate) });
       const t = after.trace.find((x) => x.ruleId === draft.id && x.kind === 'rule');
       const pb = sel(before), pa = sel(after);
       return { recordId: rec.recordId, persona: rec.personaId, matched: !!t?.matched, outcome: t?.outcome ?? 'not-matched', inputs: t?.predicateInputs ?? {}, primaryBefore: pb, primaryAfter: pa, changed: pb !== pa, tiesAfter: ties(after), findingsBefore: before.findings.length, findingsAfter: after.findings.length, current: isCurrent };
@@ -870,6 +897,7 @@ function TracePanel({ project, res, onSelectRule, fieldMap }: { project: Project
         <div className="right"><label className="rd-check"><input type="checkbox" checked={matchedOnly} onChange={(e) => setMatchedOnly(e.target.checked)} /> matched only</label></div></div>
       <div className="panel-body rd-trace">
         <div className="rd-run">{matchedCount} of {res.trace.length} rules matched for this scenario</div>
+        {res.documentDate && <div className="rd-run" data-testid="trace-document-date">{res.documentDate.date ? `${res.documentDate.given ? 'As issued on' : 'The document’s date:'} ${dayWords(res.documentDate.date)}` : 'This customer’s document has no date'}</div>}
         <Proof label="Run ID"><span className="mono rd-run">{res.runId} · {res.recordId}</span></Proof>
         <h3 className="section-title">Findings ({findings.length})</h3>
         {findings.length === 0 ? <div className="callout accent">No findings for this scenario.</div> : (
@@ -885,7 +913,7 @@ function TracePanel({ project, res, onSelectRule, fieldMap }: { project: Project
               <li key={t.ruleId + i} className={`rd-trace-item o-${t.outcome} ${t.matched ? 'm' : ''}`} data-testid={`trace-${t.ruleId}`}>
                 <div className="rd-trace-head">
                   {rule && <span className="rd-trace-title" title={ruleTitle(project, rule)}>{ruleTitle(project, rule)}</span>}
-                  <span className={`rd-state ${outcomeCls(t.outcome)}`}>{OUTCOME_ICON[t.outcome]} {word}</span>
+                  <span className={`rd-state ${outcomeCls(t.outcome)}`}>{OUTCOME_ICON[t.outcome]} {t.outcome === 'out-of-scope' && t.period ? 'Not in effect' : word}</span>
                 </div>
                 <div className="rd-trace-head rd-trace-tags">
                   {t.kind === 'rule' ? <button className="rowlink mono rd-tid" onClick={() => onSelectRule(t.ruleId)} aria-label={`Open rule ${t.ruleId}`}>{t.ruleId}</button> : <span className="mono rd-tid">{t.ruleId}</span>}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { nodeMap, type Project } from '@iss/model';
+import { dayWords, nodeMap, type Project } from '@iss/model';
 import { blocksHtml } from '@iss/renderers';
 import { describePredicate, explainNode, indexTree, type RNode, type RVariant, type Resolution, type TraceEntry } from '@iss/resolver';
 import { personaLabel, useResolution, useScenarioEngine, useStudio } from '../state/store';
@@ -10,6 +10,7 @@ import { Icon } from '../ui/icons';
 import { fieldLabel, nodeTitle, predicateSentence, ruleSentence, ruleTitle } from '../ui/plain';
 import { PagePreview } from '../doc/PagePreview';
 import { usePanel } from '../assist/panelStore';
+import { NotInEffectChip, PeriodChip } from './dates/period';
 import './ExplodedDocument.css';
 
 /**
@@ -65,6 +66,8 @@ const STATE_SHORT: Record<PanelState, string> = { selected: 'Active', outranked:
 /** Shape marker per state (shape + label, never colour alone). */
 const Mark = ({ st }: { st: PanelState }) => <span className={`ex-mark st-${st}`} aria-hidden="true" />;
 const OUTCOME_PLAIN: Record<TraceEntry['outcome'], string> = { selected: 'Chosen', outranked: 'Matched · lower priority', tie: 'Matched · tie', applied: 'Applied', required: 'Required', 'not-matched': 'Not matched', disabled: 'Switched off', 'out-of-scope': 'Not in scope' };
+/** The plain word for a trace outcome; an item outside its period (an `out-of-scope` entry with a `period`) is "Not in effect". */
+const outcomeWord = (t: TraceEntry): string => (t.outcome === 'out-of-scope' && t.period ? 'Not in effect' : OUTCOME_PLAIN[t.outcome]);
 const outcomeChip = (o: TraceEntry['outcome']) => (o === 'selected' || o === 'applied' ? 'accent' : o === 'tie' ? 'error' : o === 'outranked' ? 'variant' : '');
 
 /** Readable default camera: gentle tilt/turn, small depth fan. Reset camera returns here. */
@@ -90,7 +93,13 @@ function plainExplanation(project: Project, res: Resolution, node: RNode): strin
     else if (v) parts.push(`“${v.title}” is shown by its own condition.`);
     else parts.push(`No message is selected for ${name}.`);
   }
+  // Items outside their period on the document's date, with the dates (the engine's own note).
+  for (const t of res.trace.filter((x) => x.targetNodeId === node.id && x.outcome === 'out-of-scope' && x.period && x.note)) {
+    const rule = t.kind === 'rule' ? project.rules.find((r) => r.id === t.ruleId) : undefined;
+    parts.push(`${rule ? `“${ruleTitle(project, rule)}”` : 'This part'}: ${t.note}`);
+  }
   if (node.dataLineage.length) parts.push(`Uses: ${[...new Set(node.dataLineage.map((p) => fieldLabel(project, p)))].join(', ')}.`);
+  if (res.documentDate) parts.push(res.documentDate.date ? `Worked out ${res.documentDate.given ? 'as issued on' : 'for the document’s date,'} ${dayWords(res.documentDate.date)}.` : 'This customer’s document has no date.');
   return parts.join(' ');
 }
 
@@ -420,8 +429,9 @@ export function ExplodedDocument() {
                         <div className="ex-rule-head">
                           <span className="ex-rule-id mono">{t.ruleId}</span>
                           <span className="ex-rule-title" title={rule ? ruleTitle(project, rule) : t.ruleId}>{rule ? ruleTitle(project, rule) : t.ruleId}</span>
-                          <span className={`chip ${outcomeChip(t.outcome)}`}>{tech ? t.outcome : OUTCOME_PLAIN[t.outcome]}</span>
+                          <span className={`chip ${t.period && t.outcome === 'out-of-scope' ? 'warning' : outcomeChip(t.outcome)}`}>{tech ? t.outcome : outcomeWord(t)}</span>
                         </div>
+                        {t.period && t.outcome === 'out-of-scope' && t.note && <div className="ex-rule-sentence" data-testid={`exploded-period-${t.ruleId}`}>{t.note}</div>}
                         {tech ? <>
                           <div className="ex-mono-line" title={expr}>{expr}</div>
                           {inputs && <div className="ex-mono-line faint" title={inputs}>{inputs}</div>}
@@ -472,6 +482,8 @@ function VariantCard({ v, st, reach, totalSeeded, active, onChoose, project, res
   const traceRules = v.candidateRuleIds.map((id) => res.trace.find((t) => t.ruleId === id)).filter((t): t is TraceEntry => !!t);
   const count = reach?.count ?? 0, tot = reach?.total ?? totalSeeded;
   const pct = Math.round((100 * count) / Math.max(1, tot));
+  // An alternative with a period says so, and is marked (never hidden) when it is not in effect on the document's date.
+  const period = project.documentDate ? project.nodes.find((n) => n.variantPeriods?.[v.id])?.variantPeriods?.[v.id] : undefined;
   return (
     <div className={`ex-card${flat ? ' flat' : ''}${compact ? ' compact' : ''}${active ? ' is-active' : ''} st-${st}`} role={flat ? 'listitem' : undefined} onClick={flat ? onChoose : undefined}>
       <div className="ex-card-head">
@@ -489,6 +501,8 @@ function VariantCard({ v, st, reach, totalSeeded, active, onChoose, project, res
           return <span key={t.ruleId} className={`chip ex-rule-chip ${t.matched ? outcomeChip(t.outcome) || 'variant' : ''}${tech ? ' is-raw' : ''}`} title={`${t.ruleId}: ${rule ? ruleSentence(project, rule) : plain}${tech ? `\n${raw}` : ''}`}><b>{t.ruleId}</b><span className="ex-chip-text">{label}</span></span>;
         })}
         {v.isFallback && <span className="chip">fallback</span>}
+        {period && <PeriodChip period={period} />}
+        {period && <NotInEffectChip period={period} day={res.documentDate?.date ?? null} testId={`exploded-off-${v.id}`} />}
         {v.missingLocale && <span className="chip warning">translation missing</span>}
         {v.source === 'section-rule' && <span className="chip info">section rule</span>}
         {compact && <span className="ex-reach-mini" title={`${count} of ${tot} synthetic records (${pct}%)`}>{count}/{tot}</span>}

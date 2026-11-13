@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode, type SVGProps } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { create } from 'zustand';
-import { ROLE_LABEL, languageName, languageShortName, projectLanguages, type ProfileId, type Project } from '@iss/model';
-import { editBlockedReason, personaLabel, setPreviewLanguage, useIsDirty, useModelChecks, usePreviewLanguage, useRecord, useResolution, useStudio } from '../state/store';
+import { ROLE_LABEL, dayWords, languageName, languageShortName, projectLanguages, type ProfileId, type Project } from '@iss/model';
+import { editBlockedReason, personaLabel, setPreviewLanguage, useIsDirty, useModelChecks, usePreviewDate, usePreviewLanguage, useRecord, useResolution, useStudio } from '../state/store';
 import { RecordPicker, recordSummary } from './RecordPicker';
 import { NoCustomers } from './NoCustomers';
 import { Icon } from '../ui/icons';
@@ -394,6 +394,7 @@ function Dock() {
   const lastValidation = useStudio((s) => s.lastValidation);
   const res = useResolution();
   const checks = useModelChecks();
+  const issueDate = usePreviewDate();
   if (!project) return <footer className="dock">No project open</footer>;
   const rec = records.find((r) => r.recordId === ctx.recordId);
   const recLabel = rec ? recordSummary(rec, personas) : null;
@@ -412,6 +413,12 @@ function Dock() {
       <span title={matched.join(' ')}>Rules applied <strong>{matched.length ? <><Tech>{matched.join(' ')}</Tech><Biz>{matched.length}</Biz></> : '—'}</strong></span><span className="sep" />
       </div>
       <span className="dock-end">
+        {issueDate && (
+          <span className="dock-date" data-testid="dock-issue-date" data-value={issueDate}>
+            <Link to={`/studio/${project.projectId}/dates`} className="dock-btn" title="Every preview, check and export is worked out as if the document were issued on this day. Open Dates to change it.">As issued on {dayWords(issueDate)}</Link>
+            <button type="button" className="dock-btn dock-date-clear" data-testid="dock-issue-date-clear" aria-label={`Clear the preview date (${dayWords(issueDate)})`} title="Clear the preview date" onClick={() => useStudio.getState().setIssueDate(null)}>×</button>
+          </span>
+        )}
         {(res?.translation.draftsShown.length ?? 0) > 0 && <Link to={`/studio/${project.projectId}/content`} className="dock-btn warn" data-testid="dock-drafts" title="This preview shows translations that are not approved yet. Exports use approved text only. Open Content & Translations to review them.">{res!.translation.draftsShown.length} unapproved translation{res!.translation.draftsShown.length === 1 ? '' : 's'} shown</Link>}
         <DemoToolsButton />
       </span>

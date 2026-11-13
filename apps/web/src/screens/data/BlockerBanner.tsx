@@ -8,6 +8,7 @@ import { KnownDialog, useKnownBlockedReason } from '../blockers/KnownDialog';
 import { useKnownDataProblems, whenText } from '../blockers/knownData';
 import { blockerPath } from '../blockers/link';
 import { recordName } from './explorerModel';
+import { usePreviewDate } from '../../state/store';
 
 /** "Billed amount, claim 1" for `claims[0].billedCents`; the field's own label otherwise. */
 export function highlightLabel(project: Project, path: string): string {
@@ -27,8 +28,9 @@ export function BlockerBanner({ project, saved, draft, blockerId, own, canEdit, 
   const known = useKnownDataProblems();
   const knownBlocked = useKnownBlockedReason();
   const [marking, setMarking] = useState(false);
-  const now = useMemo(() => customerBlockers(project, saved).find((b) => b.id === blockerId) ?? null, [project, saved, blockerId]);
-  const inDraft = useMemo(() => { try { return customerBlockers(project, draft).some((b) => b.id === blockerId); } catch { return true; } }, [project, draft, blockerId]);
+  const issueDate = usePreviewDate();
+  const now = useMemo(() => customerBlockers(project, saved, { issueDate }).find((b) => b.id === blockerId) ?? null, [project, saved, blockerId, issueDate]);
+  const inDraft = useMemo(() => { try { return customerBlockers(project, draft, { issueDate }).some((b) => b.id === blockerId); } catch { return true; } }, [project, draft, blockerId, issueDate]);
   const entry = known.list.find((k) => k.blockerId === blockerId && k.recordId === saved.recordId);
   const name = recordName(saved);
   const back = <Link to={blockerPath(project.projectId, blockerId)} className="linkbtn" data-testid="dx-blocker-back">Back to the blocker</Link>;

@@ -3,7 +3,7 @@ import type { Project, SyntheticRecord } from '@iss/model';
 import type { Finding } from '@iss/resolver';
 import { documentBlockers, fixImpact, withKnownDataProblems, type Blocker, type DocumentBlockers, type DocumentBlockersWithStatus, type ExtraFinding, type FixImpact, type FixProposal } from '@iss/scenarios';
 import { bindingAnalysis, staticRuleAnalysis } from '@iss/validation';
-import { useStudio } from '../../state/store';
+import { usePreviewDate, useStudio } from '../../state/store';
 import { fullCheckOf, useFullCheck, type FullCheckResult } from './fullCheck';
 import { toKnown, useKnownDataProblems } from './knownData';
 
@@ -21,6 +21,8 @@ export interface BlockerData {
   full: FullCheckResult;
   /** How long the engine took, for Technical view. */
   ms: number;
+  /** The "As issued on" day the blockers were worked out for (null: none). */
+  issueDate?: string | null;
 }
 
 export function useDocumentBlockers(): { data: BlockerData | null; current: boolean; full: FullCheckResult } {
@@ -28,6 +30,8 @@ export function useDocumentBlockers(): { data: BlockerData | null; current: bool
   const records = useStudio((s) => s.records);
   const profileId = useStudio((s) => s.ctx.profileId);
   const journeyCursor = useStudio((s) => s.ctx.journeyCursor);
+  // "As issued on": blockers are worked out for that day (documents that use dates).
+  const issueDate = usePreviewDate();
   const full = useFullCheck((s) => (project ? fullCheckOf(s, project.projectId) : fullCheckOf(s, '')));
   const [raw, setData] = useState<(Omit<BlockerData, 'result'> & { result: DocumentBlockers }) | null>(null);
   const first = useRef(true);
@@ -39,15 +43,15 @@ export function useDocumentBlockers(): { data: BlockerData | null; current: bool
       // Static rule and binding checks are cheap and current, so they count as fast; the full check's findings do not.
       const fast: ExtraFinding[] = [...staticRuleAnalysis(project, records), ...bindingAnalysis(project)].map((finding: Finding) => ({ finding, recordId: null, speed: 'fast' as const }));
       const slow: ExtraFinding[] = full.findings.map((x) => ({ finding: x.finding, recordId: x.recordId, speed: 'full-check' as const }));
-      const result = documentBlockers(project, records, { profileId, journeyCursor, extraFindings: [...fast, ...slow] });
-      setData({ result, project, records, full, ms: Math.round(performance.now() - t0) });
+      const result = documentBlockers(project, records, { profileId, journeyCursor, extraFindings: [...fast, ...slow], ...(issueDate ? { issueDate } : {}) });
+      setData({ result, project, records, full, ms: Math.round(performance.now() - t0), issueDate });
       first.current = false;
     }, first.current ? 0 : 150);
     return () => clearTimeout(h);
-  }, [project, records, full.findings, profileId, journeyCursor]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [project, records, full.findings, profileId, journeyCursor, issueDate]); // eslint-disable-line react-hooks/exhaustive-deps
   // Known data problems only change the status of what the engine found, so they are applied without checking again.
   const data = useMemo<BlockerData | null>(() => (raw ? { ...raw, result: withKnownDataProblems(raw.result, toKnown(known.list)) } : null), [raw, known.list]);
-  const current = !!data && data.project === project && data.records === records && data.full.findings === full.findings;
+  const current = !!data && data.project === project && data.records === records && data.full.findings === full.findings && (data.issueDate ?? null) === issueDate;
   return { data, current, full };
 }
 
@@ -61,7 +65,7 @@ const slot = (project: Project, records: SyntheticRecord[]): Map<string, FixImpa
   if (!m) { m = new Map(); byRecords.set(records, m); }
   return m;
 };
-const keyOf = (blockerId: string, fixId: string, profileId: string, cursor: number | null): string => `${blockerId}|${fixId}|${profileId}|${cursor ?? ''}`;
+const keyOf = (blockerId: string, fixId: string, profileId: string, cursor: number | null, issueDate: string | null = null): string => `${blockerId}|${fixId}|${profileId}|${cursor ?? ''}|${issueDate ?? ''}`;
 
 export interface WantedImpact { blocker: Blocker; fix: FixProposal }
 
@@ -69,6 +73,7 @@ export interface WantedImpact { blocker: Blocker; fix: FixProposal }
 export function useFixImpacts(project: Project, records: SyntheticRecord[], wanted: WantedImpact[], enabled: boolean): (blockerId: string, fixId: string) => FixImpact | null {
   const profileId = useStudio((s) => s.ctx.profileId);
   const cursor = useStudio((s) => s.ctx.journeyCursor);
+  const issueDate = usePreviewDate();
   const [, setTick] = useState(0);
   const sig = useMemo(() => wanted.map((w) => `${w.blocker.id}|${w.fix.id}`).join(','), [wanted]);
   const wantedRef = useRef(wanted);
@@ -77,19 +82,19 @@ export function useFixImpacts(project: Project, records: SyntheticRecord[], want
     if (!enabled) return;
     let cancelled = false;
     const m = slot(project, records);
-    const todo = wantedRef.current.filter((w) => w.fix.kind === 'change' && !m.has(keyOf(w.blocker.id, w.fix.id, profileId, cursor)));
+    const todo = wantedRef.current.filter((w) => w.fix.kind === 'change' && !m.has(keyOf(w.blocker.id, w.fix.id, profileId, cursor, issueDate)));
     const step = (k: number) => {
       if (cancelled || k >= todo.length) return;
       setTimeout(() => {
         if (cancelled) return;
         const w = todo[k];
-        try { m.set(keyOf(w.blocker.id, w.fix.id, profileId, cursor), fixImpact(project, w.fix, records, { finding: w.blocker.finding, profileId, journeyCursor: cursor })); } catch { /* a fix whose effect cannot be worked out shows none */ }
+        try { m.set(keyOf(w.blocker.id, w.fix.id, profileId, cursor, issueDate), fixImpact(project, w.fix, records, { finding: w.blocker.finding, profileId, journeyCursor: cursor, ...(issueDate ? { issueDate } : {}) })); } catch { /* a fix whose effect cannot be worked out shows none */ }
         setTick((t) => t + 1);
         step(k + 1);
       }, 15);
     };
     step(0);
     return () => { cancelled = true; };
-  }, [project, records, sig, profileId, cursor, enabled]);
-  return (blockerId, fixId) => slot(project, records).get(keyOf(blockerId, fixId, profileId, cursor)) ?? null;
+  }, [project, records, sig, profileId, cursor, enabled, issueDate]);
+  return (blockerId, fixId) => slot(project, records).get(keyOf(blockerId, fixId, profileId, cursor, issueDate)) ?? null;
 }
