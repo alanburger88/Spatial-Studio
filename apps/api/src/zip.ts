@@ -1,4 +1,4 @@
-import { crc32, deflateRawSync } from 'node:zlib';
+import { crc32, deflateRawSync, inflateRawSync } from 'node:zlib';
 
 /** Minimal ZIP (PKWARE APPNOTE 6.3) writer: deflate entries, UTF-8 names, no ZIP64 (batches are capped well below 4 GB). */
 export function zipFiles(files: Array<{ name: string; data: Buffer; date?: Date }>): Buffer {
@@ -32,4 +32,40 @@ export function zipFiles(files: Array<{ name: string; data: Buffer; date?: Date 
   end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10);
   end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(offset, 16);
   return Buffer.concat([...locals, cd, end]);
+}
+
+/**
+ * The timestamp to give every entry of a ZIP that must come out byte-identical whenever and wherever it is built:
+ * the earliest date the format can hold (1 January 1980, 00:00), read through local-time getters as the writer does,
+ * so the stored value does not depend on the machine's time zone.
+ */
+export const ZIP_FIXED_DATE = new Date(1980, 0, 1, 0, 0, 0);
+
+export interface ZipEntry { name: string; size: number; compressedSize: number; method: number; crc: number; offset: number }
+
+/** The entries of a ZIP written by `zipFiles` (or any plain, single-disk, non-ZIP64 archive), in stored order. */
+export function zipEntries(zip: Buffer): ZipEntry[] {
+  let end = zip.length - 22;
+  while (end >= 0 && zip.readUInt32LE(end) !== 0x06054b50) end--;
+  if (end < 0) throw new Error('Not a ZIP archive.');
+  const count = zip.readUInt16LE(end + 10);
+  let at = zip.readUInt32LE(end + 16);
+  const out: ZipEntry[] = [];
+  for (let i = 0; i < count; i++) {
+    if (zip.readUInt32LE(at) !== 0x02014b50) throw new Error('The ZIP directory is damaged.');
+    const nameLen = zip.readUInt16LE(at + 28), extraLen = zip.readUInt16LE(at + 30), commentLen = zip.readUInt16LE(at + 32);
+    out.push({ name: zip.toString('utf8', at + 46, at + 46 + nameLen), method: zip.readUInt16LE(at + 10), crc: zip.readUInt32LE(at + 16), compressedSize: zip.readUInt32LE(at + 20), size: zip.readUInt32LE(at + 24), offset: zip.readUInt32LE(at + 42) });
+    at += 46 + nameLen + extraLen + commentLen;
+  }
+  return out;
+}
+
+/** The bytes of one entry, checked against its stored CRC. */
+export function zipRead(zip: Buffer, entry: ZipEntry): Buffer {
+  if (zip.readUInt32LE(entry.offset) !== 0x04034b50) throw new Error(`The ZIP entry ${entry.name} is damaged.`);
+  const start = entry.offset + 30 + zip.readUInt16LE(entry.offset + 26) + zip.readUInt16LE(entry.offset + 28);
+  const body = zip.subarray(start, start + entry.compressedSize);
+  const data = entry.method === 8 ? inflateRawSync(body) : Buffer.from(body);
+  if ((crc32(data) >>> 0) !== entry.crc) throw new Error(`The ZIP entry ${entry.name} does not match its checksum.`);
+  return data;
 }

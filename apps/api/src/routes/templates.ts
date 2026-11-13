@@ -84,7 +84,8 @@ export function registerTemplateRoutes(app: FastifyInstance, deps: RouteDeps): v
   const freeProjectId = (title: string, fallback: string) => {
     let id = slug(title);
     if (id.length < 3) id = `${id}-${fallback}`;
-    for (let i = 2; store.getProject(id); i++) id = `${slug(title).slice(0, 36)}-${i}`;
+    // A deleted document's releases keep its id, so that id is never given to another document.
+    for (let i = 2; store.getProject(id) || store.hasReleases(id); i++) id = `${slug(title).slice(0, 36)}-${i}`;
     return id;
   };
 

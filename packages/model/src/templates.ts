@@ -188,6 +188,17 @@ export function templateContentOf(project: Project): Project {
   return content;
 }
 
+/**
+ * The project as a project file holds it, without the bookkeeping of the one document it was (when it was saved, what
+ * it was copied, started or imported from). Unlike a template it keeps its id, title and version number: this is what
+ * a release package carries as `template.json`, and it can be imported like any project file.
+ */
+export function projectFileContentOf(project: Project): Project {
+  const content = deepClone(project) as Project & Record<string, unknown>;
+  for (const k of IDENTITY_KEYS) delete content[k];
+  return content;
+}
+
 /** A new editable document from a saved template version. */
 export function projectFromSavedTemplate(content: Project, opts: { projectId: string; title: string; templateId: string; version: number; templateTitle: string }): Project {
   const p = deepClone(content) as Project & Record<string, unknown>;
