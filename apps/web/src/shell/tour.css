@@ -1,0 +1,17 @@
+/* The first-visit tour, its offer and the tab-row button that restarts it. Tokens only. */
+.iss-tour-prompt { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 8px 20px; background: var(--iss-accent-soft); border-bottom: 1px solid var(--iss-accent-line, var(--iss-border)); color: var(--iss-text); font-size: 13px; }
+.iss-tour-prompt-text { flex: 1 1 280px; min-width: 0; }
+
+.iss-tour-spot { position: fixed; z-index: 940; pointer-events: none; border-radius: 10px; box-shadow: 0 0 0 3px var(--iss-accent), 0 0 0 9999px var(--iss-backdrop); transition: left var(--iss-motion-mid) var(--iss-ease), top var(--iss-motion-mid) var(--iss-ease), width var(--iss-motion-mid) var(--iss-ease), height var(--iss-motion-mid) var(--iss-ease); }
+.iss-tour-dim { position: fixed; inset: 0; z-index: 940; pointer-events: none; background: var(--iss-backdrop); }
+.iss-tour-card { position: fixed; z-index: 950; box-sizing: border-box; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; padding: 14px 16px 12px; background: var(--iss-surface); color: var(--iss-text); border: 1px solid var(--iss-border-strong); border-radius: 14px; box-shadow: var(--iss-shadow-pop); transition: left var(--iss-motion-mid) var(--iss-ease), top var(--iss-motion-mid) var(--iss-ease); }
+.iss-tour-card:focus { outline: none; }
+.iss-tour-card:focus-visible { box-shadow: var(--iss-shadow-pop), var(--iss-focus); }
+.iss-tour-count { font-size: 12px; font-weight: 700; color: var(--iss-accent-strong); }
+.iss-tour-title { margin: 4px 0 6px; font-size: 16px; line-height: 1.3; }
+.iss-tour-text { margin: 0 0 12px; font-size: 13px; line-height: 1.55; color: var(--iss-text); }
+.iss-tour-missing { margin: -4px 0 12px; font-size: 12px; color: var(--iss-text-muted); }
+.iss-tour-actions { display: flex; align-items: center; gap: 6px; }
+.iss-tour-spacer { flex: 1; }
+
+.section-tab-action { margin: 0 0 4px auto; align-self: center; }

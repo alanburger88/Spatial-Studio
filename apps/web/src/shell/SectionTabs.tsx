@@ -2,6 +2,7 @@ import { useRef, type KeyboardEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useStudio } from '../state/store';
 import { SCREENS, TAB_LABEL, screenOfPath, screenTo, sectionOf, useSectionMemory } from './Shell';
+import { startTour } from './Tour';
 import './section-tabs.css';
 
 /**
@@ -40,6 +41,7 @@ export function SectionTabs() {
           </Link>
         );
       })}
+      {section.id === 'help' && <button type="button" className="btn ghost sm section-tab-action" onClick={startTour} title="A two-minute walk through the menu and the screens" data-testid="tour-restart">Take the studio tour</button>}
     </nav>
   );
 }

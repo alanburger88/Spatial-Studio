@@ -12,7 +12,8 @@ import { nodeTitle } from '../ui/plain';
 import { SectionTabs } from './SectionTabs';
 import { DemoBanner } from '../screens/GuidedDemo';
 import { CommandPalette, useShellUi } from './CommandPalette';
-import { MOD, SettingsMenu, ShortcutsSheet, Tour } from './Help';
+import { MOD, SettingsMenu, HelpSheet } from './Help';
+import { Tour, TourPrompt } from './Tour';
 import { DemoToolsButton, DemoToolsPanel } from './DemoTools';
 import { AssistPanel } from '../assist/AssistPanel';
 import { HistoryPanel, useDrawers } from './History';
@@ -201,7 +202,7 @@ function useUiShortcuts() {
 
 function Overlays() {
   useUiShortcuts();
-  return <><CommandPalette /><ShortcutsSheet /><Tour /></>;
+  return <><CommandPalette /><HelpSheet /><Tour /></>;
 }
 
 function TopBar() {
@@ -440,6 +441,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
       <Nav />
       <main className="main" id="main">
         {ready && <SectionTabs />}
+        {ready && screenOfPath(pathname)?.id === 'S19' && <TourPrompt />}
         {status === 'error' ? <ErrorState title="Project could not be loaded" message={error ?? ''} onRetry={() => projectId && useStudio.getState().openProject(projectId)} /> : ready ? (noCustomers ? <NoCustomers /> : children) : <Loading label="Loading project model…" />}
       </main>
       <Dock />
