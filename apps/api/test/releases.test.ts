@@ -259,7 +259,7 @@ describe('releases (sign-in off: the local admin)', () => {
       modelVersion: approvedProject.modelVersion, contentDigest: projectContentDigest(approvedProject), languages: ['en-US', 'es-US'], origin: 'approval',
       approvedBy: { id: 'local-admin', name: 'Local admin' }, createdBy: { name: 'Local admin' }, standing: 'test', documentRemoved: false,
       stages: { test: { status: 'current', by: { name: 'Local admin' } }, production: null },
-      versions: { schema: '1.0.0', engine: 'iss-resolver/1.0.0', pagedRenderer: 'iss-paged-renderer/1.0.0', htmlRenderer: 'iss-html-renderer/1.0.0', emailRenderer: 'email-renderer/1', smsRenderer: 'sms-renderer/1', packageFormat: 1 },
+      versions: { schema: '1.0.0', engine: 'iss-resolver/1.0.0', pagedRenderer: 'iss-paged-renderer/1.0.1', htmlRenderer: 'iss-html-renderer/1.0.0', emailRenderer: 'email-renderer/1', smsRenderer: 'sms-renderer/1', packageFormat: 1 },
       package: { status: 'not-built', fileName: `${CARD}-r1.zip`, sha256: null }, handover: { received: false, live: false, entries: 0 },
     });
     expect(Date.parse(r.approvedAt)).not.toBeNaN();
@@ -790,7 +790,7 @@ describe('the release package (composition replaced by a stub)', () => {
       release: { id: REL, number: 1, origin: 'approval', createdAt: release.createdAt },
       document: { id: CARD, title: release.title, kind: 'credit-statement', kindLabel: 'Credit-card statement', modelVersion: release.modelVersion, issuer: 'Aster Card' },
       approvedBy: { name: 'Local admin' }, approvedAt: release.approvedAt, contentDigest: release.contentDigest,
-      versions: { schema: '1.0.0', engine: 'iss-resolver/1.0.0', pagedRenderer: 'iss-paged-renderer/1.0.0', htmlRenderer: 'iss-html-renderer/1.0.0', emailRenderer: 'email-renderer/1', smsRenderer: 'sms-renderer/1' },
+      versions: { schema: '1.0.0', engine: 'iss-resolver/1.0.0', pagedRenderer: 'iss-paged-renderer/1.0.1', htmlRenderer: 'iss-html-renderer/1.0.0', emailRenderer: 'email-renderer/1', smsRenderer: 'sms-renderer/1' },
       languages: { source: 'en-US', targets: [{ locale: 'es-US', name: 'Spanish (United States)' }] },
     });
     // the stage is the studio's record, not part of the frozen package: promoting must not change a byte
