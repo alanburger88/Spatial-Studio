@@ -111,4 +111,7 @@
 .np-ver { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
 .np-ver .select { min-height: 28px; width: auto; }
 .np-retire p { margin: 0 0 8px; }
-.dialog .body { overflow-wrap: anywhere; }
+.tpl-form, .np-detail { overflow-wrap: anywhere; }
+/* Long dialogs scroll inside, so the footer buttons stay in view */
+.dialog:has(.np-root, .tpl-form) { display: flex; flex-direction: column; overflow: hidden; }
+.dialog:has(.np-root, .tpl-form) .body { overflow: auto; min-height: 0; }
