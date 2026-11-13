@@ -292,6 +292,31 @@ const TOOL: Anthropic.Tool = {
 };
 
 /**
+ * Exactly what the live model is told about the document and the customers. Only the project's own structure and
+ * synthetic data: names of seeded and generated customers (fictional) are included so a customer can be found by name;
+ * names from records a person imported are never sent.
+ */
+export function assistantModelContext(ctx: AssistantContext, res: Resolution) {
+  const ofType = ctx.records.filter((r) => r.documentType === ctx.project.documentType);
+  const current = ofType.find((r) => r.recordId === ctx.recordId);
+  // Names of the seeded and generated customers are fictional and are sent so a customer can be found by name.
+  // Names from records a person imported are never sent; those customers are referred to as "the selected customer".
+  const nameOf = (r: SyntheticRecord) => (r.imported ? undefined : `${r.customer.givenName} ${r.customer.familyName}`);
+  const personaOf = (r: SyntheticRecord) => PERSONAS.find((p) => p.id === r.personaId)?.name;
+  return {
+    projectId: ctx.project.projectId, documentType: ctx.project.documentType, recordId: ctx.recordId, selectedNodeId: ctx.selectedNodeId,
+    currentCustomer: current ? { id: current.recordId, name: nameOf(current) ?? 'the selected customer', persona: personaOf(current), locale: current.customer.locale, changedFields: Object.keys(ctx.overrides ?? {}) } : null,
+    views: VIEWS, edgeCasePresets: EDGE_CASE_PRESETS.filter((p) => p.documentType === ctx.project.documentType).map((p) => p.id),
+    scenarioFields: [...projectFieldIndex(ctx.project).values()].filter((f) => !f.derived && f.type !== 'array').map((f) => ({ path: f.path, type: f.type, values: f.enumValues })),
+    rules: ctx.project.rules.map((r) => ({ id: r.id, mode: r.mode, priority: r.priority, condition: describePredicate(r.when), enabled: r.enabled !== false })),
+    nodes: ctx.project.nodes.map((n) => ({ id: n.id, type: n.type, name: n.name })),
+    // The current customer is always included, even when the list is cut short.
+    records: [...(current ? [current] : []), ...ofType.filter((r) => r !== current)].slice(0, 150).map((r) => ({ id: r.recordId, name: nameOf(r), persona: personaOf(r) ?? r.personaId, locale: r.customer.locale, status: (r.card as any)?.paymentStatus ?? (r.claims?.[0] as any)?.status })),
+    currentRun: { runId: res.runId, selectedVariants: res.result.selectedVariants, matchedRuleIds: res.result.matchedRuleIds },
+  };
+}
+
+/**
  * Server-side Claude adapter. Sends only synthetic, allowlisted context; output is untrusted and
  * re-validated by `validateActions`. Any failure returns null so the caller falls back offline.
  */
@@ -301,16 +326,10 @@ export async function externalInterpret(cfg: ProviderConfig, message: string, ct
     'You are the InfoSlips Spatial Studio assistant. You translate a designer request into allowlisted typed actions by calling submit_actions exactly once.',
     'Allowed actions: select_scenario{recordId,overrides?}, set_scenario_fields{fields: {path: value}}, navigate_view{view}, open_project{projectId}, set_cube_axes{axes[3]}, focus_component{nodeId,view?}, explain_resolution{nodeId}, run_validation{checks?}, compare_scenarios{recordIds[2]}, generate_edge_case{preset}, propose_rule_edit{ruleId,patch{priority?,enabled?,when?}}, propose_content_edit{contentPartId,locale,text}.',
     'Rule and content edits are proposals only; the user must approve. All data is synthetic. Never include code.',
+    'context.currentCustomer is the customer the user is looking at right now. When the user names that customer or says "this customer", they mean context.currentCustomer; never question or disclaim who it is. To find another customer the user names, match the name against context.records[].name.',
+    'In your reply, refer to customers by name and to rules, messages and components by their names, not by ids, unless the user used an id.',
   ].join('\n');
-  const context = {
-    projectId: ctx.project.projectId, documentType: ctx.project.documentType, recordId: ctx.recordId, selectedNodeId: ctx.selectedNodeId,
-    views: VIEWS, edgeCasePresets: EDGE_CASE_PRESETS.filter((p) => p.documentType === ctx.project.documentType).map((p) => p.id),
-    scenarioFields: [...projectFieldIndex(ctx.project).values()].filter((f) => !f.derived && f.type !== 'array').map((f) => ({ path: f.path, type: f.type, values: f.enumValues })),
-    rules: ctx.project.rules.map((r) => ({ id: r.id, mode: r.mode, priority: r.priority, condition: describePredicate(r.when), enabled: r.enabled !== false })),
-    nodes: ctx.project.nodes.map((n) => ({ id: n.id, type: n.type, name: n.name })),
-    records: ctx.records.filter((r) => r.documentType === ctx.project.documentType).slice(0, 40).map((r) => ({ id: r.recordId, persona: r.personaId, locale: r.customer.locale, status: (r.card as any)?.paymentStatus ?? (r.claims?.[0] as any)?.status })),
-    currentRun: { runId: res.runId, selectedVariants: res.result.selectedVariants, matchedRuleIds: res.result.matchedRuleIds },
-  };
+  const context = assistantModelContext(ctx, res);
   try {
     // Server-side refusal fallback (Anthropic-routed) is enabled; any remaining failure drops to the offline assistant.
     const response = await (client.beta.messages as any).create({
