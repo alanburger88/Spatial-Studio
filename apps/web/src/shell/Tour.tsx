@@ -230,7 +230,7 @@ export function Tour() {
         : <div className="iss-tour-dim" aria-hidden="true" />}
       <div className="iss-tour-card" ref={cardRef} tabIndex={-1} role="dialog" aria-label={`Tour, step ${i + 1} of ${TOUR_STEPS.length}: ${step.title}`}
         data-testid="tour" data-step={step.id} data-target-found={found ? 'true' : 'false'}
-        style={card ? { left: card.left, top: card.top } : { visibility: 'hidden', left: 0, top: 0 }}>
+        style={card ? { left: card.left, top: card.top } : { opacity: 0, left: 0, top: 0 }}>
         <div className="iss-tour-count" data-testid="tour-count">Step {i + 1} of {TOUR_STEPS.length}</div>
         <h2 className="iss-tour-title">{step.title}</h2>
         <p className="iss-tour-text">{step.text}</p>
