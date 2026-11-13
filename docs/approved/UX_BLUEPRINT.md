@@ -22,7 +22,7 @@ The studio is a **single contextual workbench** with distinct views, not multipl
 | ID | Route concept | Screen | Role |
 |---|---|---|---|
 | S01 | `/projects` | Project Gallery | Open/create/reset demo projects |
-| S02 | `/studio/:project/design` | 2D Design Studio | Canonical authoring surface |
+| S02 | `/studio/:project/design` | Design Studio | Canonical authoring surface |
 | S03 | `/studio/:project/exploded/:nodeId` | Exploded Document | Inspect named conditional variants |
 | S04 | `/studio/:project/cube` | Document Cube | Explore configurable 3-axis scenario space |
 | S05 | `/studio/:project/landscape` | Scenario Landscape | See outcome groups, impact, risks |
@@ -78,7 +78,7 @@ The studio is a **single contextual workbench** with distinct views, not multipl
 
 ![Illustrative Project Gallery](../../reference/screenshots/screen-01.png)
 
-## 4. Screen 02 — 2D Design Studio
+## 4. Screen 02 — Design Studio
 
 **User goal:** Build or modify a real document structure by dragging and resizing components and editing text, bindings, layout, and variants.  
 **Primary personas:** CCM designer, implementation specialist.  
@@ -99,7 +99,7 @@ The studio is a **single contextual workbench** with distinct views, not multipl
 **Accessibility:** Full keyboard authoring for supported operations, visible focus, labels, zoom and high contrast; text editing always in DOM.  
 **Acceptance:** Drag C11 conditional section, bind field, create/edit two variants, undo, save/reload, verify same semantic ID in S03 and S10.
 
-![Illustrative 2D Design Studio](../../reference/screenshots/screen-02.png)
+![Illustrative Design Studio](../../reference/screenshots/screen-02.png)
 
 ## 5. Screen 03 — Exploded Document (signature experience)
 

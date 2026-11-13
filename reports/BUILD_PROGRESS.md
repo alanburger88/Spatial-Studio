@@ -102,7 +102,7 @@ Engines are pure functions in `packages/scenarios/src/assist/`; model-backed fea
 - **Generate test customers** (Rules & Data): every outcome once plus edge values, made for one project only, marked *Generated* in the customer picker, replaced on regenerate, removable in one click. The dialog shows what would be created and anything no customer can reach before generating. A customer may prefer any language the studio supports.
 - **Assistant panel:** the engine's explanation is one block per rule in plain words; the panel is resizable (drag the left edge or arrow keys) and remembers its width; top-bar menus open above it.
 - **Live AI:** the model is told who the current customer is and the names of sample and generated customers (never names from imported records). `scripts/live-ai-check.mjs` checks every model-backed feature against the live model on purpose; automated tests always force the built-in assistant.
-- **Menu:** "2D Design Studio" is "Design Studio" in the menu; the screen heading keeps the contract's title.
+- **Name:** the design screen is "Design Studio" in the menu, the heading and the approved screen contract (D80).
 - **In progress, not in this build:** a blank project with its own data fields (a third kind of document, with list fields), and setting up a template from a description.
 
 ## v0.9 additions (D77–D79)

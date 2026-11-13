@@ -120,6 +120,13 @@ These timings are single-document measurements in the development environment, n
 
 **Costs to keep in view.** The studio's engine would run in other people's environments, which brings versioning, security patching, licensing and a support matrix. The engine is TypeScript; a container or command line avoids a port to Java or .NET, which would be a second implementation and weaken the guarantee.
 
+## Phase 2 check-in (2026-11-13)
+
+- **Stage names:** Test, then Production (confirmed by the product owner).
+- **Creating a release:** approving a document creates the next numbered release automatically, at stage Test. *Recommended default, not explicitly confirmed; easy to change to a separate "Create release" step.*
+- **Moving to Production:** admins only. *Recommended default, not explicitly confirmed.*
+- **Target CCM:** none named yet, so the package stays neutral (no mapping file until phase 3).
+
 ## Needed from the product owner
 
 - The name of the first target CCM when there is one, and from it: a sample template export, its data definition, and a sample output.
