@@ -131,8 +131,8 @@ export function ValidateCompare() {
   const currentRunId = useMemo(() => {
     if (!project || !record || record.documentType !== project.documentType) return null;
     if (ctx.profileId === 'paged-pdf' && res) return res.runId;
-    try { return resolve({ project, record, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: 'paged-pdf' }).runId; } catch { return null; }
-  }, [project, record, ctx.overrides, ctx.journeyCursor, ctx.profileId, res]);
+    try { return resolve({ project, record, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: 'paged-pdf', ...(project.documentDate && ctx.issueDate ? { issueDate: ctx.issueDate } : {}) }).runId; } catch { return null; }
+  }, [project, record, ctx.overrides, ctx.journeyCursor, ctx.profileId, ctx.issueDate, res]);
   const stale = !!report && !!currentRunId && report.runId !== currentRunId;
 
   const sameSuites = (a: Suite[], b: Suite[]) => a.length === b.length && a.every((x) => b.includes(x));
