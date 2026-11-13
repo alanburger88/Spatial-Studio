@@ -389,13 +389,11 @@ function treeOf(res: Resolution): Map<string, RNode> {
 }
 
 /**
- * Rules, message versions and sections that no synthetic customer exercises, each with a confirmed what-if and a ready-to-pin test.
- *
- * A target counts as covered when some customer reaches it as issued (baseline). `opts.journeySteps: true` also counts a
- * customer reaching it at any journey step as covered. Either way the scenario search uses journey steps.
+ * Every rule, message version and section of the project as a target, with the conditions under which it is reached.
+ * `covered` lists what is already exercised and is left out; pass empty sets for all of them.
  */
-export function coverageGaps(project: Project, records: SyntheticRecord[], opts?: { maxCandidates?: number; journeySteps?: boolean }): CoverageGap[] {
-  const env = new Env(project, records, Math.max(1, Math.floor(opts?.maxCandidates ?? 12)));
+function targetsOf(project: Project, covered: { matched: Set<string>; selected: Set<string>; shown: Set<string> }) {
+  const { matched, selected, shown } = covered;
   const docType = project.documentType;
   const nodes = new Map(project.nodes.map((n) => [n.id, n]));
   const parts = new Map(project.contentParts.map((c) => [c.id, c]));
@@ -403,24 +401,6 @@ export function coverageGaps(project: Project, records: SyntheticRecord[], opts?
   const nodeTitle = (id: string): string => { const n = nodes.get(id); return n ? (n.name && n.name !== n.id ? n.name : humanise(id)) : parts.get(id)?.title ?? humanise(id); };
   const partTitle = (id: string): string => parts.get(id)?.title ?? nodeTitle(id);
   const ruleTitle = (r: Rule): string => r.title ?? `Rule ${r.id}`;
-
-  /* --- what the synthetic customers reach today */
-  const matched = new Set<string>();
-  const selected = new Set<string>();
-  const shown = new Set<string>();
-  const cursors: Array<number | null> = opts?.journeySteps ? [null, ...env.events.map((_, i) => i)] : [null];
-  env.recs.forEach((record, i) => {
-    for (const cursor of cursors) {
-      const res = resolve({ project, record, journeyCursor: cursor });
-      if (cursor === null) env.baseBlocking[i] = new Set(res.findings.filter((f) => f.severity === 'blocking').map(blockingKey));
-      res.result.matchedRuleIds.forEach((id) => matched.add(id));
-      for (const n of treeOf(res).values()) {
-        if (!n.visible) continue;
-        shown.add(n.id);
-        for (const v of n.variants?.selected ?? []) selected.add(`${n.id}/${v}`);
-      }
-    }
-  });
 
   /* --- requirements */
   const rivals = (r: Rule): Rule[] => (r.mode !== 'exclusive' ? [] : rules.filter((x) => x.id !== r.id && x.mode === 'exclusive' && groupOf(x) === groupOf(r) && x.priority >= r.priority));
@@ -525,6 +505,38 @@ export function coverageGaps(project: Project, records: SyntheticRecord[], opts?
   }
   targets.push(...sectionTargets.sort((a, b) => (a.targetId < b.targetId ? -1 : 1)));
 
+  return { targets, rules, rivals, selectorsOf, conditionsOf, nodeTitle, partTitle, ruleTitle };
+}
+
+/**
+ * Rules, message versions and sections that no synthetic customer exercises, each with a confirmed what-if and a ready-to-pin test.
+ *
+ * A target counts as covered when some customer reaches it as issued (baseline). `opts.journeySteps: true` also counts a
+ * customer reaching it at any journey step as covered. Either way the scenario search uses journey steps.
+ */
+export function coverageGaps(project: Project, records: SyntheticRecord[], opts?: { maxCandidates?: number; journeySteps?: boolean }): CoverageGap[] {
+  const env = new Env(project, records, Math.max(1, Math.floor(opts?.maxCandidates ?? 12)));
+
+  /* --- what the synthetic customers reach today */
+  const matched = new Set<string>();
+  const selected = new Set<string>();
+  const shown = new Set<string>();
+  const cursors: Array<number | null> = opts?.journeySteps ? [null, ...env.events.map((_, i) => i)] : [null];
+  env.recs.forEach((record, i) => {
+    for (const cursor of cursors) {
+      const res = resolve({ project, record, journeyCursor: cursor });
+      if (cursor === null) env.baseBlocking[i] = new Set(res.findings.filter((f) => f.severity === 'blocking').map(blockingKey));
+      res.result.matchedRuleIds.forEach((id) => matched.add(id));
+      for (const n of treeOf(res).values()) {
+        if (!n.visible) continue;
+        shown.add(n.id);
+        for (const v of n.variants?.selected ?? []) selected.add(`${n.id}/${v}`);
+      }
+    }
+  });
+
+  const { targets, selectorsOf, ruleTitle } = targetsOf(project, { matched, selected, shown });
+
   /* --- a scenario and a test for each gap */
   const pinned: TestCase[] = [];
   const scenarioOf = (hit: Hit): NonNullable<CoverageGap['scenario']> => ({ recordId: hit.record.recordId, overrides: hit.overrides, journeyCursor: hit.cursor, explanation: explain(env, hit) });
@@ -566,3 +578,13 @@ export function coverageGaps(project: Project, records: SyntheticRecord[], opts?
     return { ...base, scenario: null, reason: limitNote(strong.tried + (weak?.tried ?? 0)) };
   });
 }
+
+/* ------------------------------------------------------------------ shared with the test-data engine */
+
+/**
+ * The search machinery above, for `testData.ts`: conditions as combinations, the fewest field changes that satisfy one,
+ * and every target of a project with its requirements. One name, so the assistant's public surface stays small.
+ */
+export const coverageKit = { Env, targetsOf, dnf, holds, shiftDay, show, describeLit, contradiction, treeOf, stepLabel, blockingKey, humanise, listOf, q, and, or, not, TRUE };
+export type CoverageEnv = Env;
+export type { Conj as CoverageConj, Hit as CoverageHit, Lit as CoverageLit, Target as CoverageTarget };
