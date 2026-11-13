@@ -7,6 +7,7 @@ import { recordSummary } from '../shell/RecordPicker';
 import { ScreenHeader, Loading, ErrorState, Empty, Tech, Proof } from '../ui/common';
 import { nodeTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
+import { pageBoxFromCss } from '../doc/pageBox';
 import './PageStack.css';
 
 type Mode = 'scenario' | 'time' | 'persona';
@@ -14,9 +15,7 @@ type Layout = 'stack' | 'fan';
 type Diag = ComposedPages['diagnostics'][number];
 type PageInfo = ComposedPages['pages'][number];
 
-const PX_PER_PT = 96 / 72;
-const PAGE_W = Math.round(612 * PX_PER_PT); // 816
-const PAGE_H = Math.round(792 * PX_PER_PT); // 1056
+// Page size in px: read from the composed CSS, so another paper size or orientation is drawn as composed.
 
 /* ------------------------------------------------------------ helpers */
 
@@ -88,9 +87,10 @@ function PageFrame({ css, html, scale, highlight, onNode, label }: { css: string
     host.addEventListener('click', h);
     return () => host.removeEventListener('click', h);
   }, [onNode]);
+  const box = useMemo(() => pageBoxFromCss(css), [css]);
   return (
-    <div className="ps-frame" style={{ width: PAGE_W * scale, height: PAGE_H * scale }} role="img" aria-label={label}>
-      <div ref={ref} className="ps-frame-host" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scale})` }} />
+    <div className="ps-frame" style={{ width: box.w * scale, height: box.h * scale }} role="img" aria-label={label}>
+      <div ref={ref} className="ps-frame-host" style={{ width: box.w, height: box.h, transform: `scale(${scale})` }} />
     </div>
   );
 }
@@ -144,7 +144,8 @@ function Stack({ comp, layout, separation, selected, onSelect, onDiag, focusNode
   const n = comp.snapshot.pages.length;
   // Fan leaves room beside the first page so the following pages show a readable strip; Stack keeps pages larger.
   const scale = n > 10 ? 0.34 : n > 4 ? 0.4 : layout === 'fan' ? 0.42 : 0.5;
-  const pw = PAGE_W * scale, ph = PAGE_H * scale;
+  const box = pageBoxFromCss(comp.snapshot.css);
+  const pw = box.w * scale, ph = box.h * scale;
   const maxStep = n > 1 ? Math.max(8, (w - pw - 80) / (n - 1)) : 0;
   const step = Math.min(maxStep, 8 + (separation / 100) * (layout === 'fan' ? 260 : 150));
   const total = pw + step * (n - 1);

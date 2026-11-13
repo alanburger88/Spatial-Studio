@@ -65,7 +65,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     purpose: 'Lay out the document and edit what it says. Pick a component on the page to change its position, its text, its data and the rules that decide whether it shows.',
     actions: [
       'Select a component on the page or in the Layers list, then edit it in the panel on the right.',
-      'Add components from the Components list, and set the page width, grid and snapping.',
+      'Add components from the Components list. Open Page setup to choose the paper, margins, columns and backgrounds, and drag the edges of the flow area or the letterhead zone, or type the measurements.',
       'Edit text, and add an alternative version of a message for a section that changes by customer.',
       'Open Styles & brand to change text styles and brand settings.',
       'Use Explore variants to see every alternative a selected section can show.',
@@ -76,6 +76,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
     read: [
       { what: 'The page', means: 'The document as the customer in the top bar would receive it. Change the customer or the output there to see it change.' },
+      { what: 'First, Following and Last', means: 'The page templates. Each has its own flow area, columns, background and fixed items. The canvas shows the first page with its content; the other templates show where content continues. Page Composition Stack shows the composed pages. A component\'s Layout tab sets keep together, a new page or column, spanning the columns and how text splits.' },
       { what: 'The right panel tabs', means: 'Data shows which customer values a component uses. Rules shows the rules that decide it. Blockers, Comments, Impact and Accessibility show what is wrong, what people have said, what a change would affect and how it reads for assistive technology.' },
     ],
   },

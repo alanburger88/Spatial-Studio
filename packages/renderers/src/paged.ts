@@ -1,10 +1,14 @@
-import type { Project, ProfileId } from '@iss/model';
-import { sysText } from '@iss/model';
+import type { PageBackground, Project, ProfileId } from '@iss/model';
+import { effectivePageDesign, isLegacyPageDesign, sysText, type EffectiveTemplate } from '@iss/model';
 import type { RNode, Resolution } from '@iss/resolver';
 import { DOC_FONT, esc, projectStyleCss, nodeDataAttrs, nodeInnerHtml, type RenderMode } from './html-common';
 import { PAGINATOR_JS } from './paginator-source';
+import { PAGINATOR_JS_V2 } from './paginator-design-source';
+import { imageSrc } from './html-common';
 
 export const PAGED_RENDERER_VERSION = 'iss-paged-renderer/1.0.0';
+/** The page-design renderer (wave 2): used only by documents that use page design (see `usesPageDesign`). */
+export const PAGED_DESIGN_RENDERER_VERSION = 'iss-paged-renderer/1.1.0';
 
 export function documentCss(accent: string, project?: Project): string {
   return `
@@ -69,7 +73,28 @@ h2.iss-variant-title,.iss-variant-title{font-size:10.5pt;font-weight:700;color:v
 ${projectStyleCss(project)}`;
 }
 
-function pagedCss(accent: string, project?: Project): string {
+function pagedCss(accent: string, project?: Project, design?: PageDesignCss): string {
+  if (design) return `@page{size:${design.css};margin:0}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#e5e7eb}
+body{font-family:${DOC_FONT};font-feature-settings:'calt' 0,'tnum' 0,'liga' 0,'case' 0;font-variant-ligatures:none;font-size:9.5pt;line-height:1.35;color:#334155;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#iss-pages{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 0}
+.page{width:${Math.floor((design.widthPt * 4) / 3)}px;height:${Math.floor((design.heightPt * 4) / 3)}px;position:relative;overflow:hidden;background:#fff;box-shadow:0 2px 10px rgba(15,23,42,.18);page-break-after:always;break-after:page}
+.page:last-child{page-break-after:auto;break-after:auto}
+@media print{html,body{background:#fff}#iss-pages{display:block;padding:0}.page{box-shadow:none;margin:0}}
+.iss-bg{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+${design.backgrounds}
+.iss-fixed{position:absolute;overflow:hidden}
+.iss-flow{position:absolute}
+.iss-col,.iss-span{position:absolute}
+.iss-col .iss-disclosure .iss-version{position:static;display:block;margin-bottom:2pt}
+.iss-col .iss-url,.iss-col .iss-qrblock{overflow-wrap:anywhere;min-width:0}
+.iss-block{position:relative}
+.iss-overflow{outline:1.5pt solid #dc2626;outline-offset:2pt}
+.iss-overflow-marker{position:absolute;left:40pt;right:40pt;bottom:50pt;background:#fee2e2;border:1pt solid #dc2626;color:#991b1b;font-weight:700;font-size:8.5pt;padding:4pt 6pt;border-radius:3pt}
+.iss-watermark{position:absolute;left:0;right:0;top:46%;text-align:center;transform:rotate(-24deg);font-size:34pt;font-weight:900;color:rgba(220,38,38,.13);letter-spacing:.06em;pointer-events:none}
+#iss-source{position:absolute;left:-20000px;top:0}
+${documentCss(accent, project)}`;
   return `@page{size:8.5in 11in;margin:0}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:#e5e7eb}
@@ -96,12 +121,46 @@ export interface PagedRenderOptions {
   profileId?: ProfileId;
   watermark?: string;
   title?: string;
+  /** Tests only: compose with the page-design engine even when the document does not need it. */
+  forceDesignEngine?: boolean;
+}
+
+interface PageDesignCss { css: string; widthPt: number; heightPt: number; backgrounds: string }
+
+/** Component settings only the page-design engine knows. */
+function nodeUsesPageDesign(n: RNode): boolean {
+  const pl = n.layout?.paged;
+  return !!pl && (pl.mode === 'fixed' ? pl.pages === 'last' : !!(pl.keepTogether || pl.breakBefore || pl.spanColumns || pl.splitText));
+}
+
+/**
+ * Whether a document needs the page-design engine: a page design beyond US Letter portrait with the flow region, or a
+ * component using keep together, a break, spanning, splitting text, or a fixed item on the last page. Every other
+ * document composes with the original engine and gives exactly the pages, PDF and page source it always has.
+ */
+export function usesPageDesign(res: Resolution, project: Project, profileId: ProfileId = 'paged-pdf'): boolean {
+  const profile = project.presentationProfiles.find((p) => p.id === profileId) ?? project.presentationProfiles.find((p) => p.kind === 'paged');
+  return !isLegacyPageDesign(profile) || res.root.children.some((n) => n.visible && nodeUsesPageDesign(n));
+}
+
+/** The CSS of a page background: always decoration (see `.iss-bg`). Unknown or unsafe images are left out. */
+function backgroundCss(bg: PageBackground, accent: string): string | null {
+  const opacity = Math.max(0, Math.min(100, bg.opacityPct)) / 100;
+  if (bg.kind === 'tint') return /^#[0-9a-fA-F]{6}$/.test(bg.color ?? '') ? `background:${bg.color};opacity:${opacity}` : null;
+  const src = imageSrc(bg.image ?? '', accent);
+  if (!src) return null;
+  return `background-image:url("${src}");background-repeat:no-repeat;background-position:center;background-size:${bg.fit === 'contain' ? 'contain' : 'cover'};opacity:${opacity}`;
+}
+
+function templateLayout(t: EffectiveTemplate, bgIndex: number | null) {
+  return { x: t.flow.xPt, y: t.flow.yPt, w: t.flow.wPt, h: t.flow.hPt, columns: t.columns, gap: t.columnGapPt, bg: bgIndex === null ? null : String(bgIndex) };
 }
 
 /** Composes the RCT into a self-paginating paged HTML document (the PDF composition request). */
 export function renderPagedDocument(res: Resolution, project: Project, opts: PagedRenderOptions = {}): string {
   const profileId = opts.profileId ?? 'paged-pdf';
   const profile = project.presentationProfiles.find((p) => p.id === profileId) ?? project.presentationProfiles.find((p) => p.kind === 'paged')!;
+  const design = opts.forceDesignEngine || usesPageDesign(res, project, profileId) ? effectivePageDesign(profile) : null;
   const flow = profile.flowRegion ?? { firstPageTopPt: 184, otherPagesTopPt: 84, bottomPt: 738 };
   const marginMm = profile.pageMarginsMm ?? [14, 14, 14, 14];
   const leftPt = Math.round((marginMm[3] * 72) / 25.4);
@@ -133,12 +192,15 @@ export function renderPagedDocument(res: Resolution, project: Project, opts: Pag
         `data-keep-with-next="${pl.keepWithNext ? 1 : 0}"`,
         isHeadingOnly(n) ? 'data-heading-only="1"' : '',
         n.table ? `data-splittable="1" data-continuation="${n.table.continuation ? 1 : 0}" data-repeat-header="${n.table.repeatHeader ? 1 : 0}"` : '',
+        ...(design ? designAttrs(n) : []),
       ].filter(Boolean).join(' ');
       flowParts.push(`<div class="iss-block" ${nodeDataAttrs(n)} ${attrs} style="width:${w}%;margin-left:${ml}%">${inner}</div>`);
     }
   }
-  const layout = { firstPageTopPt: flow.firstPageTopPt, otherPagesTopPt: flow.otherPagesTopPt, bottomPt: flow.bottomPt, leftPt, widthPt, watermark: opts.watermark ?? '', strings: { pageOf: sysText(res.systemStrings, 'pageOf'), tableContinued: sysText(res.systemStrings, 'tableContinued') } };
+  const strings = { pageOf: sysText(res.systemStrings, 'pageOf'), tableContinued: sysText(res.systemStrings, 'tableContinued') };
   const title = opts.title ?? `${project.issuer?.name ?? project.title} — ${res.recordId} (synthetic)`;
+  if (design) return renderDesigned({ res, profileId, title, accent, project, design, fixedParts, flowParts, watermark: opts.watermark ?? '', strings });
+  const layout = { firstPageTopPt: flow.firstPageTopPt, otherPagesTopPt: flow.otherPagesTopPt, bottomPt: flow.bottomPt, leftPt, widthPt, watermark: opts.watermark ?? '', strings };
   return `<!doctype html>
 <html lang="${esc(res.locale)}" data-run-id="${esc(res.runId)}" data-profile="${esc(profileId)}" data-renderer="${PAGED_RENDERER_VERSION}">
 <head><meta charset="utf-8"/><title>${esc(title)}</title>
@@ -150,5 +212,55 @@ export function renderPagedDocument(res: Resolution, project: Project, opts: Pag
 <div id="iss-source" style="width:${widthPt}pt">${fixedParts.join('\n')}${flowParts.join('\n')}</div>
 <script id="iss-layout" type="application/json">${JSON.stringify(layout).replace(/</g, '\\u003c')}</script>
 <script>${PAGINATOR_JS}</script>
+</body></html>`;
+}
+
+/** Block attributes the page-design engine reads (keep together, breaks, spanning, splitting text). */
+function designAttrs(n: RNode): string[] {
+  const pl = n.layout?.paged;
+  if (!pl) return [];
+  const textLike = n.type === 'rich-text' || n.type === 'disclosure' || n.type === 'variant-set' || n.type === 'conditional-region' || n.type === 'expandable-explanation';
+  return [
+    pl.keepTogether ? 'data-keep-together="1"' : '',
+    pl.breakBefore === 'page' || pl.breakBefore === 'column' ? `data-break-before="${pl.breakBefore}"` : '',
+    pl.spanColumns ? 'data-span="1"' : '',
+    pl.splitText && !pl.keepTogether && textLike && !n.table ? `data-split-text="1" data-min-left="${pl.minLinesLeft ?? 2}" data-min-carried="${pl.minLinesCarried ?? 2}"` : '',
+  ];
+}
+
+/** The page-design page source: page size from the profile, page templates, columns, backgrounds (PAGINATOR_JS_V2). */
+function renderDesigned(a: {
+  res: Resolution; profileId: ProfileId; title: string; accent: string; project: Project;
+  design: ReturnType<typeof effectivePageDesign>; fixedParts: string[]; flowParts: string[]; watermark: string; strings: Record<string, string>;
+}): string {
+  const { res, design } = a;
+  const bgs: string[] = [];
+  const bgIndex = (t: EffectiveTemplate | null): number | null => {
+    if (!t?.background) return null;
+    const css = backgroundCss(t.background, a.accent);
+    if (!css) return null;
+    const i = bgs.indexOf(css);
+    if (i >= 0) return i;
+    bgs.push(css);
+    return bgs.length - 1;
+  };
+  const templates = {
+    first: templateLayout(design.first, bgIndex(design.first)),
+    following: templateLayout(design.following, bgIndex(design.following)),
+    last: design.last ? templateLayout(design.last, bgIndex(design.last)) : null,
+  };
+  const backgrounds = bgs.map((css, i) => `.iss-bg--${i}{${css}}`).join('\n');
+  const layout = { v: 2, pageWidthPt: design.widthPt, pageHeightPt: design.heightPt, templates, watermark: a.watermark, strings: a.strings };
+  return `<!doctype html>
+<html lang="${esc(res.locale)}" data-run-id="${esc(res.runId)}" data-profile="${esc(a.profileId)}" data-renderer="${PAGED_DESIGN_RENDERER_VERSION}">
+<head><meta charset="utf-8"/><title>${esc(a.title)}</title>
+<meta name="generator" content="InfoSlips Spatial Studio ${PAGED_DESIGN_RENDERER_VERSION}"/>
+<meta name="description" content="Synthetic demonstration document. Run ${esc(res.runId)}; content digest ${esc(res.contentDigest)}."/>
+<style>${pagedCss(a.accent, a.project, { css: design.css, widthPt: design.widthPt, heightPt: design.heightPt, backgrounds })}</style></head>
+<body>
+<div id="iss-pages" role="document" aria-label="${esc(a.title)}"></div>
+<div id="iss-source" style="width:${design.first.flow.wPt}pt">${a.fixedParts.join('\n')}${a.flowParts.join('\n')}</div>
+<script id="iss-layout" type="application/json">${JSON.stringify(layout).replace(/</g, '\\u003c')}</script>
+<script>${PAGINATOR_JS_V2}</script>
 </body></html>`;
 }

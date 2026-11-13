@@ -1,5 +1,6 @@
 import { canonicalJson } from './digest';
 import { richToPlain } from './rich';
+import { effectivePageDesign, PAGE_TEMPLATE_LABEL, PAPER_SIZES } from './pageDesign';
 import type { BrandKit, ContentPart, CustomField, DocNode, JourneyEvent, NodeLayout, Predicate, PresentationProfile, Project, Rule, RuleAction, TestCase, TextStyle } from './types';
 
 /**
@@ -45,7 +46,8 @@ export interface ProjectDiff {
   brand: { changed: ValueChange[] };
   testCases: { added: NamedRef[]; removed: NamedRef[]; changed: NamedChange[] };
   journey: { added: NamedRef[]; removed: NamedRef[]; changed: NamedChange[] };
-  profiles: { changed: NamedChange[] };
+  /** `design`: the page design of the paged outputs in plain fields (paper, margins, each page template), when it differs. */
+  profiles: { changed: NamedChange[]; design?: ValueChange[] };
   /** Other top-level keys (issuer, rootNodeId, documentType…) that differ. */
   other: string[];
   summary: { counts: Record<'title' | 'components' | 'rules' | 'content' | 'customFields' | 'styles' | 'brand' | 'testCases' | 'journey' | 'profiles' | 'other', number>; total: number; identical: boolean };
@@ -231,7 +233,8 @@ export function diffProjects(a: Project, b: Project): ProjectDiff {
   const testCases = diffNamed<TestCase>(a.testCases, b.testCases, (t) => t.id, (t) => t.name);
   const journey = diffNamed<JourneyEvent>(a.journey?.events, b.journey?.events, (e) => e.eventId, (e) => e.label ?? e.eventType);
   if (a.journey?.snapshotPolicy !== b.journey?.snapshotPolicy) journey.changed.push({ id: 'snapshotPolicy', name: 'Snapshot policy', fields: ['snapshotPolicy'] });
-  const profiles = { changed: diffNamed<PresentationProfile>(a.presentationProfiles, b.presentationProfiles, (p) => p.id, (p) => p.id).changed };
+  const design = diffPageDesign(a, b);
+  const profiles = { changed: diffNamed<PresentationProfile>(a.presentationProfiles, b.presentationProfiles, (p) => p.id, (p) => p.id).changed, ...(design.length ? { design } : {}) };
   const brand = { changed: diffBrand(a.brand, b.brand) };
   const other = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => !KNOWN.has(k) && !same((a as any)[k], (b as any)[k])).sort();
   if (a.schemaVersion !== b.schemaVersion) other.unshift('schemaVersion');
@@ -256,4 +259,37 @@ export function diffProjects(a: Project, b: Project): ProjectDiff {
     components, rules, content, customFields, styles, brand, testCases, journey, profiles, other,
     summary: { counts, total, identical: total === 0 },
   };
+}
+
+/** The page design of the paged output, field by field in plain words ("Following pages: columns" 1 → 2). Empty when it is the same. */
+export function diffPageDesign(a: Project, b: Project): ValueChange[] {
+  const pa = a.presentationProfiles.find((p) => p.id === 'paged-pdf') ?? a.presentationProfiles.find((p) => p.kind === 'paged');
+  const pb = b.presentationProfiles.find((p) => p.id === 'paged-pdf') ?? b.presentationProfiles.find((p) => p.kind === 'paged');
+  const flat = (p: PresentationProfile | undefined): Record<string, string> => {
+    const d = effectivePageDesign(p);
+    const out: Record<string, string> = {
+      Paper: PAPER_SIZES[d.paper].label,
+      Orientation: d.orientation,
+      'Margins (mm)': (p?.pageMarginsMm ?? [14, 14, 14, 14]).join(' / '),
+    };
+    for (const t of [d.first, d.following, d.last]) {
+      const name = PAGE_TEMPLATE_LABEL[t?.id ?? 'last'];
+      if (!t) { out[`${name}`] = 'off'; continue; }
+      if (t.id === 'last') out[`${name}`] = 'on';
+      out[`${name}: flow area (pt)`] = [t.flow.xPt, t.flow.yPt, t.flow.wPt, t.flow.hPt].map((n) => Math.round(n * 10) / 10).join(', ');
+      out[`${name}: columns`] = t.columns === 1 ? '1' : `${t.columns}, gap ${t.columnGapPt} pt`;
+      out[`${name}: background`] = !t.background ? 'none' : t.background.kind === 'tint' ? `tint ${t.background.color} at ${t.background.opacityPct}%` : `image at ${t.background.opacityPct}%`;
+    }
+    return out;
+  };
+  const A = flat(pa), B = flat(pb);
+  const keys = [...new Set([...Object.keys(A), ...Object.keys(B)])];
+  // An image swapped for another image at the same opacity reads the same in words: report it from the data.
+  const changes = keys.filter((k) => A[k] !== B[k]).map((k) => ({ field: k, from: A[k] ?? null, to: B[k] ?? null }));
+  for (const id of ['first', 'following', 'last'] as const) {
+    const ia = pa?.pageTemplates?.[id]?.background?.image, ib = pb?.pageTemplates?.[id]?.background?.image;
+    const field = `${PAGE_TEMPLATE_LABEL[id]}: background`;
+    if (ia && ib && ia !== ib && !changes.some((c) => c.field === field)) changes.push({ field, from: 'an image', to: 'a different image' });
+  }
+  return changes;
 }

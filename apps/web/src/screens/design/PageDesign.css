@@ -1,0 +1,35 @@
+/* Page panel and zone handles (page design, wave 2). Colours are tokens only; the page itself stays paper white. */
+.pg-panel .pg-body { display: flex; flex-direction: column; gap: 4px; }
+.pg-note { font-size: 12px; margin: 0 0 6px; }
+.pg-hint { font-size: 12px; margin: 2px 0 8px; }
+.pg-sec { padding: 8px 0 10px; border-bottom: 1px solid var(--iss-row-border); }
+.pg-sec:last-child { border-bottom: 0; }
+.pg-sub { margin: 12px 0 6px; font-size: 12.5px; font-weight: 700; }
+.pg-label { display: block; font-size: 12px; font-weight: 600; color: var(--iss-text-muted); margin: 6px 0 4px; }
+.pg-check { gap: 6px; font-size: 12.5px; margin: 8px 0 2px; align-items: flex-start; }
+.pg-margins { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pg-fixed { margin: 0; padding: 0; list-style: none; }
+.pg-fixed-btn { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 6px 8px; cursor: pointer; font-size: 12.5px; border-radius: 4px; }
+.pg-fixed-btn:hover { background: var(--iss-row-hover); }
+.pg-fixed-btn:focus-visible { outline: 2px solid var(--iss-accent); outline-offset: 1px; }
+
+/* zones: drawn in page points inside the scaled page; handles and tags keep a constant on-screen size */
+.pz { position: absolute; inset: 0; pointer-events: none; z-index: 30; }
+.pz-flow { position: absolute; border: 1.5px solid var(--iss-green-medium); border-radius: 2px; background: color-mix(in srgb, var(--iss-green-medium) 5%, transparent); }
+.pz-flow.is-live { border-style: dashed; background: color-mix(in srgb, var(--iss-green-medium) 10%, transparent); }
+.pz-letterhead { position: absolute; border: 1.5px dashed color-mix(in srgb, var(--iss-paper-ink) 45%, transparent); border-radius: 2px; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--iss-paper-ink) 4%, transparent) 0 6pt, transparent 6pt 12pt); }
+.pz-tag { position: absolute; left: 0; top: 0; transform: scale(var(--pz-inv, 1)); transform-origin: 0 0; font: 700 11px/1 var(--iss-font-ui); color: var(--iss-paper); background: var(--iss-green-dark); padding: 3px 6px; border-radius: 0 0 4px 0; white-space: nowrap; }
+.pz-letterhead .pz-tag { background: var(--iss-paper-ink); }
+.pz-handle { all: unset; box-sizing: border-box; position: absolute; pointer-events: auto; width: 28px; height: 12px; margin: -6px 0 0 -14px; transform: scale(var(--pz-inv, 1)); transform-origin: 50% 50%; background: var(--iss-paper); border: 2px solid var(--iss-green-medium); border-radius: 6px; box-shadow: 0 1px 4px rgba(15, 23, 42, .25); cursor: ns-resize; }
+.pz-handle-left, .pz-handle-right { width: 12px; height: 28px; margin: -14px 0 0 -6px; cursor: ew-resize; }
+.pz-handle:hover { background: color-mix(in srgb, var(--iss-green-medium) 25%, var(--iss-paper)); }
+.pz-handle:focus, .pz-handle:focus-visible { outline: 3px solid var(--iss-accent); outline-offset: 2px; background: var(--iss-green-medium); }
+.pz-readout { position: absolute; margin-top: 6px; transform: scale(var(--pz-inv, 1)); transform-origin: 0 0; font: 600 11px var(--iss-font-mono); color: var(--iss-paper); background: var(--iss-green-dark); padding: 3px 7px; border-radius: 4px; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .pz-handle { transition: none; } }
+.pg-panel .field label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--iss-text-muted); font-weight: 600; }
+.pg-panel .field .input, .pg-panel .field .select { width: 100%; min-width: 0; color: var(--iss-text); font-weight: 500; }
+.pg-panel .layout-grid > * { min-width: 0; }
+.pg-panel .layout-grid.pg-margins { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pg-panel .panel-head { display: flex; align-items: center; gap: 6px; }
+.pz-tag-flow { left: auto; top: auto; right: 0; bottom: 0; transform-origin: 100% 100%; border-radius: 4px 0 0 0; }
+.pg-paper { display: flex; flex-wrap: wrap; gap: 0 12px; align-items: flex-end; } .pg-paper > .field { flex: 1 1 140px; min-width: 0; }

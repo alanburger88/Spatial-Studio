@@ -598,6 +598,21 @@ function personFixes(project: Project, f: Finding): Draft[] {
       }
       return [linkDraft(`Adjust the layout around ${q(name)}`, `${q(name)} ends a page while its content continues on the next. Change the spacing or order in the Design view.`, design)];
     }
+    case 'KEEP_TOGETHER_CANNOT_FIT': {
+      const node = project.nodes.find((n) => n.id === f.nodeId);
+      if (node && node.layout?.paged?.keepTogether) {
+        const table = node.type === 'repeating-table';
+        return [changeDraft(project, {
+          title: `Let ${q(name)} continue on the next ${table ? 'page' : 'page or column'}`,
+          explanation: `${q(name)} is set to keep together, but it is taller than an empty page or column, so it cannot be placed in one piece. Turning keep together off lets ${table ? 'its rows continue on the next page or column' : 'it be placed as before keep together was set'}. Page breaks move for the customers this happens to.`,
+          commands: [{ type: 'SET_LAYOUT', nodeId: node.id, profile: 'paged', layout: { keepTogether: false } }],
+          risk: 'review', riskReason: 'Moves page breaks for customers whose component no longer fits one page or column.',
+        }, design), linkDraft(`Give ${q(name)} more room`, `Shorten ${q(name)}, or make the flow area of the page template taller in the Page panel of the Design view.`, design)];
+      }
+      return [linkDraft(`Make ${q(name)} fit on a page`, `${q(name)} is taller than an empty page or column. Shorten it or give it more room in the Design view.`, design)];
+    }
+    case 'FIXED_OFF_PAGE':
+      return [linkDraft(`Move ${q(name)} onto the page`, `${q(name)} is fixed partly outside the page (for example after the paper or orientation changed). Move or resize it in the Design view.`, design)];
     case 'FIXED_FLOW_ADJUSTED':
       return [linkDraft(`Move ${q(name)} clear of the flowing content`, `${q(name)} is fixed on the page where flowing content also runs. The content was kept clear of it, but the page has less room. Move or resize the element in the Design view if that is not intended.`, design)];
     case 'ROW_TALLER_THAN_REGION':
@@ -695,6 +710,8 @@ function resolvedInModel(after: Project, f: Pick<Finding, 'code' | 'nodeId' | 'r
     // Model-level only: the composer confirms the pages (a total row can still be too tall for any page).
     case 'FLOW_OVERFLOW_NO_CONTINUATION':
     case 'TABLE_TOTAL_CLIPPED': return !!node && node.flowContinuation !== false;
+    // Model-level only, like the table fixes: the composer confirms the pages.
+    case 'KEEP_TOGETHER_CANNOT_FIT': return !!node && !node.layout?.paged?.keepTogether;
     case 'INVALID_BINDING': { const path = pathOf(f); return path === undefined ? null : !used(usageOf(after, f.nodeId ?? '', path)); }
     case 'IMAGE_ALT_MISSING':
     case 'A11Y_IMAGE_ALT': return !!node && (!!node.decorative || !!node.image?.alt?.trim());
@@ -737,7 +754,7 @@ export function fixImpact(project: Project, proposal: FixProposal, records: Synt
   else { const m = resolvedInModel(applied.project, issue); resolves = m === true; how = m === null ? 'unknown' : 'model'; }
 
   const others = changed - unblocked.length;
-  const composer = ['FLOW_OVERFLOW_NO_CONTINUATION', 'TABLE_TOTAL_CLIPPED', 'ORPHANED_HEADING'].includes(issue.code);
+  const composer = ['FLOW_OVERFLOW_NO_CONTINUATION', 'TABLE_TOTAL_CLIPPED', 'ORPHANED_HEADING', 'KEEP_TOGETHER_CANNOT_FIT'].includes(issue.code);
   let summary: string;
   if (newlyBlocked.length) summary = `This would block ${customers(newlyBlocked.length)} who ${newlyBlocked.length === 1 ? 'is' : 'are'} fine today${unblocked.length ? `, while unblocking ${unblocked.length}` : ''}; review it before applying.`;
   else if (how === 'unknown') summary = changed ? `${changed} of ${total} synthetic customers are affected, but it could not be confirmed that the issue is resolved${composer ? ' until the pages are composed again' : ''}.` : `None of the ${total} synthetic customers receives anything different; whether the issue is resolved could not be confirmed${composer ? ' until the pages are composed again' : ' on the sample customers'}.`;
