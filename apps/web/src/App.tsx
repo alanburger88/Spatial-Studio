@@ -36,6 +36,7 @@ const loaders = {
   Calculations: () => import('./screens/Calculations'),
   LookupTables: () => import('./screens/LookupTables'),
   Dates: () => import('./screens/Dates'),
+  Library: () => import('./screens/Library'),
 };
 const screen = <K extends keyof typeof loaders>(name: K) => lazy(() => (loaders[name]() as Promise<Record<string, ComponentType<any>>>).then((m) => ({ default: m[name] })));
 const DesignStudio = screen('DesignStudio');
@@ -59,6 +60,7 @@ const ProofLookup = screen('ProofLookup');
 const Calculations = screen('Calculations');
 const LookupTables = screen('LookupTables');
 const Dates = screen('Dates');
+const Library = screen('Library');
 const Activity = screen('Activity') as ComponentType<{ global?: boolean }>;
 
 function usePrefetchScreens() {
@@ -104,6 +106,7 @@ export function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/activity" element={<PlainShell>{wait(<Activity global />)}</PlainShell>} />
         <Route path="/projects" element={<PlainShell><ProjectGallery /></PlainShell>} />
+        <Route path="/library" element={<PlainShell>{wait(<Library />)}</PlainShell>} />
         <Route path="/studio" element={<Navigate to="/projects" replace />} />
         <Route path="/studio/:project" element={<Navigate to="overview" replace />} />
         <Route path="/studio/:project/overview" element={S(<Overview />)} />

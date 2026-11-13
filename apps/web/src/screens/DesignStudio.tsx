@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent as RKeyboardEvent } from 'react';
+import { LibraryBlockButton } from './library/InsertBlock';
 import { useNavigate } from 'react-router-dom';
 import { COMPONENT_CATALOG, CATALOG_BY_TYPE, defaultNode, dropRejection, effectivePageDesign, newNodeId, nodeMap, PAPER_SIZES, pagedProfileOf, parentOf, type ComponentType, type DocNode, type PageTemplateId, type Project } from '@iss/model';
 import { renderInteractiveHtml } from '@iss/renderers';
@@ -314,6 +315,7 @@ export function DesignStudio() {
                 {!palette.length && <li className="muted" style={{ fontSize: 12 }}>No component matches “{paletteQuery}”.</li>}
               </ul>
               <p className="muted palette-note">Drag onto the page, or use + to insert after the selection.</p>
+              <LibraryBlockButton project={project} selectedId={selected} />
             </div>
           ) : (
             <div className="panel-body flush" data-testid="layers-tree"><LayersTree project={project} res={res} selected={selected} onSelect={(id) => select(id)} /></div>

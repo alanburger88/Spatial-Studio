@@ -433,6 +433,11 @@ export interface Project {
    * blocker (layout and pages) found by the full check; when absent or false, it is a warning. Absent = off.
    */
   accessiblePdfRequired?: boolean;
+  // Shared library (wave 2, phase 4). Absent on documents that use nothing from the library: they behave exactly as before.
+  /** Library items this document links to, each at one approved version. The linked content itself is ordinary project content. */
+  libraryLinks?: LibraryLink[];
+  /** The house wording rules, placed here by a link to a library item of kind "Wording rules" (read-only while linked). */
+  houseWordingRules?: WordingRule[];
 }
 
 /** One preferred term: the English `source` should be rendered as `target` in that language. */
@@ -608,4 +613,63 @@ export interface PageTemplate {
   columns?: number;
   columnGapPt?: number;
   background?: PageBackground;
+}
+
+/* ------------------------------------------------------------- Shared library (wave 2, phase 4) */
+
+/** The kinds of library item. See `library.ts` for the content of each. */
+export type LibraryKind = 'brand' | 'block' | 'wording' | 'glossary' | 'lookup-table' | 'wording-rules';
+
+/** Where a link's content sits in the document. */
+export type LibraryTarget =
+  | { kind: 'brand' }
+  /** A component subtree by its root node id. Its node and wording ids are the library's ids with `idPrefix` in front. */
+  | { kind: 'block'; rootNodeId: string; idPrefix: string }
+  /** One content part (a message, notice or disclosure). */
+  | { kind: 'wording'; partId: string }
+  | { kind: 'glossary' }
+  | { kind: 'wording-rules' }
+  | { kind: 'lookup-table'; tableId: string };
+
+/** A document's link to one library item at one approved version. The content itself is copied into the document. */
+export interface LibraryLink {
+  /** Unique in the document (`lk` and six lower-case letters or digits). */
+  linkId: string;
+  itemId: string;
+  kind: LibraryKind;
+  /** The item's title when it was linked or last updated. */
+  title: string;
+  /** The approved version the document holds. */
+  version: number;
+  /** Digest of that version's content in the library (`libraryContentFingerprint`). */
+  fingerprint: string;
+  target: LibraryTarget;
+}
+
+export type WordingRuleKind = 'banned' | 'required' | 'preferred' | 'reading-level' | 'sentence-length' | 'tone';
+/** Where a wording rule applies (absent = anywhere a customer can read). */
+export type WordingRuleScope = 'anywhere' | 'messages' | 'disclosures' | 'labels' | 'email' | 'sms';
+
+/**
+ * One house wording rule (section 4 of the wave 2 design). Only the shape and its validator (`validateWordingRules`)
+ * exist so far; the checker is built on top. `must` = breaking it is a blocker; `should` = a warning.
+ *  - banned: `phrase` must not appear; `replacement` is offered when given.
+ *  - required: `phrase` must appear (in `appliesTo`, default anywhere).
+ *  - preferred: write `replacement` instead of `phrase` (both required).
+ *  - reading-level: no harder than grade `limit` (1–18). English only.
+ *  - sentence-length: no sentence longer than `limit` words (5–100).
+ *  - tone: no wording that reads as a demand for money where the document is not a bill. English only.
+ */
+export interface WordingRule {
+  id: string;
+  kind: WordingRuleKind;
+  severity: 'must' | 'should';
+  phrase?: string;
+  replacement?: string;
+  appliesTo?: WordingRuleScope;
+  limit?: number;
+  /** Only text in this language is checked (absent = every language the rule can check). */
+  language?: Locale;
+  /** Why the rule exists, in the author's words. */
+  note?: string;
 }

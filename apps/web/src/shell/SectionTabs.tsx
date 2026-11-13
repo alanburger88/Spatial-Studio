@@ -10,14 +10,16 @@ import './section-tabs.css';
  * A section with a single screen (Projects, Overview) shows no row. The tabs are links, so each keeps its own address;
  * the tab in use carries aria-current="page". Left/Right/Home/End move between tabs, as well as Tab.
  */
-export function SectionTabs() {
+export function SectionTabs({ plain = false }: { plain?: boolean } = {}) {
   const { pathname } = useLocation();
   const project = useStudio((s) => s.project);
   const sel = useStudio((s) => s.ctx.selectedNodeId);
   const row = useRef<HTMLElement>(null);
   const here = screenOfPath(pathname);
   const section = here ? sectionOf(here.id) : undefined;
-  if (!here || !section || section.screens.length < 2 || !project) return null;
+  if (!here || !section || section.screens.length < 2) return null;
+  // Outside a document (the project list and the library) only the Projects section has tabs; its screens need no project.
+  if (plain ? section.id !== 'projects' : !project) return null;
 
   const onKey = (e: KeyboardEvent<HTMLElement>) => {
     const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
@@ -36,7 +38,7 @@ export function SectionTabs() {
         const s = SCREENS.find((x) => x.id === id)!;
         const current = id === here.id;
         return (
-          <Link key={id} to={screenTo(s, project, sel, project.projectId)} className={`section-tab${current ? ' current' : ''}`} aria-current={current ? 'page' : undefined} onClick={() => useSectionMemory.getState().remember(section.id, id)} title={`${s.label} — ${s.hint}`} data-testid={`nav-${id}`}>
+          <Link key={id} to={screenTo(s, project, sel, project?.projectId ?? '')} className={`section-tab${current ? ' current' : ''}`} aria-current={current ? 'page' : undefined} onClick={() => useSectionMemory.getState().remember(section.id, id)} title={`${s.label} — ${s.hint}`} data-testid={`nav-${id}`}>
             <span className="section-tab-label">{TAB_LABEL[id] ?? s.label}</span>
           </Link>
         );

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { applyCommand, type BrandKit, type Project, type TextStyle } from '@iss/model';
 import { useStudio } from '../../state/store';
 import { Dialog } from '../../ui/common';
 import { AssetLibraryDialog, type PickedAsset } from './AssetLibrary';
 import './StylesBrand.css';
+import { ReadOnlyKind, WholeDocumentLibrary } from '../library/DocumentLibrary';
 
 /** WCAG relative luminance contrast ratio between two 6-digit hex colours. */
 export function contrastRatio(a: string, b: string): number {
@@ -173,8 +174,13 @@ function BrandPane({ project, onClose }: { project: Project; onClose: () => void
     else setMsg({ kind: 'error', text: r.message });
   };
   const pick = (a: PickedAsset) => { set({ logoDataUri: a.dataUri, logoAlt: kit.logoAlt || '' }); setLibrary(false); };
+  // Shared library: a brand linked, updated or unlinked elsewhere is shown as it now is.
+  const brandKey = JSON.stringify(project.brand ?? null);
+  useEffect(() => { if (project.brand) setKit({ ...project.brand }); }, [brandKey]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="sb-brand" data-testid="brand-pane">
+      <WholeDocumentLibrary project={project} kind="brand" />
+      <ReadOnlyKind project={project} kind="brand">
       <div className="sb-brand-grid">
         <div>
           <ColourField label="Primary colour" value={kit.primary} onChange={(v) => set({ primary: v })} testId="brand-primary" />
@@ -214,10 +220,11 @@ function BrandPane({ project, onClose }: { project: Project; onClose: () => void
           </div>
         </div>
       </div>
+      </ReadOnlyKind>
       <div className="sb-foot">
         {msg && <div className={`callout ${msg.kind === 'error' ? 'error' : 'accent'}`} role={msg.kind === 'error' ? 'alert' : 'status'} data-testid="brand-message">{msg.text}</div>}
         <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
-          {project.brand && <button className="btn ghost danger-text" onClick={remove} data-testid="brand-remove">Remove brand kit</button>}
+          {project.brand && !project.libraryLinks?.some((l) => l.kind === 'brand') && <button className="btn ghost danger-text" onClick={remove} data-testid="brand-remove">Remove brand kit</button>}
           <button className="btn" onClick={onClose}>Close</button>
           <button className="btn primary" onClick={apply} disabled={!dirty} data-testid="brand-apply">Apply brand kit</button>
         </div>

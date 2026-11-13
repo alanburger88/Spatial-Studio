@@ -17,6 +17,8 @@ import { NeedsAi, useBusy } from '../../assist/common';
 import { ComponentBlockers } from '../blockers/ComponentBlockers';
 import { GuardedSuggestion, WritingHelp, recordAssist, useReadOnlyReason } from '../../assist/WritingHelp';
 import { NotInEffectChip, PeriodChip, PeriodEditor } from '../dates/period';
+import { NodeLibrary, ReadOnlyWhenLinked, useLinkedNode } from '../library/NodeLibrary';
+import { LibraryChip } from '../library/LinkUI';
 
 /**
  * The fields a one-line condition can test. The two sample kinds keep their numbers, amounts, choices and yes/no fields;
@@ -108,6 +110,8 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
   const openComments = useOpenCommentCount(node?.id);
   const a11yIssues = node ? res.findings.filter((f) => f.nodeId === node.id && f.source === 'accessibility').length : 0;
   const reviewCount = openComments + a11yIssues;
+  // Shared library: a linked component is read-only (its place and, at the block's top, its layout stay the document's).
+  const lib = useLinkedNode(project, node?.id);
   return (
     <aside className="panel insp" aria-label="Component inspector" data-testid="component-inspector" data-side="right" data-side-title="Inspector">
       <div className="panel-head">Inspector {node && <span className="sub">{CATALOG_BY_TYPE[node.type].label}</span>}</div>
@@ -121,6 +125,7 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
               <Tech><span className="chip code" data-testid="inspector-node-id" title={node.id}>{node.id}</span><span className="chip code" title="Component code">{CATALOG_BY_TYPE[node.type].code}</span></Tech>
               {rnode.required && <span className="chip">Required</span>}
               {node.locked && <span className="chip warning"><Icon.lock width={12} height={12} /> Locked</span>}
+              {lib.link && <LibraryChip link={lib.link} />}
               {node.layout?.paged?.mode === 'fixed' ? <span className="chip info">Fixed anchor</span> : <span className="chip">Flow</span>}
             </div>
             {!rnode.visible && <div className="callout warning" style={{ marginTop: 8 }} data-testid="not-rendered"><strong>Not rendered in this scenario.</strong> {rnode.hiddenReason}</div>}
@@ -133,14 +138,14 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
             ))}
           </div>
           <div className="panel-body" role="tabpanel">
-            {tab === 'content' && <ContentTab node={node} project={project} res={res} onEditText={onEditText} />}
+            {tab === 'content' && <><ReadOnlyWhenLinked link={lib.link}><ContentTab node={node} project={project} res={res} onEditText={onEditText} /></ReadOnlyWhenLinked><NodeLibrary project={project} node={node} /></>}
             {tab === 'data' && (
               <>
                 <section className="insp-sec"><h3 className="insp-h">Data</h3><DataTab node={node} project={project} res={res} /></section>
                 <section className="insp-sec"><h3 className="insp-h">Rules</h3><RulesTab node={node} project={project} res={res} /></section>
               </>
             )}
-            {tab === 'layout' && <LayoutTab node={node} project={project} />}
+            {tab === 'layout' && <ReadOnlyWhenLinked link={lib.isRoot ? undefined : lib.link}><LayoutTab node={node} project={project} /></ReadOnlyWhenLinked>}
             {tab === 'review' && (
               <>
                 <section className="insp-sec" data-testid="insp-blockers-section"><h3 className="insp-h">Blockers</h3><ComponentBlockers nodeId={node.id} /></section>

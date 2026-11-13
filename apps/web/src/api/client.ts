@@ -1,5 +1,5 @@
-import type { SetupSpec, DocumentType, HandoverEntry, HandoverKind, Permission, Persona, Project, ProjectDiff, ReleaseEvent, ReleaseInfo, ReleasePackageStatus, ReleaseStage, Role, RuntimePackageStatus, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
-import type { RowMatch, SetupOutline, TestResult } from '@iss/scenarios';
+import type { LibraryContent, LibraryItemInfo, LibraryKind, LibraryUsage, LibraryVersionInfo, SetupSpec, DocumentType, HandoverEntry, HandoverKind, Permission, Persona, Project, ProjectDiff, ReleaseEvent, ReleaseInfo, ReleasePackageStatus, ReleaseStage, Role, RuntimePackageStatus, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
+import type { RowMatch, SetupOutline, TestResult, VersionComparison } from '@iss/scenarios';
 
 /** Typed client for the local Spatial Studio API (/api/v1, proxied by Vite). */
 
@@ -344,6 +344,19 @@ export const api = {
   /** Starts building it in the background (a ready one is only checked, never replaced). Answers at once unless `wait`. */
   prepareRuntime: (releaseId: string, body: { wait?: boolean; verify?: boolean } = {}) => json<{ runtime: RuntimePackageStatus; started: boolean }>(`/api/v1/releases/${releaseId}/runtime`, { method: 'POST', body: JSON.stringify(body) }),
   runtimeDownloadUrl: (releaseId: string) => `/api/v1/releases/${releaseId}/runtime`,
+  // Shared library (wave 2, phase 4): items and their versions live on the server; documents link to approved versions.
+  libraryItems: (q: { kind?: LibraryKind; q?: string; state?: 'approved' | 'draft' } = {}) => json<{ items: LibraryItemDto[]; can: LibraryCan }>(`/api/v1/library?${new URLSearchParams(Object.entries(q).filter(([, v]) => v) as Array<[string, string]>)}`),
+  libraryItem: (itemId: string) => json<{ item: LibraryItemDto; usage: LibraryUsage[]; can: LibraryCan }>(`/api/v1/library/${encodeURIComponent(itemId)}`),
+  /** One version's content; `latest` = the latest approved one. */
+  libraryVersion: (itemId: string, version: number | 'latest') => json<{ item: { id: string; kind: LibraryKind; title: string }; version: LibraryVersionInfo; content: LibraryContent }>(`/api/v1/library/${encodeURIComponent(itemId)}/versions/${version}`),
+  /** A new item with its first version as a draft (authors and admins). `source` names the document and thing it was taken from. */
+  createLibraryItem: (body: { kind: LibraryKind; title: string; description?: string; note?: string; content?: unknown; source?: { projectId: string; ref?: string }; projectId?: string; ref?: string }) => json<{ item: LibraryItemDto }>('/api/v1/library', { method: 'POST', body: JSON.stringify(body) }),
+  saveLibraryDraft: (itemId: string, body: { content?: unknown; projectId?: string; ref?: string; note?: string; title?: string; description?: string }) => json<{ item: LibraryItemDto; version: number; created: boolean }>(`/api/v1/library/${encodeURIComponent(itemId)}/draft`, { method: 'PUT', body: JSON.stringify(body) }),
+  approveLibraryDraft: (itemId: string, note?: string) => json<{ item: LibraryItemDto; version: number; usage: LibraryUsage[] }>(`/api/v1/library/${encodeURIComponent(itemId)}/approve`, { method: 'POST', body: JSON.stringify(note ? { note } : {}) }),
+  discardLibraryDraft: (itemId: string) => json<{ item: LibraryItemDto | null; discarded: number }>(`/api/v1/library/${encodeURIComponent(itemId)}/draft`, { method: 'DELETE' }),
+  /** Dry run: what updating this document's link to `version` changes, and for which synthetic customers. Send `project` for the working copy. */
+  libraryImpact: (itemId: string, body: { projectId: string; version?: number; linkId?: string; project?: Project }) => json<LibraryImpactDto>(`/api/v1/library/${encodeURIComponent(itemId)}/impact`, { method: 'POST', body: JSON.stringify(body) }),
+  releaseLibrary: (releaseId: string) => json<{ library: Array<{ itemId: string; title: string; kind: LibraryKind; version: number; inLibrary: boolean }> }>(`/api/v1/releases/${releaseId}/library`),
 };
 
 /* ------------------------------------------------------------------ accessible PDF (wave 2) */
@@ -374,4 +387,16 @@ export interface ReleasePdfRecordDto {
   level: 'studio' | 'verapdf'; levelLabel: string;
   studio: { checker: string; pageCount: number; summary: { ran: number; passed: number; failed: number; notChecked: number }; checks: Array<{ id: string; label: string; status: PdfCheckStatus }>; findings: number };
   verapdf: { status: string; version?: string | null; compliant?: boolean; failedRules?: Array<{ id: string; description: string; count: number; knownLimit?: string }>; message?: string };
+}
+
+/* ------------------------------------------------------------------ shared library */
+
+export interface LibraryCan { create: boolean; approve: boolean }
+export type LibraryItemDto = LibraryItemInfo & { usage: { documents: number; links: number; behind: number } };
+export interface LibraryImpactDto {
+  linkId: string; title: string; kind: LibraryKind; from: number; to: number;
+  comparison: VersionComparison;
+  changes: Array<{ title: string; items: string[] }>;
+  content: LibraryContent;
+  version: LibraryVersionInfo;
 }

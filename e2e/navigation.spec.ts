@@ -75,10 +75,17 @@ test('NV02 each section shows its screens as tabs; single-screen sections show n
   await nav(page).getByTestId('nav-S19').click();
   await expect(page.getByTestId('section-tabs')).toHaveCount(0);
   await expect(page.getByTestId('nav-S19')).toHaveAttribute('aria-current', 'page');
-  await nav(page).getByTestId('nav-S01').click();
+  // Projects has two tabs, Projects and Library (the shared library), shown on the project list too.
+  await nav(page).getByTestId('nav-section-projects').click();
   await expect(page).toHaveURL(/\/projects$/);
-  await expect(page.getByTestId('section-tabs')).toHaveCount(0);
+  const projectTabs = page.getByRole('navigation', { name: 'Projects screens' });
+  await expect(projectTabs.getByRole('link')).toHaveText(['Projects', 'Library']);
   await expect(page.getByTestId('nav-S01')).toHaveAttribute('aria-current', 'page');
+  await expect(nav(page).locator('[data-section=projects]')).toHaveAttribute('aria-current', 'true');
+  await page.getByTestId('nav-S25').click();
+  await expect(page).toHaveURL(/\/library$/);
+  await expect(heading(page)).toHaveText('Library');
+  await expect(page.getByTestId('nav-S25')).toHaveAttribute('aria-current', 'page');
 });
 
 test('NV03 exactly one entry and one tab are current; moving to another tab moves both', async ({ page }) => {

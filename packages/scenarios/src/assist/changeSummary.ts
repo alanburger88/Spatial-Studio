@@ -1,5 +1,5 @@
 import {
-  channelConfig, diffProjects, EMAIL_SECTION_LABELS, languageName, periodInWords, projectLanguages, richToPlain, SOURCE_LANGUAGE, tokensOfText, translatableStrings, translationStatus,
+  channelConfig, diffProjects, LIBRARY_KIND_LABEL, EMAIL_SECTION_LABELS, languageName, periodInWords, projectLanguages, richToPlain, SOURCE_LANGUAGE, tokensOfText, translatableStrings, translationStatus,
   type ChannelConfig, type DocNode, type GlossaryEntry, type Predicate, type Project, type SyntheticRecord,
 } from '@iss/model';
 import { resolve } from '@iss/resolver';
@@ -390,6 +390,13 @@ export function summarizeChanges(before: Project, after: Project, records: Synth
   if (!same(cb.email.sections.map((s) => s.id), ca.email.sections.map((s) => s.id))) add('channels', 'The order of the email sections changed');
 
   /* ------------------------------------------------------------------ settings */
+  // Shared library: what the document took from the library, moved to another version of, or made its own.
+  if (d.library) {
+    const kind = (k: string) => (LIBRARY_KIND_LABEL as Record<string, string>)[k]?.toLowerCase() ?? k;
+    for (const l of d.library.linked) add('settings', `Now uses the library ${kind(l.kind)} ${q(l.title)} (version ${l.version}), read-only in this document`);
+    for (const l of d.library.updated) add('settings', `The library ${kind(l.kind)} ${q(l.title)} was updated from version ${l.from} to version ${l.version}`);
+    for (const l of d.library.unlinked) add('settings', `The library ${kind(l.kind)} ${q(l.title)} was unlinked: its content is now this document’s own`);
+  }
   if (d.title) add('settings', `The project was renamed from ${q(d.title.from)} to ${q(d.title.to)}`);
   const langsBefore = projectLanguages(before), langsAfter = projectLanguages(after);
   for (const l of langsAfter) if (!langsBefore.includes(l)) add('settings', `Language added: ${languageName(l)}`);
