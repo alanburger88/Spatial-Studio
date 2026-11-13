@@ -406,7 +406,6 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
     const touchesDepth = paths.some((x) => x.startsWith('calc.') || x === 'document.date');
     if (!touchesDepth && !hasPeriods) return null;
     paths.forEach(visit);
-    if (project.documentDate?.source === 'field' && dated) inputs.add(project.documentDate.path);
     return { inputs: [...inputs], dated };
   };
   const numbersIn = (alts: Predicate[]): number[] => {
@@ -470,9 +469,13 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
       } else setField(record as unknown as Record<string, unknown>, path, value);
       return record;
     };
+    // A document that takes its date from a field gets each day through that field; otherwise it is given for the run.
+    const dateField = depth.dated && project.documentDate?.source === 'field' && !opts.issueDate ? project.documentDate.path : null;
+    const onDay = (b: SyntheticRecord, d: string | null | undefined): SyntheticRecord => (dateField && d ? withChange(b, dateField, d) : b);
     for (const d of dayList) {
       const day = runDay(d);
-      for (const base of bases.slice(0, SEARCH_WIDTH)) {
+      for (const base0 of bases.slice(0, SEARCH_WIDTH)) {
+        const base = onDay(base0, d);
         const hit = tryRecord(base, day, 0);
         if (hit) return hit;
         for (const o of options) for (const v of o.values) { const h = tryRecord(withChange(base, o.path, v), day, 1); if (h) return h; if (budget <= 0) return fallback; }
@@ -480,7 +483,8 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
     }
     for (const d of dayList) {
       const day = runDay(d);
-      for (const base of bases.slice(0, 3)) {
+      for (const base0 of bases.slice(0, 3)) {
+        const base = onDay(base0, d);
         for (let i = 0; i < options.length; i++) for (let j = i + 1; j < options.length; j++) {
           for (const v of options[i].values) for (const w of options[j].values) {
             const h = tryRecord(withChange(withChange(base, options[i].path, v), options[j].path, w), day, 2);

@@ -1,8 +1,8 @@
 import {
-  addDaysToIso, dateBoundaries, dayWords, isIsoDay, periodInWords,
+  addDaysToIso, dateBoundaries, dayWords, exprDependencies, isIsoDay, periodInWords,
   type DateBoundaryItem, type EffectivePeriod, type ProfileId, type Project, type Rule, type SyntheticRecord,
 } from '@iss/model';
-import { resolve } from '@iss/resolver';
+import { resolve, type RNode, type Resolution } from '@iss/resolver';
 import { visibleChanges, type VisibleChange } from './compareVersions';
 import { nodeWords, ruleWords } from './assist/writing';
 
@@ -130,6 +130,18 @@ export interface TimelineEntry extends DocumentBoundary {
   examples: Array<{ recordId: string; changes: VisibleChange[] }>;
 }
 
+/** What a date boundary can change for one customer, as one comparable text. */
+function signatureOf(project: Project): (r: Resolution) => string {
+  const dated = new Set((project.calculatedFields ?? []).filter((c) => exprDependencies(c.expr).tables.length).map((c) => c.key));
+  return (r) => {
+    const visible: string[] = [];
+    const walk = (n: RNode) => { if (n.visible) visible.push(n.id); n.children.forEach(walk); };
+    walk(r.root);
+    const values = Object.entries(r.calculated ?? {}).filter(([k]) => dated.has(k)).map(([k, c]) => [k, c.value]);
+    return JSON.stringify([r.result.selectedVariants, visible, r.result.matchedRuleIds, [...new Set(r.findings.filter((f) => f.severity === 'blocking').map((f) => f.code))].sort(), values]);
+  };
+}
+
 /**
  * What changes on which day, and which test customers it reaches: each boundary day is compared with the day before,
  * for every customer of the document's kind. Pure; a document without dates has an empty timeline.
@@ -138,6 +150,7 @@ export function documentTimeline(project: Project, records: SyntheticRecord[], o
   if (!project.documentDate) return [];
   const mine = records.filter((r) => r.documentType === project.documentType);
   const max = opts.examples ?? 3;
+  const signature = signatureOf(project);
   return documentDateBoundaries(project).filter((b) => isIsoDay(b.date)).map((b) => {
     const dayBefore = addDaysToIso(b.date, -1);
     const reached: string[] = [];
@@ -145,9 +158,10 @@ export function documentTimeline(project: Project, records: SyntheticRecord[], o
     for (const record of mine) {
       const before = resolve({ project, record, issueDate: dayBefore, profileId: opts.profileId });
       const after = resolve({ project, record, issueDate: b.date, profileId: opts.profileId });
-      if (before.contentDigest === after.contentDigest && before.findings.length === after.findings.length) continue;
+      // Reached = what the boundary decides differs: messages chosen, sections shown, rules applied, being stopped, and
+      // values read from a dated lookup table. A count of days that changes every day is not a change of that day.
+      if (signature(before) === signature(after)) continue;
       const changes = visibleChanges(before, after);
-      if (!changes.length) continue;
       reached.push(record.recordId);
       if (examples.length < max) examples.push({ recordId: record.recordId, changes });
     }
