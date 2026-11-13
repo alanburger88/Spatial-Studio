@@ -262,7 +262,7 @@ export function ValidateCompare() {
     navigate(`${base}/${link.view}${link.view === 'rules-data' && rid ? `?rule=${encodeURIComponent(rid)}` : ''}`);
   };
   const blockerIssue = (g: BGroup): Issue => ({ issueId: g.key, code: g.code, severity: g.severity, suite: g.suite, message: g.message, nodeId: g.nodeId, ruleIds: g.ruleIds, locale: g.locale, suggestion: g.suggestion });
-  const sourceLabel = (i: Issue) => (idsOf(i).length ? `Rule ${idsOf(i)[0]} in Rules & Data` : i.suite === 'rules' ? 'Rules & Data' : i.suite === 'pagination' ? 'Page Composition Stack' : i.suite === 'parity' && !i.nodeId ? 'Preview & Export' : `${i.nodeId ?? 'node'} in 2D Design`);
+  const sourceLabel = (i: Issue) => (idsOf(i).length ? `Rule ${idsOf(i)[0]} in Rules & Data` : i.suite === 'rules' ? 'Rules & Data' : i.suite === 'pagination' ? 'Page Composition Stack' : i.suite === 'parity' && !i.nodeId ? 'Preview & Export' : `${i.nodeId ?? 'node'} in Design Studio`);
 
   if (!project) return <Loading label="Loading project…" />;
   const running = status === 'running';

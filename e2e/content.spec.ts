@@ -97,7 +97,7 @@ test('API: translations.csv and import return real data', async ({ request }) =>
   expect(b.errors[0].code).toBe('UNKNOWN_ID');
 });
 
-test('See it in context opens 2D Design with an es-US record and the part selected', async ({ page }) => {
+test('See it in context opens Design Studio with an es-US record and the part selected', async ({ page }) => {
   await open(page, 'aster-card-demo', 'content');
   await row(page, 'billing-summary').getByTestId('tr-context').click();
   await expect(page).toHaveURL(/\/design$/);

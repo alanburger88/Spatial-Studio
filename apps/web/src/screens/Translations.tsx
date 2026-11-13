@@ -587,7 +587,7 @@ export function Translations() {
                           {r.status.status === 'missing' && !d && (
                             <button className="btn sm ghost tr-ctx" onClick={() => runTranslate([r.partId])} disabled={!!aiBusy} aria-busy={aiHere} data-testid="tr-ai-draft-row">{aiHere ? <><span className="spinner" aria-hidden="true" /> Drafting…</> : <><Icon.ai width={12} height={12} /> Draft with AI</>}</button>
                           )}
-                          <button className="btn sm ghost tr-ctx" onClick={() => seeInContext(r)} data-testid="tr-context" title={hasLocaleRecord ? `Open 2D Design with a ${langShort}-language synthetic record` : `Open 2D Design previewing ${langShort}`}>See in context <Icon.external width={12} height={12} /></button>
+                          <button className="btn sm ghost tr-ctx" onClick={() => seeInContext(r)} data-testid="tr-context" title={hasLocaleRecord ? `Open Design Studio with a ${langShort}-language synthetic record` : `Open Design Studio previewing ${langShort}`}>See in context <Icon.external width={12} height={12} /></button>
                         </td>
                       </tr>
                     </Fragment>

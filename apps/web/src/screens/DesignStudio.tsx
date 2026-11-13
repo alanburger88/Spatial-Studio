@@ -252,7 +252,7 @@ export function DesignStudio() {
     }
   };
 
-  if (!res) return <section className="screen" data-testid="design-canvas"><ScreenHeader id="S02" title="2D Design Studio" subtitle="Select a synthetic record that matches this project." /></section>;
+  if (!res) return <section className="screen" data-testid="design-canvas"><ScreenHeader id="S02" title="Design Studio" subtitle="Select a synthetic record that matches this project." /></section>;
   const palette = COMPONENT_CATALOG.filter((c) => !paletteQuery || c.label.toLowerCase().includes(paletteQuery.toLowerCase()) || c.code.toLowerCase().includes(paletteQuery.toLowerCase()));
   const canExplode = selNode && (selNode.type === 'variant-set' || selNode.type === 'conditional-region');
   let hiddenCount = 0;
@@ -264,8 +264,8 @@ export function DesignStudio() {
   const goExplode = () => { dismissHint(); navigate(`/studio/${project.projectId}/exploded/${selNode!.id}`); };
 
   return (
-    <section className="screen design" aria-label="2D Design Studio">
-      <ScreenHeader id="S02" title="2D Design Studio" subtitle="Edit accurate page geometry and responsive profiles on one semantic component tree. Every edit is a typed, undoable model command. Select a variant or conditional section and use its pull handle, or Explore variants, to open the Exploded view."
+    <section className="screen design" aria-label="Design Studio">
+      <ScreenHeader id="S02" title="Design Studio" subtitle="Edit accurate page geometry and responsive profiles on one semantic component tree. Every edit is a typed, undoable model command. Select a variant or conditional section and use its pull handle, or Explore variants, to open the Exploded view."
         actions={<>
           <button className="btn" onClick={() => setStylesOpen(true)} data-testid="open-styles" title="Text styles and brand kit">Styles & brand</button>
           <button className="btn primary" disabled={!canExplode} onClick={goExplode} data-testid="explore-variants" title={canExplode ? 'Open the selected section in the Exploded view' : 'Select a variant set or conditional section first'}><Icon.exploded /> Explore variants</button>

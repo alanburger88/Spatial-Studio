@@ -58,7 +58,7 @@ Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the 
 - **Version history** (click *Saved · vN* in the top bar): every save is kept; see what changed between any two versions in plain words and restore an older one.
 - **Review & approval** (status chip in the top bar): Draft → In review → Approved → Published, with comments pinned to components (Inspector → *Comments*). Approval is refused while any synthetic record has a blocking issue or a pinned test fails; editing an approved document returns it to Draft.
 - **Users, roles and activity log**: off by default for local use. Set `AUTH=on`, `ADMIN_EMAIL` and `ADMIN_PASSWORD` (e.g. in `.env`) to require sign-in with Author / Reviewer / Approver / Admin roles; the **Activity** screen lists who did what, when.
-- **New project from a template** (Gallery → *New project*): credit-card statement, explanation of benefits or a blank letter. **Styles & brand** (2D Design toolbar): named text styles and a brand kit (colours, document font, logo) applied identically to the studio, PDF, HTML and email.
+- **New project from a template** (Gallery → *New project*): credit-card statement, explanation of benefits or a blank letter. **Styles & brand** (Design Studio toolbar): named text styles and a brand kit (colours, document font, logo) applied identically to the studio, PDF, HTML and email.
 - **Decision table** and **regression tests** (Rules & Data → *Table* / *Tests*): see each rule group as a grid, with ties, never-winning rules and uncovered combinations flagged; pin scenarios as tests that re-run on every change and show which tests a draft would break.
 - **Content & Translations**: every text with its Spanish translation status; draft, approve (data tokens must match the English) and exchange CSV files with translators. Approving the mandatory texts clears the Spanish customers' blocking issue.
 - **Email and SMS** (Preview & Export): email-safe HTML (600 px, inline styles, plain-text part, subject and preheader) and SMS with GSM-7/UCS-2 and segment counting — both from the same resolved document, with parity checks.
@@ -85,7 +85,7 @@ Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the 
   - *Activity*: search in plain words ("what did the reviewer approve last week"); changes applied from the assistant are listed as such.
 - **Document Cube filters**: click a legend chip to show only intersections with that outcome (several can be on at once), or **Problems only** for those with blocking issues or warnings. The Grid and table fade the rest; the 3D view hides them. The 3D view opens on one layer (the previewed customer's) with previous/next buttons; choose **All layers** for the whole cube.
 - **Demo tools** (status bar): deliberate defects for demonstrations (rule tie, missing Spanish wording, table overflow, unconfirmed liability, no matching message) live in one panel that opens only when you click it.
-- **2D Design Studio zoom**: the page fits the panel width by default (*Width*); *Page* shows the whole sheet. On windows narrower than 1500 px the component list starts closed so the page shows near full size; open it with **Components** (your choice is remembered).
+- **Design Studio zoom**: the page fits the panel width by default (*Width*); *Page* shows the whole sheet. On windows narrower than 1500 px the component list starts closed so the page shows near full size; open it with **Components** (your choice is remembered).
 - **Export history** keeps one PDF per distinct document: rebuilding the same document replaces the earlier entry.
 - **Narrow windows**: between 900 and 1100 px side panels become slide-out drawers (buttons appear in the screen header); below 900 px the studio asks for a wider window.
 
@@ -127,7 +127,7 @@ pnpm verify
 | Route | Screen |
 |---|---|
 | `/projects` | S01 Project Gallery |
-| `/studio/:project/design` | S02 2D Design Studio — drag/drop 15 components, rich text with data tokens, fixed + flow layout, profiles, inspector |
+| `/studio/:project/design` | S02 Design Studio — drag/drop 15 components, rich text with data tokens, fixed + flow layout, profiles, inspector |
 | `/studio/:project/exploded/:nodeId` | S03 **Exploded Document** — the signature 2.5D view of a component's real variants |
 | `/studio/:project/channels` | S15 Email & SMS — wording, data fields, sections and live preview |
 | `/studio/:project/cube` | S04 Document Cube — three configurable scenario dimensions |

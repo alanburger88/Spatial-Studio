@@ -20,7 +20,7 @@ import './panel.css';
  */
 
 const SCREEN_NAMES: Record<string, string> = {
-  design: '2D Design Studio', exploded: 'Exploded Document', cube: 'Document Cube', landscape: 'Scenario Landscape', 'page-stack': 'Page Composition Stack',
+  design: 'Design Studio', exploded: 'Exploded Document', cube: 'Document Cube', landscape: 'Scenario Landscape', 'page-stack': 'Page Composition Stack',
   'rules-data': 'Rules & Data', journey: 'Journey Simulator', validate: 'Validate & Compare', outputs: 'Preview & Export', demo: 'Guided Demo',
   content: 'Content & Translations', activity: 'Activity', channels: 'Email & SMS', assistant: 'AI Assistant',
 };

@@ -25,7 +25,7 @@ const ActivityIcon = (props: SVGProps<SVGSVGElement>) => (
 
 export const SCREENS = [
   { id: 'S01', path: '/projects', label: 'Project Gallery', icon: Icon.gallery, group: 'home', hint: 'All projects and samples' },
-  { id: 'S02', path: 'design', label: '2D Design Studio', icon: Icon.design, group: 'build', hint: 'Lay out the document and edit its content' },
+  { id: 'S02', path: 'design', label: 'Design Studio', icon: Icon.design, group: 'build', hint: 'Lay out the document and edit its content' },
   { id: 'S03', path: 'exploded', label: 'Exploded Document', icon: Icon.exploded, group: 'explore', hint: 'See every alternative message a component can show, and why' },
   { id: 'S04', path: 'cube', label: 'Document Cube', icon: Icon.cube, group: 'explore', hint: 'Compare outcomes across customer types, outputs and journey stages' },
   { id: 'S05', path: 'landscape', label: 'Scenario Landscape', icon: Icon.landscape, group: 'explore', hint: 'Which outcomes customers get, and where the problems are' },

@@ -14,9 +14,9 @@ const SHORTCUTS: Array<{ group: string; rows: Array<[string[], string]> }> = [
     [[MOD, 'S'], 'Save the project'],
     [[MOD, 'Z'], 'Undo'],
     [[MOD, 'Y'], 'Redo (also Ctrl+Shift+Z)'],
-    [['Alt', '1…9'], 'Jump to views 2D Design … Preview & Export (inside a project)'],
+    [['Alt', '1…9'], 'Jump to views Design Studio … Preview & Export (inside a project)'],
   ] },
-  { group: '2D Design canvas (a component selected)', rows: [
+  { group: 'Design Studio canvas (a component selected)', rows: [
     [['←', '↑', '→', '↓'], 'Nudge a fixed component (Shift = 10 pt)'],
     [['Alt', '↑ ↓'], 'Reorder a flowing component within its container'],
     [['Shift', '← →'], 'Narrow / widen the selected component by 5%'],

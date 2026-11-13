@@ -49,7 +49,7 @@ test('A01 "Ask AI" is on every studio screen but the assistant screen; Escape cl
   await expect(ask).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByTestId('assist-status')).toContainText('Built-in assistant · no AI key');
   const sees = page.getByTestId('assist-sees');
-  await expect(sees).toContainText('2D Design Studio');
+  await expect(sees).toContainText('Design Studio');
   await expect(sees).toContainText('Jordan Mercer');
   await expect(sees).toContainText('Payment guidance');
   await expect(page.locator('[data-testid="assist-action"][data-action="explain"]')).toBeVisible();

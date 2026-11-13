@@ -230,7 +230,7 @@ function ReviewPanelInner() {
               {!comments ? <p className="muted"><span className="spinner" /> Loading…</p> : grouped.length === 0 ? <p className="muted" style={{ marginTop: 0 }}>No open comments.</p> : grouped.map((g) => (
                 <div key={g.nodeId} className="rev-group" data-testid="review-comment-group" data-node={g.nodeId}>
                   <div className="head">
-                    <button type="button" className="linkbtn" onClick={() => goNode(g.nodeId)} title="Select this component in 2D Design">{project.nodes.some((n) => n.id === g.nodeId) ? title(g.nodeId) : `${g.nodeId} (no longer in the document)`}</button>
+                    <button type="button" className="linkbtn" onClick={() => goNode(g.nodeId)} title="Select this component in Design Studio">{project.nodes.some((n) => n.id === g.nodeId) ? title(g.nodeId) : `${g.nodeId} (no longer in the document)`}</button>
                     <Tech><span className="mono muted" style={{ fontSize: 11 }}>{g.nodeId}</span></Tech>
                     <span className="count">{g.list.length} open{g.replies ? ` · ${g.replies} repl${g.replies === 1 ? 'y' : 'ies'}` : ''}</span>
                   </div>
