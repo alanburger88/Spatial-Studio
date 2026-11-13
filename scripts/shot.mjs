@@ -3,7 +3,7 @@
 // Actions run in order after load: click:<testid>  key:<key>  wait:<ms>
 import { chromium } from 'playwright';
 const [,, url, out, w = '1440', h = '900', ...acts] = process.argv;
-if (process.env.RESET) for (const id of ['aster-card-demo', 'harborcare-demo']) await fetch(`http://127.0.0.1:3001/api/v1/projects/${id}/reset`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"confirm":true}' });
+if (process.env.RESET) for (const id of ['aster-card-demo', 'harborcare-demo']) await fetch(`${process.env.E2E_API ?? 'http://127.0.0.1:3001'}/api/v1/projects/${id}/reset`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"confirm":true}' });
 const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: +w, height: +h } });
 const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
 await p.addInitScript(([t, v]) => { try { if (t) localStorage.setItem('iss.theme', t); if (v) localStorage.setItem('iss.viewMode', v); } catch {} }, [process.env.THEME ?? '', process.env.VIEW ?? '']);

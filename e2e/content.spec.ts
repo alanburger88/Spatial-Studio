@@ -1,7 +1,7 @@
 /** Content & Translations (S13) workflow and the 2.5D Scenario Landscape. Drives the real running application. */
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { open, resetAll } from './helpers';
+import { API, open, resetAll } from './helpers';
 
 test.beforeEach(async ({ request }) => { await resetAll(request); });
 
@@ -65,7 +65,7 @@ test('approving every mandatory part clears REQUIRED_TRANSLATION_MISSING for Spa
   await expect(page.getByTestId('tr-summary')).toContainText('All required text is approved');
   // the API composes the Spanish document for the (unsaved) approved model instead of the seed's 422 REQUIRED_TRANSLATION_MISSING
   const project = await page.evaluate(() => (window as any).__iss.store.getState().project);
-  const r = await request.post('http://127.0.0.1:3001/api/v1/compose/pdf', { data: { projectId: 'aster-card-demo', recordId: 'CARD-0001', overrides: { customer: { locale: 'es-US' } }, project } });
+  const r = await request.post(`${API}/compose/pdf`, { data: { projectId: 'aster-card-demo', recordId: 'CARD-0001', overrides: { customer: { locale: 'es-US' } }, project } });
   expect(r.status()).toBe(200);
 });
 
@@ -87,11 +87,11 @@ test('CSV export downloads and import creates drafts (never approvals) with a re
 });
 
 test('API: translations.csv and import return real data', async ({ request }) => {
-  const r = await request.get('http://127.0.0.1:3001/api/v1/projects/aster-card-demo/translations.csv?locale=es-US');
+  const r = await request.get(`${API}/projects/aster-card-demo/translations.csv?locale=es-US`);
   expect(r.ok()).toBeTruthy();
   expect(r.headers()['content-disposition']).toContain('attachment');
   expect(await r.text()).toContain('partId,title,mandatory,status,en-US,es-US');
-  const i = await request.post('http://127.0.0.1:3001/api/v1/projects/aster-card-demo/translations/import', { data: { locale: 'es-US', csv: 'partId,es-US\npayment-due,"Pago {{card.minimumDueCents}}"\nnope,x' } });
+  const i = await request.post(`${API}/projects/aster-card-demo/translations/import`, { data: { locale: 'es-US', csv: 'partId,es-US\npayment-due,"Pago {{card.minimumDueCents}}"\nnope,x' } });
   const b = await i.json();
   expect(b.drafts).toEqual([{ partId: 'payment-due', text: 'Pago {{card.minimumDueCents}}' }]);
   expect(b.errors[0].code).toBe('UNKNOWN_ID');

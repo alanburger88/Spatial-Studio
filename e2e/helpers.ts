@@ -2,7 +2,9 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-export const API = 'http://127.0.0.1:3001/api/v1';
+/** The API under test. E2E_API points the suite at an isolated stack (see scripts/dev-isolated.mjs). */
+export const API_ORIGIN = process.env.E2E_API ?? 'http://127.0.0.1:3001';
+export const API = `${API_ORIGIN}/api/v1`;
 export const EXPECTED = JSON.parse(readFileSync(path.join(process.cwd(), 'fixtures/expected_scenarios.json'), 'utf8')).cases;
 
 export async function resetAll(request: APIRequestContext) {

@@ -13,8 +13,9 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: [['list'], ['json', { outputFile: 'reports/evidence/e2e-results.json' }]],
-  use: { baseURL: 'http://127.0.0.1:5173', viewport: { width: 1440, height: 900 }, trace: 'off', screenshot: 'only-on-failure' },
-  webServer: [
+  use: { baseURL: process.env.E2E_WEB ?? 'http://127.0.0.1:5173', viewport: { width: 1440, height: 900 }, trace: 'off', screenshot: 'only-on-failure' },
+  // With E2E_WEB/E2E_API set, an isolated stack (scripts/dev-isolated.mjs) is already running: start nothing.
+  webServer: process.env.E2E_WEB || process.env.E2E_API ? undefined : [
     { command: 'pnpm --filter @iss/api start', url: 'http://127.0.0.1:3001/api/v1/health', reuseExistingServer: true, timeout: 120_000 },
     { command: 'pnpm --filter @iss/web dev', url: 'http://127.0.0.1:5173/projects', reuseExistingServer: true, timeout: 120_000 },
   ],
