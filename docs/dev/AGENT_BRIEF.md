@@ -137,3 +137,14 @@ Verify with `npx tsc -p tsconfig.json --noEmit`, screenshots in light + dark (`T
 - **A setup is data, not a project.** A model (or the built-in reader) produces a `SetupSpec`; `checkSetupSpec` cleans it and `projectFromSetupSpec` builds the project through ordinary commands. The server never trusts a client-sent project for creation.
 - **Tests never use a live AI key** (vitest and the test servers force the built-in assistant). Live checks are run on purpose with `scripts/live-ai-check.mjs` against a `LIVE_AI=1` stack.
 
+
+## Releases and the release package (phase 2 of the template work) — rules
+
+- **A release is frozen.** `Store.insertRelease` only ever adds; nothing edits a stored release and the `releases` table refuses a write to a frozen column. Only its stage states and "document removed" change. A change to a document is a new release.
+- **One place creates a release:** `createRelease` in `apps/api/src/releases.ts` (called by the approval and by the "create from the approved version" route). The rules (numbering, who may do what, what supersedes what) are pure, in `packages/model/src/releases.ts`; screens use the same helpers and types (`ReleaseInfo`, `promoteProblem`, `releaseRoleProblem`, …).
+- **The package is a function of the release alone.** `buildReleasePackage` reads the frozen project and what was recorded at creation, nothing else from the store. No file states a build time. Once built, a package is never replaced; building again only checks it.
+- **No customer data in a package, ever.** Only built-in sample customers and customers the engine generates from them or from the document's own fields. A pinned test on an imported, supplied or edited customer is left out and reported. Anything new that goes into a package must keep this, and `apps/api/test/releases.test.ts` scans every file for the names of such customers.
+- **Approved wording only.** Unapproved drafts are stripped from `template.json` and never become an XLIFF target.
+- **Format changes follow `docs/design/RELEASE_PACKAGE.md` ("Versioning"):** additions need no version change and readers ignore what they do not know; anything a reader could misread raises `PACKAGE_FORMAT_VERSION`. Change that document with the code.
+- **Composition is slow.** Tests replace it with `releasePackage: { composer }` in `buildApp`; build real PDFs in one test only.
+- Routes and shapes: `docs/api/RELEASES.md`.

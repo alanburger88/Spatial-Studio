@@ -445,7 +445,7 @@ describe('releases (sign-in off: the local admin)', () => {
     expect((await inj('POST', url, { kind: 'received', stage: 'staging' })).json().error.code).toBe('INVALID_STAGE');
     const a = await inj('POST', url, { kind: 'received', note: ' Loaded into the  test environment ', stage: 'test' });
     expect(a.statusCode).toBe(201);
-    expect(a.json()).toMatchObject({ entry: { kind: 'received', stage: 'test', note: 'Loaded into the test environment', by: { id: 'local-admin', name: 'Local admin' } }, release: { handover: { received: true, live: false, entries: 1 } } });
+    expect(a.json()).toMatchObject({ entry: { kind: 'received', stage: 'test', note: 'Loaded into the test environment', packageSha256: null, by: { id: 'local-admin', name: 'Local admin' } }, release: { handover: { received: true, live: false, entries: 1 } } });
     expect(Date.parse(a.json().entry.at)).not.toBeNaN();
     const b = await inj('POST', url, { kind: 'live' });
     expect(b.json()).toMatchObject({ entry: { kind: 'live', stage: null, note: null }, release: { handover: { received: true, live: true, entries: 2 } } });
@@ -507,10 +507,31 @@ describe('releases (sign-in off: the local admin)', () => {
     expect((await inj('GET', `/api/v1/releases/${CARD}-r4/template`)).json().title).toBe('Aster statement, third edition');
   });
 
+  it('an approval and its release are stored together or not at all', async () => {
+    const id = (await inj('POST', '/api/v1/projects', { templateId: 'blank-letter', title: 'Interrupted letter' })).json().project.projectId as string;
+    expect((await workflow(id, 'submit')).statusCode).toBe(200);
+    const insert = ctx.store.insertRelease;
+    ctx.store.insertRelease = () => { throw new Error('The disk is full.'); };
+    const failed = await workflow(id, 'approve');
+    ctx.store.insertRelease = insert;
+    expect(failed.statusCode).toBe(500);
+    // nothing of the approval was kept: still in review, no approval in the history, no release
+    const wf = await json('GET', `/api/v1/projects/${id}/workflow?checks=0`);
+    expect(wf.state).toBe('in_review');
+    expect(wf.history.map((h: any) => h.action)).toEqual(['submit']);
+    expect((await json('GET', `/api/v1/projects/${id}/releases`)).releases).toEqual([]);
+    expect((await json('GET', `/api/v1/audit?projectId=${id}&limit=50`)).events.map((e: any) => e.action)).not.toContain('workflow.approve');
+    // and the next attempt works normally
+    const ok = await workflow(id, 'approve');
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().release).toMatchObject({ created: true, release: { id: `${id}-r1`, number: 1 } });
+    expect((await json('GET', `/api/v1/projects/${id}/workflow?checks=0`)).history.map((h: any) => h.action)).toEqual(['approve', 'submit']);
+  });
+
   it('every state change is in the audit log with names and numbers, never content', async () => {
     const events = (await json('GET', '/api/v1/audit?action=release.&limit=200')).events as any[];
     const of = (action: string) => events.filter((e) => e.action === action);
-    expect(of('release.create').length).toBe(6);
+    expect(of('release.create').length).toBe(7);
     expect(of('release.create').at(-1)).toMatchObject({ userName: 'Local admin', projectId: CARD, detail: { releaseId: `${CARD}-r1`, number: 1, title: expect.any(String), stage: 'Test', origin: 'approval', approvedBy: 'Local admin', supersededAtTest: [] } });
     expect(of('release.create').find((e) => e.detail.origin === 'manual')).toMatchObject({ projectId: EOB, detail: { number: 1, approvedBy: 'Ada Approver' } });
     expect(of('release.promote').find((e) => e.detail.number === 3)).toMatchObject({ detail: { releaseId: `${CARD}-r3`, title: 'Aster statement, third edition', stage: 'Production', superseded: [2], withNote: false } });
@@ -673,7 +694,7 @@ describe('the release package (composition replaced by a stub)', () => {
     ids.edited = generated[0].recordId;
     expect((await inj('PUT', `/api/v1/projects/${CARD}/records/${ids.edited}`, { record: { ...generated[0], customer: { ...generated[0].customer, ...EDITED } } })).statusCode).toBe(200);
 
-    // Pinned tests: on a sample customer (with and without a what-if) and on each of the three customers above. One translation approved, one only drafted.
+    // Pinned tests: on a sample customer (plain, with a what-if, and at a journey step) and on each of the three customers above. One translation approved, one only drafted.
     const before = await project(CARD);
     const all = (await json('GET', `/api/v1/records?documentType=credit-statement&full=1&projectId=${CARD}`)).records as any[];
     const rec = (id: string) => all.find((r) => r.recordId === id);
@@ -685,6 +706,7 @@ describe('the release package (composition replaced by a stub)', () => {
         { id: 'T03', name: 'A customer from the imported file', recordId: ids.imported, expect: captureExpectation(before, rec(ids.imported)) },
         { id: 'T04', name: 'A customer supplied for this document', recordId: ids.supplied, expect: captureExpectation(before, rec(ids.supplied)) },
         { id: 'T05', name: 'A generated customer that was edited', recordId: ids.edited, expect: captureExpectation(before, rec(ids.edited)) },
+        { id: 'T06', name: 'After a missed payment', recordId: 'CARD-0001', journeyCursor: 1, expect: captureExpectation(before, rec('CARD-0001'), {}, 1) },
       ];
       p.strings = { ...(p.strings ?? {}), '@billing-summary/label': { approved: { 'es-US': 'Saldo nuevo' }, basedOn: { 'es-US': p.nodes.find((n: any) => n.id === 'billing-summary').label } }, '@payment-due/label': { draft: { 'es-US': 'BORRADOR pago mínimo' } } };
       const part = p.contentParts.find((c: any) => !c.approvedLocales['es-US']);
@@ -694,7 +716,7 @@ describe('the release package (composition replaced by a stub)', () => {
     expect((await approve(CARD)).release).toMatchObject({ created: true, release: { id: REL, package: { status: 'not-built' } } });
 
     const url = `/api/v1/releases/${REL}/package`;
-    expect((await json('GET', `${url}/status`)).package).toEqual({ status: 'not-built', fileName: `${REL}.zip`, sha256: null, bytes: null, files: null, builtAt: null, progress: null, error: null, summary: null });
+    expect((await json('GET', `${url}/status`)).package).toEqual({ status: 'not-built', fileName: `${REL}.zip`, sha256: null, bytes: null, files: null, builtAt: null, progress: null, error: null, summary: null, verified: null });
     // nothing to read before it is built
     const tooEarly = await inj('GET', `${url}/files/manifest.json`);
     expect(tooEarly.statusCode).toBe(409);
@@ -717,7 +739,7 @@ describe('the release package (composition replaced by a stub)', () => {
     const done = await inj('POST', url, { wait: true });
     expect(done.statusCode).toBe(200);
     const status = done.json().package;
-    expect(status).toMatchObject({ status: 'ready', fileName: `${REL}.zip`, progress: null, error: null });
+    expect(status).toMatchObject({ status: 'ready', fileName: `${REL}.zip`, progress: null, error: null, verified: null });
     expect(status.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(Date.parse(status.builtAt)).not.toBeNaN();
     expect((await json('GET', `/api/v1/releases/${REL}`)).release.package).toEqual(status);
@@ -772,10 +794,13 @@ describe('the release package (composition replaced by a stub)', () => {
     expect(manifest.templateDigest).toBe(projectContentDigest(parsed('template.json')));
   });
 
-  it('building it again gives the same bytes, and no file says when it was built', async () => {
+  it('building it again gives the same bytes, the kept package is never replaced, and no file says when it was built', async () => {
     const before = stub.pdfs;
-    const again = await inj('POST', `/api/v1/releases/${REL}/package`, { force: true, wait: true });
-    expect(again.json()).toMatchObject({ started: true, package: { status: 'ready', sha256: sha(zip), bytes: zip.length } });
+    const kept = (await json('GET', `/api/v1/releases/${REL}/package/status`)).package;
+    const again = await inj('POST', `/api/v1/releases/${REL}/package`, { verify: true, wait: true });
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toMatchObject({ started: true, package: { status: 'ready', sha256: sha(zip), bytes: zip.length, builtAt: kept.builtAt, verified: { same: true, sha256: sha(zip), error: null } } });
+    expect(Date.parse(again.json().package.verified.at)).toBeGreaterThanOrEqual(Date.parse(kept.builtAt));
     expect(stub.pdfs).toBeGreaterThan(before);
     const second = (await inj('GET', `/api/v1/releases/${REL}/package`)).rawPayload;
     expect(second.equals(zip)).toBe(true);
@@ -783,13 +808,16 @@ describe('the release package (composition replaced by a stub)', () => {
     for (const e of zipEntries(zip)) { expect(zip.readUInt16LE(e.offset + 10), e.name).toBe(0); expect(zip.readUInt16LE(e.offset + 12), e.name).toBe(33); }
     // moving the release, logging a handover and time passing change nothing either
     await inj('POST', `/api/v1/releases/${REL}/promote`);
-    await inj('POST', `/api/v1/releases/${REL}/handover`, { kind: 'received' });
-    const third = await inj('POST', `/api/v1/releases/${REL}/package`, { force: true, wait: true });
-    expect(third.json().package.sha256).toBe(sha(zip));
+    // a handover entry records which package it was about
+    const logged = await inj('POST', `/api/v1/releases/${REL}/handover`, { kind: 'received' });
+    expect(logged.json().entry).toMatchObject({ kind: 'received', packageSha256: sha(zip) });
+    const third = await inj('POST', `/api/v1/releases/${REL}/package`, { verify: true, wait: true });
+    expect(third.json().package).toMatchObject({ sha256: sha(zip), verified: { same: true, sha256: sha(zip) } });
     const events = (await json('GET', '/api/v1/audit?action=release.package&limit=20')).events as any[];
-    expect(events.filter((e) => e.detail.event === 'ready').map((e) => e.detail.sameAsBefore)).toEqual([true, true, null]);
+    expect(events.map((e) => e.detail.event).reverse()).toEqual(['started', 'ready', 'check-started', 'checked', 'check-started', 'checked']);
+    expect(events.filter((e) => e.detail.event === 'checked').map((e) => [e.detail.same, e.detail.sha256, e.detail.keptSha256])).toEqual([[true, sha(zip), sha(zip)], [true, sha(zip), sha(zip)]]);
     expect(events.find((e) => e.detail.event === 'ready').detail).toMatchObject({ releaseId: REL, number: 1, sha256: sha(zip), bytes: zip.length, files: files.size });
-    // without `force` a ready package is not rebuilt
+    // without `verify` a ready package is left alone
     const calm = await inj('POST', `/api/v1/releases/${REL}/package`, {});
     expect(calm.statusCode).toBe(200);
     expect(calm.json()).toMatchObject({ started: false, package: { status: 'ready' } });
@@ -814,7 +842,7 @@ describe('the release package (composition replaced by a stub)', () => {
     expect(template.strings).toEqual({ '@billing-summary/label': { approved: { 'es-US': 'Saldo nuevo' }, basedOn: { 'es-US': expect.any(String) } } });
     expect(template.contentParts.some((c: any) => c.draftLocales)).toBe(false);
     expect(template.contentParts.filter((c: any) => approvedParts.includes(c.id)).every((c: any) => c.approvedLocales['es-US'].startsWith('ES aprobado: '))).toBe(true);
-    expect(template.testCases.map((t: any) => t.id)).toEqual(['T01', 'T02', 'T03', 'T04', 'T05']);
+    expect(template.testCases.map((t: any) => t.id)).toEqual(['T01', 'T02', 'T03', 'T04', 'T05', 'T06']);
     // apart from the drafts it is exactly what was approved
     const frozen = ctx.store.releaseProject(REL)!;
     const stripped = JSON.parse(JSON.stringify(frozen));
@@ -954,21 +982,26 @@ describe('the release package (composition replaced by a stub)', () => {
     const template = parsed('template.json') as Project;
     const s = parsed('tests/scenarios.json');
     expect(s).toMatchObject({ formatVersion: 1, syntheticOnly: true, cap: 24, release: { id: REL, number: 1 } });
-    expect(s.counts).toMatchObject({ pinnedTests: 2, pinnedTestsExcluded: 3, omittedByCap: 0, scenarios: s.scenarios.length });
+    expect(s.counts).toMatchObject({ pinnedTests: 3, pinnedTestsExcluded: 3, omittedByCap: 0, scenarios: s.scenarios.length });
     expect(s.counts.generated).toBeGreaterThanOrEqual(6);
     expect(s.scenarios.slice(0, 2).map((x: any) => [x.source, x.name, x.pinnedTest.id, x.customerId])).toEqual([
       ['pinned-test', 'Everyday customer gets payment instructions', 'T01', 'CARD-0001'], ['pinned-test', 'Two missed payments', 'T02', 'CARD-0001'],
     ]);
     expect(s.scenarios[1].overrides).toEqual({ card: { paymentStatus: 'overdue', missedPayments: 2 } });
     expect(s.scenarios[1].data.card).toMatchObject({ paymentStatus: 'overdue', missedPayments: 2 });
-    for (const x of s.scenarios.slice(0, 2)) expect(x.pinnedExpectation).toMatchObject({ holds: true, selectedVariants: expect.any(Object) });
+    // a test pinned at a journey step: the data is the customer after that step
+    expect(s.scenarios[2]).toMatchObject({ source: 'pinned-test', name: 'After a missed payment', pinnedTest: { id: 'T06' }, customerId: 'CARD-0001', journeyCursor: 1, journeyStep: template.journey.events[1].label, overrides: {} });
+    expect(s.scenarios[2].data.card.missedPayments).toBeGreaterThan(s.scenarios[0].data.card.missedPayments);
+    expect(s.scenarios[2].expected.contentDigest).not.toBe(s.scenarios[0].expected.contentDigest);
+    for (const x of s.scenarios.slice(0, 3)) expect(x.pinnedExpectation).toMatchObject({ holds: true, selectedVariants: expect.any(Object) });
+    expect(s.scenarios.slice(3).every((x: any) => x.source === 'generated' && x.journeyCursor === null && x.journeyStep === null)).toBe(true);
     // the three tests on customers that are not synthetic are left out, each with the reason and without the customer
     expect(s.pinnedTestsExcluded).toEqual([
       { test: 'A customer from the imported file', reason: 'It uses an imported customer. Imported customers never leave the studio.' },
       { test: 'A customer supplied for this document', reason: 'It uses a customer that was supplied for this document or edited by a person. Those never leave the studio.' },
       { test: 'A generated customer that was edited', reason: 'It uses a customer that was supplied for this document or edited by a person. Those never leave the studio.' },
     ]);
-    expect(parsed('manifest.json').tests).toMatchObject({ cap: 24, scenarios: s.scenarios.length, pinnedTests: 2, pinnedTestsExcluded: s.pinnedTestsExcluded, omittedByCap: [] });
+    expect(parsed('manifest.json').tests).toMatchObject({ cap: 24, scenarios: s.scenarios.length, pinnedTests: 3, pinnedTestsExcluded: s.pinnedTestsExcluded, omittedByCap: [] });
 
     // only built-in sample customers and customers the engine generated
     const sampleIds = new Set(RECORDS.map((r) => r.recordId));
@@ -1063,7 +1096,7 @@ describe('the release package (composition replaced by a stub)', () => {
     const mine = (await json('GET', `/api/v1/records?documentType=credit-statement&projectId=${CARD}`)).records as any[];
     for (const who of [IMPORTED, SUPPLIED, EDITED]) expect(mine.some((r) => r.name === `${who.givenName} ${who.familyName}`)).toBe(true);
     expect(JSON.stringify(ctx.store.releaseProject(REL))).toContain('BORRADOR');
-    expect(ctx.store.release(REL)!.pinned.map((p) => [p.testId, p.kind])).toEqual([['T01', 'sample'], ['T02', 'sample'], ['T03', 'imported'], ['T04', 'supplied'], ['T05', 'supplied']]);
+    expect(ctx.store.release(REL)!.pinned.map((p) => [p.testId, p.kind])).toEqual([['T01', 'sample'], ['T02', 'sample'], ['T03', 'imported'], ['T04', 'supplied'], ['T05', 'supplied'], ['T06', 'sample']]);
     // what the release remembers about those customers is an id and where it came from: no data
     expect(JSON.stringify(ctx.store.release(REL)!.pinned)).not.toMatch(/Quackenbush|Featherstonehaugh|Throckmorton/);
     expect(files.size).toBeGreaterThan(20);
@@ -1122,14 +1155,28 @@ describe('the release package (composition replaced by a stub)', () => {
     expect(download.json().error).toMatchObject({ code: 'PACKAGE_FAILED', package: { status: 'failed' } });
     expect(download.json().error.message).toBe('Preparing the package failed: The page composer is not available. Prepare it again.');
     expect((await inj('GET', `${url}/files/manifest.json`)).json().error).toMatchObject({ code: 'PACKAGE_NOT_READY', message: 'Preparing the package failed. Prepare it again.' });
-    // a download that waits reports the failure of the build it started
     stub.fail = null;
     const retry = await inj('POST', url, { wait: true });
     expect(retry.json()).toMatchObject({ started: true, package: { status: 'ready', error: null } });
-    expect((await inj('GET', url)).statusCode).toBe(200);
+    const good = await inj('GET', url);
+    expect(good.statusCode).toBe(200);
+    // a check that cannot be completed says so and leaves the kept package exactly as it was
+    stub.fail = 'The page composer stopped.';
+    const check = await inj('POST', url, { verify: true, wait: true });
+    stub.fail = null;
+    expect(check.json().package).toMatchObject({ status: 'ready', sha256: good.headers['x-sha256'], verified: { same: false, sha256: null, error: 'The page composer stopped.' } });
+    expect((await inj('GET', url)).rawPayload.equals(good.rawPayload)).toBe(true);
     const events = (await json('GET', `/api/v1/audit?action=release.package&projectId=${eob}&limit=20`)).events as any[];
-    expect(events.map((e) => e.detail.event).reverse()).toEqual(['started', 'failed', 'started', 'ready']);
+    expect(events.map((e) => e.detail.event).reverse()).toEqual(['started', 'failed', 'started', 'ready', 'check-started', 'checked']);
     expect(events.find((e) => e.detail.event === 'failed').detail).toMatchObject({ number: 1, reason: 'The page composer is not available.' });
+    expect(events.find((e) => e.detail.event === 'checked').detail).toMatchObject({ same: false, reason: 'The page composer stopped.', keptSha256: good.headers['x-sha256'] });
+
+    // a release made by an earlier engine is not built by this one: its package would claim versions that did not produce it
+    const r1 = ctx.store.release(`${eob}-r1`)!;
+    ctx.store.insertRelease({ ...r1, id: `${eob}-r2`, number: 2, versions: { ...r1.versions, engine: 'iss-resolver/0.9.0', packageFormat: 0 } }, ctx.store.releaseProject(r1.id)!);
+    const old = await inj('POST', `/api/v1/releases/${eob}-r2/package`, { wait: true });
+    expect(old.json().package).toMatchObject({ status: 'failed', sha256: null, error: "This studio has been updated since release 2 was made (engine iss-resolver/0.9.0 then, iss-resolver/1.0.0 now; package format 0 then, 1 now), so it can no longer build this release's package exactly as it was approved." });
+    expect((await inj('GET', `/api/v1/releases/${eob}-r2/package`)).statusCode).toBe(409);
     // an English-only package of the other sample kind, for good measure: Spanish is a language of the document but nothing is approved
     const built = unzip((await inj('GET', url)).rawPayload);
     const m = JSON.parse(built.get('manifest.json')!.toString('utf8'));
@@ -1219,7 +1266,7 @@ describe('the release package of a document with its own data', () => {
     for (const name of ['Perpetua', 'Windlesham']) expect(zip.includes(Buffer.from(name)), name).toBe(false);
     for (const data of files.values()) expect(data.toString('utf8')).not.toMatch(/Perpetua|Windlesham/);
     // release 1 is unchanged by any of this
-    expect((await inj('POST', `/api/v1/releases/${id}-r1/package`, { force: true, wait: true })).json().package.sha256).toBe((await json('GET', `/api/v1/releases/${id}-r1`)).release.package.sha256);
+    expect((await inj('POST', `/api/v1/releases/${id}-r1/package`, { verify: true, wait: true })).json().package.verified).toMatchObject({ same: true, error: null });
   });
 });
 
@@ -1265,8 +1312,8 @@ describe('the release package with the real page composer', () => {
 
     // a second build, after the clock has moved on, is the same file byte for byte
     await new Promise((r) => setTimeout(r, 1100));
-    const again = await inj('POST', `/api/v1/releases/${EOB}-r1/package`, { force: true, wait: true });
-    expect(again.json().package).toMatchObject({ status: 'ready', sha256: sha(zip), bytes: zip.length });
+    const again = await inj('POST', `/api/v1/releases/${EOB}-r1/package`, { verify: true, wait: true });
+    expect(again.json().package).toMatchObject({ status: 'ready', sha256: sha(zip), bytes: zip.length, verified: { same: true, sha256: sha(zip), error: null } });
     expect((await inj('GET', `/api/v1/releases/${EOB}-r1/package`)).rawPayload.equals(zip)).toBe(true);
   });
 });

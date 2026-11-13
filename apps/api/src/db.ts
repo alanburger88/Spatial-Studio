@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 // Loaded via require so test bundlers that do not know the newer node:sqlite builtin leave it alone.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
-import { DEMOTE_ON_SAVE, WORKFLOW_LABEL, projectContentDigest, sha256Hex, type DocumentType, type HandoverEntry, type HandoverKind, type Project, type ReleaseActor, type ReleaseEvent, type ReleaseEventKind, type ReleaseInfo, type ReleasePackageSummary, type ReleaseStage, type ReleaseVersions, type Role, type SyntheticRecord, type TemplateInfo, type TemplateVersionInfo, type WorkflowState } from '@iss/model';
+import { DEMOTE_ON_SAVE, WORKFLOW_LABEL, projectContentDigest, sha256Hex, type DocumentType, type HandoverEntry, type HandoverKind, type Project, type ReleaseActor, type ReleaseEvent, type ReleaseEventKind, type ReleaseInfo, type ReleasePackageCheck, type ReleasePackageSummary, type ReleaseStage, type ReleaseVersions, type Role, type SyntheticRecord, type TemplateInfo, type TemplateVersionInfo, type WorkflowState } from '@iss/model';
 import { seedProjects } from '@iss/model/fixtures';
 
 export interface StoredUser { id: string; email: string; name: string; role: Role; disabled: boolean; createdAt: string; updatedAt: string }
@@ -24,7 +24,7 @@ export interface StoredRelease {
   stages: ReleaseInfo['stages']; documentRemovedAt: string | null;
 }
 /** The last finished build of a release package (a build in progress lives in memory only). */
-export interface StoredReleasePackage { status: 'ready' | 'failed'; file: string | null; sha256: string | null; bytes: number | null; files: number | null; summary: ReleasePackageSummary | null; error: string | null; builtAt: string }
+export interface StoredReleasePackage { status: 'ready' | 'failed'; file: string | null; sha256: string | null; bytes: number | null; files: number | null; summary: ReleasePackageSummary | null; error: string | null; builtAt: string; verified: ReleasePackageCheck | null }
 
 /**
  * Local-first POC persistence: SQLite (node:sqlite) behind a small repository API so a
@@ -69,9 +69,9 @@ export class Store {
       CREATE TRIGGER IF NOT EXISTS releases_are_frozen BEFORE UPDATE OF release_id, project_id, number, title, document_type, model_version, content_digest, json, languages, versions, pinned, origin, approved_by_id, approved_by_name, approved_at, created_by_id, created_by_name, created_at ON releases BEGIN SELECT RAISE(ABORT, 'A release is frozen: only its stage and whether its document still exists can change.'); END;
       CREATE TABLE IF NOT EXISTS release_events(id INTEGER PRIMARY KEY AUTOINCREMENT, release_id TEXT NOT NULL, kind TEXT NOT NULL, stage TEXT, note TEXT, user_id TEXT, user_name TEXT, at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS release_events_by_release ON release_events(release_id, id);
-      CREATE TABLE IF NOT EXISTS release_handover(id INTEGER PRIMARY KEY AUTOINCREMENT, release_id TEXT NOT NULL, kind TEXT NOT NULL, stage TEXT, note TEXT, user_id TEXT, user_name TEXT, at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS release_handover(id INTEGER PRIMARY KEY AUTOINCREMENT, release_id TEXT NOT NULL, kind TEXT NOT NULL, stage TEXT, note TEXT, package_sha256 TEXT, user_id TEXT, user_name TEXT, at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS release_handover_by_release ON release_handover(release_id, id);
-      CREATE TABLE IF NOT EXISTS release_packages(release_id TEXT PRIMARY KEY, status TEXT NOT NULL, file TEXT, sha256 TEXT, bytes INTEGER, files INTEGER, summary TEXT, error TEXT, built_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS release_packages(release_id TEXT PRIMARY KEY, status TEXT NOT NULL, file TEXT, sha256 TEXT, bytes INTEGER, files INTEGER, summary TEXT, error TEXT, built_at TEXT NOT NULL, verified TEXT);
     `);
     this.ensureSeeds();
     this.backfillVersions();
@@ -285,15 +285,15 @@ export class Store {
     return (this.db.prepare('SELECT * FROM release_events WHERE release_id=? ORDER BY id').all(releaseId) as any[])
       .map((r) => ({ id: r.id, kind: r.kind, stage: r.stage ?? null, note: r.note ?? null, by: r.user_name ? { id: r.user_id ?? null, name: r.user_name } : null, at: r.at }));
   }
-  addHandover(releaseId: string, e: { kind: HandoverKind; stage: ReleaseStage | null; note: string | null; by: { id: string | null; name: string } | null }): HandoverEntry {
+  addHandover(releaseId: string, e: { kind: HandoverKind; stage: ReleaseStage | null; note: string | null; packageSha256: string | null; by: { id: string | null; name: string } | null }): HandoverEntry {
     const at = new Date().toISOString();
-    const done = this.db.prepare('INSERT INTO release_handover(release_id,kind,stage,note,user_id,user_name,at) VALUES (?,?,?,?,?,?,?)').run(releaseId, e.kind, e.stage, e.note, e.by?.id ?? null, e.by?.name ?? null, at);
-    return { id: Number(done.lastInsertRowid), kind: e.kind, stage: e.stage, note: e.note, by: e.by, at };
+    const done = this.db.prepare('INSERT INTO release_handover(release_id,kind,stage,note,package_sha256,user_id,user_name,at) VALUES (?,?,?,?,?,?,?,?)').run(releaseId, e.kind, e.stage, e.note, e.packageSha256, e.by?.id ?? null, e.by?.name ?? null, at);
+    return { id: Number(done.lastInsertRowid), kind: e.kind, stage: e.stage, note: e.note, packageSha256: e.packageSha256, by: e.by, at };
   }
   /** The handover log of one release, oldest first. */
   releaseHandover(releaseId: string): HandoverEntry[] {
     return (this.db.prepare('SELECT * FROM release_handover WHERE release_id=? ORDER BY id').all(releaseId) as any[])
-      .map((r) => ({ id: r.id, kind: r.kind, stage: r.stage ?? null, note: r.note ?? null, by: r.user_name ? { id: r.user_id ?? null, name: r.user_name } : null, at: r.at }));
+      .map((r) => ({ id: r.id, kind: r.kind, stage: r.stage ?? null, note: r.note ?? null, packageSha256: r.package_sha256 ?? null, by: r.user_name ? { id: r.user_id ?? null, name: r.user_name } : null, at: r.at }));
   }
   /** How many "received" and "live" entries each release has (for lists). */
   handoverCounts(): Map<string, { received: number; live: number }> {
@@ -307,10 +307,10 @@ export class Store {
   }
   releasePackage(releaseId: string): StoredReleasePackage | undefined {
     const r = this.db.prepare('SELECT * FROM release_packages WHERE release_id=?').get(releaseId) as any;
-    return r ? { status: r.status, file: r.file ?? null, sha256: r.sha256 ?? null, bytes: r.bytes ?? null, files: r.files ?? null, summary: r.summary ? JSON.parse(r.summary) : null, error: r.error ?? null, builtAt: r.built_at } : undefined;
+    return r ? { status: r.status, file: r.file ?? null, sha256: r.sha256 ?? null, bytes: r.bytes ?? null, files: r.files ?? null, summary: r.summary ? JSON.parse(r.summary) : null, error: r.error ?? null, builtAt: r.built_at, verified: r.verified ? JSON.parse(r.verified) : null } : undefined;
   }
   setReleasePackage(releaseId: string, p: StoredReleasePackage) {
-    this.db.prepare('INSERT OR REPLACE INTO release_packages(release_id,status,file,sha256,bytes,files,summary,error,built_at) VALUES (?,?,?,?,?,?,?,?,?)').run(releaseId, p.status, p.file, p.sha256, p.bytes, p.files, p.summary ? JSON.stringify(p.summary) : null, p.error, p.builtAt);
+    this.db.prepare('INSERT OR REPLACE INTO release_packages(release_id,status,file,sha256,bytes,files,summary,error,built_at,verified) VALUES (?,?,?,?,?,?,?,?,?,?)').run(releaseId, p.status, p.file, p.sha256, p.bytes, p.files, p.summary ? JSON.stringify(p.summary) : null, p.error, p.builtAt, p.verified ? JSON.stringify(p.verified) : null);
   }
   /** Test and demo reset only (its route is off unless RELEASES_RESET=allow): removes every release with its history, handover log and package record. */
   clearReleases(): number {

@@ -209,7 +209,8 @@ export function registerReleaseRoutes(app: FastifyInstance, deps: RouteDeps): vo
     const stage = req.body?.stage;
     if (stage !== undefined && stage !== null && stage !== '' && !isReleaseStage(stage)) throw new ApiError(400, 'INVALID_STAGE', `stage must be one of ${RELEASE_STAGES.join(', ')}, or left out.`);
     const note = noteOf(req.body?.note, 'A note');
-    const entry = store.addHandover(r.id, { kind, stage: isReleaseStage(stage) ? stage : null, note, by: by(req) });
+    // What was handed over: the package as the studio held it at this moment (null when nobody had prepared it yet).
+    const entry = store.addHandover(r.id, { kind, stage: isReleaseStage(stage) ? stage : null, note, packageSha256: packages.status(r).sha256, by: by(req) });
     audit(store, req, 'release.handover', { projectId: r.documentId, modelVersion: r.modelVersion, detail: { ...named(r), kind: HANDOVER_LABEL[kind], stage: isReleaseStage(stage) ? RELEASE_STAGE_LABEL[stage] : null, withNote: !!note } });
     reply.status(201);
     return { entry, handover: store.releaseHandover(r.id), release: info(r) };
@@ -217,13 +218,19 @@ export function registerReleaseRoutes(app: FastifyInstance, deps: RouteDeps): vo
 
   /* ------------------------------------------------------------ the package */
 
-  /** Starts a build when one is needed and records who asked and how it ended. */
-  const prepare = (r: StoredRelease, req: FastifyRequest, force: boolean) => {
-    const p = packages.prepare(r, { force });
+  /** Starts a build (or, with `verify`, a check of the kept package) when one is needed, and records who asked and how it ended. */
+  const prepare = (r: StoredRelease, req: FastifyRequest, verify: boolean) => {
+    const p = packages.prepare(r, { verify });
     if (p.started) {
       const who = { user: req.user?.id ?? null, userName: req.user?.name ?? null };
-      audit(store, req, 'release.package', { projectId: r.documentId, modelVersion: r.modelVersion, detail: { ...named(r), event: 'started', rebuild: force } });
-      void p.done!.then((o: PackageBuildOutcome) => store.audit({ ...who, action: 'release.package', projectId: r.documentId, modelVersion: r.modelVersion, detail: { ...named(r), event: o.status.status, ...(o.built ? { sha256: o.built.sha256, bytes: o.built.bytes, files: o.built.files, sameAsBefore: o.built.sameAsBefore } : {}), ...(o.status.error ? { reason: o.status.error } : {}) } }));
+      const checking = p.status.status === 'ready';
+      audit(store, req, 'release.package', { projectId: r.documentId, modelVersion: r.modelVersion, detail: { ...named(r), event: checking ? 'check-started' : 'started' } });
+      void p.done!.then((o: PackageBuildOutcome) => store.audit({
+        ...who, action: 'release.package', projectId: r.documentId, modelVersion: r.modelVersion,
+        detail: o.verified
+          ? { ...named(r), event: 'checked', same: o.verified.same, sha256: o.verified.sha256, keptSha256: o.status.sha256, ...(o.verified.error ? { reason: o.verified.error } : {}) }
+          : { ...named(r), event: o.status.status, ...(o.built ? { sha256: o.built.sha256, bytes: o.built.bytes, files: o.built.files } : {}), ...(o.status.error ? { reason: o.status.error } : {}) },
+      }));
     } else req.audited = true;
     return p;
   };
@@ -237,15 +244,16 @@ export function registerReleaseRoutes(app: FastifyInstance, deps: RouteDeps): vo
   app.get<{ Params: { releaseId: string } }>('/api/v1/releases/:releaseId/package/status', async (req) => ({ package: packages.status(releaseOr404(req.params.releaseId)) }));
 
   /**
-   * Prepare the package. Answers at once: 200 when it is ready (or failed), 202 while it is being built.
-   * `wait: true` holds the answer until the build ends; `force: true` builds again even when a package is ready.
+   * Prepare the package. Answers at once: 200 when it is ready (or failed), 202 while work is still going on.
+   * `wait: true` holds the answer until the work ends. `verify: true` builds a ready package again and compares the
+   * result with the kept one; the kept package is never replaced, and the outcome is reported as `package.verified`.
    */
   app.post<{ Params: { releaseId: string }; Body: Record<string, any> }>('/api/v1/releases/:releaseId/package', async (req, reply) => {
     const r = releaseOr404(req.params.releaseId);
-    const p = prepare(r, req, req.body?.force === true);
+    const p = prepare(r, req, req.body?.verify === true);
     if (p.done && req.body?.wait === true) await p.done;
     const status = packages.status(r);
-    reply.status(status.status === 'building' ? 202 : 200);
+    reply.status(status.status === 'building' || status.progress ? 202 : 200);
     return { package: status, started: p.started };
   });
 

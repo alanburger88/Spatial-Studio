@@ -68,7 +68,14 @@ export interface ReleasePackageStatus {
   error: string | null;
   /** Ready only: what the package holds, for a list or a preview header. */
   summary: ReleasePackageSummary | null;
+  /**
+   * The last time the package was built again to check it (it is never replaced once built): whether the new build
+   * was byte-identical to the kept one, or why it could not be built. Null when it was never checked.
+   */
+  verified: ReleasePackageCheck | null;
 }
+
+export interface ReleasePackageCheck { at: string; same: boolean; sha256: string | null; error: string | null }
 
 export interface ReleasePackageSummary {
   scenarios: number;
@@ -134,6 +141,8 @@ export interface HandoverEntry {
   /** The environment it was received or went live in, when the person said. */
   stage: ReleaseStage | null;
   note: string | null;
+  /** The SHA-256 of the release package the studio held when this was logged (null when it had not been built yet). */
+  packageSha256: string | null;
   by: ReleaseActor | null;
   at: string;
 }

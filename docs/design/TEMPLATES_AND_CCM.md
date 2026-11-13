@@ -33,21 +33,23 @@ Build starts after the AI assistant work is finished and verified, in the phases
 - **Adapters live outside the core.** An adapter reads a release package and writes whatever one CCM needs. The package format is the contract; a format change is versioned and announced.
 - **Git later:** releases are already frozen, file-shaped and hash-addressed, so writing them to a repository adds a destination, not a redesign.
 
-## The release package (sketch, to be finalised in phase 2)
+## The release package (finalised in phase 2)
+
+The format is final as **format version 1** and is specified file by file in [`RELEASE_PACKAGE.md`](RELEASE_PACKAGE.md). The routes that create, move and download releases are in [`docs/api/RELEASES.md`](../api/RELEASES.md).
 
 ```
-<template-id>-r<release>.zip
-  manifest.json            package format version, release number, stage, approver, date, engine and renderer versions, file list with SHA-256
-  template.json            layout, components, rules, channel settings (documented schema, versioned)
-  library/                 the pinned versions of the shared items this template uses
-  wording/<locale>.xlf     every customer-visible text per language (XLIFF 2.x), plus wording/<locale>.csv
-  data/dictionary.json     fields the template needs: path, label, type, format, required, example
-  data/mapping-<ccm>.json  field names and formats in the target CCM (one per configured target)
-  assets/                  images; fonts.json lists the fonts required (font files are not redistributed)
-  tests/scenarios.json     named customers and what-ifs with expected messages, sections and amounts
-  reference/<scenario>/    document.pdf, document.html, email.html, email.txt, sms.txt, facts.json
-  README.html              what this is, how to verify a build against it
+<document-id>-r<release>.zip
+  manifest.json            format version, release number, document, approver, date, engine and renderer versions, languages, every file with its SHA-256
+  README.html              what this is, how to verify a build against it, what "matching" means
+  template.json            the approved template as a studio project file (project format 1.0.0), approved wording only
+  wording/<locale>.xlf     every customer-visible text per language (XLIFF 2.0), plus wording/<locale>.csv and the English source list
+  data/dictionary.json     every field: path, label, type, format, required, example, where the template uses it
+  assets/                  images as files named by content hash (they also stay inside template.json); fonts.json lists the fonts required
+  tests/scenarios.json     synthetic customers with what the engine works out for each (up to 24)
+  reference/<scenario>/    document.pdf, document.html, email.html, email.txt, sms.txt, facts.json (up to 8 scenarios)
 ```
+
+Changes from the sketch, each for a reason given in `RELEASE_PACKAGE.md`: the **stage is not in the manifest** (it changes while the release does not; the studio keeps it); `library/` and `data/mapping-<ccm>.json` are **not written yet** (phases 4 and 3) and will be added without a format version change; unapproved translation drafts are left out of `template.json`.
 
 ## Phases
 

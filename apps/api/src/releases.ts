@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
-  DOCUMENT_TYPE_LABEL, RELEASE_STAGE_LABEL, SOURCE_LANGUAGE, currentRelease, projectContentDigest, projectLanguages, promoteProblem, releaseCreationDecision, releaseId,
+  DOCUMENT_TYPE_LABEL, SOURCE_LANGUAGE, currentRelease, projectContentDigest, projectLanguages, promoteProblem, releaseCreationDecision, releaseId,
   releasePackageName, releaseStanding, supersededByPromotion, withdrawProblem,
-  type Project, type ReleaseActor, type ReleaseInfo, type ReleasePackageStatus, type ReleaseStage, type ReleaseVersions,
+  type Project, type ReleaseActor, type ReleaseInfo, type ReleasePackageCheck, type ReleasePackageStatus, type ReleaseStage, type ReleaseVersions,
 } from '@iss/model';
 import { RECORDS } from '@iss/model/fixtures';
 import { ENGINE_VERSION } from '@iss/resolver';
@@ -124,15 +124,34 @@ export function liveReleases(releases: StoredRelease[]): { production: StoredRel
   return { production: currentRelease(releases, 'production'), test: currentRelease(releases, 'test'), latest: releases[releases.length - 1] };
 }
 
-export const stageLabel = (s: ReleaseStage): string => RELEASE_STAGE_LABEL[s];
+const VERSION_NAMES: Record<keyof ReleaseVersions, string> = { schema: 'project format', engine: 'engine', pagedRenderer: 'PDF renderer', htmlRenderer: 'web page renderer', emailRenderer: 'email renderer', smsRenderer: 'SMS renderer', packageFormat: 'package format' };
+
+/**
+ * Why this studio can no longer build the release's package exactly as approved (null when it can): the engine, a
+ * renderer or the package format has changed since the release was made. A package states the versions that produced
+ * it, so building it with different ones would make that statement false.
+ */
+export function versionDrift(r: StoredRelease, frozen: Project): string | null {
+  const now = releaseVersions(frozen);
+  const changed = (Object.keys(VERSION_NAMES) as Array<keyof ReleaseVersions>).filter((k) => now[k] !== r.versions[k]);
+  if (!changed.length) return null;
+  return `This studio has been updated since release ${r.number} was made (${changed.map((k) => `${VERSION_NAMES[k]} ${r.versions[k]} then, ${now[k]} now`).join('; ')}), so it can no longer build this release's package exactly as it was approved.`;
+}
 
 /* ------------------------------------------------------------------ packages: build once, keep, serve */
 
-export interface PackageBuildOutcome { status: ReleasePackageStatus; /** Set when this call finished a build. */ built?: { sha256: string; bytes: number; files: number; sameAsBefore: boolean | null } }
+export interface PackageBuildOutcome {
+  status: ReleasePackageStatus;
+  /** Set when this run built the package the studio now keeps. */
+  built?: { sha256: string; bytes: number; files: number };
+  /** Set when this run built the package again to check it against the kept one. */
+  verified?: ReleasePackageCheck;
+}
 
 /**
  * Builds release packages one at a time, off the request that asked, and keeps each finished ZIP on disk with its
- * SHA-256. "Building" lives in memory only, so a build cut short by a restart is simply not built.
+ * SHA-256. Once a package is built it is never replaced: building it again only checks that the result is the same.
+ * "Building" lives in memory only, so a build cut short by a restart is simply not built.
  */
 export class ReleasePackages {
   private building = new Map<string, { promise: Promise<PackageBuildOutcome>; progress: { step: string; done: number; total: number } }>();
@@ -140,74 +159,91 @@ export class ReleasePackages {
   constructor(private store: Store, private composer: PackageComposer, private caps: { scenarioCap?: number; referenceCap?: number } = {}) {}
 
   private file(name: string) { return path.join(this.store.artifactDir, name); }
+  /** The stored record of a package whose ZIP is really there. */
+  private kept(releaseId: string) {
+    const row = this.store.releasePackage(releaseId);
+    return row && row.status === 'ready' && row.file && existsSync(this.file(row.file)) ? row : null;
+  }
 
   status(r: Pick<StoredRelease, 'id' | 'documentId' | 'number'>): ReleasePackageStatus {
     const fileName = releasePackageName(r.documentId, r.number);
-    const empty: ReleasePackageStatus = { status: 'not-built', fileName, sha256: null, bytes: null, files: null, builtAt: null, progress: null, error: null, summary: null };
+    const empty: ReleasePackageStatus = { status: 'not-built', fileName, sha256: null, bytes: null, files: null, builtAt: null, progress: null, error: null, summary: null, verified: null };
+    const kept = this.kept(r.id);
     const job = this.building.get(r.id);
+    // While a kept package is being checked it stays ready (and downloadable); only a first build shows as building.
+    if (kept) return { status: 'ready', fileName, sha256: kept.sha256, bytes: kept.bytes, files: kept.files, builtAt: kept.builtAt, progress: job ? { ...job.progress } : null, error: null, summary: kept.summary, verified: kept.verified };
     if (job) return { ...empty, status: 'building', progress: { ...job.progress } };
     const row = this.store.releasePackage(r.id);
-    if (!row) return empty;
-    if (row.status === 'failed') return { ...empty, status: 'failed', error: row.error, builtAt: row.builtAt };
-    if (!row.file || !existsSync(this.file(row.file))) return empty;
-    return { status: 'ready', fileName, sha256: row.sha256, bytes: row.bytes, files: row.files, builtAt: row.builtAt, progress: null, error: null, summary: row.summary };
+    return row?.status === 'failed' ? { ...empty, status: 'failed', error: row.error, builtAt: row.builtAt } : empty;
   }
 
   /**
-   * Starts a build unless one is running or the package is ready (`force` rebuilds a ready one).
+   * Starts a build when the package is not built (or its last build failed). With `verify`, a package that is ready is
+   * built again and compared with the kept one, which stays in place whatever the result.
    * Returns at once with the status and, when a build was started or is running, the promise of its outcome.
    */
-  prepare(r: StoredRelease, opts: { force?: boolean } = {}): { status: ReleasePackageStatus; started: boolean; done: Promise<PackageBuildOutcome> | null } {
+  prepare(r: StoredRelease, opts: { verify?: boolean } = {}): { status: ReleasePackageStatus; started: boolean; done: Promise<PackageBuildOutcome> | null } {
     const running = this.building.get(r.id);
     if (running) return { status: this.status(r), started: false, done: running.promise };
-    const now = this.status(r);
-    if (now.status === 'ready' && !opts.force) return { status: now, started: false, done: null };
+    if (this.kept(r.id) && !opts.verify) return { status: this.status(r), started: false, done: null };
     const job = { progress: { step: 'Waiting for its turn', done: 0, total: 1 }, promise: null as unknown as Promise<PackageBuildOutcome> };
-    const previous = now.status === 'ready' ? now.sha256 : null;
-    job.promise = (this.queue = this.queue.then(() => this.build(r, job, previous))) as Promise<PackageBuildOutcome>;
+    job.promise = (this.queue = this.queue.then(() => this.build(r, job))) as Promise<PackageBuildOutcome>;
     this.building.set(r.id, job);
     return { status: this.status(r), started: true, done: job.promise };
   }
 
-  private async build(r: StoredRelease, job: { progress: { step: string; done: number; total: number } }, previousSha: string | null): Promise<PackageBuildOutcome> {
+  private async build(r: StoredRelease, job: { progress: { step: string; done: number; total: number } }): Promise<PackageBuildOutcome> {
+    const now = () => new Date().toISOString();
+    // Names and reasons only: never a content body.
+    const reason = (e: any) => String(e?.message ?? e).slice(0, 400);
     let built: PackageBuildOutcome['built'];
+    let verified: PackageBuildOutcome['verified'];
     try {
       const frozen = this.store.releaseProject(r.id);
       if (!frozen) throw new Error('The release has no stored content.');
+      const drift = versionDrift(r, frozen);
+      if (drift) throw new Error(drift);
       const pkg = await buildReleasePackage(r, frozen, { composer: this.composer, ...this.caps, onProgress: (p) => { job.progress = p; } });
-      const file = `release-${r.id}-${pkg.sha256.slice(0, 16)}.zip`;
-      writeFileSync(this.file(file), pkg.zip);
-      this.store.setReleasePackage(r.id, { status: 'ready', file, sha256: pkg.sha256, bytes: pkg.zip.length, files: pkg.files.length + 1, summary: pkg.summary, error: null, builtAt: new Date().toISOString() });
-      built = { sha256: pkg.sha256, bytes: pkg.zip.length, files: pkg.files.length + 1, sameAsBefore: previousSha === null ? null : previousSha === pkg.sha256 };
+      const kept = this.kept(r.id);
+      if (kept) {
+        verified = { at: now(), same: kept.sha256 === pkg.sha256, sha256: pkg.sha256, error: null };
+        this.store.setReleasePackage(r.id, { ...kept, verified });
+      } else {
+        const file = `release-${r.id}-${pkg.sha256.slice(0, 16)}.zip`;
+        writeFileSync(this.file(file), pkg.zip);
+        this.store.setReleasePackage(r.id, { status: 'ready', file, sha256: pkg.sha256, bytes: pkg.zip.length, files: pkg.files.length + 1, summary: pkg.summary, error: null, builtAt: now(), verified: null });
+        built = { sha256: pkg.sha256, bytes: pkg.zip.length, files: pkg.files.length + 1 };
+      }
     } catch (e: any) {
-      // Names and reasons only: never a content body.
-      this.store.setReleasePackage(r.id, { status: 'failed', file: null, sha256: null, bytes: null, files: null, summary: null, error: String(e?.message ?? e).slice(0, 300), builtAt: new Date().toISOString() });
+      const kept = this.kept(r.id);
+      if (kept) {
+        verified = { at: now(), same: false, sha256: null, error: reason(e) };
+        this.store.setReleasePackage(r.id, { ...kept, verified });
+      } else this.store.setReleasePackage(r.id, { status: 'failed', file: null, sha256: null, bytes: null, files: null, summary: null, error: reason(e), builtAt: now(), verified: null });
     } finally {
       this.building.delete(r.id);
     }
-    return { status: this.status(r), built };
+    return { status: this.status(r), built, verified };
   }
 
-  /** The cached ZIP of a ready package. */
+  /** The kept ZIP of a ready package. */
   zip(r: StoredRelease): Buffer | null {
-    const row = this.store.releasePackage(r.id);
-    if (!row || row.status !== 'ready' || !row.file || !existsSync(this.file(row.file))) return null;
-    return readFileSync(this.file(row.file));
+    const kept = this.kept(r.id);
+    return kept ? readFileSync(this.file(kept.file!)) : null;
   }
 
   /** The files of a ready package as its manifest lists them (plus the manifest itself), without unpacking anything. */
   files(r: StoredRelease): PackageFile[] | null {
     const zip = this.zip(r);
     if (!zip) return null;
-    const entries = zipEntries(zip);
-    const manifestEntry = entries.find((e) => e.name === 'manifest.json');
+    const manifestEntry = zipEntries(zip).find((e) => e.name === 'manifest.json');
     if (!manifestEntry) return null;
     const manifest = zipRead(zip, manifestEntry);
     const listed = (JSON.parse(manifest.toString('utf8')).contents ?? []) as PackageFile[];
     return [{ path: 'manifest.json', sha256: createHash('sha256').update(manifest).digest('hex'), bytes: manifest.length, role: 'manifest' }, ...listed];
   }
 
-  /** One file of a ready package, read straight from the cached ZIP. */
+  /** One file of a ready package, read straight from the kept ZIP. */
   read(r: StoredRelease, filePath: string): Buffer | null {
     const zip = this.zip(r);
     if (!zip) return null;
