@@ -105,7 +105,8 @@ export function Tour() {
   useEffect(() => {
     setI(0); setBox(null); setFound(false); setCard(null); setLate(false);
     if (!open) return;
-    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Mounted open (the tour is a separate download, mounted when started): keep who had focus first, not the card the first pass focused.
+    if (!opener.current) opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     write(OFFERED_KEY, '1');
   }, [open]);
 

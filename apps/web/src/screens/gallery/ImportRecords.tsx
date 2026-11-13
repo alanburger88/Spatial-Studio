@@ -70,17 +70,25 @@ export function ImportDialog({ onClose, onDone, projectId }: { onClose: () => vo
   const [mapping, setMapping] = useState<string[]>([]);
   // Assistant column matching (built-in): exact and likely matches are pre-selected; a guess is only offered, never applied silently.
   const matches: ColumnMatch[] = useMemo(() => (headers.length ? matchColumns(headers.map((h) => h.replace(/^\uFEFF/, '')), csvRows.slice(1, 26), target ?? { documentType: docType }) : []), [headers.join('\u0001'), csvRows, target, docType]);
+  // Matches the person chose by hand, by column, for the current set of columns. They are kept whenever the document's
+  // fields arrive late or are re-read in the background (the list can even be empty for a moment); only a new set of
+  // columns starts afresh.
+  const chosen = useRef<{ key: string; byColumn: Record<number, string> }>({ key: '', byColumn: {} });
+  const choose = (i: number, value: string) => { chosen.current.byColumn[i] = value; setMapping((m) => m.map((x, j) => (j === i ? value : x))); };
   useEffect(() => {
     const usable = new Set(fields.filter((f) => f.type !== 'array').map((f) => f.path));
+    const headersKey = headers.join('\u0001');
+    if (chosen.current.key !== headersKey) chosen.current = { key: headersKey, byColumn: {} };
+    const byHand = chosen.current.byColumn;
     setMapping(headers.map((h, i) => {
+      if (byHand[i] !== undefined) return byHand[i];
       const own = autoMatch(h.replace(/^\uFEFF/, ''), fields);
       if (own !== IGNORE) return own;
       const m = matches[i];
       return m?.path && usable.has(m.path) && (m.confidence === 'exact' || m.confidence === 'likely') ? m.path : IGNORE;
     }));
     setCheck(null);
-    // Keyed by what the columns and fields ARE, not by object identity: the document is re-read in the background
-    // (for example when the project list refreshes), and that must not throw away a match the person chose by hand.
+    // Keyed by what the columns and fields ARE, not by object identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headers.join('\u0001'), fields.map((f) => `${f.path}:${f.type}`).join('\u0001'), matches.map((m) => `${m.path ?? ''}:${m.confidence}`).join('\u0001')]);
   const downloadMapped = () => {
@@ -186,7 +194,7 @@ export function ImportDialog({ onClose, onDone, projectId }: { onClose: () => vo
                       <td><strong>{h || <em className="faint">(blank)</em>}</strong></td>
                       <td className="faint imp-sample" title={csvRows[1]?.[i] ?? ''}>{csvRows[1]?.[i] ?? ''}</td>
                       <td>
-                        <select className="select" value={mapping[i] ?? IGNORE} onChange={(e) => setMapping((m) => m.map((x, j) => (j === i ? e.target.value : x)))} aria-label={`Data field for column ${h}`} data-testid={`map-${i}`}>
+                        <select className="select" value={mapping[i] ?? IGNORE} onChange={(e) => choose(i, e.target.value)} aria-label={`Data field for column ${h}`} data-testid={`map-${i}`}>
                           <option value={IGNORE}>— Ignore —</option>
                           <option value={SOURCE_ID}>Your record ID (kept for reference)</option>
                           {fields.filter((f) => f.type !== 'array').map((f) => <option key={f.path} value={f.path}>{f.label}{f.path.startsWith('custom.') ? ' (custom)' : ''}</option>)}
@@ -206,7 +214,7 @@ export function ImportDialog({ onClose, onDone, projectId }: { onClose: () => vo
                               {m.confidence === 'likely' && agrees && <span className="chip info">Likely</span>}
                               {m.confidence === 'guess' && <span className="chip warning">Guess</span>}
                               {(m.confidence === 'none' || (!agrees && m.confidence !== 'guess')) && chosen === IGNORE && <span className="chip">Not matched</span>}
-                              {m.confidence === 'guess' && m.path && !agrees && <button type="button" className="btn sm ghost" onClick={() => setMapping((mm) => mm.map((x, j) => (j === i ? m.path! : x)))} data-testid={`match-use-${i}`}>Use “{label(m.path)}”</button>}
+                              {m.confidence === 'guess' && m.path && !agrees && <button type="button" className="btn sm ghost" onClick={() => choose(i, m.path!)} data-testid={`match-use-${i}`}>Use “{label(m.path)}”</button>}
                               <span className="faint imp-match-why">{m.reason}</span>
                               {m.sampleProblem && agrees && <span className="imp-match-warn" data-testid={`match-problem-${i}`}>▲ {m.sampleProblem}</span>}
                             </>
