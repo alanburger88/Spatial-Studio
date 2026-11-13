@@ -22,6 +22,9 @@ import { registerAssistRoutes } from './routes/assist';
 import { registerTestDataRoutes } from './routes/testData';
 import { registerRecordRoutes } from './routes/records';
 import { registerSetupRoutes } from './routes/setup';
+import { registerReleaseRoutes } from './routes/releases';
+import { ReleasePackages, createRelease, releaseInfo } from './releases';
+import { chromiumPackageComposer, type PackageComposer } from './releasePackage';
 import type { RouteDeps } from './routes/deps';
 import { handleMessage, providerConfig, providerStatus, type Proposal } from './assistant';
 import { registerAuth, audit } from './auth';
@@ -65,7 +68,7 @@ function checkDraftProject(p: any, projectId: string): Project {
   return p as Project;
 }
 
-export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides env AUTH=on (tests). */ auth?: boolean; /** Replaces the AI translation call (tests). */ translator?: import('./translate').Translator; /** Replaces the assistant's model call (tests). */ assistModel?: import('./assistAi').AssistModel }
+export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides env AUTH=on (tests). */ auth?: boolean; /** Replaces the AI translation call (tests). */ translator?: import('./translate').Translator; /** Replaces the assistant's model call (tests). */ assistModel?: import('./assistAi').AssistModel; /** Release packages: replaces the browser composition and lowers the scenario caps (tests). */ releasePackage?: { composer?: PackageComposer; scenarioCap?: number; referenceCap?: number } }
 
 export async function buildApp(opts: AppOptions = {}) {
   const store = new Store(opts.dataDir ?? process.env.DATA_DIR ?? path.resolve(here, '../../../.data'));
@@ -189,7 +192,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const src = projectOr404(req.params.projectId);
     const title = cleanTitle((req.body as any)?.title ?? `${src.title} (copy)`);
     let id = slug(title); if (id.length < 3) id = `${id}-copy`;
-    for (let i = 2; store.getProject(id); i++) id = `${slug(title).slice(0, 36)}-${i}`;
+    for (let i = 2; store.getProject(id) || store.hasReleases(id); i++) id = `${slug(title).slice(0, 36)}-${i}`;
     const { lastSavedAt: _l, ...rest } = src as Project & { lastSavedAt?: string };
     const copy = { ...rest, projectId: id, title, modelVersion: 1, derivedFrom: { projectId: src.projectId, modelVersion: src.modelVersion } } as Project;
     const saved = store.putProject(copy, projectContentDigest(copy), { by: by(req), label: `Duplicated from “${src.title}” v${src.modelVersion}` });
@@ -210,13 +213,16 @@ export async function buildApp(opts: AppOptions = {}) {
     projectOr404(req.params.projectId);
     if (store.isSample(req.params.projectId)) throw new ApiError(400, 'SAMPLE_PROJECT', 'Approved sample projects cannot be deleted; use Restore approved sample instead.');
     const gone = projectOr404(req.params.projectId);
-    store.deleteProject(req.params.projectId);
-    audit(store, req, 'project.delete', { projectId: gone.projectId, modelVersion: gone.modelVersion, detail: { title: gone.title } });
-    return { deleted: true, projectId: req.params.projectId };
+    // Releases outlive their document: they are kept and marked "document removed".
+    const releasesKept = store.releases(gone.projectId).length;
+    store.deleteProject(req.params.projectId, by(req));
+    audit(store, req, 'project.delete', { projectId: gone.projectId, modelVersion: gone.modelVersion, detail: { title: gone.title, releasesKept } });
+    return { deleted: true, projectId: req.params.projectId, releasesKept };
   });
 
   /* Feature route modules (each owns its own file; see routes/deps.ts for the shared helpers they receive). */
-  const deps: RouteDeps = { store, composer, ApiError, projectOr404, recordOr404, allRecords, checkDraftProject, runFor: (b) => runFor(ResolveBody.parse(b)), translator: opts.translator, assistModel: opts.assistModel };
+  const releasePackages = new ReleasePackages(store, opts.releasePackage?.composer ?? chromiumPackageComposer(composer), { scenarioCap: opts.releasePackage?.scenarioCap, referenceCap: opts.releasePackage?.referenceCap });
+  const deps: RouteDeps = { store, composer, ApiError, projectOr404, recordOr404, allRecords, checkDraftProject, runFor: (b) => runFor(ResolveBody.parse(b)), translator: opts.translator, assistModel: opts.assistModel, releasePackages };
   registerTemplateRoutes(app, deps);
   registerChannelRoutes(app, deps);
   registerTranslationRoutes(app, deps);
@@ -224,6 +230,7 @@ export async function buildApp(opts: AppOptions = {}) {
   registerTestDataRoutes(app, deps);
   registerRecordRoutes(app, deps);
   registerSetupRoutes(app, deps);
+  registerReleaseRoutes(app, deps);
 
   /* ------------------------------------------------ version history, review workflow, comments, audit */
 
@@ -318,9 +325,20 @@ export async function buildApp(opts: AppOptions = {}) {
       if (!readiness.ready) throw new ApiError(422, 'APPROVAL_BLOCKED', `Cannot approve: ${readiness.blocking.length} blocking issue${readiness.blocking.length === 1 ? '' : 's'} and ${readiness.testsFailed} failing test${readiness.testsFailed === 1 ? '' : 's'} in the saved model (v${p.modelVersion}).`, { readiness });
     }
     if (action === 'request_changes' && !comment) throw new ApiError(400, 'COMMENT_REQUIRED', 'Say what needs to change.');
-    const { from, to } = store.setWorkflow(p.projectId, action, t.to, p.modelVersion, projectContentDigest(p), by(req), comment || null);
-    audit(store, req, `workflow.${action}`, { projectId: p.projectId, modelVersion: p.modelVersion, detail: { from, to, withComment: !!comment } });
-    return workflowView(p, req, false);
+    // Approving a document creates its next numbered release at Test, frozen at exactly this version. The approval and
+    // the release are stored together or not at all. (All of the creation logic is in `createRelease`; a separate
+    // "create release" step would call it from its own route instead of from here.)
+    const { from, to, release } = store.transaction(() => {
+      const moved = store.setWorkflow(p.projectId, action, t.to, p.modelVersion, projectContentDigest(p), by(req), comment || null);
+      const made = action === 'approve' ? createRelease(store, p, { approvedBy: by(req), approvedAt: store.getWorkflow(p.projectId).updatedAt ?? new Date().toISOString(), createdBy: by(req), origin: 'approval', noteReapproval: true }) : null;
+      return { ...moved, release: made };
+    });
+    audit(store, req, `workflow.${action}`, { projectId: p.projectId, modelVersion: p.modelVersion, detail: { from, to, withComment: !!comment, ...(release ? { release: { number: release.release.number, created: release.created } } : {}) } });
+    if (release?.created) audit(store, req, 'release.create', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { releaseId: release.release.id, number: release.release.number, title: release.release.title, stage: 'Test', origin: 'approval', approvedBy: req.user?.name ?? null, supersededAtTest: release.supersededAtTest } });
+    const view = workflowView(p, req, false);
+    if (!release) return view;
+    const info = releaseInfo(release.release, releasePackages.status(release.release), store.handoverCounts().get(release.release.id));
+    return { ...view, release: { created: release.created, reason: release.reason, message: release.created ? `Release ${info.number} was created at Test.` : `Release ${info.number} already holds this content, so no new release was made.`, release: info } };
   });
 
   /* Comments pinned to components (plain text only). */

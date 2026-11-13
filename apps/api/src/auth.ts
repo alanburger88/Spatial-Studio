@@ -115,6 +115,14 @@ const ROUTES: Record<string, Need> = {
   'POST /api/v1/projects/:projectId/test-data/plan': 'any',
   'POST /api/v1/projects/:projectId/records/check': 'any',
   'POST /api/v1/assistant/proposals/:id/decision': 'any',
+  // Releases: approvers and admins create them and keep the handover log; only admins move one between stages.
+  'POST /api/v1/projects/:projectId/releases': 'approve',
+  'POST /api/v1/releases/:releaseId/handover': 'approve',
+  'POST /api/v1/releases/:releaseId/promote': 'promote_release',
+  'POST /api/v1/releases/:releaseId/withdraw': 'promote_release',
+  'POST /api/v1/releases/reset': 'manage_users',
+  // Preparing a package changes no document or release; anyone who may download it may ask for it (the handler records who did).
+  'POST /api/v1/releases/:releaseId/package': 'any',
 };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Routes not listed above: reads need a session; anything that writes needs edit rights (safe default for new modules). */
@@ -133,6 +141,7 @@ function forbiddenMessage(role: Role, need: Permission): string {
   if (role === 'reviewer' && need === 'edit') return 'Reviewers can comment but not edit.';
   if (need === 'edit') return `${ROLE_LABEL[role]}s cannot change documents; ask an author.`;
   if (need === 'manage_users') return 'Only admins can manage users.';
+  if (need === 'promote_release') return 'Only admins can move a release to Production or withdraw it.';
   return `${ROLE_LABEL[role]}s are not allowed to do this.`;
 }
 

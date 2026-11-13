@@ -72,7 +72,7 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
   const freeProjectId = (title: string): string => {
     let id = slug(title);
     if (id.length < 3) id = `${id}-project`;
-    for (let i = 2; store.getProject(id); i++) id = `${slug(title).slice(0, 36)}-${i}`;
+    for (let i = 2; store.getProject(id) || store.hasReleases(id); i++) id = `${slug(title).slice(0, 36)}-${i}`;
     return id;
   };
   /** The rows of the supplied file, or undefined when none was sent. */

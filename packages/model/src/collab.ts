@@ -14,12 +14,13 @@ export const ROLE_SUMMARY: Record<Role, string> = {
   admin: 'Everything, including managing users',
 };
 
-export type Permission = 'edit' | 'comment' | 'submit' | 'request_changes' | 'approve' | 'publish' | 'reopen' | 'manage_users';
+/** `promote_release` = move a release to Production or withdraw it (admins only; see releases.ts). */
+export type Permission = 'edit' | 'comment' | 'submit' | 'request_changes' | 'approve' | 'publish' | 'reopen' | 'manage_users' | 'promote_release';
 const PERMISSIONS: Record<Role, Permission[]> = {
   author: ['edit', 'comment', 'submit', 'reopen'],
   reviewer: ['comment', 'request_changes'],
   approver: ['comment', 'request_changes', 'approve', 'publish', 'reopen'],
-  admin: ['edit', 'comment', 'submit', 'request_changes', 'approve', 'publish', 'reopen', 'manage_users'],
+  admin: ['edit', 'comment', 'submit', 'request_changes', 'approve', 'publish', 'reopen', 'manage_users', 'promote_release'],
 };
 export function permissionsFor(role: Role | null | undefined): Permission[] { return role ? [...PERMISSIONS[role]] : []; }
 export function roleCan(role: Role | null | undefined, p: Permission): boolean { return !!role && PERMISSIONS[role].includes(p); }

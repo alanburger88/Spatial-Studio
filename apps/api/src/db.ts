@@ -4,10 +4,27 @@ import { createRequire } from 'node:module';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 // Loaded via require so test bundlers that do not know the newer node:sqlite builtin leave it alone.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
-import { DEMOTE_ON_SAVE, WORKFLOW_LABEL, projectContentDigest, sha256Hex, type Project, type Role, type SyntheticRecord, type TemplateInfo, type TemplateVersionInfo, type WorkflowState } from '@iss/model';
+import { DEMOTE_ON_SAVE, WORKFLOW_LABEL, projectContentDigest, sha256Hex, type DocumentType, type HandoverEntry, type HandoverKind, type Project, type ReleaseActor, type ReleaseEvent, type ReleaseEventKind, type ReleaseInfo, type ReleasePackageCheck, type ReleasePackageSummary, type ReleaseStage, type ReleaseVersions, type Role, type SyntheticRecord, type TemplateInfo, type TemplateVersionInfo, type WorkflowState } from '@iss/model';
 import { seedProjects } from '@iss/model/fixtures';
 
 export interface StoredUser { id: string; email: string; name: string; role: Role; disabled: boolean; createdAt: string; updatedAt: string }
+
+/**
+ * Which customer each pinned test of a release used, recorded when the release is created so that the package never
+ * depends on what the studio holds later. No customer data: an id, where the customer came from, and (for a generated
+ * customer) a digest that lets the package builder prove the engine reproduces it from synthetic data alone.
+ */
+export interface PinnedCustomerRef { testId: string; recordId: string; kind: 'sample' | 'generated' | 'imported' | 'supplied' | 'missing'; digest?: string }
+
+/** A release as stored. The frozen project is read separately (`releaseProject`). Only `stages` and `documentRemovedAt` ever change. */
+export interface StoredRelease {
+  id: string; documentId: string; number: number; title: string; documentType: DocumentType; modelVersion: number; contentDigest: string;
+  languages: string[]; versions: ReleaseVersions; pinned: PinnedCustomerRef[]; origin: 'approval' | 'manual';
+  approvedBy: ReleaseActor | null; approvedAt: string; createdBy: ReleaseActor | null; createdAt: string;
+  stages: ReleaseInfo['stages']; documentRemovedAt: string | null;
+}
+/** The last finished build of a release package (a build in progress lives in memory only). */
+export interface StoredReleasePackage { status: 'ready' | 'failed'; file: string | null; sha256: string | null; bytes: number | null; files: number | null; summary: ReleasePackageSummary | null; error: string | null; builtAt: string; verified: ReleasePackageCheck | null }
 
 /**
  * Local-first POC persistence: SQLite (node:sqlite) behind a small repository API so a
@@ -47,6 +64,14 @@ export class Store {
       CREATE TABLE IF NOT EXISTS project_test_data(project_id TEXT PRIMARY KEY, json TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS templates(template_id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL, document_type TEXT NOT NULL, retired INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS template_versions(template_id TEXT NOT NULL, version INTEGER NOT NULL, json TEXT NOT NULL, meta TEXT NOT NULL, saved_at TEXT NOT NULL, PRIMARY KEY(template_id, version));
+      CREATE TABLE IF NOT EXISTS releases(release_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, number INTEGER NOT NULL, title TEXT NOT NULL, document_type TEXT NOT NULL, model_version INTEGER NOT NULL, content_digest TEXT NOT NULL, json TEXT NOT NULL, languages TEXT NOT NULL, versions TEXT NOT NULL, pinned TEXT NOT NULL, origin TEXT NOT NULL, approved_by_id TEXT, approved_by_name TEXT, approved_at TEXT NOT NULL, created_by_id TEXT, created_by_name TEXT, created_at TEXT NOT NULL, stages TEXT NOT NULL, document_removed_at TEXT, UNIQUE(project_id, number));
+      CREATE INDEX IF NOT EXISTS releases_by_project ON releases(project_id, number);
+      CREATE TRIGGER IF NOT EXISTS releases_are_frozen BEFORE UPDATE OF release_id, project_id, number, title, document_type, model_version, content_digest, json, languages, versions, pinned, origin, approved_by_id, approved_by_name, approved_at, created_by_id, created_by_name, created_at ON releases BEGIN SELECT RAISE(ABORT, 'A release is frozen: only its stage and whether its document still exists can change.'); END;
+      CREATE TABLE IF NOT EXISTS release_events(id INTEGER PRIMARY KEY AUTOINCREMENT, release_id TEXT NOT NULL, kind TEXT NOT NULL, stage TEXT, note TEXT, user_id TEXT, user_name TEXT, at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS release_events_by_release ON release_events(release_id, id);
+      CREATE TABLE IF NOT EXISTS release_handover(id INTEGER PRIMARY KEY AUTOINCREMENT, release_id TEXT NOT NULL, kind TEXT NOT NULL, stage TEXT, note TEXT, package_sha256 TEXT, user_id TEXT, user_name TEXT, at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS release_handover_by_release ON release_handover(release_id, id);
+      CREATE TABLE IF NOT EXISTS release_packages(release_id TEXT PRIMARY KEY, status TEXT NOT NULL, file TEXT, sha256 TEXT, bytes INTEGER, files INTEGER, summary TEXT, error TEXT, built_at TEXT NOT NULL, verified TEXT);
     `);
     this.ensureSeeds();
     this.backfillVersions();
@@ -202,8 +227,96 @@ export class Store {
 
   /* ---------------------------------------------------------- projects (user copies) */
 
-  deleteProject(projectId: string) {
+  /** Deletes a document and everything that belongs to it, except its releases: those are kept and marked "document removed". */
+  deleteProject(projectId: string, by: { id: string; name: string } | null = null) {
     for (const t of ['projects', 'snapshots', 'project_versions', 'workflow', 'workflow_events', 'comments', 'project_records', 'project_test_data']) this.db.prepare(`DELETE FROM ${t} WHERE project_id=?`).run(projectId);
+    const now = new Date().toISOString();
+    for (const r of this.releases(projectId).filter((x) => !x.documentRemovedAt)) {
+      this.db.prepare('UPDATE releases SET document_removed_at=? WHERE release_id=?').run(now, r.id);
+      this.addReleaseEvent(r.id, { kind: 'document-removed', stage: null, note: 'The document was deleted. This release is kept.', by, at: now });
+    }
+  }
+
+  /* ---------------------------------------------------------- releases (frozen and numbered; the rules are in @iss/model releases.ts) */
+
+  /** Runs `fn` as one unit: either everything it wrote is stored, or nothing is. */
+  transaction<T>(fn: () => T): T {
+    this.db.exec('BEGIN IMMEDIATE');
+    try { const out = fn(); this.db.exec('COMMIT'); return out; }
+    catch (e) { this.db.exec('ROLLBACK'); throw e; }
+  }
+  private static readonly RELEASE_COLUMNS = 'release_id, project_id, number, title, document_type, model_version, content_digest, languages, versions, pinned, origin, approved_by_id, approved_by_name, approved_at, created_by_id, created_by_name, created_at, stages, document_removed_at';
+  private mapRelease = (r: any): StoredRelease => ({
+    id: r.release_id, documentId: r.project_id, number: r.number, title: r.title, documentType: r.document_type, modelVersion: r.model_version, contentDigest: r.content_digest,
+    languages: JSON.parse(r.languages), versions: JSON.parse(r.versions), pinned: JSON.parse(r.pinned), origin: r.origin,
+    approvedBy: r.approved_by_name ? { id: r.approved_by_id ?? null, name: r.approved_by_name } : null, approvedAt: r.approved_at,
+    createdBy: r.created_by_name ? { id: r.created_by_id ?? null, name: r.created_by_name } : null, createdAt: r.created_at,
+    stages: JSON.parse(r.stages), documentRemovedAt: r.document_removed_at ?? null,
+  });
+  /** Releases, oldest first within a document. With a document id: that document's only. The frozen content is not loaded. */
+  releases(documentId?: string): StoredRelease[] {
+    const rows = (documentId
+      ? this.db.prepare(`SELECT ${Store.RELEASE_COLUMNS} FROM releases WHERE project_id=? ORDER BY number`).all(documentId)
+      : this.db.prepare(`SELECT ${Store.RELEASE_COLUMNS} FROM releases ORDER BY project_id, number`).all()) as any[];
+    return rows.map(this.mapRelease);
+  }
+  release(releaseId: string): StoredRelease | undefined {
+    const r = this.db.prepare(`SELECT ${Store.RELEASE_COLUMNS} FROM releases WHERE release_id=?`).get(releaseId) as any;
+    return r ? this.mapRelease(r) : undefined;
+  }
+  /** A document id that has releases is never given to another document. */
+  hasReleases(documentId: string): boolean { return !!this.db.prepare('SELECT 1 FROM releases WHERE project_id=? LIMIT 1').get(documentId); }
+  /** The frozen project of a release, exactly as it was approved. */
+  releaseProject(releaseId: string): Project | undefined {
+    const r = this.db.prepare('SELECT json FROM releases WHERE release_id=?').get(releaseId) as any;
+    return r ? JSON.parse(r.json) : undefined;
+  }
+  /** Adds a release. No method changes one afterwards, and the table itself refuses it (the `releases_are_frozen` trigger). */
+  insertRelease(r: StoredRelease, frozen: Project) {
+    this.db.prepare('INSERT INTO releases(release_id,project_id,number,title,document_type,model_version,content_digest,json,languages,versions,pinned,origin,approved_by_id,approved_by_name,approved_at,created_by_id,created_by_name,created_at,stages,document_removed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(r.id, r.documentId, r.number, r.title, r.documentType, r.modelVersion, r.contentDigest, JSON.stringify(frozen), JSON.stringify(r.languages), JSON.stringify(r.versions), JSON.stringify(r.pinned), r.origin, r.approvedBy?.id ?? null, r.approvedBy?.name ?? null, r.approvedAt, r.createdBy?.id ?? null, r.createdBy?.name ?? null, r.createdAt, JSON.stringify(r.stages), null);
+  }
+  setReleaseStages(releaseId: string, stages: ReleaseInfo['stages']) { this.db.prepare('UPDATE releases SET stages=? WHERE release_id=?').run(JSON.stringify(stages), releaseId); }
+  addReleaseEvent(releaseId: string, e: { kind: ReleaseEventKind; stage: ReleaseStage | null; note: string | null; by: { id: string | null; name: string } | null; at: string }) {
+    this.db.prepare('INSERT INTO release_events(release_id,kind,stage,note,user_id,user_name,at) VALUES (?,?,?,?,?,?,?)').run(releaseId, e.kind, e.stage, e.note, e.by?.id ?? null, e.by?.name ?? null, e.at);
+  }
+  /** Stage history, oldest first. */
+  releaseEvents(releaseId: string): ReleaseEvent[] {
+    return (this.db.prepare('SELECT * FROM release_events WHERE release_id=? ORDER BY id').all(releaseId) as any[])
+      .map((r) => ({ id: r.id, kind: r.kind, stage: r.stage ?? null, note: r.note ?? null, by: r.user_name ? { id: r.user_id ?? null, name: r.user_name } : null, at: r.at }));
+  }
+  addHandover(releaseId: string, e: { kind: HandoverKind; stage: ReleaseStage | null; note: string | null; packageSha256: string | null; by: { id: string | null; name: string } | null }): HandoverEntry {
+    const at = new Date().toISOString();
+    const done = this.db.prepare('INSERT INTO release_handover(release_id,kind,stage,note,package_sha256,user_id,user_name,at) VALUES (?,?,?,?,?,?,?,?)').run(releaseId, e.kind, e.stage, e.note, e.packageSha256, e.by?.id ?? null, e.by?.name ?? null, at);
+    return { id: Number(done.lastInsertRowid), kind: e.kind, stage: e.stage, note: e.note, packageSha256: e.packageSha256, by: e.by, at };
+  }
+  /** The handover log of one release, oldest first. */
+  releaseHandover(releaseId: string): HandoverEntry[] {
+    return (this.db.prepare('SELECT * FROM release_handover WHERE release_id=? ORDER BY id').all(releaseId) as any[])
+      .map((r) => ({ id: r.id, kind: r.kind, stage: r.stage ?? null, note: r.note ?? null, packageSha256: r.package_sha256 ?? null, by: r.user_name ? { id: r.user_id ?? null, name: r.user_name } : null, at: r.at }));
+  }
+  /** How many "received" and "live" entries each release has (for lists). */
+  handoverCounts(): Map<string, { received: number; live: number }> {
+    const out = new Map<string, { received: number; live: number }>();
+    for (const r of this.db.prepare('SELECT release_id, kind, COUNT(*) AS n FROM release_handover GROUP BY release_id, kind').all() as any[]) {
+      const e = out.get(r.release_id) ?? { received: 0, live: 0 };
+      if (r.kind === 'received') e.received = Number(r.n); else if (r.kind === 'live') e.live = Number(r.n);
+      out.set(r.release_id, e);
+    }
+    return out;
+  }
+  releasePackage(releaseId: string): StoredReleasePackage | undefined {
+    const r = this.db.prepare('SELECT * FROM release_packages WHERE release_id=?').get(releaseId) as any;
+    return r ? { status: r.status, file: r.file ?? null, sha256: r.sha256 ?? null, bytes: r.bytes ?? null, files: r.files ?? null, summary: r.summary ? JSON.parse(r.summary) : null, error: r.error ?? null, builtAt: r.built_at, verified: r.verified ? JSON.parse(r.verified) : null } : undefined;
+  }
+  setReleasePackage(releaseId: string, p: StoredReleasePackage) {
+    this.db.prepare('INSERT OR REPLACE INTO release_packages(release_id,status,file,sha256,bytes,files,summary,error,built_at,verified) VALUES (?,?,?,?,?,?,?,?,?,?)').run(releaseId, p.status, p.file, p.sha256, p.bytes, p.files, p.summary ? JSON.stringify(p.summary) : null, p.error, p.builtAt, p.verified ? JSON.stringify(p.verified) : null);
+  }
+  /** Test and demo reset only (its route is off unless RELEASES_RESET=allow): removes every release with its history, handover log and package record. */
+  clearReleases(): number {
+    const n = Number(this.db.prepare('DELETE FROM releases').run().changes);
+    for (const t of ['release_events', 'release_handover', 'release_packages']) this.db.prepare(`DELETE FROM ${t}`).run();
+    return n;
   }
 
   seedFor(projectId: string): Project | undefined {

@@ -3,6 +3,7 @@ import type { Resolution } from '@iss/resolver';
 import type { Composer } from '../composer';
 import type { Store } from '../db';
 import type { ApiError } from '../app';
+import type { ReleasePackages } from '../releases';
 
 /** Shared helpers handed to feature route modules so they never re-implement validation or persistence. */
 export interface RouteDeps {
@@ -19,6 +20,8 @@ export interface RouteDeps {
   runFor(body: unknown): { res: Resolution; project: Project; request: any };
   /** The model call behind the assistant's writing features; tests replace it. */
   assistModel?: import('../assistAi').AssistModel;
+  /** Builds, keeps and serves release packages (one instance per app). */
+  releasePackages: ReleasePackages;
   /** The AI translation call; tests replace it. */
   translator?: import('../translate').Translator;
 }
