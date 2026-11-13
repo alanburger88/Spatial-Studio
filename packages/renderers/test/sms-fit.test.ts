@@ -13,8 +13,13 @@ const longest = (t: string): string => t
   .replace(/\{\{\s*card\.dueDate\s*\}\}/g, 'Sep 25, 2026')
   .replace(/\{\{\s*claim\.claimId\s*\}\}/g, 'HC-10428')
   .replace(/\{\{\s*link\s*\}\}/g, 'https://example.com/harborcare/claims');
-/** The same for the card statement: its own issuer name and payment link. */
-const longestCard = (t: string): string => longest(t.replace(/\{\{\s*issuer\.name\s*\}\}/g, 'Aster Card').replace(/\{\{\s*link\s*\}\}/g, 'https://example.com/aster/payments'));
+/** The statement SMS as the sample customer Jordan Mercer gets it in Spanish (values from the renderer for CARD-0001). */
+const cardSpanish = (t: string): string => t
+  .replace(/\{\{\s*issuer\.name\s*\}\}/g, 'Aster Card')
+  .replace(/\{\{\s*card\.newBalanceCents\s*\}\}/g, '$1,248.00')
+  .replace(/\{\{\s*card\.minimumDueCents\s*\}\}/g, '$45.00')
+  .replace(/\{\{\s*card\.dueDate\s*\}\}/g, '25 nov 2026')
+  .replace(/\{\{\s*link\s*\}\}/g, 'https://example.com/aster/payments');
 const tokens = (t: string): string[] => t.match(/\{\{[^}]*\}\}/g) ?? [];
 /** The bundled Spanish sample wording of the statement SMS (apps/api/src/sampleTranslations.ts). */
 const SPANISH_SAMPLE = 'DEMO {{issuer.name}}: Su estado de cuenta ya se puede consultar. Saldo nuevo {{card.newBalanceCents}}; pago requerido {{card.minimumDueCents}} antes del {{card.dueDate}}. {{link}}';
@@ -31,13 +36,19 @@ describe('fitSms', () => {
     }
   });
 
-  it('leaves the bundled Spanish wording alone, and removes only the accents the SMS alphabet lacks from an accented one', () => {
-    expect(fitSms(SPANISH_SAMPLE, { sample: longestCard })).toMatchObject({ text: SPANISH_SAMPLE, changes: [], fits: true });
+  it('does not touch the bundled Spanish wording (it has no accents to remove) and removes only the accents the SMS alphabet lacks', () => {
+    // The bundled Spanish statement SMS is already in the SMS alphabet. Filled for a sample customer it is 162 characters:
+    // two parts. Nothing this conservative rewrite does applies to it, so it comes back unchanged with fits: false.
+    const sample = fitSms(SPANISH_SAMPLE, { sample: cardSpanish });
+    expect(sample).toMatchObject({ text: SPANISH_SAMPLE, changes: [], fits: false });
+    expect(sample.after).toEqual({ length: 162, segments: 2, encoding: 'GSM-7' });
+    expect(fitSms(SPANISH_SAMPLE, { sample: cardSpanish, maxSegments: 2 }).fits).toBe(true);
+    expect(fitSms(SPANISH_SAMPLE)).toMatchObject({ text: SPANISH_SAMPLE, changes: [] });
 
-    const accented = 'DEMO {{issuer.name}}: Señor, su estado de cuenta ya está listo. Saldo nuevo {{card.newBalanceCents}}; pago mínimo {{card.minimumDueCents}} antes del {{card.dueDate}}. {{link}}';
-    const fit = fitSms(accented, { sample: longestCard });
+    const accented = 'DEMO {{issuer.name}}: Señor, su estado de cuenta está listo. Saldo {{card.newBalanceCents}}; pago mínimo {{card.minimumDueCents}} antes del {{card.dueDate}}. {{link}}';
+    const fit = fitSms(accented, { sample: cardSpanish });
     expect(fit.before).toMatchObject({ encoding: 'UCS-2', segments: 3 });
-    expect(fit.text).toBe('DEMO {{issuer.name}}: Señor, su estado de cuenta ya esta listo. Saldo nuevo {{card.newBalanceCents}}; pago minimo {{card.minimumDueCents}} antes del {{card.dueDate}}. {{link}}');
+    expect(fit.text).toBe('DEMO {{issuer.name}}: Señor, su estado de cuenta esta listo. Saldo {{card.newBalanceCents}}; pago minimo {{card.minimumDueCents}} antes del {{card.dueDate}}. {{link}}');
     expect(fit.changes).toEqual(['Removed accents the standard SMS alphabet does not have (á to a, í to i); ñ stayed because the alphabet has it']);
     expect(fit.after).toMatchObject({ encoding: 'GSM-7', segments: 1 });
     expect(fit.fits).toBe(true);
