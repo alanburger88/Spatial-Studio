@@ -246,6 +246,15 @@ export function RulesData() {
   const blockedReason = useStudio((s) => editBlockedReason(s.session));
   const openDock = (t: DockTab) => { setDock(t); setTimeout(() => dockRef.current?.scrollIntoView({ block: 'nearest', behavior: useStudio.getState().reducedMotion ? 'auto' : 'smooth' }), 30); };
 
+  // "?assist=coverage" (from Overview) opens the coverage dialog straight away; the address is tidied so a reload does not reopen it.
+  useEffect(() => {
+    if (params.get('assist') !== 'coverage') return;
+    setAssist('coverage');
+    const next = new URLSearchParams(params); next.delete('assist');
+    setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
+
   useEffect(() => {
     if (isNew || !stored) return;
     const dirty = draft && draft.id === stored.id && baseRef.current && JSON.stringify(draft) !== baseRef.current;

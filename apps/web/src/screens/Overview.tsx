@@ -26,6 +26,8 @@ interface Step {
   why: ReactNode;
   /** One button: opens the screen (or panel) where the step is dealt with. */
   action: { label: string; to?: string; run?: () => void };
+  /** Optional second, smaller link under the button. */
+  link?: { label: string; to: string };
 }
 
 const STATE_WORD: Record<StepState, string> = { done: 'Done', todo: 'To do', attention: 'Needs attention', 'not-needed': 'Not needed', working: 'Checking' };
@@ -116,6 +118,8 @@ export function Overview() {
 
   /* ------------------------------------------------------------------ the next steps, in order */
   const steps: Step[] = [];
+  // Once a release exists there is something to compare the working version with.
+  const seeDifferent: Step['link'] = releases.length > 0 ? { label: 'See what customers will see differently', to: `${base}/compare` } : undefined;
 
   // (a) customers to test with
   steps.push({
@@ -137,7 +141,7 @@ export function Overview() {
       state = 'todo';
       why = `${plural(gaps.length, 'rule, message version or section is', 'rules, message versions or sections are')} not reached by any of ${customers(docRecords.length)}. ${reachable === gaps.length ? 'Generating test customers would reach all of them.' : `${reachable} could be reached with a generated customer; ${gaps.length - reachable} cannot be reached at all.`}`;
     }
-    steps.push({ key: 'coverage', title: 'Every outcome has a customer', state, why: gapsStale && state !== 'working' ? <>{why} <span className="muted">(updating…)</span></> : why, action: { label: 'Find coverage gaps', to: `${base}/rules-data` } });
+    steps.push({ key: 'coverage', title: 'Every outcome has a customer', state, why: gapsStale && state !== 'working' ? <>{why} <span className="muted">(updating…)</span></> : why, action: { label: 'Find coverage gaps', to: `${base}/rules-data?assist=coverage` } });
   }
 
   // (c) no blockers
@@ -194,7 +198,7 @@ export function Overview() {
     else if (wf.state === 'changes_requested') { state = 'attention'; why = `A reviewer asked for changes to version ${wf.modelVersion}.${unsaved}`; }
     else if (wf.state === 'in_review') { state = 'todo'; why = `Version ${wf.modelVersion} is waiting for a reviewer to approve it.${unsaved}`; }
     else { state = 'todo'; why = `Version ${wf.modelVersion} is a draft. Submit it for review, then have it approved.${unsaved}`; }
-    steps.push({ key: 'review', title: 'Reviewed and approved', state, why, action: { label: 'Open review', run: () => useDrawers.getState().show('review') } });
+    steps.push({ key: 'review', title: 'Reviewed and approved', state, why, action: { label: 'Open review', run: () => useDrawers.getState().show('review') }, link: seeDifferent });
   }
 
   // (g) released to Production
@@ -209,7 +213,7 @@ export function Overview() {
       state = 'todo';
       why = test ? `Release ${test.number} is in Test but nothing is live in Production yet.` : `${plural(releases.length, 'release')} exist${releases.length === 1 ? 's' : ''}, but none is current in Production.`;
     } else { state = 'todo'; why = 'Nothing has been released yet. Approving the document makes release 1, which goes to Test first.'; }
-    steps.push({ key: 'release', title: 'Released to Production', state, why, action: { label: 'Open releases', to: `${base}/releases` } });
+    steps.push({ key: 'release', title: 'Released to Production', state, why, action: { label: 'Open releases', to: `${base}/releases` }, link: seeDifferent });
   }
 
   const nextIdx = steps.findIndex((s) => s.state !== 'done' && s.state !== 'not-needed');
@@ -273,6 +277,7 @@ export function Overview() {
                     {s.state === 'done' || s.state === 'not-needed'
                       ? <button type="button" className="btn ghost sm" onClick={() => goTo(s.action)} data-testid={`overview-step-action-${s.key}`}>{s.action.label}</button>
                       : <button type="button" className={`btn sm${s.key === nextKey ? ' primary' : ''}`} onClick={() => goTo(s.action)} data-testid={`overview-step-action-${s.key}`}>{s.action.label}</button>}
+                    {s.link && <Link to={s.link.to} className="ov-step-link" style={{ display: 'block', marginTop: 6, fontSize: 12 }} data-testid={`overview-step-compare-${s.key}`}>{s.link.label}</Link>}
                   </div>
                 </li>
               ))}

@@ -99,7 +99,8 @@ export function placeCard(target: Box | null, cw: number, ch: number, vw: number
   const above = { left: clampX(target.left), top: target.top - ch - GAP };
   const right = { left: target.left + target.width + GAP, top: clampY(target.top) };
   const left = { left: target.left - cw - GAP, top: clampY(target.top) };
-  const order = inLeftRail ? [right, below, above, left] : [below, above, right, left];
+  const tall = target.height > vh * 0.45;
+  const order = inLeftRail || tall ? [right, left, below, above] : [below, above, right, left];
   const fits = (p: { left: number; top: number }) => p.left >= MARGIN && p.top >= MARGIN && p.left + cw <= vw - MARGIN && p.top + ch <= vh - MARGIN && !overlap({ ...p, width: cw, height: ch }, target);
   const chosen = order.find(fits);
   if (chosen) return chosen;
@@ -217,7 +218,11 @@ export function Tour() {
   if (!open || !step) return null;
   const last = i === TOUR_STEPS.length - 1;
   const pad = 5;
-  const hole = box ? { left: Math.max(0, box.left - pad), top: Math.max(0, box.top - pad), width: box.width + pad * 2, height: box.height + pad * 2 } : null;
+  const hole = box ? (() => {
+    // Keep the ring inside the window: a target taller or wider than the window is outlined as far as it can be seen.
+    const left = Math.max(2, box.left - pad), top = Math.max(2, box.top - pad);
+    return { left, top, width: Math.min(box.left + box.width + pad, window.innerWidth - 2) - left, height: Math.min(box.top + box.height + pad, window.innerHeight - 2) - top };
+  })() : null;
   return (
     <>
       {hole
