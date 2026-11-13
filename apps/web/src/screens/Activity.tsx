@@ -1,11 +1,13 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ROLES, ROLE_LABEL, ROLE_SUMMARY, type Project, type Role } from '@iss/model';
+import { parseActivityQuery, type ActivityQuery } from '@iss/scenarios';
 import { api, type AuditEventDto, type AuditQuery, type SessionUser } from '../api/client';
 import { useCan, useStudio } from '../state/store';
 import { ErrorState, Proof, ScreenHeader } from '../ui/common';
 import { nodeTitle } from '../ui/plain';
 import { fmtAbs } from '../shell/History';
+import { SourceChip } from '../assist/common';
 import './Activity.css';
 
 /* ------------------------------------------------------------------ plain sentences */
@@ -75,6 +77,9 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
   }
 }
 
+
+const ACTION_WORDS: Record<string, string> = { 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs' };
+const actionLabel = (a: string): string => ACTION_WORDS[a] ?? CATEGORIES.find((c) => c.id === a)?.label ?? a;
 
 /* ------------------------------------------------------------------ grouping */
 
@@ -147,6 +152,11 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
   const [action, setAction] = useState('');
   const [period, setPeriod] = useState('all');
   const [projectFilter, setProjectFilter] = useState('');
+  // Plain-words search: what was asked, what was understood, and the parts of it that the log cannot filter on the server.
+  const [qText, setQText] = useState('');
+  const [searched, setSearched] = useState<ActivityQuery | null>(null);
+  const [range, setRange] = useState<{ since?: string; until?: string } | null>(null);
+  const [words, setWords] = useState<string[]>([]);
   const [events, setEvents] = useState<AuditEventDto[] | null>(null);
   const [actors, setActors] = useState<Array<{ id: string; name: string; count: number }>>([]);
   const [next, setNext] = useState<number | null>(null);
@@ -156,10 +166,13 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
   const serverVersion = useStudio((s) => s.serverVersion);
   const titles = useMemo(() => new Map(projects.map((p) => [p.projectId, p.title])), [projects]);
 
+  // The server filters by project, person, action and start time. An end time and words are applied here, on the rows fetched,
+  // so while one of those is active we fetch a bigger page to search within.
+  const clientFiltered = !!(range?.until || words.length);
   const query = useCallback((before?: number): AuditQuery => {
     const ms = PERIODS.find((p) => p.id === period)?.ms ?? null;
-    return { projectId: projectId ?? (projectFilter || undefined), user: user || undefined, action: action || undefined, since: ms ? new Date(Date.now() - ms).toISOString() : undefined, before, limit: 50 };
-  }, [projectId, projectFilter, user, action, period]);
+    return { projectId: projectId ?? (projectFilter || undefined), user: user || undefined, action: action || undefined, since: range?.since ?? (ms ? new Date(Date.now() - ms).toISOString() : undefined), before, limit: clientFiltered ? 200 : 50 };
+  }, [projectId, projectFilter, user, action, period, range?.since, clientFiltered]);
 
   const load = useCallback(() => {
     setError(null);
@@ -172,12 +185,71 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
     setLoadingMore(true);
     try { const r = await api.audit(query(next)); setEvents((ev) => [...(ev ?? []), ...r.events]); setNext(r.nextBefore); } catch (e: any) { setError(e.message); } finally { setLoadingMore(false); }
   };
-  const days = useMemo(() => (events ? groupEvents(events, project) : []), [events, project]);
+  const shown = useMemo(() => {
+    if (!events) return null;
+    const until = range?.until ? Date.parse(range.until) : null;
+    return events.filter((e) => {
+      if (until !== null && !(Date.parse(e.at) < until)) return false;
+      if (!words.length) return true;
+      const hay = auditSentence(e, project).toLowerCase();
+      return words.every((w) => hay.includes(w));
+    });
+  }, [events, range?.until, words, project]);
+  const days = useMemo(() => (shown ? groupEvents(shown, project) : []), [shown, project]);
   const cols = projectId ? 4 : 5;
-  const filtered = !!(user || action || period !== 'all' || projectFilter);
+  const filtered = !!(user || action || period !== 'all' || projectFilter || range || words.length);
+
+  const nameOfUser = (id: string) => actors.find((a) => a.id === id)?.name ?? id;
+  const clearAll = () => { setUser(''); setAction(''); setPeriod('all'); setProjectFilter(''); setRange(null); setWords([]); setSearched(null); setQText(''); };
+  const runSearch = () => {
+    const text = qText.trim();
+    if (!text) { clearAll(); return; }
+    const q = parseActivityQuery(text, {
+      now: new Date().toISOString(),
+      users: actors.map((a) => ({ id: a.id, name: a.name })),
+      projects: projectId ? (project ? [{ projectId: project.projectId, title: project.title }] : []) : projects,
+    });
+    setSearched(q);
+    setUser(q.user ?? '');
+    setAction(q.action ?? '');
+    setPeriod('all');
+    setRange(q.since || q.until ? { since: q.since, until: q.until } : null);
+    setProjectFilter(!projectId && q.projectId ? q.projectId : '');
+    // Words the search could not place are reported under "ignored" and are not used to hide entries.
+    setWords((q.text ?? '').toLowerCase().split(/\s+/).filter((w) => w && !q.ignored.includes(w)));
+  };
+  const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  const chips: Array<{ key: string; text: string; remove: () => void }> = [];
+  if (searched) {
+    if (searched.user && user === searched.user) chips.push({ key: 'user', text: `Person: ${nameOfUser(user)}`, remove: () => setUser('') });
+    if (searched.action && action === searched.action) chips.push({ key: 'action', text: `Area: ${actionLabel(action)}`, remove: () => setAction('') });
+    if (!projectId && searched.projectId && projectFilter === searched.projectId) chips.push({ key: 'project', text: `Project: ${titles.get(projectFilter) ?? projectFilter}`, remove: () => setProjectFilter('') });
+    if (range) chips.push({ key: 'when', text: range.since && range.until ? `From ${day(range.since)} to ${day(new Date(Date.parse(range.until) - 1).toISOString())}` : range.since ? `From ${day(range.since)} to now` : `Until ${day(new Date(Date.parse(range.until!) - 1).toISOString())}`, remove: () => setRange(null) });
+    if (words.length) chips.push({ key: 'words', text: `Words: ${words.join(' ')}`, remove: () => setWords([]) });
+  }
+  const ignoredWords = searched?.ignored ?? [];
 
   return (
     <div className="panel act-panel">
+      <form className="act-search" role="search" aria-label="Search activity" onSubmit={(e) => { e.preventDefault(); runSearch(); }}>
+        <label className="sr-only" htmlFor="activity-search">Ask about the activity in plain words</label>
+        <input id="activity-search" className="input act-search-input" type="search" value={qText} onChange={(e) => setQText(e.target.value)} data-testid="activity-search" autoComplete="off" maxLength={200}
+          placeholder="Ask, for example: who changed the payment rules last week?" />
+        <button type="submit" className="btn sm primary" data-testid="activity-search-go">Search</button>
+        {(searched || qText) && <button type="button" className="btn sm ghost" onClick={clearAll} data-testid="activity-search-clear">Clear</button>}
+        {searched && <SourceChip source="builtin" />}
+      </form>
+      {searched && (chips.length > 0 || ignoredWords.length > 0 || clientFiltered) && (
+        <div className="act-understood-wrap" aria-live="polite">
+          {chips.length > 0 && (
+            <div className="act-understood" data-testid="activity-understood" title={searched.understood.join(' · ')}>
+              <span className="muted act-understood-lbl">Understood</span>
+              {chips.map((c) => <span key={c.key} className="chip act-chip" data-testid="activity-chip" data-facet={c.key}>{c.text}<button type="button" className="act-chip-x" onClick={c.remove} aria-label={`Remove: ${c.text}`}>×</button></span>)}
+            </div>
+          )}
+          {ignoredWords.length > 0 && <p className="act-ignored muted" data-testid="activity-ignored">Not used as a filter: {ignoredWords.map((w) => `“${w}”`).join(', ')}.</p>}
+        </div>
+      )}
       <div className="panel-head act-filters" role="search" aria-label="Filter activity">
         <label className="act-filter"><span>Who</span>
           <select className="select" value={user} onChange={(e) => setUser(e.target.value)} data-testid="activity-filter-user">
@@ -188,10 +260,12 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
         <label className="act-filter"><span>What</span>
           <select className="select" value={action} onChange={(e) => setAction(e.target.value)} data-testid="activity-filter-action">
             {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            {action && !CATEGORIES.some((c) => c.id === action) && <option value={action}>{actionLabel(action)}</option>}
           </select>
         </label>
         <label className="act-filter"><span>When</span>
-          <select className="select" value={period} onChange={(e) => setPeriod(e.target.value)} data-testid="activity-filter-when">
+          <select className="select" value={range ? 'custom' : period} onChange={(e) => { setRange(null); setPeriod(e.target.value); }} data-testid="activity-filter-when">
+            {range && <option value="custom">From your search</option>}
             {PERIODS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
         </label>
@@ -204,13 +278,14 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
           </label>
         )}
         <div className="right">
-          {filtered && <button type="button" className="btn ghost sm" onClick={() => { setUser(''); setAction(''); setPeriod('all'); setProjectFilter(''); }}>Clear filters</button>}
+          {filtered && <button type="button" className="btn ghost sm" onClick={clearAll}>Clear filters</button>}
           <button type="button" className="btn sm" onClick={load} data-testid="activity-refresh">Refresh</button>
         </div>
       </div>
       <div className="panel-body act-table-wrap">
-        {error ? <ErrorState title="Activity could not be loaded" message={error} onRetry={load} /> : !events ? <div className="empty"><span className="spinner" /> Loading activity…</div> : !events.length ? (
-          <div className="empty"><strong>No activity{filtered ? ' matches these filters' : ' recorded yet'}</strong><span>{filtered ? 'Try a wider time range or clear the filters.' : 'Saves, reviews, comments and imports will appear here.'}</span></div>
+        {error ? <ErrorState title="Activity could not be loaded" message={error} onRetry={load} /> : !events || !shown ? <div className="empty"><span className="spinner" /> Loading activity…</div> : !shown.length ? (
+          <div className="empty"><strong>No activity{filtered ? ' matches these filters' : ' recorded yet'}</strong><span>{filtered ? 'Try a wider time range or clear the filters.' : 'Saves, reviews, comments and imports will appear here.'}</span>
+            {clientFiltered && next !== null && <span data-testid="activity-truncated">Showing matches within the latest {events.length} entries. Show older activity to look further back.</span>}</div>
         ) : (
           <table className="table act-table">
             <caption className="sr-only">Activity, newest first</caption>
@@ -245,6 +320,7 @@ function AuditLog({ projectId, project, projects }: { projectId: string | null; 
             </tbody>
           </table>
         )}
+        {events && clientFiltered && shown && shown.length > 0 && next !== null && <p className="muted act-truncated" data-testid="activity-truncated">Showing matches within the latest {events.length} entries.</p>}
         {events && next !== null && <div className="act-more"><button type="button" className="btn sm" onClick={more} disabled={loadingMore} data-testid="activity-load-more">{loadingMore ? 'Loading…' : 'Show older activity'}</button></div>}
       </div>
     </div>

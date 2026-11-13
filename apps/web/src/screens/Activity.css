@@ -56,3 +56,15 @@
 .login-submit { margin-top: 6px; min-height: 38px; }
 .login-card .callout { margin-bottom: 4px; }
 .login-note { margin: 12px 0 0; font-size: 11.5px; color: var(--iss-text-muted); text-align: center; }
+
+/* plain-words search */
+.act-search { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px 6px; }
+.act-search-input { flex: 1 1 280px; min-width: 0; }
+.act-understood-wrap { padding: 0 14px 8px; display: flex; flex-direction: column; gap: 4px; }
+.act-understood { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.act-understood-lbl { font-size: 12px; }
+.act-chip { display: inline-flex; align-items: center; gap: 4px; }
+.act-chip-x { border: 0; background: none; cursor: pointer; padding: 0 2px; line-height: 1; font-size: 14px; color: inherit; border-radius: 4px; }
+.act-chip-x:focus-visible { outline: none; box-shadow: var(--iss-focus); }
+.act-ignored { margin: 0; font-size: 12px; }
+.act-truncated { margin: 8px 14px 0; font-size: 12px; }
