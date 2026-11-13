@@ -282,7 +282,7 @@ describe('the formula view', () => {
     expect(words(DEPTH_CALCS[0].expr)).toBe('The number of days from the document’s date to “Renewal date”.');
     expect(words(DEPTH_CALCS[1].expr)).toBe('The total of “Price” in “Booked sessions” where “Class” is “Spin”.');
     expect(words(DEPTH_CALCS[2].expr)).toBe('“Monthly fee” divided by “Visits this month”, rounded to 2 decimal places.');
-    expect(words(DEPTH_CALCS[3].expr)).toBe('“Late fee” from the table “Late fee by tier” for “Membership tier” “Membership tier”.');
+    expect(words(DEPTH_CALCS[3].expr)).toBe('“Late fee” from the table “Late fee by tier” for “Membership tier”.');
     expect(words(DEPTH_CALCS[5].expr)).toBe('If “Days to renewal” is less than 14, yes; otherwise no.');
     expect(words({ op: 'addDays', date: f('custom.renewalDate'), days: n(-7) })).toBe('7 days before “Renewal date”.');
     expect(words({ op: 'mul', a: { op: 'add', a: m(150), b: f('calc.spinTotal') }, b: n(2) })).toBe('($1.50 plus “Spin total”) times 2.');

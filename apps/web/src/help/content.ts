@@ -315,9 +315,11 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
   S22: {
     purpose: 'Calculations are named values worked out from a customer\'s data, such as the days until a payment is due or the total of this month\'s fees. A calculation can be used in rules and wording wherever a data field can.',
     actions: [
-      'Add a calculation by picking fields and operations from lists, or by typing a formula.',
-      'Read it back in plain words and see its value for the current customer.',
-      'See its value across every synthetic customer, and who has no value and why.',
+      'Add a calculation, or start from an example made from this document\'s own fields.',
+      'Build it step by step from lists, or type a formula. The builder, the formula and the plain-words reading always match.',
+      'See the value of each step for the current customer, and the value for every synthetic customer, including who has no value and why.',
+      'Check which rules, wording and other calculations use it before you change or remove it.',
+      'Save the calculation. It is one step that Undo takes back.',
     ],
     next: [
       { screen: 'S07', why: 'use a calculation in a rule' },
@@ -327,9 +329,10 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
   S23: {
     purpose: 'Lookup tables are small tables kept with the document, such as a fee by tier or a notice by state. A calculation reads a value from a table.',
     actions: [
-      'Add a table and say what its key and value columns hold.',
-      'Type the rows or paste them from a spreadsheet.',
-      'See problems such as duplicate keys, overlapping ranges and gaps as you edit.',
+      'Add a table and say what it is looked up by (exact text, a range of numbers or a range of dates) and what values it gives.',
+      'Type the rows in the grid with the keyboard, or paste them from a spreadsheet and check the preview first.',
+      'See duplicate keys, overlapping ranges and gaps as you edit, and choose what happens when no row matches.',
+      'Try a key to see which row matches and what it gives, then save the table.',
     ],
     next: [
       { screen: 'S22', why: 'read the table from a calculation' },

@@ -101,7 +101,14 @@ export function keyCellWords(col: LookupKeyColumn, cell: string | LookupRange | 
   if (col.match === 'text') return typeof cell === 'string' ? q(cell) : 'nothing';
   if (!isRange(cell)) return 'nothing';
   const f = cell.from, u = cell.until;
-  const show = (b: Bound) => (col.match === 'number-range' && col.unit === 'money' && typeof b === 'number' ? `${(b / 100).toFixed(2)} dollars` : String(b));
+  // Amounts are written the way people read them ($1,000.00), without Intl so the browser and the server agree.
+  const money = (cents: number): string => {
+    const whole = Math.floor(Math.abs(cents) / 100).toString();
+    let grouped = '';
+    for (let i = 0; i < whole.length; i++) grouped += (i > 0 && (whole.length - i) % 3 === 0 ? ',' : '') + whole[i];
+    return `${cents < 0 ? '−' : ''}$${grouped}.${(Math.abs(cents) % 100).toString().padStart(2, '0')}`;
+  };
+  const show = (b: Bound) => (col.match === 'number-range' && col.unit === 'money' && typeof b === 'number' ? money(b) : String(b));
   if (f === undefined && u === undefined) return 'any value';
   if (f === undefined) return `below ${show(u!)}`;
   if (u === undefined) return `${show(f)} or more`;

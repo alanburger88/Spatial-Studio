@@ -103,7 +103,8 @@ export function exprWords(e: Expr, scope: WordsScope): string {
     case 'lookup': {
       const t = scope.tables?.find((x) => x.id === e.table);
       const col = t?.columns.find((c) => c.key === e.column)?.label ?? e.column;
-      const keys = e.keys.map((k, i) => `${t?.keys[i] ? `${q(t.keys[i].label)} ` : ''}${w(k)}`);
+      // "“Balance” <value>"; when the value is a field with the same name as the key, the name is said once.
+      const keys = e.keys.map((k, i) => { const value = w(k); const label = t?.keys[i] ? q(t.keys[i].label) : ''; return label && label !== value ? `${label} ${value}` : value; });
       return `${q(col)} from the table ${q(t?.title ?? e.table)} for ${listOf(keys)}`;
     }
   }
