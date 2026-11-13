@@ -8,7 +8,8 @@ export const SCHEMA_VERSION = '1.0.0' as const;
 
 export type DocumentType = 'credit-statement' | 'eob';
 export type ProfileId = 'paged-pdf' | 'paged-afp-sim' | 'html-responsive';
-export type Locale = 'en-US' | 'es-US';
+/** A BCP-47 language tag from the supported list in `languages.ts` ("en-US" is the source language). */
+export type Locale = string;
 
 export type ComponentType =
   | 'container'
@@ -285,6 +286,48 @@ export interface Project {
   brand?: BrandKit;
   /** Pinned regression scenarios with expected outcomes (B4). Travel with the model. */
   testCases?: TestCase[];
+  /** Target languages of the project (never the English source). Absent on older projects, which behave as ["es-US"]. */
+  languages?: Locale[];
+  /**
+   * Translations of every customer-visible text that is not a content part (labels, headings, rich text, table titles,
+   * links, footers, email and SMS wording), keyed by the string id from `translatableStrings`. English is always the live model text.
+   */
+  strings?: Record<string, StringTranslation>;
+  /** Who produced a draft that no person has edited or approved yet, keyed by `<locale>|<part or string id>`. */
+  translationOrigins?: Record<string, TranslationOrigin>;
+  /** Email and SMS wording and section choices. Absent = the defaults from `defaultChannels`. */
+  channels?: ChannelConfig;
+}
+
+export type TranslationOrigin = 'ai' | 'sample';
+
+export interface StringTranslation {
+  approved?: Record<Locale, string>;
+  draft?: Record<Locale, string>;
+  /** The English text each approved translation was made from; a difference means the English has changed since. */
+  basedOn?: Record<Locale, string>;
+}
+
+export type EmailSectionId = 'keyFacts' | 'messages' | 'tables' | 'summaries' | 'actions';
+
+/**
+ * Wording and layout choices for the email and SMS versions of the document. Texts use the same safe markup and
+ * `{{data.field}}` tokens as document text, plus `{{issuer.name}}`, `{{issuer.product}}`, `{{keyFacts}}` and `{{link}}`.
+ */
+export interface ChannelConfig {
+  email: {
+    subject: string;
+    preheader: string;
+    title: string;
+    /** Optional opening paragraph shown after the greeting. */
+    intro: string;
+    /** Optional closing paragraph shown before the disclosures. */
+    closing: string;
+    keyFactsHeading: string;
+    /** Which generated sections appear, in this order. */
+    sections: Array<{ id: EmailSectionId; show: boolean }>;
+  };
+  sms: { text: string };
 }
 
 /** A named text style. Sizes in points; colours are CSS hex. */

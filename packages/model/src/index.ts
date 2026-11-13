@@ -8,6 +8,7 @@ export * from './validate';
 export * from './seed';
 export * from './data';
 export * from './importRecords';
+export * from './languages';
 export * from './translations';
 export * from './templates';
 export * from './diff';

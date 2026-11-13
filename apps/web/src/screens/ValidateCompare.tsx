@@ -4,7 +4,8 @@ import { resolve } from '@iss/resolver';
 import { ScreenHeader, Loading, SeverityLabel, Proof, Tech, Named } from '../ui/common';
 import { nodeTitle, ruleTitle, localeLabel } from '../ui/plain';
 import { Icon } from '../ui/icons';
-import { useStudio, useResolution, useScenarioRequest, useRecord } from '../state/store';
+import { useStudio, useResolution, useScenarioRequest, useRecord, useScenarioEngine } from '../state/store';
+import { recordSummary } from '../shell/RecordPicker';
 import { api, ApiFailure } from '../api/client';
 import { abridge } from './RulesData';
 import { ParityRow, blockWord } from './PreviewExport';
@@ -88,6 +89,12 @@ export function ValidateCompare() {
   const [failedKey, setFailedKey] = useState<string | null>(null);
   const [sevFilter, setSevFilter] = useState<Sev[]>([...SEVS]);
   const [suiteFilter, setSuiteFilter] = useState<'all' | Suite>('all');
+  const [scope, setScopeState] = useState<Scope>(readScope);
+  const setScope = (v: Scope) => { setScopeState(v); try { localStorage.setItem(SCOPE_KEY, v); } catch { /* storage unavailable */ } };
+  const [want, setWant] = useState<{ code: string; nodeId?: string } | null>(null);
+  const [bSel, setBSel] = useState<string | null>(null);
+  const [onlyBlockingPick, setOnlyBlockingPick] = useState<boolean | null>(null);
+  const blockers = useBlockers(scope === 'all');
   const seq = useRef(0);
   const inspectorRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -179,6 +186,31 @@ export function ValidateCompare() {
     useStudio.getState().setCtx({ activeValidationIssue: id });
     if (focusInspector) setTimeout(() => inspectorRef.current?.focus(), 0);
   };
+  /* "Preview this customer" from the All customers view: land on the same issue in the single-customer view once its run is current. */
+  useEffect(() => {
+    if (!want || scope !== 'this' || !report || !upToDate) return;
+    const g = groups.find((x) => x.members.some((m) => m.code === want.code && (!want.nodeId || m.nodeId === want.nodeId))) ?? groups.find((x) => x.members.some((m) => m.code === want.code));
+    if (g) { setSevFilter([...SEVS]); setSuiteFilter('all'); choose(g.primary.issueId); }
+    setWant(null);
+  }, [want, scope, report, upToDate, groups]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onlyBlocking = onlyBlockingPick ?? (blockers.data ? blockers.data.groups.some((g) => isBlocking(g.severity)) : true);
+  const bShown = useMemo(() => (blockers.data?.groups ?? []).filter((g) => !onlyBlocking || isBlocking(g.severity)), [blockers.data, onlyBlocking]);
+  const bCurrent = bShown.find((g) => g.key === bSel) ?? null;
+  useEffect(() => {
+    if (scope !== 'all') return;
+    if (!bShown.length) { if (bSel) setBSel(null); return; }
+    if (!bSel || !bShown.some((g) => g.key === bSel)) setBSel((bShown.find((g) => isBlocking(g.severity)) ?? bShown[0]).key);
+  }, [scope, bShown, bSel]);
+  const previewCustomer = (recordId: string, g: BGroup) => {
+    const st = useStudio.getState();
+    const cursor = st.ctx.journeyCursor;
+    st.setRecord(recordId);
+    st.setJourneyCursor(cursor); // setRecord resets the journey step; the blockers were computed for this one
+    setWant({ code: g.code, nodeId: g.nodeId });
+    setScope('this');
+  };
+
   const onListKey = (e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
     const btns = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('button[data-issue]') ?? [])];
@@ -201,6 +233,7 @@ export function ValidateCompare() {
     else if (i.suite === 'parity' && !i.nodeId) navigate(`${base}/outputs`);
     else navigate(`${base}/design`);
   };
+  const blockerIssue = (g: BGroup): Issue => ({ issueId: g.key, code: g.code, severity: g.severity, suite: g.suite, message: g.message, nodeId: g.nodeId, ruleIds: g.ruleIds, locale: g.locale, suggestion: g.suggestion });
   const sourceLabel = (i: Issue) => (idsOf(i).length ? `Rule ${idsOf(i)[0]} in Rules & Data` : i.suite === 'rules' ? 'Rules & Data' : i.suite === 'pagination' ? 'Page Composition Stack' : i.suite === 'parity' && !i.nodeId ? 'Preview & Export' : `${i.nodeId ?? 'node'} in 2D Design`);
 
   if (!project) return <Loading label="Loading project…" />;
@@ -228,6 +261,9 @@ export function ValidateCompare() {
         } />
       <div className="screen-body vc-body">
         <div className="vc-main" aria-busy={running}>
+          <ScopeSwitch scope={scope} onChange={setScope} />
+          {scope === 'all' && <BlockersAll state={blockers} shown={bShown} selected={bSel} onSelect={setBSel} onlyBlocking={onlyBlocking} onToggle={setOnlyBlockingPick} />}
+          {scope === 'this' && <>
           {/* run status */}
           <div className="vc-status" aria-live="polite">
             {(running || pending) && !report && <div className="callout accent" data-testid="validation-progress"><span className="spinner" /> Checking {who}: rules, bindings, pagination, parity and accessibility. Pagination and parity compose a PDF, so the first results take a few seconds.</div>}
@@ -311,16 +347,209 @@ export function ValidateCompare() {
               {report && <ParityPanel report={report} />}
             </>
           )}
+          </>}
           <p className="hint vc-note" data-testid="certification-note">Automated checks are not WCAG or regulatory certification. They are necessary but not sufficient; PDF accessibility (tagging/PDF-UA) is not evaluated.</p>
         </div>
 
         <aside className="panel vc-inspector" data-side="right" data-side-title="Issue detail" data-testid="validation-inspector" aria-label="Validation detail" tabIndex={-1} ref={inspectorRef}>
-          {current ? <Inspector issue={current} members={currentGroup!.members} onGo={goTo} sourceLabel={sourceLabel(current)} stale={outdated} /> : (
+          {scope === 'all' ? <BlockerDetail group={bCurrent} data={blockers.data} loading={blockers.loading} onlyBlocking={onlyBlocking} onPreview={previewCustomer} onGo={(g) => goTo(blockerIssue(g))} sourceLabel={bCurrent ? sourceLabel(blockerIssue(bCurrent)) : ''} /> : current ? <Inspector issue={current} members={currentGroup!.members} onGo={goTo} sourceLabel={sourceLabel(current)} stale={outdated} /> : (
             <Summary report={report} running={running || pending} who={who} recordId={record?.recordId} gCounts={gCounts} filtered={groups.length > 0} />
           )}
         </aside>
       </div>
     </section>
+  );
+}
+
+/* ------------------------------------------------- all customers (blockers) */
+
+type Scope = 'this' | 'all';
+const SCOPE_KEY = 'iss.validateScope';
+const readScope = (): Scope => { try { return localStorage.getItem(SCOPE_KEY) === 'all' ? 'all' : 'this'; } catch { return 'this'; } };
+const isBlocking = (s: Sev) => s === 'blocking' || s === 'error';
+
+interface BGroup {
+  key: string; code: string; severity: Sev; suite: Suite; nodeId?: string; ruleIds: string[]; locale?: string; message: string; suggestion?: string;
+  recordIds: string[]; messages: Map<string, string>;
+}
+interface BData { engine: unknown; cursor: number | null; profileId: string; groups: BGroup[]; total: number; affected: number; blockedIds: Set<string> }
+
+/** Resolves every synthetic record once for the current profile and journey step (engine caches), after first paint, and groups the findings by issue. */
+function useBlockers(active: boolean): { data: BData | null; loading: boolean } {
+  const engine = useScenarioEngine();
+  const cursor = useStudio((s) => s.ctx.journeyCursor);
+  const profileId = useStudio((s) => s.ctx.profileId);
+  const [data, setData] = useState<BData | null>(null);
+  const fresh = !!data && data.engine === engine && data.cursor === cursor && data.profileId === profileId;
+  useEffect(() => {
+    if (!active || !engine || fresh) return;
+    let cancelled = false;
+    const h = setTimeout(() => {
+      const scen = engine.universe({ journeyCursors: [cursor], profiles: [profileId] });
+      const byKey = new Map<string, BGroup>();
+      const blockedIds = new Set<string>();
+      const affectedIds = new Set<string>();
+      for (const sc of scen) {
+        const res = engine.resolveScenario(sc);
+        for (const f of res.findings) {
+          if (f.severity === 'info') continue;
+          const sev = f.severity as Sev;
+          const ruleIds = [...new Set([...(f.ruleIds ?? []), ...(f.ruleId ? [f.ruleId] : [])])].sort();
+          const key = [f.code, f.nodeId ?? '', ruleIds.join('+'), f.locale ?? ''].join('|');
+          let g = byKey.get(key);
+          if (!g) {
+            const suite: Suite = f.source === 'binding' ? 'bindings' : f.source === 'accessibility' ? 'accessibility' : f.source === 'composer' ? 'pagination' : f.source === 'parity' ? 'parity' : 'rules';
+            g = { key, code: f.code, severity: sev, suite, nodeId: f.nodeId, ruleIds, locale: f.locale, message: f.message, suggestion: f.suggestion, recordIds: [], messages: new Map() };
+            byKey.set(key, g);
+          }
+          if (sevRank(sev) < sevRank(g.severity)) g.severity = sev;
+          if (!g.recordIds.includes(sc.recordId)) g.recordIds.push(sc.recordId);
+          if (!g.messages.has(sc.recordId)) g.messages.set(sc.recordId, f.message);
+          affectedIds.add(sc.recordId);
+          if (isBlocking(sev)) blockedIds.add(sc.recordId);
+        }
+      }
+      const groups = [...byKey.values()].sort((a, b) => Number(isBlocking(b.severity)) - Number(isBlocking(a.severity)) || sevRank(a.severity) - sevRank(b.severity) || b.recordIds.length - a.recordIds.length || a.code.localeCompare(b.code));
+      if (!cancelled) setData({ engine, cursor, profileId, groups, total: scen.length, affected: affectedIds.size, blockedIds });
+    }, 30);
+    return () => { cancelled = true; clearTimeout(h); };
+  }, [active, engine, cursor, profileId, fresh]);
+  return { data: fresh ? data : null, loading: active && !fresh };
+}
+
+function ScopeSwitch({ scope, onChange }: { scope: Scope; onChange: (s: Scope) => void }) {
+  return (
+    <div className="vc-scope">
+      <div className="segmented" role="group" aria-label="Validation scope">
+        <button type="button" aria-pressed={scope === 'this'} onClick={() => onChange('this')} data-testid="scope-this">This customer</button>
+        <button type="button" aria-pressed={scope === 'all'} onClick={() => onChange('all')} data-testid="scope-all">All customers</button>
+      </div>
+    </div>
+  );
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+function BlockersAll({ state, shown, selected, onSelect, onlyBlocking, onToggle }: { state: { data: BData | null; loading: boolean }; shown: BGroup[]; selected: string | null; onSelect: (k: string) => void; onlyBlocking: boolean; onToggle: (v: boolean) => void }) {
+  const project = useStudio((s) => s.project)!;
+  const listRef = useRef<HTMLUListElement>(null);
+  const { data } = state;
+  if (!data) return <section className="panel vc-blockers" data-testid="blockers-all" aria-busy="true"><Loading label="Checking every synthetic customer…" /></section>;
+  const blocking = data.groups.filter((g) => isBlocking(g.severity));
+  const warns = data.groups.length - blocking.length;
+  const clear = data.total - data.blockedIds.size;
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+    const btns = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('button[data-group]') ?? [])];
+    const i = btns.indexOf(document.activeElement as HTMLButtonElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const n = e.key === 'Home' ? 0 : e.key === 'End' ? btns.length - 1 : Math.max(0, Math.min(btns.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+    btns[n].focus();
+    onSelect(btns[n].dataset.group!);
+  };
+  return (
+    <section className="panel vc-blockers" data-testid="blockers-all" aria-label="Issues across all synthetic customers">
+      <div className="panel-head">Issues across customers <span className="sub">{data.total} synthetic customers checked</span></div>
+      <p className="vc-bsummary" data-testid="blockers-summary" role="status">
+        {blocking.length
+          ? <><strong>{plural(blocking.length, 'blocking issue affects', 'blocking issues affect')} {data.blockedIds.size} of {data.total} synthetic customers</strong> · {clear} {clear === 1 ? 'is' : 'are'} clear</>
+          : <><strong>No blocking issues for any synthetic customer</strong> · {data.total} checked</>}
+        {warns > 0 && <span className="muted"> · {plural(warns, 'warning', 'warnings')}</span>}
+      </p>
+      <div className="vc-sevfilter" role="group" aria-label="Filter by severity">
+        <label className="vc-check">
+          <input type="checkbox" checked={onlyBlocking} onChange={(e) => onToggle(e.target.checked)} data-testid="blockers-only" /> Blocking only
+        </label>
+        <span className="muted vc-bnote">Checked for the output and journey step chosen in the top bar.</span>
+      </div>
+      <div className="vc-list-scroll vc-blist">
+        {shown.length ? (
+          <ul className="vc-list list-rows" aria-label="Issues across customers" ref={listRef} onKeyDown={onKey}>
+            {shown.map((g) => {
+              const sel = selected === g.key;
+              return (
+                <li key={g.key} className={`vc-item ${sel ? 'selected' : ''}`}>
+                  <button type="button" className={`vc-issue ${g.severity}`} data-testid="blocker-group" data-group={g.key} data-code={g.code} data-node={g.nodeId} data-severity={g.severity} aria-current={sel} onClick={() => onSelect(g.key)}>
+                    <span className="vc-issue-top"><SeverityLabel severity={g.severity} />
+                      <strong className="vc-title">{BLOCK_TITLE(g.code)}</strong>
+                      <Tech><span className="chip code">{g.code}</span></Tech>
+                      {g.nodeId && <Named name={nodeTitle(project, g.nodeId)} code={g.nodeId} />}
+                      {g.ruleIds.map((r) => <span key={r} className="chip code">{r}</span>)}
+                      <span className="chip count vc-reach">{g.recordIds.length} of {data.total} synthetic customers</span></span>
+                    <span className="vc-issue-msg">{g.message}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="vc-clean" data-testid="blockers-empty">
+            {data.groups.length ? 'No warnings or blockers match the filter.' : <><span className="sev ok">✔ Clear</span> No blocking issues for any synthetic customer; {data.total} checked.</>}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function BlockerDetail({ group: g, data, loading, onlyBlocking, onPreview, onGo, sourceLabel }: { group: BGroup | null; data: BData | null; loading: boolean; onlyBlocking: boolean; onPreview: (recordId: string, g: BGroup) => void; onGo: (g: BGroup) => void; sourceLabel: string }) {
+  const project = useStudio((s) => s.project)!;
+  const records = useStudio((s) => s.records);
+  const personas = useStudio((s) => s.personas);
+  if (!g || !data) {
+    return (
+      <>
+        <div className="panel-head"><span id="vc-detail-title">Issue detail</span></div>
+        <div className="panel-body vc-detail" aria-labelledby="vc-detail-title" data-testid="blocker-detail-empty">
+          {loading || !data ? <p className="vc-detail-msg"><span className="spinner" /> Checking every synthetic customer…</p>
+            : <><h2 className="vc-detail-code">{onlyBlocking || !data.groups.length ? 'No blocking issues for any synthetic customer' : 'Nothing matches the filter'}</h2>
+              <p className="vc-detail-msg">{data.total} synthetic customers were checked for the current output and journey step.</p></>}
+        </div>
+      </>
+    );
+  }
+  const names = g.recordIds.map((id) => {
+    const r = records.find((x) => x.recordId === id);
+    const sum = r ? recordSummary(r, personas) : null;
+    return { id, name: sum?.name ?? id, tag: sum?.tag ?? null, message: g.messages.get(id) ?? g.message };
+  });
+  const differing = new Set(names.map((n) => n.message)).size > 1;
+  const issue: Issue = { issueId: g.key, code: g.code, severity: g.severity, suite: g.suite, message: g.message, nodeId: g.nodeId, ruleIds: g.ruleIds, locale: g.locale };
+  return (
+    <>
+      <div className="panel-head"><span id="vc-detail-title">Issue detail</span><div className="right"><SeverityLabel severity={g.severity} /></div></div>
+      <div className="panel-body vc-detail" aria-labelledby="vc-detail-title" data-testid="blocker-detail" data-code={g.code}>
+        <h2 className="vc-detail-code">{BLOCK_TITLE(g.code)} <Tech><span className="chip code">{g.code}</span></Tech></h2>
+        <p className="vc-detail-msg">{g.message}</p>
+        <dl className="kv vc-kv">
+          <dt>Reach</dt><dd>{g.recordIds.length} of {data.total} synthetic customers</dd>
+          {g.nodeId && <><dt>Section</dt><dd><Named name={nodeTitle(project, g.nodeId)} code={g.nodeId} /></dd></>}
+          {g.ruleIds.length > 0 && <><dt>Rules</dt><dd>{g.ruleIds.map((r) => { const rule = project.rules.find((x) => x.id === r); return <span key={r} className="vc-rule">{rule ? ruleTitle(project, rule) : null} <span className="chip code">{r}</span></span>; })}</dd></>}
+          {g.locale && <><dt>Language</dt><dd title={g.locale}>{localeLabel(g.locale)}</dd></>}
+        </dl>
+        {g.suggestion && <><h3 className="section-title">Suggested correction</h3><div className="callout accent" data-testid="issue-suggestion">{g.suggestion}</div></>}
+        <h3 className="section-title">Affected customers</h3>
+        <ul className="list-rows vc-affected" data-testid="blocker-customers" aria-label="Affected synthetic customers">
+          {names.map((n) => (
+            <li key={n.id} className="vc-aff" data-record={n.id}>
+              <div className="vc-aff-who">
+                <strong className="vc-aff-name">{n.name}</strong>
+                {n.tag && <span className="muted vc-aff-tag">{n.tag}</span>}
+                <Tech><span className="chip code">{n.id}</span></Tech>
+                {differing && <span className="vc-aff-msg muted">{n.message}</span>}
+              </div>
+              <button type="button" className="btn sm" onClick={() => onPreview(n.id, g)} data-testid="blocker-open-customer" aria-label={`Preview this customer: ${n.name}`}>Preview this customer</button>
+            </li>
+          ))}
+        </ul>
+        <h3 className="section-title">Source</h3>
+        <div className="row wrap">
+          <button className="btn primary" onClick={() => onGo(g)} data-testid="go-to-source"><Icon.external /> Go to source</button>
+        </div>
+        <p className="hint">Opens {sourceLabel}{issue.nodeId ? ' with the node selected' : ''}. Your selection and scenario are kept.</p>
+      </div>
+    </>
   );
 }
 

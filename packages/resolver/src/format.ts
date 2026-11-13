@@ -1,30 +1,28 @@
 /** Locale-aware formatting at the presentation boundary. Arithmetic is always integer cents. */
 
-function group3(digits: string): string {
-  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+import { languageData } from '@iss/model';
+
+function group3(digits: string, sep = ','): string {
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
 }
 
-export function formatCents(cents: number | null | undefined, _locale = 'en-US'): string {
+/** US-dollar amount in the conventions of the document language (separators and symbol position from the language table). */
+export function formatCents(cents: number | null | undefined, locale = 'en-US'): string {
   if (cents === null || cents === undefined || !Number.isInteger(cents)) return '';
+  const l = languageData(locale);
   const neg = cents < 0;
   const abs = Math.abs(cents);
-  const dollars = Math.floor(abs / 100).toString();
-  const rem = (abs % 100).toString().padStart(2, '0');
-  return `${neg ? '−' : ''}$${group3(dollars)}.${rem}`;
+  const n = `${group3(Math.floor(abs / 100).toString(), l.group)}${l.decimal}${(abs % 100).toString().padStart(2, '0')}`;
+  return `${neg ? '−' : ''}${l.currencyFirst ? `$${l.gap}${n}` : `${n}${l.gap}$`}`;
 }
 
-const MONTHS: Record<string, string[]> = {
-  'en-US': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-  'es-US': ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'],
-};
-
+/** Short date in the document language: month names and order come from the language table (CLDR). */
 export function formatDate(iso: string | null | undefined, locale = 'en-US'): string {
   if (!iso) return '';
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   if (!m) return String(iso);
-  const month = (MONTHS[locale] ?? MONTHS['en-US'])[Number(m[2]) - 1];
-  const day = Number(m[3]);
-  return locale === 'es-US' ? `${day} ${month} ${m[1]}` : `${month} ${day}, ${m[1]}`;
+  const l = languageData(locale);
+  return l.datePattern.replace('{d}', String(Number(m[3]))).replace('{m}', l.months[Number(m[2]) - 1]).replace('{y}', m[1]);
 }
 
 export function formatInt(n: number | null | undefined): string {
