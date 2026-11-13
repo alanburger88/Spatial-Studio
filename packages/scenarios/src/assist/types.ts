@@ -90,6 +90,49 @@ export interface CoverageGap {
   reason?: string;
 }
 
+/* ------------------------------------------------------------------ test customers */
+
+export interface TestDataOptions {
+  /** one customer for every rule, message version, optional section (shown and hidden) and document language */
+  outcomes: boolean;
+  /** just below / exactly on / just above each threshold, each referenced enum value and yes/no, and an empty value for each optional field a rule reads */
+  edges: boolean;
+  /** hard cap on customers, default 200 */
+  max?: number;
+}
+
+export type TestDataTargetKind = 'rule' | 'variant' | 'section-shown' | 'section-hidden' | 'language' | 'edge' | 'empty';
+
+export interface TestDataTarget {
+  id: string;
+  kind: TestDataTargetKind;
+  /** rule id, content-part id, node id, locale, or field path */
+  targetId: string;
+  /** plain words, names not ids, e.g. `Rule “Two or more missed payments — offer support” applies`, `New balance exactly $500.00` */
+  title: string;
+  /** index into `customers`, or null when nothing reaches it */
+  customer: number | null;
+  /** why nothing reaches it (contradictory conditions, depends on a calculated field, only reached at a journey step, …) */
+  reason?: string;
+  /** edge/empty targets: what the document did for that value, e.g. `Gets “Payment reminder”` */
+  observed?: string;
+}
+
+export interface GeneratedCustomer {
+  /** a complete record except its id */
+  record: Omit<SyntheticRecord, 'recordId'>;
+  /** short reason shown in the customer picker, e.g. `Reaches “Payment support”` or `New balance just above $500.00` */
+  label: string;
+  /** ids of the targets this customer covers */
+  targets: string[];
+}
+
+export interface TestDataPlan {
+  customers: GeneratedCustomer[];
+  targets: TestDataTarget[];
+  summary: { outcomes: { total: number; reached: number }; edges: { total: number; reached: number }; unreachable: number; capped: boolean };
+}
+
 /* ------------------------------------------------------------------ change summary */
 
 export interface ChangeSummary {

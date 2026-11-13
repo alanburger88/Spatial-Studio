@@ -1,6 +1,7 @@
 export * from './types';
 export * from './fixes';
 export * from './coverage';
+export * from './testData';
 export * from './changeSummary';
 export * from './translationQa';
 export * from './importMapping';
