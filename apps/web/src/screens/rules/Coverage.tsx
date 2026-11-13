@@ -60,7 +60,7 @@ function targetTotal(project: Project): number {
 
 const KIND_WORD: Record<CoverageGap['kind'], string> = { rule: 'Rule', variant: 'Message version', section: 'Section' };
 
-export function CoverageDialog({ project, onClose, onPreview }: { project: Project; onClose: () => void; onPreview: (gap: CoverageGap, scenario: Scenario) => void }) {
+export function CoverageDialog({ project, onClose, onPreview, onGenerate }: { project: Project; onClose: () => void; onPreview: (gap: CoverageGap, scenario: Scenario) => void; onGenerate?: () => void }) {
   const records = useStudio((s) => s.records);
   const personas = useStudio((s) => s.personas);
   const blocked = useStudio((s) => editBlockedReason(s.session));
@@ -92,6 +92,12 @@ export function CoverageDialog({ project, onClose, onPreview }: { project: Proje
   return (
     <Dialog title={<>Find coverage gaps <SourceChip source="builtin" /></>} onClose={onClose} labelledBy="coverage-title">
       <div className="ra-wide ra-cov" data-testid="coverage-panel">
+        {onGenerate && (
+          <p className="row wrap ra-covbar ra-gen">
+            <span className="muted">Rather than fixing gaps one by one:</span>
+            <button type="button" className="btn sm" onClick={onGenerate} data-testid="coverage-generate">Generate test customers for all of this</button>
+          </p>
+        )}
         {!gaps ? <Loading label="Trying what-if scenarios on the synthetic customers…" /> : (
           <>
             <p className="ra-summary" data-testid="coverage-summary" data-gaps={gaps.length} data-total={total}>

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Persona, SyntheticRecord } from '@iss/model';
 import { Icon } from '../ui/icons';
+import './RecordPicker.css';
 
 /** Human label for a record: name plus persona (card) or claim status (EOB). */
 export function recordSummary(r: SyntheticRecord, personas: Persona[]) {
@@ -27,11 +28,13 @@ export function RecordPicker({ records, personas, value, onChange }: { records: 
 
   const items = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return records.filter((r) => {
+    const hit = records.filter((r) => {
       if (!needle) return true;
       const s = recordSummary(r, personas);
-      return `${r.recordId} ${s.name} ${s.tag ?? ''} ${s.locale ?? ''}`.toLowerCase().includes(needle);
+      return `${r.recordId} ${s.name} ${s.tag ?? ''} ${s.locale ?? ''} ${r.generated?.label ?? ''}`.toLowerCase().includes(needle);
     });
+    // Samples and imported customers first, then the ones generated for this document (own group).
+    return [...hit.filter((r) => !r.generated), ...hit.filter((r) => r.generated)];
   }, [records, personas, q]);
 
   useEffect(() => {
@@ -56,7 +59,7 @@ export function RecordPicker({ records, personas, value, onChange }: { records: 
   return (
     <div className="rp" ref={root}>
       <button type="button" className="rp-trigger select" data-testid="record-selector" data-value={value} aria-haspopup="listbox" aria-expanded={open}
-        aria-label={`Synthetic customer: ${cur ? `${cur.name}${cur.tag ? `, ${cur.tag}` : ''} (${value})` : value}. Change customer`}
+        aria-label={`Synthetic customer: ${cur ? `${cur.name}${cur.tag ? `, ${cur.tag}` : ''}${current?.generated ? ', generated test customer' : ''} (${value})` : value}. Change customer`}
         onClick={() => setOpen((o) => !o)} onKeyDown={(e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); } }}>
         <span className="rp-name">{cur?.name ?? value}</span>
         {cur?.tag && <span className="rp-tag">{cur.tag}</span>}
@@ -71,14 +74,20 @@ export function RecordPicker({ records, personas, value, onChange }: { records: 
           <ul id="rp-list" role="listbox" aria-label="Synthetic customers" ref={list}>
             {items.map((r, i) => {
               const s = recordSummary(r, personas);
+              const firstGenerated = !!r.generated && !items[i - 1]?.generated;
               return (
-                <li key={r.recordId} id={`rp-${r.recordId}`} role="option" aria-selected={r.recordId === value} data-idx={i} data-testid={`record-option-${r.recordId}`}
-                  className={`${i === active ? 'active' : ''}${r.recordId === value ? ' current' : ''}`} onMouseEnter={() => setActive(i)} onMouseDown={(e) => { e.preventDefault(); choose(r.recordId); }}>
+                <Fragment key={r.recordId}>
+                {firstGenerated && <li className="rp-group" role="presentation" data-testid="record-group-generated">Generated for this document</li>}
+                <li id={`rp-${r.recordId}`} role="option" aria-selected={r.recordId === value} data-idx={i} data-testid={`record-option-${r.recordId}`}
+                  className={`${i === active ? 'active' : ''}${r.recordId === value ? ' current' : ''}${r.generated ? ' gen' : ''}`} onMouseEnter={() => setActive(i)} onMouseDown={(e) => { e.preventDefault(); choose(r.recordId); }}>
                   <span className="rp-name">{s.name}</span>
                   {s.tag && <span className="rp-tag">{s.tag}</span>}
                   {s.locale && s.locale !== 'en-US' && <span className="rp-tag lang">{s.locale}</span>}
+                  {r.generated && <span className="rp-tag gen" data-testid="record-generated-chip">Generated</span>}
+                  {r.generated ? <span className="rp-why" title={r.generated.label}>{r.generated.label}</span> : null}
                   <span className="rp-id mono">{r.recordId}</span>
                 </li>
+                </Fragment>
               );
             })}
             {!items.length && <li className="rp-empty" role="presentation">No customer matches “{q}”.</li>}

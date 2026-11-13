@@ -143,8 +143,9 @@ function ForThisScreen() {
   }
   if (seg === 'rules-data') {
     actions.push({ id: 'describe', label: 'Describe a rule in plain words', run: () => goThen('rules-data', ['rule-describe-input']) });
-    actions.push({ id: 'review', label: 'Review my rules', run: () => goThen('rules-data', ['rules-review']) });
     actions.push({ id: 'coverage', label: 'Find coverage gaps', run: () => goThen('rules-data', ['coverage-open']) });
+    // Opens the generator itself (not just a jump): wait for the button, then press it.
+    actions.push({ id: 'testdata', label: 'Generate test customers', hint: 'One customer for every outcome and edge value', run: () => { goThen('rules-data', ['testdata-open']); let n = 0; const t = window.setInterval(() => { const b = document.querySelector<HTMLButtonElement>('[data-testid="testdata-open"]'); if (b) { window.clearInterval(t); b.click(); } else if (++n > 20) window.clearInterval(t); }, 100); } });
   }
   if (seg === 'content') {
     actions.push({ id: 'draft', label: 'Draft missing translations', run: () => goThen('content', ['tr-ai-draft-all']) });

@@ -18,6 +18,7 @@ import { DecisionTable } from './rules/DecisionTable';
 import { DraftTestImpact, TestsPanel, TestsSummary } from './rules/TestCases';
 import { DescribeRuleDialog, ReviewRulesDialog } from './rules/RuleAssist';
 import { CoverageDialog, stepLabelOf } from './rules/Coverage';
+import { TestDataDialog } from './rules/TestData';
 import { makeTransactions } from '../demo/defects';
 import './RulesData.css';
 
@@ -239,7 +240,7 @@ export function RulesData() {
   const [view, setView] = useState<'editor' | 'table' | 'tests'>('editor');
   const [toggleNote, setToggleNote] = useState<{ before: Project; after: Project; ruleId: string; verb: string } | null>(null);
   const dockRef = useRef<HTMLDivElement>(null);
-  const [assist, setAssist] = useState<'describe' | 'review' | 'coverage' | null>(null);
+  const [assist, setAssist] = useState<'describe' | 'review' | 'coverage' | 'testdata' | null>(null);
   const [previewed, setPreviewed] = useState<{ title: string; recordId: string; overrides: string; cursor: number | null } | null>(null);
   const blockedReason = useStudio((s) => editBlockedReason(s.session));
   const openDock = (t: DockTab) => { setDock(t); setTimeout(() => dockRef.current?.scrollIntoView({ block: 'nearest', behavior: useStudio.getState().reducedMotion ? 'auto' : 'smooth' }), 30); };
@@ -426,7 +427,7 @@ export function RulesData() {
           </div>
         )}
         <div className="rd-row rd-row1" hidden={view !== 'editor'}>
-          <RuleTree assist={<div className="ra-assist" data-testid="rules-assist"><button className="btn sm" onClick={() => setAssist('describe')} data-testid="rule-describe-button"><Icon.plus /> Describe a rule</button><button className="btn sm" onClick={() => setAssist('review')} data-testid="rules-review"><Icon.target /> Review my rules</button><button className="btn sm" onClick={() => setAssist('coverage')} data-testid="coverage-open"><Icon.list /> Find coverage gaps</button></div>} project={project} ruleTrace={ruleTrace} selectedId={isNew ? draft?.id ?? '' : ruleId} newId={isNew ? draft?.id : undefined} onSelect={selectRule} />
+          <RuleTree assist={<div className="ra-assist" data-testid="rules-assist"><button className="btn sm" onClick={() => setAssist('describe')} data-testid="rule-describe-button"><Icon.plus /> Describe a rule</button><button className="btn sm" onClick={() => setAssist('review')} data-testid="rules-review"><Icon.target /> Review my rules</button><button className="btn sm" onClick={() => setAssist('coverage')} data-testid="coverage-open"><Icon.list /> Find coverage gaps</button><button className="btn sm" onClick={() => setAssist('testdata')} data-testid="testdata-open"><Icon.plus /> Generate test customers</button></div>} project={project} ruleTrace={ruleTrace} selectedId={isNew ? draft?.id ?? '' : ruleId} newId={isNew ? draft?.id : undefined} onSelect={selectRule} />
 
           <div className="panel rd-editor-panel" data-testid="rule-editor" aria-label="Rule editor">
             {!draft ? (
@@ -551,7 +552,8 @@ export function RulesData() {
       {showFields && <DataFieldsDialog onClose={() => setShowFields(false)} />}
       {assist === 'describe' && <DescribeRuleDialog project={project} blockedReason={blockedReason} onClose={() => setAssist(null)} onOpenDraft={openDraft} />}
       {assist === 'review' && <ReviewRulesDialog project={project} onClose={() => setAssist(null)} onSelectRule={(id) => { setView('editor'); return selectRule(id); }} />}
-      {assist === 'coverage' && <CoverageDialog project={project} onClose={() => setAssist(null)} onPreview={previewGap} />}
+      {assist === 'coverage' && <CoverageDialog project={project} onClose={() => setAssist(null)} onPreview={previewGap} onGenerate={() => setAssist('testdata')} />}
+      {assist === 'testdata' && <TestDataDialog project={project} onClose={() => setAssist(null)} />}
     </section>
   );
 }
