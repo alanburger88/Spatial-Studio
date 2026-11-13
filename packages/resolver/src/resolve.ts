@@ -8,7 +8,9 @@ import { formatCents, formatValue } from './format';
 import type { CalculatedOutcome, ChannelTexts, CoreDiagnostic, CoreResult, Finding, RBlock, RInline, RNode, RTableRow, RVariant, Resolution, ResolveInput, SemanticManifest, TraceEntry } from './types';
 
 export const ENGINE_VERSION = 'iss-resolver/1.0.0';
-const DEBT_LANGUAGE = /\b(you owe|owed|amount due|balance due|pay this amount|amount you owe|payment due now)\b/i;
+/** Wording that reads as a demand for money. One list, shared with the wording checker's tone rule so the two cannot drift apart. */
+export const DEBT_LANGUAGE_PATTERN = String.raw`\b(you owe|owed|amount due|balance due|pay this amount|amount you owe|payment due now)\b`;
+const DEBT_LANGUAGE = new RegExp(DEBT_LANGUAGE_PATTERN, 'i');
 
 /* --------------------------------------------------------------- predicates */
 

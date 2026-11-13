@@ -3,7 +3,7 @@ import {
   localizeProject, projectLanguages, requiredNodeIds, setChannelString, translatableStrings,
   type ChannelConfig, type Command, type DocNode, type LibraryLink, type Project, type WordingRule, type WordingRuleScope,
 } from '@iss/model';
-import type { Finding } from '@iss/resolver';
+import { DEBT_LANGUAGE_PATTERN, type Finding } from '@iss/resolver';
 import { readingLevel } from './writing';
 
 /**
@@ -280,8 +280,8 @@ export function sentencesOf(text: string): Array<{ start: number; end: number; t
   return out;
 }
 
-/** The phrases the existing "reads as a demand for money" check looks for (the resolver's EOB check, same list). */
-const DEMAND = /\b(you owe|owed|amount due|balance due|pay this amount|amount you owe|payment due now)\b/gi;
+/** The phrases the existing "reads as a demand for money" check looks for: the resolver's own list, not a copy. */
+const DEMAND = new RegExp(DEBT_LANGUAGE_PATTERN, 'gi');
 /** A reading level is only judged on a text of at least this many words. */
 export const READING_LEVEL_MIN_WORDS = 12;
 
