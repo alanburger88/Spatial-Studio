@@ -584,7 +584,13 @@ export function evaluateExpr(e: Expr, env: EvalEnv): Evaluated {
         break;
       }
       case 'if': {
-        const cond = predicateTri(x.when, env.ctx, (path) => (path.startsWith(CALC_PREFIX) ? env.calcMissing.get(path.slice(CALC_PREFIX.length)) ?? null : null));
+        const cond = predicateTri(x.when, env.ctx, (path) => {
+          if (path === DOCUMENT_DATE_PATH) return env.issueDate ? null : { code: 'no-date', message: 'The document has no date for this customer.' };
+          if (!path.startsWith(CALC_PREFIX)) return null;
+          const key = path.slice(CALC_PREFIX.length);
+          const m = env.calcMissing.get(key);
+          return m ? { ...m, via: [...(m.via ?? []), key] } : null;
+        });
         if (typeof cond !== 'boolean') { r = { ok: false, missing: cond }; break; }
         r = cond ? go('then', x.then) : go('else', x.else);
         break;
@@ -688,6 +694,7 @@ export function evaluateCalculations(project: Pick<Project, 'documentType' | 'cu
   const values: Record<string, CalcValue | null> = {};
   const missingBy = new Map<string, Missing>();
   ctx.calc = values;
+  if (project.documentDate && !ctx.document) ctx.document = { date: issueDate };
   const env: EvalEnv = { ctx, calcMissing: missingBy, issueDate, tables: c.tables, fields: c.fields, calcLabels: c.labels, calcTypes: c.calcTypes };
   for (const calc of c.order) {
     if (c.cycle.size && c.cycle.has(calc.key)) {
