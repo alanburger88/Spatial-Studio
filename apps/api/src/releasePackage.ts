@@ -796,7 +796,7 @@ ${fromLibrary.map((l) => `<tr><td>${escHtml(l.title)}</td><td>${escHtml(LIBRARY_
   // Wording rules (wave 2): the rules in force when the content was approved, and what the checker found in it.
   const wording = wordingReleaseRecord(template);
   const wordingHtml = wording ? `<h2>Wording rules</h2>
-<p>${wording.house ? `The house rules “${escHtml(wording.house.title)}” (version ${wording.house.version}, ${wording.house.rules} rules) from the library` : wording.houseKept ? `${wording.houseKept} house rules kept from the library` : 'No house rules'}${wording.own.length ? `, and ${wording.own.length} of the document's own` : ''}. The approved content had ${wording.mustFindings === 0 ? 'no' : wording.mustFindings} finding${wording.mustFindings === 1 ? '' : 's'} against a “must” rule and ${wording.shouldFindings} against a “should” rule (${wording.textsChecked} texts checked).</p>
+<p>${wording.house ? `The house rules “${escHtml(wording.house.title)}” (version ${wording.house.version}, ${wording.house.rules} rules) from the library` : wording.houseKept ? `${wording.houseKept} house rules kept from the library` : 'No house rules'}${wording.own.length ? `, and ${wording.own.length} of the document's own` : ''}. The approved content had ${wording.mustFindings === 0 ? 'no finding' : `${wording.mustFindings} finding${wording.mustFindings === 1 ? '' : 's'}`} against a “must” rule and ${wording.shouldFindings} against a “should” rule (${wording.textsChecked} texts checked).</p>
 ${wording.own.length ? `<ul>${wording.own.map((r) => `<li>${escHtml(wordingRuleLabel(r))} (${r.severity})</li>`).join('')}</ul>` : ''}
 
 ` : '';

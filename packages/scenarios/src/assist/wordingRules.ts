@@ -408,9 +408,7 @@ export const isWordingCode = (code: string): boolean => code.startsWith('WORDING
  * text its own root cause (`blockerIdOf`); `details` carries ids, the match and its position, never a customer's data.
  */
 export function wordingFindings(project: Project, check: WordingCheck = checkWording(project)): Finding[] {
-  const nodes = new Map(project.nodes.map((n) => [n.id, n]));
-  // Who reads it: the chosen alternative itself, or the component that shows the text; nothing named = every customer.
-  const readBy = (w: WordingFinding): string[] => (w.partId && (nodes.get(w.nodeId ?? '')?.variantIds ?? []).includes(w.partId) ? [w.partId] : w.nodeId ? [w.nodeId] : []);
+  const readBy = (w: WordingFinding): string[] => readByOf(project, w);
   return check.findings.map((w) => ({
     code: WORDING_CODE[w.kind],
     severity: w.severity === 'must' ? 'blocking' : 'warning',
@@ -527,14 +525,21 @@ export function wordingFixFor(project: Project, findingId: string, scope: 'text'
 }
 
 /** What a change did to the wording a rule is about: how many matches went and in how many texts (for a fix's effect). */
-export function wordingEditEffect(before: Project, after: Project, ruleKey: string): { occurrences: number; texts: number } {
+export function wordingEditEffect(before: Project, after: Project, ruleKey: string): { occurrences: number; texts: number; read: Array<{ ids: string[]; locale: string }> } {
   const b = checkWording(before).findings.filter((f) => f.ruleKey === ruleKey);
   const a = new Map(checkWording(after).findings.filter((f) => f.ruleKey === ruleKey).map((f) => [f.id, f.occurrences.length]));
   let occurrences = 0, texts = 0;
+  const read: Array<{ ids: string[]; locale: string }> = [];
   for (const f of b) {
     const left = a.get(f.id) ?? 0;
-    if (left < f.occurrences.length) { occurrences += f.occurrences.length - left; texts++; }
+    if (left < f.occurrences.length) { occurrences += f.occurrences.length - left; texts++; read.push({ ids: readByOf(before, f), locale: f.locale }); }
   }
-  return { occurrences, texts };
+  return { occurrences, texts, read };
+}
+
+/** Who reads a finding's text: the chosen alternative itself, or the component that shows it; nothing named = every customer. */
+function readByOf(project: Project, w: WordingFinding): string[] {
+  const node = project.nodes.find((n) => n.id === w.nodeId);
+  return w.partId && (node?.variantIds ?? []).includes(w.partId) ? [w.partId] : w.nodeId ? [w.nodeId] : [];
 }
 

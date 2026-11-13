@@ -905,9 +905,13 @@ export function fixImpact(project: Project, proposal: FixProposal, records: Synt
   if (isWordingCode(issue.code) && typeof check === 'string' && !newlyBlocked.length) {
     // "Replaces 3 occurrences in 2 texts; changes what 41 of 70 synthetic customers read."
     const e = wordingEditEffect(project, applied.project, check.split('@')[0]);
+    // Who reads a changed text: the customers who get that message (or see that component), in its language.
+    const readers = new Set<string>();
+    for (const t of e.read) for (const r of readersOf(project, records, t.ids, { locale: t.locale, profileId: opts?.profileId, journeyCursor: cursor, issueDate: opts?.issueDate })) readers.add(r);
+    const read = Math.max(changed, readers.size);
     const what = e.occurrences ? `Replaces ${plural(e.occurrences, 'occurrence')} in ${plural(e.texts, 'text')}` : 'Changes the wording';
-    const summary = `${what}; changes what ${changed} of ${total} synthetic customers read${resolves ? '' : how === 'unknown' ? ', but it could not be confirmed that the rule is met' : ', but the rule is still broken there'}.`;
-    return { resolves, unblocked, newlyBlocked, changedCustomers: changed, totalCustomers: total, summary };
+    const summary = `${what}; changes what ${read} of ${total} synthetic customers read${resolves ? '' : how === 'unknown' ? ', but it could not be confirmed that the rule is met' : ', but the rule is still broken there'}.`;
+    return { resolves, unblocked, newlyBlocked, changedCustomers: read, totalCustomers: total, summary };
   }
   const composer = ['FLOW_OVERFLOW_NO_CONTINUATION', 'TABLE_TOTAL_CLIPPED', 'ORPHANED_HEADING', 'KEEP_TOGETHER_CANNOT_FIT'].includes(issue.code) || issue.code.startsWith('PDF_A11Y_');
   let summary: string;
@@ -973,7 +977,10 @@ export function safeFixPlan(project: Project, records: SyntheticRecord[], opts?:
         : `Needs your review: ${first.riskReason ?? first.title}` });
       continue;
     }
-    const fresh = (chosen.proposal.commands ?? []).filter((c) => !taken.has(shortDigest(c, 24)));
+    // Two wording replacements can touch the same message (its text and its heading): each is made again on the wording as the earlier fixes left it.
+    const wid = isWordingCode(group.finding.code) ? group.finding.details?.findingId : undefined;
+    const again = typeof wid === 'string' ? wordingFixFor(running, wid, chosen.proposal.title.includes(' texts') ? 'all' : 'text') : null;
+    const fresh = (again && 'commands' in again ? again.commands : again === null && typeof wid === 'string' ? [] : chosen.proposal.commands ?? []).filter((c) => !taken.has(shortDigest(c, 24)));
     if (fresh.length) {
       const r = applyCommand(running, { type: 'BATCH', label: chosen.proposal.title, commands: fresh });
       if (!r.ok) { skipped.push({ group, reason: 'This fix cannot be combined with the other safe fixes; apply it on its own.' }); continue; }
