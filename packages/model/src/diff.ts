@@ -1,6 +1,8 @@
 import { canonicalJson } from './digest';
 import { richToPlain } from './rich';
-import type { BrandKit, ContentPart, CustomField, DocNode, JourneyEvent, NodeLayout, Predicate, PresentationProfile, Project, Rule, RuleAction, TestCase, TextStyle } from './types';
+import type { BrandKit, CalculatedField, ContentPart, CustomField, DocNode, DocumentDateSource, JourneyEvent, LookupTable, NodeLayout, Predicate, PresentationProfile, Project, Rule, RuleAction, TestCase, TextStyle } from './types';
+import { printFormula } from './formula';
+import { periodInWords } from './formulaWords';
 
 /**
  * Pure, deterministic structural diff between two saved project versions. It reports *what* changed in the
@@ -27,6 +29,8 @@ export interface RuleChange {
   condition?: { from: string; to: string };
   action?: { from: string; to: string };
   mode?: { from: string; to: string };
+  /** In effect from/until, in plain words ("always" when it has no period). */
+  period?: { from: string; to: string };
   before: Rule;
   after: Rule;
 }
@@ -46,9 +50,15 @@ export interface ProjectDiff {
   testCases: { added: NamedRef[]; removed: NamedRef[]; changed: NamedChange[] };
   journey: { added: NamedRef[]; removed: NamedRef[]; changed: NamedChange[] };
   profiles: { changed: NamedChange[] };
+  /** Calculated fields (by key). A changed one also says how its formula changed. */
+  calculations: { added: NamedRef[]; removed: NamedRef[]; changed: Array<NamedChange & { formula?: { from: string; to: string } }> };
+  /** Lookup tables (by id), with the number of rows before and after for a changed one. */
+  lookupTables: { added: NamedRef[]; removed: NamedRef[]; changed: Array<NamedChange & { rows: { from: number; to: number } }> };
+  /** Where the document's date comes from, in plain words (null = the document does not use dates). */
+  documentDate?: { from: string | null; to: string | null };
   /** Other top-level keys (issuer, rootNodeId, documentType…) that differ. */
   other: string[];
-  summary: { counts: Record<'title' | 'components' | 'rules' | 'content' | 'customFields' | 'styles' | 'brand' | 'testCases' | 'journey' | 'profiles' | 'other', number>; total: number; identical: boolean };
+  summary: { counts: Record<'title' | 'components' | 'rules' | 'content' | 'customFields' | 'styles' | 'brand' | 'testCases' | 'journey' | 'profiles' | 'calculations' | 'lookupTables' | 'documentDate' | 'other', number>; total: number; identical: boolean };
 }
 
 const same = (a: unknown, b: unknown) => canonicalJson(a ?? null) === canonicalJson(b ?? null);
@@ -136,6 +146,11 @@ function diffNode(a: DocNode, b: DocNode): ComponentChange | null {
       const from = nodeText(a), to = nodeText(b);
       if (from !== to) changes.push({ field: 'text', from: from === null ? null : clip(from), to: to === null ? null : clip(to) });
       else changes.push({ field: f, from: scalarText((a as any)[f]), to: scalarText((b as any)[f]) });
+    } else if (f === 'effective') changes.push({ field: f, from: a.effective ? periodInWords(a.effective) : null, to: b.effective ? periodInWords(b.effective) : null });
+    else if (f === 'variantPeriods') {
+      const ids = [...new Set([...Object.keys(a.variantPeriods ?? {}), ...Object.keys(b.variantPeriods ?? {})])].sort();
+      const words = (n: DocNode) => ids.filter((v) => n.variantPeriods?.[v]).map((v) => `${v}: ${periodInWords(n.variantPeriods![v])}`).join('; ') || null;
+      changes.push({ field: f, from: words(a), to: words(b) });
     } else if (f === 'visibleWhen') changes.push({ field: f, from: a.visibleWhen ? predicateText(a.visibleWhen) : null, to: b.visibleWhen ? predicateText(b.visibleWhen) : null });
     else if (f === 'children' || f === 'variantIds') {
       const ai = (a as any)[f] as string[] | undefined ?? [], bi = (b as any)[f] as string[] | undefined ?? [];
@@ -160,6 +175,7 @@ function diffRule(a: Rule, b: Rule): RuleChange | null {
   if (fields.includes('when')) c.condition = { from: predicateText(a.when), to: predicateText(b.when) };
   if (fields.includes('then')) c.action = { from: actionText(a.then), to: actionText(b.then) };
   if (fields.includes('mode')) c.mode = { from: a.mode, to: b.mode };
+  if (fields.includes('effective')) c.period = { from: periodInWords(a.effective), to: periodInWords(b.effective) };
   return c;
 }
 
@@ -209,7 +225,13 @@ function diffBrand(a: BrandKit | undefined, b: BrandKit | undefined): ValueChang
     : { field: k, from: scalarText((a as any)?.[k]), to: scalarText((b as any)?.[k]) });
 }
 
-const KNOWN = new Set(['schemaVersion', 'projectId', 'title', 'modelVersion', 'lastSavedAt', 'nodes', 'rules', 'contentParts', 'customFields', 'styles', 'brand', 'testCases', 'journey', 'presentationProfiles', 'derivedFrom', 'fromTemplate', 'importedFrom']);
+const KNOWN = new Set(['schemaVersion', 'projectId', 'title', 'modelVersion', 'lastSavedAt', 'nodes', 'rules', 'contentParts', 'customFields', 'styles', 'brand', 'testCases', 'journey', 'presentationProfiles', 'derivedFrom', 'fromTemplate', 'importedFrom', 'calculatedFields', 'lookupTables', 'documentDate']);
+
+/** Where the document's date comes from, in plain words. */
+export function documentDateWords(src: DocumentDateSource | undefined, fieldLabel?: (path: string) => string): string | null {
+  if (!src) return null;
+  return src.source === 'run' ? 'given for each run' : `from ${fieldLabel ? `“${fieldLabel(src.path)}”` : src.path}`;
+}
 
 /** Structural diff from `a` (older) to `b` (newer). Ignores modelVersion and save timestamps. */
 export function diffProjects(a: Project, b: Project): ProjectDiff {
@@ -233,6 +255,19 @@ export function diffProjects(a: Project, b: Project): ProjectDiff {
   if (a.journey?.snapshotPolicy !== b.journey?.snapshotPolicy) journey.changed.push({ id: 'snapshotPolicy', name: 'Snapshot policy', fields: ['snapshotPolicy'] });
   const profiles = { changed: diffNamed<PresentationProfile>(a.presentationProfiles, b.presentationProfiles, (p) => p.id, (p) => p.id).changed };
   const brand = { changed: diffBrand(a.brand, b.brand) };
+  const calcBase = diffNamed<CalculatedField>(a.calculatedFields, b.calculatedFields, (c) => c.key, (c) => c.label);
+  const calcA = byId(a.calculatedFields, (c) => c.key);
+  const calculations: ProjectDiff['calculations'] = {
+    ...calcBase,
+    changed: calcBase.changed.map((c) => {
+      const before = calcA.get(c.id)!, after = (b.calculatedFields ?? []).find((x) => x.key === c.id)!;
+      return c.fields.includes('expr') ? { ...c, formula: { from: printFormula(before.expr), to: printFormula(after.expr) } } : c;
+    }),
+  };
+  const tableBase = diffNamed<LookupTable>(a.lookupTables, b.lookupTables, (t) => t.id, (t) => t.title);
+  const tableA = byId(a.lookupTables, (t) => t.id);
+  const lookupTables: ProjectDiff['lookupTables'] = { ...tableBase, changed: tableBase.changed.map((c) => ({ ...c, rows: { from: tableA.get(c.id)!.rows.length, to: (b.lookupTables ?? []).find((x) => x.id === c.id)!.rows.length } })) };
+  const dateChanged = !same(a.documentDate, b.documentDate);
   const other = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => !KNOWN.has(k) && !same((a as any)[k], (b as any)[k])).sort();
   if (a.schemaVersion !== b.schemaVersion) other.unshift('schemaVersion');
 
@@ -248,12 +283,17 @@ export function diffProjects(a: Project, b: Project): ProjectDiff {
     testCases: n3(testCases),
     journey: n3(journey),
     profiles: profiles.changed.length,
+    calculations: n3(calculations),
+    lookupTables: n3(lookupTables),
+    documentDate: dateChanged ? 1 : 0,
     other: other.length,
   };
   const total = Object.values(counts).reduce((s, n) => s + n, 0);
   return {
     ...(a.title !== b.title ? { title: { from: a.title, to: b.title } } : {}),
-    components, rules, content, customFields, styles, brand, testCases, journey, profiles, other,
+    components, rules, content, customFields, styles, brand, testCases, journey, profiles, calculations, lookupTables,
+    ...(dateChanged ? { documentDate: { from: documentDateWords(a.documentDate), to: documentDateWords(b.documentDate) } } : {}),
+    other,
     summary: { counts, total, identical: total === 0 },
   };
 }
