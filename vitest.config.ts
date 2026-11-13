@@ -10,5 +10,6 @@ export default defineConfig({
     '@iss/model/fixtures': r('packages/model/src/fixtures.ts'),
     '@iss/model': r('packages/model/src/index.ts'),
   } },
-  test: { include: ['packages/*/test/**/*.test.ts', 'apps/api/test/**/*.test.ts'], testTimeout: 60000 },
+  // Unit tests never call a live AI model, whatever keys the machine has: they would cost money and stop being repeatable.
+  test: { include: ['packages/*/test/**/*.test.ts', 'apps/api/test/**/*.test.ts'], testTimeout: 60000, env: { AI_PROVIDER: 'offline', AI_API_KEY: '', ANTHROPIC_API_KEY: '' } },
 });

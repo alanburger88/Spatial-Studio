@@ -21,7 +21,8 @@ const run = (args, env, name) => {
   return p;
 };
 const procs = [
-  run(['--filter', '@iss/api', 'dev'], { API_PORT: String(apiPort), DATA_DIR: dataDir }, 'api'),
+  // Test stacks use the built-in assistant unless LIVE_AI=1 is set on purpose: tests must not spend against a real key.
+  run(['--filter', '@iss/api', 'dev'], { API_PORT: String(apiPort), DATA_DIR: dataDir, ...(process.env.LIVE_AI === '1' ? {} : { AI_PROVIDER: 'offline', AI_API_KEY: '', ANTHROPIC_API_KEY: '' }) }, 'api'),
   run(['--filter', '@iss/web', 'exec', 'vite', '--host', '127.0.0.1', '--port', String(webPort), '--strictPort'], { API_URL: `http://127.0.0.1:${apiPort}` }, 'web'),
 ];
 const stop = () => { procs.forEach((p) => p.kill('SIGTERM')); process.exit(0); };
