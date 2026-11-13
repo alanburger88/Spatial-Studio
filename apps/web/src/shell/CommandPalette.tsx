@@ -7,7 +7,7 @@ import { useDemo } from '../demo/demo';
 import { ruleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { recordSummary } from './RecordPicker';
-import { SCREENS } from './Shell';
+import { SCREENS, SECTIONS, TAB_LABEL, screenTo, sectionOf } from './Shell';
 import { useDrawers } from './History';
 
 /** Tiny UI-only store for the overlays owned by the shell (palette, shortcuts sheet, tour). */
@@ -107,9 +107,11 @@ export function CommandPalette() {
     const sel = st.ctx.selectedNodeId;
     for (const s of SCREENS) {
       if (s.path !== '/projects' && !(inStudio && pid)) continue;
-      const to = s.path.startsWith('/') ? s.path : `/studio/${pid}/${s.path}${s.path === 'exploded' ? `/${sel ?? project?.nodes.find((n) => n.type === 'variant-set')?.id ?? (project?.documentType === 'custom' ? '' : 'payment-guidance')}`.replace(/\/$/, '') : ''}`;
-      const idx = SCREENS.indexOf(s);
-      out.push({ kind: 'view', id: s.id, label: s.label, tag: s.id, hint: inStudio && idx >= 1 && idx <= 9 ? `Alt+${idx}` : undefined, haystack: `${s.label} ${s.id} view go to`.toLowerCase(), run: go(to) });
+      const to = screenTo(s, project ?? null, sel, pid ?? '');
+      const sec = sectionOf(s.id);
+      const secIdx = sec ? SECTIONS.indexOf(sec) : -1;
+      const tab = TAB_LABEL[s.id];
+      out.push({ kind: 'view', id: s.id, label: s.label, sub: sec && sec.label !== s.label ? sec.label : undefined, tag: s.id, hint: inStudio && sec && secIdx >= 0 && sec.screens[0] === s.id ? `Alt+${secIdx + 1}` : undefined, haystack: `${s.label} ${tab ?? ''} ${sec?.label ?? ''} ${s.id} view go to`.toLowerCase(), run: go(to) });
     }
     if (inStudio && project && pid) {
       for (const n of project.nodes) {

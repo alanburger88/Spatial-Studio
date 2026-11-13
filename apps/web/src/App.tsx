@@ -28,6 +28,9 @@ const loaders = {
   Blockers: () => import('./screens/Blockers'),
   Releases: () => import('./screens/Releases'),
   Activity: () => import('./screens/Activity'),
+  Overview: () => import('./screens/Overview'),
+  BeforeAfter: () => import('./screens/BeforeAfter'),
+  ProofLookup: () => import('./screens/ProofLookup'),
 };
 const screen = <K extends keyof typeof loaders>(name: K) => lazy(() => (loaders[name]() as Promise<Record<string, ComponentType<any>>>).then((m) => ({ default: m[name] })));
 const DesignStudio = screen('DesignStudio');
@@ -45,6 +48,9 @@ const EmailSms = screen('EmailSms');
 const DataExplorer = screen('DataExplorer');
 const Blockers = screen('Blockers');
 const Releases = screen('Releases');
+const Overview = screen('Overview');
+const BeforeAfter = screen('BeforeAfter');
+const ProofLookup = screen('ProofLookup');
 const Activity = screen('Activity') as ComponentType<{ global?: boolean }>;
 
 function usePrefetchScreens() {
@@ -91,7 +97,10 @@ export function App() {
         <Route path="/activity" element={<PlainShell>{wait(<Activity global />)}</PlainShell>} />
         <Route path="/projects" element={<PlainShell><ProjectGallery /></PlainShell>} />
         <Route path="/studio" element={<Navigate to="/projects" replace />} />
-        <Route path="/studio/:project" element={<Navigate to="design" replace />} />
+        <Route path="/studio/:project" element={<Navigate to="overview" replace />} />
+        <Route path="/studio/:project/overview" element={S(<Overview />)} />
+        <Route path="/studio/:project/compare" element={S(<BeforeAfter />)} />
+        <Route path="/studio/:project/proof" element={S(<ProofLookup />)} />
         <Route path="/studio/:project/design" element={S(<DesignStudio />)} />
         <Route path="/studio/:project/exploded" element={S(<ExplodedDocument />)} />
         <Route path="/studio/:project/exploded/:nodeId" element={S(<ExplodedDocument />)} />

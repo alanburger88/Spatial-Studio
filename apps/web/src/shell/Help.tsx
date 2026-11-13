@@ -14,7 +14,7 @@ const SHORTCUTS: Array<{ group: string; rows: Array<[string[], string]> }> = [
     [[MOD, 'S'], 'Save the project'],
     [[MOD, 'Z'], 'Undo'],
     [[MOD, 'Y'], 'Redo (also Ctrl+Shift+Z)'],
-    [['Alt', '1…9'], 'Jump to views Design Studio … Preview & Export (inside a project)'],
+    [['Alt', '1…8'], 'Open the 1st to 8th entry of the left menu, on the tab you last used there (inside a project)'],
   ] },
   { group: 'Design Studio canvas (a component selected)', rows: [
     [['←', '↑', '→', '↓'], 'Nudge a fixed component (Shift = 10 pt)'],
@@ -134,7 +134,7 @@ const STEPS: Step[] = [
   { title: 'Pick a customer', text: 'Every view shows the document for this customer. Switch customers to see rules change the content.', selector: '[data-testid=record-selector]' },
   { title: 'Choose the output', text: 'Preview the same model as PDF, interactive HTML or a simulated AFP stream.', selector: '[data-testid=select-profile]' },
   { title: 'Settings', text: 'Switch between Business view (plain language) and Technical view (IDs, hashes, raw expressions), change the theme, or reopen this tour.', selector: '[data-testid=open-settings]' },
-  { title: 'Move between views', text: 'The menu is grouped by job: build the document, explore how it behaves, then check and publish it.', selector: 'nav.nav' },
+  { title: 'Move between views', text: 'The menu follows the stage of work: overview, design, rules and data, explore, check, releases. Each stage has its screens as tabs across the top.', selector: 'nav.nav' },
   { title: 'About this view', text: 'The ⓘ button next to each title explains what the view is for.', selector: '.screen-about > summary' },
   { title: 'Search everything', text: `Press ${MOD}+K to jump to any view, component, rule, customer or action.`, selector: '[data-testid=open-palette]' },
 ];

@@ -213,7 +213,7 @@ export function SetupDialog({ onClose }: { onClose: () => void }) {
       await useStudio.getState().loadProjects();
       useStudio.getState().toast({ kind: 'success', title: 'Document created', message: `“${r.project.title}” was set up with ${r.customers.total} customer${r.customers.total === 1 ? '' : 's'} to preview with.` });
       onClose();
-      navigate(`/studio/${r.project.projectId}/design`);
+      navigate(`/studio/${r.project.projectId}/overview`);
     } catch (e) { setErr(errText(e)); setBusy(null); }
   };
 

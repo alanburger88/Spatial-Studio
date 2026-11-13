@@ -105,7 +105,7 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
 
   return (
     <article className={`gal-card${hero ? ' hero' : ''}${p.sample ? '' : ' copy'}`} data-testid={`project-card-${p.projectId}`} aria-labelledby={`t-${p.projectId}`}>
-      <Link className="gal-preview" to={`/studio/${p.projectId}/design`} tabIndex={-1} aria-hidden="true">
+      <Link className="gal-preview" to={`/studio/${p.projectId}/overview`} tabIndex={-1} aria-hidden="true">
         {mini ? <div className="gal-paper"><PagePreview res={mini.res} project={mini.project} scale={hero ? 0.34 : 0.28} showGuides={false} ia={{ selectedId: null }} /></div> : <div className="gal-paper-skel"><span className="spinner" /></div>}
       </Link>
       <div className="gal-body">
@@ -126,7 +126,7 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
           <Tech><dt>Content digest</dt><dd className="mono">{p.contentDigest.slice(0, 12)}</dd></Tech>
         </dl>
         <div className="row wrap gal-actions">
-          <Link className="btn primary" to={`/studio/${p.projectId}/design`} data-testid={`open-${p.projectId}`}><Icon.design /> Open</Link>
+          <Link className="btn primary" to={`/studio/${p.projectId}/overview`} data-testid={`open-${p.projectId}`}><Icon.design /> Open</Link>
           <OverflowMenu id={p.projectId} label={`More actions for ${p.sample ? p.issuer?.name ?? p.title : p.title}`}>
             {(close) => <>
               <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); openDialog('duplicate'); }} data-testid={`duplicate-${p.projectId}`}><Icon.copy /> Duplicate</button>
@@ -233,7 +233,7 @@ function NewProjectDialog({ onClose, onDescribe }: { onClose: () => void; onDesc
       await useStudio.getState().loadProjects();
       useStudio.getState().toast({ kind: 'success', title: 'Project created', message: `“${project.title}” is ready to design.` });
       onClose();
-      navigate(`/studio/${project.projectId}/design`);
+      navigate(`/studio/${project.projectId}/overview`);
     } catch (e) { setErr(e instanceof ApiFailure ? e.message : String((e as Error).message ?? e)); setBusy(false); }
   };
   const setRetired = async (retired: boolean, t: TemplateInfoDto) => {
@@ -434,7 +434,7 @@ export function ProjectGallery() {
           <div className="panel-head">Start here</div>
           <div className="panel-body">
             <ol className="gal-steps">
-              <li><span className="gal-step-n" aria-hidden="true">1</span><div><strong>Open a sample</strong><span className="muted">See the document Aster Card sends.</span> <Link to="/studio/aster-card-demo/design" data-testid="start-open-sample">Open Aster Card</Link></div></li>
+              <li><span className="gal-step-n" aria-hidden="true">1</span><div><strong>Open a sample</strong><span className="muted">See the document Aster Card sends.</span> <Link to="/studio/aster-card-demo/overview" data-testid="start-open-sample">Open Aster Card</Link></div></li>
               <li><span className="gal-step-n" aria-hidden="true">2</span><div><strong>Switch the customer</strong><span className="muted">Use the customer picker in the top bar and watch the document change.</span> <button type="button" className="gal-link" onClick={tryCustomer} data-testid="start-switch-customer">Show me where</button></div></li>
               <li><span className="gal-step-n" aria-hidden="true">3</span><div><strong>Check and export it</strong><span className="muted">Run the checks, compare outputs, then download a PDF.</span> <Link to="/studio/aster-card-demo/validate" data-testid="start-validate">Go to Validate &amp; Compare</Link></div></li>
             </ol>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type SVGProps } from 'react';
-import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { create } from 'zustand';
-import { ROLE_LABEL, languageName, languageShortName, projectLanguages, type ProfileId } from '@iss/model';
+import { ROLE_LABEL, languageName, languageShortName, projectLanguages, type ProfileId, type Project } from '@iss/model';
 import { editBlockedReason, personaLabel, setPreviewLanguage, useIsDirty, useModelChecks, usePreviewLanguage, useRecord, useResolution, useStudio } from '../state/store';
 import { RecordPicker, recordSummary } from './RecordPicker';
 import { NoCustomers } from './NoCustomers';
@@ -9,6 +9,7 @@ import { Icon } from '../ui/icons';
 import { BrandLogo } from '../ui/Brand';
 import { Biz, ErrorState, Loading, Named, Tech, Toasts } from '../ui/common';
 import { nodeTitle } from '../ui/plain';
+import { SectionTabs } from './SectionTabs';
 import { DemoBanner } from '../screens/GuidedDemo';
 import { CommandPalette, useShellUi } from './CommandPalette';
 import { MOD, SettingsMenu, ShortcutsSheet, Tour } from './Help';
@@ -17,6 +18,7 @@ import { AssistPanel } from '../assist/AssistPanel';
 import { HistoryPanel, useDrawers } from './History';
 import { ReviewPanel, WorkflowChip } from './Review';
 import './shell-extras.css';
+import './section-tabs.css';
 import './collab.css';
 
 /** Activity (audit log) nav icon: a pulse line. */
@@ -43,16 +45,79 @@ export const SCREENS = [
   { id: 'S17', path: 'blockers', label: 'Blockers', icon: Icon.warning, group: 'check', hint: 'Everything that stops this document being issued, and how to resolve it' },
   { id: 'S18', path: 'releases', label: 'Releases', icon: ReleaseIcon, group: 'check', hint: 'Approved, frozen versions of this document, their stage and the package to hand over' },
   { id: 'S16', path: 'data', label: 'Data Explorer', icon: DataIcon, group: 'build', hint: 'See, edit, add and remove the customers this document is tested with' },
+  { id: 'S19', path: 'overview', label: 'Overview', icon: OverviewIcon, group: 'home', hint: 'Where this document stands and what to do next' },
+  { id: 'S20', path: 'compare', label: 'Before & after', icon: Icon.compare, group: 'check', hint: 'Compare two releases, or the working version with a release' },
+  { id: 'S21', path: 'proof', label: 'Proof', icon: Icon.search, group: 'check', hint: 'What a customer was given, from which release, and why' },
 ] as const;
 
-/** Menu groups, in working order. Screen IDs and Alt+N shortcuts are unchanged; only the menu order is grouped. */
-export const NAV_GROUPS = [
-  { id: 'home', label: null, screens: ['S01'] },
-  { id: 'build', label: 'Build', screens: ['S02', 'S07', 'S16', 'S13', 'S15'] },
-  { id: 'explore', label: 'Explore', screens: ['S03', 'S04', 'S05', 'S06', 'S08'] },
-  { id: 'check', label: 'Check & publish', screens: ['S09', 'S17', 'S10', 'S18'] },
-  { id: 'help', label: 'Help & admin', screens: ['S11', 'S12', 'S14'] },
+/** Overview nav icon: a gauge with a tick. */
+function OverviewIcon(p: SVGProps<SVGSVGElement>) {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M4 5h16v14H4zM4 9h16M8 13l2 2 4-4" /></svg>;
+}
+
+/** The label a screen carries as a tab across the top of its section (its page heading is the screen's own `label`). */
+export const TAB_LABEL: Record<string, string> = {
+  S01: 'Projects', S19: 'Overview',
+  S02: 'Layout', S13: 'Wording & translations', S15: 'Email & SMS',
+  S07: 'Rules', S16: 'Customers', S08: 'Journeys',
+  S03: 'Exploded', S04: 'Cube', S05: 'Landscape', S06: 'Page stack',
+  S17: 'Blockers', S09: 'Validate & compare', S10: 'Preview & export',
+  S18: 'Releases', S20: 'Before & after', S21: 'Proof',
+  S11: 'Tour', S12: 'Assistant', S14: 'Activity',
+} as const;
+
+/**
+ * The left menu: eight entries by stage of work. A section with several screens shows them as tabs across the top of the
+ * main area (SectionTabs). Order of `screens` is the tab order; the first is the default tab.
+ */
+export const SECTIONS = [
+  { id: 'projects', label: 'Projects', icon: Icon.gallery, hint: 'All projects and samples', screens: ['S01'] },
+  { id: 'overview', label: 'Overview', icon: OverviewIcon, hint: 'Where this document stands and what to do next', screens: ['S19'] },
+  { id: 'design', label: 'Design', icon: Icon.design, hint: 'Layout, wording and translations, email and text messages', screens: ['S02', 'S13', 'S15'] },
+  { id: 'rules-data', label: 'Rules & data', icon: Icon.rules, hint: 'Who sees what, the customers to test with, and how it plays out over time', screens: ['S07', 'S16', 'S08'] },
+  { id: 'explore', label: 'Explore', icon: Icon.exploded, hint: 'See the document from different angles', screens: ['S03', 'S04', 'S05', 'S06'] },
+  { id: 'check', label: 'Check', icon: Icon.validate, hint: 'What stops this document going out, and what it looks like', screens: ['S17', 'S09', 'S10'] },
+  { id: 'releases', label: 'Releases', icon: ReleaseIcon, hint: 'Approved versions, what changed, and proof of what customers got', screens: ['S18', 'S20', 'S21'] },
+  { id: 'help', label: 'Help & activity', icon: Icon.info, hint: 'Take the tour, ask the assistant, see who changed what', screens: ['S11', 'S12', 'S14'] },
 ] as const;
+export type SectionId = (typeof SECTIONS)[number]['id'];
+type Section = (typeof SECTIONS)[number];
+
+export const sectionOf = (screenId: string): Section | undefined => SECTIONS.find((g) => (g.screens as readonly string[]).includes(screenId));
+const screenById = (id: string) => SCREENS.find((x) => x.id === id);
+
+/** Which screen a URL shows (null for anything else). */
+export function screenOfPath(pathname: string): (typeof SCREENS)[number] | null {
+  if (pathname === '/projects') return screenById('S01') ?? null;
+  if (pathname === '/activity') return screenById('S14') ?? null;
+  const seg = pathname.match(/^\/studio\/[^/]+\/([^/]+)/)?.[1];
+  return SCREENS.find((x) => !x.path.startsWith('/') && x.path === seg) ?? null;
+}
+
+/** Address of a screen for a project (Exploded keeps the selected component in its address, as before). */
+export function screenTo(s: (typeof SCREENS)[number], project: Project | null, sel: string | null | undefined, pid: string): string {
+  if (s.path.startsWith('/')) return s.path;
+  const tail = s.path === 'exploded' ? `/${sel ?? project?.nodes.find((n) => n.type === 'variant-set')?.id ?? (project?.documentType === 'custom' ? '' : 'payment-guidance')}`.replace(/\/$/, '') : '';
+  return `/studio/${pid}/${s.path}${tail}`;
+}
+
+/** The tab last used in each section during this browser session (a section opens on it; otherwise on its first tab). */
+const TAB_KEY = 'iss.sectionTabs';
+const readTabs = (): Record<string, string> => { try { return JSON.parse(sessionStorage.getItem(TAB_KEY) ?? '{}') as Record<string, string>; } catch { return {}; } };
+export const useSectionMemory = create<{ last: Record<string, string>; remember(sectionId: string, screenId: string): void }>((set, get) => ({
+  last: readTabs(),
+  remember(sectionId, screenId) {
+    if (get().last[sectionId] === screenId) return;
+    const last = { ...get().last, [sectionId]: screenId };
+    try { sessionStorage.setItem(TAB_KEY, JSON.stringify(last)); } catch { /* the choice lasts until reload */ }
+    set({ last });
+  },
+}));
+/** The screen a section opens on: the last tab used there, otherwise its first. */
+export const sectionEntry = (section: Section, last: Record<string, string>): string => {
+  const l = last[section.id];
+  return l && (section.screens as readonly string[]).includes(l) ? l : section.screens[0];
+};
 
 function ReleaseIcon(p: SVGProps<SVGSVGElement>) {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9M8 5.2l8 4.6" /></svg>;
@@ -109,9 +174,11 @@ export function useGlobalShortcuts() {
       if (isTyping(e.target)) return;
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); s.undo(); }
       else if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); s.redo(); }
-      else if (e.altKey && /^[1-9]$/.test(e.key) && projectId) {
-        const sc = SCREENS[Number(e.key)];
-        if (sc) { e.preventDefault(); navigate(sc.path.startsWith('/') ? sc.path : `/studio/${projectId}/${sc.path}${sc.path === 'exploded' ? `/${s.ctx.selectedNodeId ?? (s.project?.documentType === 'custom' ? '' : 'payment-guidance')}`.replace(/\/$/, '') : ''}`); }
+      else if (e.altKey && /^[1-8]$/.test(e.key) && projectId) {
+        // Alt+N opens the Nth entry of the left menu (on the tab last used there).
+        const sec = SECTIONS[Number(e.key) - 1];
+        const sc = sec && screenById(sectionEntry(sec, useSectionMemory.getState().last));
+        if (sc) { e.preventDefault(); navigate(screenTo(sc, s.project, s.ctx.selectedNodeId, projectId)); }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -281,26 +348,32 @@ function Nav() {
   const toggleNav = useNavCollapsed((s) => s.toggle);
   const project = useStudio((s) => s.project);
   const sel = useStudio((s) => s.ctx.selectedNodeId);
+  const { pathname } = useLocation();
+  const last = useSectionMemory((s) => s.last);
   const pid = project?.projectId ?? 'aster-card-demo';
+  const here = screenOfPath(pathname);
+  const hereSection = here ? sectionOf(here.id) : undefined;
+  // Remember the tab in use, so the section opens on it next time.
+  useEffect(() => { if (here && hereSection) useSectionMemory.getState().remember(hereSection.id, here.id); }, [here?.id, hereSection?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <nav className="nav" id="studio-nav" aria-label="Studio views">
-      {NAV_GROUPS.map((g) => (
-        <div className="nav-group" key={g.id} role="group" aria-label={g.label ?? 'Projects'}>
-          {g.label && <div className="nav-title" aria-hidden="true"><span>{g.label}</span></div>}
-          {g.screens.map((sid) => {
-            const i = SCREENS.findIndex((x) => x.id === sid);
-            const s = SCREENS[i];
-            const to = s.path.startsWith('/') ? s.path : `/studio/${pid}/${s.path}${s.path === 'exploded' ? `/${sel ?? project?.nodes.find((n) => n.type === 'variant-set')?.id ?? (project?.documentType === 'custom' ? '' : 'payment-guidance')}`.replace(/\/$/, '') : ''}`;
-            const Ico = s.icon;
-            const key = i >= 1 && i <= 9 ? ` (Alt+${i})` : '';
-            return (
-              <NavLink key={s.id} to={to} className={({ isActive }) => (isActive || (s.path === 'exploded' && location.pathname.includes('/exploded/')) ? 'active' : '')} title={`${s.label} — ${s.hint}${key}`} data-testid={`nav-${s.id}`}>
-                <Ico /><span>{s.label}</span>
-              </NavLink>
-            );
-          })}
-        </div>
-      ))}
+      <ul className="nav-list">
+        {SECTIONS.map((sec, i) => {
+          const entry = screenById(sectionEntry(sec, last))!;
+          const to = screenTo(entry, project, sel, pid);
+          const current = hereSection?.id === sec.id;
+          const single = sec.screens.length === 1;
+          const Ico = sec.icon;
+          const testId = single ? `nav-${sec.screens[0]}` : `nav-section-${sec.id}`;
+          return (
+            <li key={sec.id}>
+              <Link to={to} className={current ? 'active' : ''} aria-current={current ? (single ? 'page' : 'true') : undefined} title={`${sec.label} — ${sec.hint} (Alt+${i + 1})`} data-testid={testId} data-section={sec.id}>
+                <Ico /><span className="nav-text"><span className="nav-label">{sec.label}</span><span className="nav-hint">{sec.hint}</span></span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
       <button type="button" className="nav-toggle" onClick={toggleNav} aria-expanded={!collapsed} aria-controls="studio-nav" title={collapsed ? 'Show the menu names' : 'Collapse the menu to icons for more room'} data-testid="nav-toggle">
         <Icon.chevron aria-hidden="true" /><span>{collapsed ? 'Expand menu' : 'Collapse menu'}</span>
       </button>
@@ -357,13 +430,16 @@ export function StudioShell({ children }: { children: ReactNode }) {
   useEffect(() => { if (projectId) useStudio.getState().openProject(projectId); }, [projectId]);
   const ready = project && project.projectId === projectId && status === 'ready';
   const recordsStatus = useStudio((s) => s.recordsStatus);
-  const noCustomers = !!ready && project.documentType === 'custom' && recordsStatus === 'ready' && records.length === 0;
+  const { pathname } = useLocation();
+  // Overview still opens with no customers: its first step is to add some.
+  const noCustomers = !!ready && project.documentType === 'custom' && recordsStatus === 'ready' && records.length === 0 && screenOfPath(pathname)?.id !== 'S19';
   const navCollapsed = useNavCollapsed((s) => s.collapsed);
   return (
     <div className={shellClass(navCollapsed)}>
       <TopBar />
       <Nav />
       <main className="main" id="main">
+        {ready && <SectionTabs />}
         {status === 'error' ? <ErrorState title="Project could not be loaded" message={error ?? ''} onRetry={() => projectId && useStudio.getState().openProject(projectId)} /> : ready ? (noCustomers ? <NoCustomers /> : children) : <Loading label="Loading project model…" />}
       </main>
       <Dock />

@@ -153,7 +153,7 @@ export function ImportProjectDialog({ onClose }: { onClose: () => void }) {
       await useStudio.getState().loadProjects();
       useStudio.getState().toast({ kind: 'success', title: 'Project imported', message: `“${created.title}” was added as a new draft. Nothing was replaced.` });
       onClose();
-      navigate(`/studio/${created.projectId}/design`);
+      navigate(`/studio/${created.projectId}/overview`);
     } catch (e) { fail(e); setBusy(false); }
   };
   const report = check?.report;
