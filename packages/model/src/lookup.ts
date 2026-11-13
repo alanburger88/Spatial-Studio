@@ -32,8 +32,55 @@ export function keyMatches(col: LookupKeyColumn, cell: string | LookupRange | un
 
 /** The first row whose every key matches, or null. (A table with overlapping rows is refused when it is saved.) */
 export function lookupRowFor(table: LookupTable, keys: unknown[]): LookupRow | null {
+  const index = indexOf(table);
+  if (index) return index(keys);
+  return firstMatch(table, keys);
+}
+
+function firstMatch(table: LookupTable, keys: unknown[]): LookupRow | null {
   for (const row of table.rows) if (table.keys.every((k, i) => keyMatches(k, row.keys?.[k.key], keys[i]))) return row;
   return null;
+}
+
+/**
+ * A fast lookup for a table that passed its checks (no duplicate keys, no overlapping ranges, so at most one row
+ * matches): exact keys through a map, and one range key by binary search among the rows with the same exact keys.
+ * Tables are immutable values, so the index is kept per table object. A table with problems is searched row by row.
+ */
+const INDEX = new WeakMap<LookupTable, ((keys: unknown[]) => LookupRow | null) | null>();
+function indexOf(table: LookupTable): ((keys: unknown[]) => LookupRow | null) | null {
+  if (INDEX.has(table)) return INDEX.get(table)!;
+  let index: ((keys: unknown[]) => LookupRow | null) | null = null;
+  const ranged = table.keys.filter((k) => k.match !== 'text');
+  if (table.rows.length >= 16 && ranged.length <= 1 && !lookupTableProblems(table).some((x) => x.severity === 'error')) {
+    const textCols = table.keys.map((k, i) => ({ k, i })).filter((x) => x.k.match === 'text');
+    const rangeAt = table.keys.findIndex((k) => k.match !== 'text');
+    const groups = new Map<string, Array<{ from: Bound | null; until: Bound | null; row: LookupRow }>>();
+    for (const row of table.rows) {
+      const id = JSON.stringify(textCols.map((x) => row.keys?.[x.k.key] ?? null));
+      const cell = rangeAt >= 0 ? (row.keys?.[table.keys[rangeAt].key] as LookupRange | undefined) : undefined;
+      const list = groups.get(id) ?? [];
+      list.push({ from: (cell?.from ?? null) as Bound | null, until: (cell?.until ?? null) as Bound | null, row });
+      groups.set(id, list);
+    }
+    for (const list of groups.values()) list.sort((a, b) => (a.from === b.from ? 0 : a.from === null ? -1 : b.from === null ? 1 : a.from < b.from ? -1 : 1));
+    index = (keys) => {
+      const list = groups.get(JSON.stringify(textCols.map((x) => keys[x.i] ?? null)));
+      if (!list) return null;
+      if (rangeAt < 0) return list[0].row;
+      const v = keys[rangeAt];
+      const kind = table.keys[rangeAt].match;
+      if (kind === 'number-range' ? typeof v !== 'number' : typeof v !== 'string') return null;
+      // The last row that starts at or before the value; it matches when the value is before its end.
+      let lo = 0, hi = list.length - 1, at = -1;
+      while (lo <= hi) { const mid = (lo + hi) >> 1; const f = list[mid].from; if (f === null || f <= (v as Bound)) { at = mid; lo = mid + 1; } else hi = mid - 1; }
+      if (at < 0) return null;
+      const hit = list[at];
+      return hit.until === null || (v as Bound) < hit.until ? hit.row : null;
+    };
+  }
+  INDEX.set(table, index);
+  return index;
 }
 
 export const valueOfType = (type: CalcType, v: Scalar): boolean => {

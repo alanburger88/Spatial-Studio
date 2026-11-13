@@ -475,148 +475,162 @@ export function predicateTri(p: Predicate, ctx: unknown, isMissing: (path: strin
 
 const missing = (code: MissingCode, message: string, path?: string): Evaluated => ({ ok: false, missing: { code, message, ...(path ? { path } : {}) } });
 
+/** One evaluation: the environment, whether steps are recorded, and how a condition learns that a value is missing. */
+interface Run { env: EvalEnv; steps: boolean; isMissing: (path: string) => Missing | null }
+
+const OUT_OF_RANGE = 'The result is too large to work with.';
+const NO_DATE_MESSAGE = 'The document has no date for this customer.';
+const joinAt = (run: Run, at: string, slot: string): string => (run.steps ? (at ? `${at}.${slot}` : slot) : '');
+const finite = (v: number): Evaluated => (Number.isFinite(v) && Math.abs(v) <= NUMBER_LIMIT ? { ok: true, value: v } : missing('out-of-range', OUT_OF_RANGE));
+
+function readPath(env: EvalEnv, path: string): Evaluated {
+  if (path === DOCUMENT_DATE_PATH) return env.issueDate ? { ok: true, value: env.issueDate } : missing('no-date', NO_DATE_MESSAGE);
+  if (path.startsWith(CALC_PREFIX)) {
+    const key = path.slice(CALC_PREFIX.length);
+    const m = env.calcMissing.get(key);
+    if (m) return { ok: false, missing: { ...m, via: [...(m.via ?? []), key] } };
+  }
+  const v = getPath(env.ctx, path);
+  if (v === null || v === undefined || v === '') return missing('input-missing', `${q(fieldName(env, path))} is missing.`, path);
+  if (typeof v !== 'number' && typeof v !== 'string' && typeof v !== 'boolean') return missing('invalid', `${q(fieldName(env, path))} is not a single value.`, path);
+  return { ok: true, value: v };
+}
+
+/** Whether a ROUND works on an amount, per node (projects are immutable values, so this never changes for a node). */
+const MONEY = new WeakMap<Expr, boolean>();
+
+function evalNode(x: Expr, at: string, run: Run): Evaluated {
+  const env = run.env;
+  let r: Evaluated;
+  switch (x.op) {
+    case 'field': {
+      r = readPath(env, x.path);
+      const t = x.path.startsWith(CALC_PREFIX) ? null : env.fields.get(x.path)?.type;
+      if (r.ok && (t === 'cents' || t === 'int' || t === 'points') && !Number.isInteger(r.value)) r = missing('invalid', `${q(fieldName(env, x.path))} is not a whole number.`, x.path);
+      else if (r.ok && t === 'date' && !isIsoDay(r.value)) r = missing('invalid', `${q(fieldName(env, x.path))} is not a date.`, x.path);
+      break;
+    }
+    case 'number': r = { ok: true, value: x.value }; break;
+    case 'money': r = { ok: true, value: x.cents }; break;
+    case 'text': case 'date': case 'bool': r = { ok: true, value: x.value }; break;
+    case 'issueDate': r = env.issueDate ? { ok: true, value: env.issueDate } : missing('no-date', NO_DATE_MESSAGE); break;
+    case 'add': case 'sub': case 'mul': case 'div': {
+      const a = evalNode(x.a, joinAt(run, at, 'a'), run); if (!a.ok) { r = a; break; }
+      const b = evalNode(x.b, joinAt(run, at, 'b'), run); if (!b.ok) { r = b; break; }
+      const av = a.value as number, bv = b.value as number;
+      if (x.op === 'div' && bv === 0) { r = missing('division-by-zero', x.b.op === 'field' ? `${q(fieldName(env, x.b.path))} is zero, and nothing can be divided by zero.` : 'It divides by zero.', x.b.op === 'field' ? x.b.path : undefined); break; }
+      r = finite(x.op === 'add' ? av + bv : x.op === 'sub' ? av - bv : x.op === 'mul' ? av * bv : av / bv);
+      break;
+    }
+    case 'round': {
+      const a = evalNode(x.arg, joinAt(run, at, 'arg'), run); if (!a.ok) { r = a; break; }
+      // An amount is cents: rounding to `places` dollar decimals rounds to a multiple of 10^(2 − places) cents.
+      let money = MONEY.get(x);
+      if (money === undefined) { money = checkMoneyOf(x.arg, env); MONEY.set(x, money); }
+      r = finite(money ? roundHalfUp((a.value as number) / 10 ** (2 - x.places), 0) * 10 ** (2 - x.places) : roundHalfUp(a.value as number, x.places));
+      break;
+    }
+    case 'min': case 'max': {
+      let best: number | null = null;
+      let fail: Evaluated | null = null;
+      for (let i = 0; i < x.args.length; i++) {
+        const v = evalNode(x.args[i], joinAt(run, at, `args.${i}`), run);
+        if (!v.ok) { fail = v; break; }
+        const n = v.value as number;
+        if (best === null || (x.op === 'min' ? n < best : n > best)) best = n;
+      }
+      r = fail ?? { ok: true, value: best as number };
+      break;
+    }
+    case 'abs': { const a = evalNode(x.arg, joinAt(run, at, 'arg'), run); r = a.ok ? { ok: true, value: Math.abs(a.value as number) } : a; break; }
+    case 'days': {
+      const a = evalNode(x.from, joinAt(run, at, 'from'), run); if (!a.ok) { r = a; break; }
+      const b = evalNode(x.to, joinAt(run, at, 'to'), run); if (!b.ok) { r = b; break; }
+      r = { ok: true, value: daysBetweenIso(a.value as string, b.value as string) };
+      break;
+    }
+    case 'addDays': {
+      const a = evalNode(x.date, joinAt(run, at, 'date'), run); if (!a.ok) { r = a; break; }
+      const b = evalNode(x.days, joinAt(run, at, 'days'), run); if (!b.ok) { r = b; break; }
+      const n = b.value as number;
+      if (!Number.isInteger(n)) { r = missing('not-whole-days', 'A date can only be moved by a whole number of days.'); break; }
+      if (Math.abs(n) > 3_000_000) { r = missing('out-of-range', 'The date would be out of range.'); break; }
+      const d = addDaysToIso(a.value as string, n);
+      r = isIsoDay(d) ? { ok: true, value: d } : missing('out-of-range', 'The date would be out of range.');
+      break;
+    }
+    case 'earlier': case 'later': {
+      const a = evalNode(x.a, joinAt(run, at, 'a'), run); if (!a.ok) { r = a; break; }
+      const b = evalNode(x.b, joinAt(run, at, 'b'), run); if (!b.ok) { r = b; break; }
+      const p = a.value as string, s2 = b.value as string;
+      r = { ok: true, value: x.op === 'earlier' ? (p <= s2 ? p : s2) : (p >= s2 ? p : s2) };
+      break;
+    }
+    case 'join': {
+      const out: string[] = [];
+      let fail: Evaluated | null = null;
+      for (let i = 0; i < x.parts.length; i++) { const v = evalNode(x.parts[i], joinAt(run, at, `parts.${i}`), run); if (!v.ok) { fail = v; break; } out.push(String(v.value)); }
+      r = fail ?? { ok: true, value: out.join(x.sep) };
+      break;
+    }
+    case 'count': case 'sum': case 'smallest': case 'largest': {
+      const list = getPath(env.ctx, x.list);
+      const rows: Array<Record<string, unknown>> = Array.isArray(list) ? list.filter((row) => row && typeof row === 'object') : [];
+      const kept = x.where ? rows.filter((row) => predicateTri(x.where!, row, NEVER_MISSING) === true) : rows;
+      if (x.op === 'count') { r = { ok: true, value: kept.length }; break; }
+      const vals = kept.map((row) => row[x.column]).filter((v) => v !== null && v !== undefined && v !== '');
+      if (x.op === 'sum') {
+        let total = 0;
+        for (const v of vals) if (typeof v === 'number' && Number.isFinite(v)) total += v;
+        r = finite(total);
+        break;
+      }
+      if (!vals.length) { r = missing('input-missing', `${q(fieldName(env, x.list))} has no ${x.where ? 'matching ' : ''}rows with a value to compare.`, x.list); break; }
+      const sorted = (vals as Array<number | string>).slice().sort((p, s2) => (p < s2 ? -1 : p > s2 ? 1 : 0));
+      r = { ok: true, value: x.op === 'smallest' ? sorted[0] : sorted[sorted.length - 1] };
+      break;
+    }
+    case 'if': {
+      const cond = predicateTri(x.when, env.ctx, run.isMissing);
+      if (typeof cond !== 'boolean') { r = { ok: false, missing: cond }; break; }
+      r = cond ? evalNode(x.then, joinAt(run, at, 'then'), run) : evalNode(x.else, joinAt(run, at, 'else'), run);
+      break;
+    }
+    case 'lookup': {
+      const table = env.tables.get(x.table);
+      if (!table) { r = missing('invalid', `The lookup table ${q(x.table)} does not exist.`); break; }
+      const keys: CalcValue[] = [];
+      let fail: Evaluated | null = null;
+      for (let i = 0; i < x.keys.length; i++) { const v = evalNode(x.keys[i], joinAt(run, at, `keys.${i}`), run); if (!v.ok) { fail = v; break; } keys.push(v.value); }
+      if (fail) { r = fail; break; }
+      const row = lookupRowFor(table, keys);
+      const values = row?.values ?? table.defaultRow;
+      if (!values) { r = missing('no-lookup-row', `No row of the table ${q(table.title)} matches this customer, and the table has no default row.`); break; }
+      const v = values[x.column];
+      const col = table.columns.find((c) => c.key === x.column);
+      r = v === null || v === undefined || v === '' ? missing('no-lookup-value', `The ${row ? 'matching' : 'default'} row of ${q(table.title)} has no value for ${q(col?.label ?? x.column)}.`) : { ok: true, value: v as CalcValue };
+      break;
+    }
+    default:
+      r = missing('invalid', 'This calculation step is not known.');
+  }
+  if (run.steps) env.steps!.push(r.ok ? { at, value: r.value } : { at, value: null, missing: r.missing });
+  return r;
+}
+
+const NEVER_MISSING = (): null => null;
+
 /** Works out one calculation for one customer. Pure. */
 export function evaluateExpr(e: Expr, env: EvalEnv): Evaluated {
-  const rec = (at: string, r: Evaluated): Evaluated => {
-    env.steps?.push(r.ok ? { at, value: r.value } : { at, value: null, missing: r.missing });
-    return r;
-  };
-  const join = (at: string, slot: string) => (at ? `${at}.${slot}` : slot);
-  const num = (v: number, at: string): Evaluated => (Number.isFinite(v) && Math.abs(v) <= NUMBER_LIMIT ? { ok: true, value: v } : rec(at, missing('out-of-range', 'The result is too large to work with.')));
-
-  const readPath = (path: string): Evaluated => {
-    if (path === DOCUMENT_DATE_PATH) return env.issueDate ? { ok: true, value: env.issueDate } : missing('no-date', 'The document has no date for this customer.');
-    if (path.startsWith(CALC_PREFIX)) {
-      const key = path.slice(CALC_PREFIX.length);
-      const m = env.calcMissing.get(key);
-      if (m) return { ok: false, missing: { ...m, via: [...(m.via ?? []), key] } };
-    }
-    const v = getPath(env.ctx, path);
-    if (v === null || v === undefined || v === '') return missing('input-missing', `${q(fieldName(env, path))} is missing.`, path);
-    if (typeof v !== 'number' && typeof v !== 'string' && typeof v !== 'boolean') return missing('invalid', `${q(fieldName(env, path))} is not a single value.`, path);
-    return { ok: true, value: v };
-  };
-
-  const ev = (x: Expr, at: string): Evaluated => {
-    const go = (slot: string, y: Expr) => ev(y, join(at, slot));
-    let r: Evaluated;
-    switch (x.op) {
-      case 'field': {
-        r = readPath(x.path);
-        const t = x.path.startsWith(CALC_PREFIX) ? null : env.fields.get(x.path)?.type;
-        if (r.ok && (t === 'cents' || t === 'int' || t === 'points') && !Number.isInteger(r.value)) r = missing('invalid', `${q(fieldName(env, x.path))} is not a whole number.`, x.path);
-        else if (r.ok && t === 'date' && !isIsoDay(r.value)) r = missing('invalid', `${q(fieldName(env, x.path))} is not a date.`, x.path);
-        break;
-      }
-      case 'number': r = { ok: true, value: x.value }; break;
-      case 'money': r = { ok: true, value: x.cents }; break;
-      case 'text': case 'date': case 'bool': r = { ok: true, value: x.value }; break;
-      case 'issueDate': r = env.issueDate ? { ok: true, value: env.issueDate } : missing('no-date', 'The document has no date for this customer.'); break;
-      case 'add': case 'sub': case 'mul': case 'div': {
-        const a = go('a', x.a); if (!a.ok) { r = a; break; }
-        const b = go('b', x.b); if (!b.ok) { r = b; break; }
-        const av = a.value as number, bv = b.value as number;
-        if (x.op === 'div' && bv === 0) { r = missing('division-by-zero', x.b.op === 'field' ? `${q(fieldName(env, x.b.path))} is zero, and nothing can be divided by zero.` : 'It divides by zero.', x.b.op === 'field' ? x.b.path : undefined); break; }
-        r = num(x.op === 'add' ? av + bv : x.op === 'sub' ? av - bv : x.op === 'mul' ? av * bv : av / bv, at);
-        break;
-      }
-      case 'round': {
-        const a = go('arg', x.arg); if (!a.ok) { r = a; break; }
-        // An amount is cents: rounding to `places` dollar decimals rounds to a multiple of 10^(2 − places) cents.
-        const money = checkMoneyOf(x.arg, env);
-        r = num(money ? roundHalfUp((a.value as number) / 10 ** (2 - x.places), 0) * 10 ** (2 - x.places) : roundHalfUp(a.value as number, x.places), at);
-        break;
-      }
-      case 'min': case 'max': {
-        const vals: number[] = [];
-        let fail: Evaluated | null = null;
-        for (const [i, y] of x.args.entries()) { const v = go(`args.${i}`, y); if (!v.ok) { fail = v; break; } vals.push(v.value as number); }
-        r = fail ?? { ok: true, value: x.op === 'min' ? Math.min(...vals) : Math.max(...vals) };
-        break;
-      }
-      case 'abs': { const a = go('arg', x.arg); r = a.ok ? { ok: true, value: Math.abs(a.value as number) } : a; break; }
-      case 'days': {
-        const a = go('from', x.from); if (!a.ok) { r = a; break; }
-        const b = go('to', x.to); if (!b.ok) { r = b; break; }
-        r = { ok: true, value: daysBetweenIso(a.value as string, b.value as string) };
-        break;
-      }
-      case 'addDays': {
-        const a = go('date', x.date); if (!a.ok) { r = a; break; }
-        const b = go('days', x.days); if (!b.ok) { r = b; break; }
-        const n = b.value as number;
-        if (!Number.isInteger(n)) { r = missing('not-whole-days', 'A date can only be moved by a whole number of days.'); break; }
-        if (Math.abs(n) > 3_000_000) { r = missing('out-of-range', 'The date would be out of range.'); break; }
-        const d = addDaysToIso(a.value as string, n);
-        r = isIsoDay(d) ? { ok: true, value: d } : missing('out-of-range', 'The date would be out of range.');
-        break;
-      }
-      case 'earlier': case 'later': {
-        const a = go('a', x.a); if (!a.ok) { r = a; break; }
-        const b = go('b', x.b); if (!b.ok) { r = b; break; }
-        const [p, s] = [a.value as string, b.value as string];
-        r = { ok: true, value: x.op === 'earlier' ? (p <= s ? p : s) : (p >= s ? p : s) };
-        break;
-      }
-      case 'join': {
-        const out: string[] = [];
-        let fail: Evaluated | null = null;
-        for (const [i, y] of x.parts.entries()) { const v = go(`parts.${i}`, y); if (!v.ok) { fail = v; break; } out.push(String(v.value)); }
-        r = fail ?? { ok: true, value: out.join(x.sep) };
-        break;
-      }
-      case 'count': case 'sum': case 'smallest': case 'largest': {
-        const list = getPath(env.ctx, x.list);
-        const rows: Array<Record<string, unknown>> = Array.isArray(list) ? list.filter((row) => row && typeof row === 'object') : [];
-        const never = (): null => null;
-        const kept = x.where ? rows.filter((row) => predicateTri(x.where!, row, never) === true) : rows;
-        if (x.op === 'count') { r = { ok: true, value: kept.length }; break; }
-        const vals = kept.map((row) => row[x.column]).filter((v) => v !== null && v !== undefined && v !== '');
-        if (x.op === 'sum') {
-          const nums = vals.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
-          r = num(nums.reduce((s, v) => s + v, 0), at);
-          break;
-        }
-        const listName = fieldName(env, x.list);
-        if (!vals.length) { r = missing('input-missing', `${q(listName)} has no ${x.where ? 'matching ' : ''}rows with a value to compare.`, x.list); break; }
-        const sorted = (vals as Array<number | string>).slice().sort((p, s) => (p < s ? -1 : p > s ? 1 : 0));
-        r = { ok: true, value: x.op === 'smallest' ? sorted[0] : sorted[sorted.length - 1] };
-        break;
-      }
-      case 'if': {
-        const cond = predicateTri(x.when, env.ctx, (path) => {
-          if (path === DOCUMENT_DATE_PATH) return env.issueDate ? null : { code: 'no-date', message: 'The document has no date for this customer.' };
-          if (!path.startsWith(CALC_PREFIX)) return null;
-          const key = path.slice(CALC_PREFIX.length);
-          const m = env.calcMissing.get(key);
-          return m ? { ...m, via: [...(m.via ?? []), key] } : null;
-        });
-        if (typeof cond !== 'boolean') { r = { ok: false, missing: cond }; break; }
-        r = cond ? go('then', x.then) : go('else', x.else);
-        break;
-      }
-      case 'lookup': {
-        const table = env.tables.get(x.table);
-        if (!table) { r = missing('invalid', `The lookup table ${q(x.table)} does not exist.`); break; }
-        const keys: CalcValue[] = [];
-        let fail: Evaluated | null = null;
-        for (const [i, y] of x.keys.entries()) { const v = go(`keys.${i}`, y); if (!v.ok) { fail = v; break; } keys.push(v.value); }
-        if (fail) { r = fail; break; }
-        const row = lookupRowFor(table, keys);
-        const values = row?.values ?? table.defaultRow;
-        if (!values) { r = missing('no-lookup-row', `No row of the table ${q(table.title)} matches this customer, and the table has no default row.`); break; }
-        const v = values[x.column];
-        const col = table.columns.find((c) => c.key === x.column);
-        r = v === null || v === undefined || v === '' ? missing('no-lookup-value', `The ${row ? 'matching' : 'default'} row of ${q(table.title)} has no value for ${q(col?.label ?? x.column)}.`) : { ok: true, value: v as CalcValue };
-        break;
-      }
-      default:
-        r = missing('invalid', 'This calculation step is not known.');
-    }
-    return rec(at, r);
+  const isMissing = (path: string): Missing | null => {
+    if (path === DOCUMENT_DATE_PATH) return env.issueDate ? null : { code: 'no-date', message: NO_DATE_MESSAGE };
+    if (!path.startsWith(CALC_PREFIX)) return null;
+    const key = path.slice(CALC_PREFIX.length);
+    const m = env.calcMissing.get(key);
+    return m ? { ...m, via: [...(m.via ?? []), key] } : null;
   };
   try {
-    return ev(e, '');
+    return evalNode(e, '', { env, steps: !!env.steps, isMissing });
   } catch {
     return missing('invalid', 'This calculation could not be worked out.');
   }

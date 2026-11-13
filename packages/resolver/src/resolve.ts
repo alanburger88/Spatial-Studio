@@ -727,22 +727,31 @@ export function resolve(input: ResolveInput): Resolution {
 
 /** Each calculated field's value or why it is missing, with what it reads. */
 function calculatedOutcomes(project: Project, calcs: CalcResults): Record<string, CalculatedOutcome> {
+  const shape = outcomeShape(project);
   const out: Record<string, CalculatedOutcome> = {};
-  const byKey = new Map((project.calculatedFields ?? []).map((x) => [x.key, x]));
-  const fields = projectFieldIndex(project);
   for (const key of calcs.order) {
-    const def = byKey.get(key);
-    if (!def) continue;
-    const d = exprDependencies(def.expr);
-    const inputs = [...d.fields, ...d.lists, ...d.calcs.map((k) => `${CALC_PREFIX}${k}`), ...(d.usesIssueDate ? [DOCUMENT_DATE_PATH] : [])];
-    out[key] = {
-      label: def.label, type: def.type, value: calcs.values[key] ?? null,
-      ...(calcs.missing[key] ? { missing: calcs.missing[key] } : {}),
-      inputs,
-      inputNames: inputs.map((x) => (x === DOCUMENT_DATE_PATH ? 'the document’s date' : x.startsWith(CALC_PREFIX) ? byKey.get(x.slice(CALC_PREFIX.length))?.label ?? x : fields.get(x)?.label ?? x)),
-    };
+    const s = shape.get(key);
+    if (!s) continue;
+    out[key] = { label: s.label, type: s.type, value: calcs.values[key] ?? null, ...(calcs.missing[key] ? { missing: calcs.missing[key] } : {}), inputs: s.inputs, inputNames: s.inputNames };
   }
   return out;
+}
+
+/** What each calculation reads, by path and by name: the same for every customer, so worked out once per project. */
+const SHAPES = new WeakMap<Project, Map<string, Pick<CalculatedOutcome, 'label' | 'type' | 'inputs' | 'inputNames'>>>();
+function outcomeShape(project: Project): Map<string, Pick<CalculatedOutcome, 'label' | 'type' | 'inputs' | 'inputNames'>> {
+  const hit = SHAPES.get(project);
+  if (hit) return hit;
+  const byKey = new Map((project.calculatedFields ?? []).map((x) => [x.key, x]));
+  const fields = projectFieldIndex(project);
+  const shape = new Map<string, Pick<CalculatedOutcome, 'label' | 'type' | 'inputs' | 'inputNames'>>();
+  for (const def of byKey.values()) {
+    const d = exprDependencies(def.expr);
+    const inputs = [...d.fields, ...d.lists, ...d.calcs.map((k) => `${CALC_PREFIX}${k}`), ...(d.usesIssueDate ? [DOCUMENT_DATE_PATH] : [])];
+    shape.set(def.key, { label: def.label, type: def.type, inputs, inputNames: inputs.map((x) => (x === DOCUMENT_DATE_PATH ? 'the document’s date' : x.startsWith(CALC_PREFIX) ? byKey.get(x.slice(CALC_PREFIX.length))?.label ?? x : fields.get(x)?.label ?? x)) });
+  }
+  SHAPES.set(project, shape);
+  return shape;
 }
 
 /** The resolver's expected semantic facts — what every output adapter must preserve. */
