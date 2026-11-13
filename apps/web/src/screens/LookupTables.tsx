@@ -6,13 +6,14 @@ import {
 } from '@iss/model';
 import { Dialog, Empty, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
-import { useCan, useRecord, useResolution, useStudio } from '../state/store';
+import { useCan, usePreviewDate, useRecord, useResolution, useStudio } from '../state/store';
 import { recordSummary } from '../shell/RecordPicker';
 import { keyFromLabel, issueDateFor } from './calc/model';
 import { Definition } from './lookup/Definition';
 import { Grid, type RowProblem } from './lookup/Grid';
 import { MATCH_NAME, TYPE_NAME, defaultKeyColumn } from './lookup/model';
 import { PasteDialog } from './lookup/PasteDialog';
+import { PreviewDateField } from './dates/PreviewDateField';
 import { TryIt, type CustomerData } from './lookup/TryIt';
 import './LookupTables.css';
 
@@ -46,15 +47,17 @@ export function LookupTables() {
 
   // The current customer, as the calculations see it (only needed when a calculation reads a table).
   const anyReader = [...readers.values()].some((l) => l.length > 0);
+  // "As issued on": the studio's shared preview date, as everywhere else.
+  const given = usePreviewDate();
   const customer: CustomerData | null = useMemo(() => {
     const rec = res?.effectiveRecord ?? record;
     if (!rec || !anyReader) return null;
     const data = buildContext(rec) as Record<string, unknown>;
-    const issue = issueDateFor(project, data, null);
+    const issue = issueDateFor(project, data, given);
     if (project.documentDate) data.document = { date: issue };
     const out = evaluateCalculations(project, data, issue);
     return { name: recordSummary(rec, personas).name, ctx: data, issue, missing: out.missing };
-  }, [project, res?.effectiveRecord, record, personas, anyReader]);
+  }, [project, res?.effectiveRecord, record, personas, anyReader, given]);
 
   const create = (table: LookupTable): string | null => {
     const r = useStudio.getState().dispatch({ type: 'UPSERT_LOOKUP_TABLE', table });
@@ -128,6 +131,7 @@ function SidePanel({ draft, project, readers, customer, locale }: { draft: Looku
   return (
     <div className="panel-body lk-sidebody">
       <h3 className="section-title">Try it</h3>
+      {draft.keys.some((k) => k.match === 'date-range') && <PreviewDateField project={project} testId="lk-asof" what="The current customer’s values are worked out" />}
       <TryIt table={draft} project={project} customer={customer} locale={locale} />
       <h3 className="section-title lk-used-h">Where it is used</h3>
       {readers.length === 0 ? <p className="muted" data-testid="lk-used">No calculation reads this table yet.</p> : (

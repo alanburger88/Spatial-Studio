@@ -150,6 +150,7 @@
 .dx-msgs li { display: flex; flex-direction: column; gap: 1px; padding: 7px 4px; font-size: 12.5px; }
 .dx-msgs li .chip { align-self: flex-start; }
 .dx-msg-node { color: var(--iss-text-muted); }
+a.dx-msg-node { color: var(--iss-accent-strong); }
 .dx-msg-version { font-size: 13px; }
 .dx-blocking { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--iss-error-fg); }
 .dx-outcome-foot { border-top: 1px solid var(--iss-border); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; align-items: stretch; }

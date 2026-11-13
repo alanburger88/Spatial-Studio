@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { dayNumber, dayWords, documentDateUse, isIsoDay, type DocumentDateSource, type Project, type SyntheticRecord } from '@iss/model';
 import { dateChecks, documentTimeline, type DateCheck, type TimelineEntry } from '@iss/scenarios';
 import { Empty, Loading, ScreenHeader } from '../ui/common';
@@ -189,8 +189,8 @@ function Timeline({ entries, issueDate, records, project }: { entries: TimelineE
                 {next === e.date && issueDate && <span className="chip info">Next change after the preview date</span>}
                 <span className="chip count" data-testid={`dates-boundary-reached-${e.date}`}>Reaches {e.reached.length} of {e.evaluated} synthetic customers</span>
               </div>
-              {starts.length > 0 && <><div className="dt-what">Starts</div><ul className="dt-changes">{starts.map((c, i) => <li key={i}>{c.words}</li>)}</ul></>}
-              {ends.length > 0 && <><div className="dt-what">Ends</div><ul className="dt-changes">{ends.map((c, i) => <li key={i}>{c.words}</li>)}</ul></>}
+              {starts.length > 0 && <><div className="dt-what">Starts</div><ul className="dt-changes">{starts.map((c, i) => <li key={i}><ChangeWords project={project} change={c} /></li>)}</ul></>}
+              {ends.length > 0 && <><div className="dt-what">Ends</div><ul className="dt-changes">{ends.map((c, i) => <li key={i}><ChangeWords project={project} change={c} /></li>)}</ul></>}
               {e.reached.length > 0 && (
                 <details className="dt-reached">
                   <summary>Who it reaches ({e.reached.length})</summary>
@@ -205,6 +205,16 @@ function Timeline({ entries, issueDate, records, project }: { entries: TimelineE
           );
         })}
       </ol>
+    </>
+  );
+}
+
+/** What changes on a day, in words; a dated row of a lookup table links to its table. */
+function ChangeWords({ project, change }: { project: Project; change: TimelineEntry['changes'][number] }) {
+  if (change.kind !== 'lookup-row' || !change.nodeId || !project.lookupTables?.some((t) => t.id === change.nodeId)) return <>{change.words}</>;
+  return (
+    <>{change.words}{' '}
+      <Link to={`/studio/${project.projectId}/lookup-tables?table=${encodeURIComponent(change.nodeId)}`} data-testid={`dates-table-link-${change.nodeId}`}>Open the table</Link>
     </>
   );
 }

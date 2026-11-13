@@ -3,13 +3,14 @@ import { useSearchParams } from 'react-router-dom';
 import { buildContext, calculationUsage, checkExpr, evaluateCalculations, exprScopeOf, formulaInWords, projectFieldIndex, wordsScopeOf, CALC_MAX, type CalcType, type CalculatedField } from '@iss/model';
 import { Dialog, Empty, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
-import { useCan, useRecord, useResolution, useStudio } from '../state/store';
+import { useCan, usePreviewDate, useRecord, useResolution, useStudio } from '../state/store';
 import { recordSummary } from '../shell/RecordPicker';
 import { AcrossCustomers } from './calc/AcrossCustomers';
 import { CalcEditor, type Customer } from './calc/CalcEditor';
 import { examplesFor } from './calc/examples';
 import { CALC_TYPES, evaluateForCustomers, formatCalcValue, issueDateFor, keyFromLabel, makeCtx, seed, TYPE_NAME } from './calc/model';
 import { UsedBy, usePlaces } from './calc/UsedBy';
+import { PreviewDateField } from './dates/PreviewDateField';
 import './Calculations.css';
 
 /**
@@ -26,7 +27,6 @@ export function Calculations() {
   const [params, setParams] = useSearchParams();
   const [adding, setAdding] = useState(false);
   const [refusal, setRefusal] = useState<{ key: string; message: string } | null>(null);
-  const [asOf, setAsOf] = useState('');
   const dirtyRef = useRef(false);
   const [pending, setPending] = useState<string | null>(null);
   const onDirty = useCallback((d: boolean) => { dirtyRef.current = d; }, []);
@@ -34,7 +34,8 @@ export function Calculations() {
   const calcs = project.calculatedFields ?? [];
   const selected = calcs.find((c) => c.key === params.get('calc')) ?? calcs[0] ?? null;
   const locale = res?.locale ?? 'en-US';
-  const given = asOf || null;
+  // "As issued on": the studio's shared preview date (the status bar and the Dates screen show the same day).
+  const given = usePreviewDate();
 
   const scope = useMemo(() => exprScopeOf(project), [project]);
   const ctx = useMemo(() => makeCtx(project, selected?.key ?? null), [project, selected?.key]);
@@ -79,8 +80,6 @@ export function Calculations() {
     if (!r.ok) setRefusal({ key: c.key, message: r.message });
     else { setRefusal(null); setParams({}, { replace: true }); useStudio.getState().toast({ kind: 'success', title: 'Calculation removed', message: `“${c.label}”. Undo with Ctrl+Z.` }); }
   };
-
-  const dateNote = project.documentDate?.source === 'run';
 
   return (
     <section className="screen" data-testid="calculations-screen">
@@ -141,13 +140,7 @@ export function Calculations() {
           <aside className="panel calc-side" data-side="right" data-side-title="Results" aria-label="Results and uses">
             {selected && (
               <div className="panel-body">
-                {dateNote && (
-                  <div className="field calc-asof">
-                    <label htmlFor="calc-asof">Document date for this preview</label>
-                    <input id="calc-asof" className="input" type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} data-testid="calc-asof" />
-                    <span className="hint">The document’s date is given for each run, so calculations that use it need one here.</span>
-                  </div>
-                )}
+                <PreviewDateField project={project} testId="calc-asof" what="The values here are worked out" />
                 <h3 className="section-title">Across all customers</h3>
                 <AcrossCustomers calc={selected} rows={Object.values(everyone.get(selected.key) ?? {})} locale={locale} />
                 <h3 className="section-title calc-used-h">Where it is used</h3>
