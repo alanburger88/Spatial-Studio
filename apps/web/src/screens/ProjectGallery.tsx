@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { buildContext, fieldsFor, getPath, parseCsv, projectFields, type DocumentType, type FieldDef, type Project, type SyntheticRecord } from '@iss/model';
 import { resolve, type Resolution } from '@iss/resolver';
 import { matchColumns, type ColumnMatch } from '@iss/scenarios';
 import { api, ApiFailure, type ImportResult, type ProjectSummary, type TemplateInfoDto } from '../api/client';
-import { useStudio } from '../state/store';
+import { editBlockedReason, useCan, useStudio } from '../state/store';
+import { CountsList, ImportProjectDialog, SAVE_TEMPLATE_DENIED, SaveTemplateDialog } from './gallery/TemplateDialogs';
 import { Biz, Dialog, Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { PagePreview } from '../doc/PagePreview';
@@ -64,7 +65,7 @@ function OverflowMenu({ id, label, children }: { id: string; label: string; chil
   );
 }
 
-type CardDialog = 'restore' | 'duplicate' | 'rename' | 'delete' | null;
+type CardDialog = 'restore' | 'duplicate' | 'rename' | 'delete' | 'template' | null;
 
 function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolean; sourceTitle?: string }) {
   const recordId = p.documentType === 'eob' ? 'EOB-0001' : 'CARD-0001';
@@ -75,6 +76,8 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
   const [err, setErr] = useState<string | null>(null);
   const navigate = useNavigate();
   const toast = useStudio.getState().toast;
+  const canSaveTemplate = useCan('approve');
+  const closeTemplate = useCallback(() => setDialog(null), []);
 
   const openDialog = (d: CardDialog) => { setErr(null); setTitle(d === 'duplicate' ? `${p.title} (copy)` : d === 'rename' ? p.title : ''); setDialog(d); };
   const run = async (fn: () => Promise<void>) => {
@@ -108,6 +111,8 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
         </div>
         <h2 id={`t-${p.projectId}`}>{p.sample ? p.issuer?.name ?? p.title : p.title}</h2>
         <p className="muted">{description}</p>
+        {p.fromTemplate && <p className="gal-origin" data-testid={`origin-${p.projectId}`}>Started from the template “{p.fromTemplate.title}”, version {p.fromTemplate.version}</p>}
+        {p.importedFrom && <p className="gal-origin" data-testid={`origin-${p.projectId}`}>Imported from the file “{p.importedFrom.title}”<Tech> (version {p.importedFrom.modelVersion})</Tech></p>}
         <dl className="kv">
           <dt>Components</dt><dd>{p.nodeCount}</dd>
           <dt>Rules</dt><dd>{p.ruleCount}</dd>
@@ -120,7 +125,11 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
             {(close) => <>
               <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); openDialog('duplicate'); }} data-testid={`duplicate-${p.projectId}`}><Icon.copy /> Duplicate</button>
               {!p.sample && <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); openDialog('rename'); }} data-testid={`rename-${p.projectId}`}>Rename</button>}
-              <a role="menuitem" className="gal-item" href={`/api/v1/projects/${p.projectId}/export`} download onClick={close} data-testid={`export-${p.projectId}`}><Icon.download /> Export JSON</a>
+              <a role="menuitem" className="gal-item" href={`/api/v1/projects/${p.projectId}/export`} download onClick={close} data-testid={`export-${p.projectId}`}><Icon.download /> Export project file</a>
+              <button role="menuitem" type="button" className="gal-item gal-item-stack" aria-disabled={!canSaveTemplate} onClick={() => { if (!canSaveTemplate) return; close(); openDialog('template'); }} data-testid={`save-template-${p.projectId}`}>
+                <span className="gal-item-line"><Icon.plus /> Save as template…</span>
+                {!canSaveTemplate && <span className="gal-item-why" data-testid={`save-template-why-${p.projectId}`}>{SAVE_TEMPLATE_DENIED}</span>}
+              </button>
               {p.sample && <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); openDialog('restore'); }} data-testid={`restore-${p.projectId}`}><Icon.reset /> Restore sample</button>}
               {p.sample && <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); navigate(`/studio/${p.projectId}/demo`); }} data-testid={`guided-demo-${p.projectId}`}><Icon.demo /> Guided demo</button>}
               {!p.sample && <button role="menuitem" type="button" className="gal-item danger-text" onClick={() => { close(); openDialog('delete'); }} data-testid={`delete-${p.projectId}`}><Icon.trash /> Delete</button>}
@@ -147,6 +156,7 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
           {err && <p className="callout error" role="alert">{err}</p>}
         </Dialog>
       )}
+      {dialog === 'template' && <SaveTemplateDialog p={p} onClose={closeTemplate} />}
       {dialog === 'delete' && (
         <Dialog title="Delete project?" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn danger" onClick={remove} disabled={busy} data-testid="confirm-delete">Delete project</button></>}>
           <p><strong>{p.title}</strong> and its issued journey snapshots will be removed from this computer. Exported files you downloaded are not affected. This cannot be undone.</p>
@@ -372,60 +382,109 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
 
 /* ------------------------------------------------------------ new project */
 
-function TemplateThumb({ templateId, documentType }: { templateId: string; documentType?: DocumentType }) {
+function TemplateThumb({ templateId, documentType, version }: { templateId: string; documentType?: DocumentType; version?: number }) {
   const [state, setState] = useState<{ res: Resolution; project: Project } | null>(null);
   useEffect(() => {
     let live = true;
     setState(null);
-    api.templateProject(templateId, templateId === 'blank-letter' ? documentType : undefined)
+    api.templateProject(templateId, templateId === 'blank-letter' ? documentType : undefined, version)
       .then(async ({ project }) => {
         const { record } = await fetch(`/api/v1/records/${project.documentType === 'eob' ? 'EOB-0001' : 'CARD-0001'}`).then((r) => r.json());
         if (live) setState({ project, res: resolve({ project, record: record as SyntheticRecord }) });
       })
       .catch(() => undefined);
     return () => { live = false; };
-  }, [templateId, documentType]);
+  }, [templateId, documentType, version]);
   return state ? <PagePreview res={state.res} project={state.project} scale={0.2} showGuides={false} ia={{ selectedId: null }} /> : <div className="gal-paper-skel np-skel"><span className="spinner" /></div>;
 }
 
 function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<TemplateInfoDto[] | null>(null);
+  const [canSave, setCanSave] = useState(false);
+  const [showRetired, setShowRetired] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [sel, setSel] = useState<string>('blank-letter');
+  const [version, setVersion] = useState<number | undefined>(undefined);
+  const [confirmRetire, setConfirmRetire] = useState(false);
   const [title, setTitle] = useState('');
   const [letterData, setLetterData] = useState<DocumentType>('credit-statement');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { api.templates().then((r) => setTemplates(r.templates)).catch((e) => setLoadErr(e instanceof ApiFailure ? e.message : String(e.message ?? e))); }, []);
+  const load = useCallback((retired: boolean) => api.templates(retired).then((r) => { setTemplates(r.templates); setCanSave(r.canSave); setLoadErr(null); }).catch((e) => setLoadErr(e instanceof ApiFailure ? e.message : String(e.message ?? e))), []);
+  useEffect(() => { void load(showRetired); }, [load, showRetired]);
+  const builtIn = templates?.filter((t) => t.source !== 'saved') ?? [];
+  const saved = templates?.filter((t) => t.source === 'saved') ?? [];
   const chosen = templates?.find((t) => t.id === sel);
+  const isSaved = chosen?.source === 'saved';
+  const versions = chosen?.versions ?? [];
+  const latest = chosen?.version;
+  const shownVersion = isSaved ? version ?? latest : undefined;
+  const detail = versions.find((v) => v.version === shownVersion);
+  const select = (id: string) => { setSel(id); setVersion(undefined); setConfirmRetire(false); setErr(null); };
+  const usable = !!chosen && !chosen.retired;
   const create = async () => {
-    if (!chosen || title.trim().length < 2) return;
+    if (!chosen || !usable || title.trim().length < 2) return;
     setBusy(true); setErr(null);
     try {
-      const { project } = await api.createProject({ templateId: chosen.id, title: title.trim(), ...(chosen.id === 'blank-letter' ? { documentType: letterData } : {}) });
+      const { project } = await api.createProject({ templateId: chosen.id, title: title.trim(), ...(chosen.id === 'blank-letter' ? { documentType: letterData } : {}), ...(isSaved && shownVersion ? { templateVersion: shownVersion } : {}) });
       await useStudio.getState().loadProjects();
       useStudio.getState().toast({ kind: 'success', title: 'Project created', message: `“${project.title}” is ready to design.` });
       onClose();
       navigate(`/studio/${project.projectId}/design`);
     } catch (e) { setErr(e instanceof ApiFailure ? e.message : String((e as Error).message ?? e)); setBusy(false); }
   };
+  const setRetired = async (retired: boolean, t: TemplateInfoDto) => {
+    setBusy(true); setErr(null);
+    try {
+      await api.setTemplateRetired(t.id, retired);
+      useStudio.getState().toast({ kind: 'success', title: retired ? 'Template retired' : 'Template brought back', message: retired ? `“${t.title}” is no longer offered for new projects. Projects already started from it are unchanged.` : `“${t.title}” can be chosen again.` });
+      setConfirmRetire(false);
+      if (retired && !showRetired) select('blank-letter');
+      await load(showRetired);
+    } catch (e) { setErr(e instanceof ApiFailure ? e.message : String((e as Error).message ?? e)); }
+    finally { setBusy(false); }
+  };
+  const card = (t: TemplateInfoDto) => {
+    const savedT = t.source === 'saved';
+    const on = sel === t.id;
+    return (
+      <div key={t.id} className="np-item">
+        <button type="button" role="radio" aria-checked={on} disabled={!!t.retired} className={`np-card${on ? ' on' : ''}${t.retired ? ' retired' : ''}`} onClick={() => select(t.id)} data-testid={`template-${t.id}`}>
+          <span className="np-thumb" aria-hidden="true"><TemplateThumb templateId={t.id} documentType={letterData} version={savedT && on ? shownVersion : undefined} /></span>
+          <span className="np-name">{t.title}</span>
+          <span className="row wrap np-chips">
+            <span className="chip accent">{DOC_LABEL[t.id === 'blank-letter' ? letterData : t.documentType]}</span>
+            {savedT && <span className="chip">Saved · v{t.version}</span>}
+            {t.retired && <span className="chip warning">Retired</span>}
+          </span>
+          <span className="muted np-desc">{t.description || (savedT ? 'No description.' : '')}</span>
+        </button>
+        {t.retired && canSave && <button type="button" className="btn sm" onClick={() => setRetired(false, t)} disabled={busy} data-testid="template-unretire" aria-label={`Bring back “${t.title}”`}>Bring back</button>}
+      </div>
+    );
+  };
   return (
     <Dialog title="New project" onClose={onClose} labelledBy="new-project-title"
-      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={create} disabled={busy || !chosen || title.trim().length < 2} data-testid="create-project">Create project</button></>}>
+      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={create} disabled={busy || !usable || title.trim().length < 2} data-testid="create-project">Create project</button></>}>
       <form className="np-root" onSubmit={(e) => { e.preventDefault(); void create(); }}>
         {loadErr && <p className="callout error" role="alert">{loadErr}</p>}
         {!templates && !loadErr && <Loading label="Loading templates…" />}
         <div className="np-cards" role="radiogroup" aria-label="Template">
-          {templates?.map((t) => (
-            <button type="button" key={t.id} role="radio" aria-checked={sel === t.id} className={`np-card${sel === t.id ? ' on' : ''}`} onClick={() => setSel(t.id)} data-testid={`template-${t.id}`}>
-              <span className="np-thumb" aria-hidden="true"><TemplateThumb templateId={t.id} documentType={letterData} /></span>
-              <span className="np-name">{t.title}</span>
-              <span className="chip accent">{DOC_LABEL[t.id === 'blank-letter' ? letterData : t.documentType]}</span>
-              <span className="muted np-desc">{t.description}</span>
-            </button>
-          ))}
+          {builtIn.map(card)}
         </div>
+        {(saved.length > 0 || canSave) && (
+          <>
+            <div className="row np-saved-head">
+              <h3 className="np-heading">Saved templates</h3>
+              {canSave && <label className="np-check"><input type="checkbox" checked={showRetired} onChange={(e) => setShowRetired(e.target.checked)} data-testid="template-show-retired" /> Show retired templates</label>}
+            </div>
+            {saved.length === 0 && <p className="muted np-empty">No saved templates yet. Use “Save as template…” in a project’s menu to add one.</p>}
+            <div className="np-cards" role="radiogroup" aria-label="Saved templates">
+              {saved.map(card)}
+            </div>
+          </>
+        )}
         {sel === 'blank-letter' && (
           <div className="field">
             <label htmlFor="np-data">Sample data for the letter</label>
@@ -433,6 +492,39 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
               <option value="credit-statement">Credit-card statement data</option>
               <option value="eob">Healthcare EOB data</option>
             </select>
+          </div>
+        )}
+        {isSaved && chosen && (
+          <div className="np-detail" data-testid="template-detail">
+            <div className="row wrap">
+              <strong>{chosen.title}</strong>
+              {chosen.retired && <span className="chip warning">Retired</span>}
+              {versions.length > 1 && (
+                <span className="np-ver">
+                  <label htmlFor="np-version">Version</label>
+                  <select id="np-version" className="select" value={shownVersion} onChange={(e) => setVersion(Number(e.target.value))} data-testid="template-version">
+                    {versions.map((v) => <option key={v.version} value={v.version}>v{v.version}{v.version === latest ? ' (latest)' : ''}</option>)}
+                  </select>
+                </span>
+              )}
+            </div>
+            {detail && (
+              <>
+                <p className="np-who">Version {detail.version} saved by {detail.savedBy?.name ?? 'someone who is no longer listed'} on {new Date(detail.savedAt).toLocaleString()}, from the document “{detail.from.title}”<Tech> (its version {detail.from.modelVersion})</Tech>.</p>
+                {detail.note && <p className="np-note"><span className="muted">What changed:</span> {detail.note}</p>}
+                <CountsList counts={detail.counts} />
+              </>
+            )}
+            {canSave && !chosen.retired && (
+              confirmRetire
+                ? (
+                  <div className="callout warning np-retire" role="group" aria-label="Confirm retiring">
+                    <p>Retire “{chosen.title}”? It will no longer be offered for new projects. Projects already started from it are not changed, and you can bring it back later.</p>
+                    <div className="row"><button type="button" className="btn danger sm" onClick={() => setRetired(true, chosen)} disabled={busy} data-testid="template-retire-confirm">Retire template</button><button type="button" className="btn ghost sm" onClick={() => setConfirmRetire(false)}>Keep it</button></div>
+                  </div>
+                )
+                : <div className="row"><button type="button" className="btn sm" onClick={() => setConfirmRetire(true)} data-testid="template-retire">Retire this template</button></div>
+            )}
           </div>
         )}
         <div className="field">
@@ -452,8 +544,12 @@ export function ProjectGallery() {
   const [counts, setCounts] = useState<{ card: number; eob: number; importedCard: number; importedEob: number } | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importingProject, setImportingProject] = useState(false);
+  const canEdit = useCan('edit');
+  const editBlock = useStudio((st) => editBlockedReason(st.session)) ?? 'You do not have permission to import projects';
   const [creating, setCreating] = useState(false);
   const [tick, setTick] = useState(0);
+  const closeImportProject = useCallback(() => setImportingProject(false), []);
   useEffect(() => {
     fetch('/api/v1/records').then((r) => r.json()).then((b) => {
       const recs = b.records as Array<{ documentType: string; imported?: boolean }>;
@@ -488,7 +584,8 @@ export function ProjectGallery() {
       <ScreenHeader id="S01" title="Project Gallery" subtitle="Design in 2D. Understand in 2.5D. Simulate across personas and time. Compose into faithful paged and interactive outputs."
         actions={<>
           <button className="btn primary" onClick={() => setCreating(true)} data-testid="new-project"><Icon.plus /> New project</button>
-          <button className="btn" onClick={() => setImporting(true)} data-testid="import-records"><Icon.plus /> Import records</button>
+          <button className="btn" onClick={() => setImportingProject(true)} disabled={!canEdit} title={canEdit ? 'Import a studio project file as a new draft' : editBlock} data-testid="import-project"><Icon.download style={{ transform: 'rotate(180deg)' }} /> Import project</button>
+          <button className="btn ghost" onClick={() => setImporting(true)} data-testid="import-records"><Icon.plus /> Import records</button>
         </>} />
       <div className="screen-body gal-grid">
         <div className="gal-cards">
@@ -542,6 +639,7 @@ export function ProjectGallery() {
         </Dialog>
       )}
       {creating && <NewProjectDialog onClose={() => setCreating(false)} />}
+      {importingProject && <ImportProjectDialog onClose={closeImportProject} />}
       {importing && <ImportDialog onClose={() => setImporting(false)} onDone={recordsChanged} />}
     </section>
   );
