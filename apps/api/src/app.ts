@@ -316,10 +316,13 @@ export async function buildApp(opts: AppOptions = {}) {
     const known = knownDataProblemsInForce(store, req, project, allRecords(project.projectId));
     const excused = new Set(known.active.map((k) => `${k.blockerId}|${k.recordId}`));
     const records = allRecords(project.projectId).filter((r) => r.documentType === project.documentType);
-    const groups = new Map<string, { code: string; severity: string; nodeId: string | null; locale: string | null; message: string; source: string; recordIds: string[] }>();
-    const add = (f: { code: string; severity: string; nodeId?: string; locale?: string; message: string; source: string }, recordId: string | null) => {
+    type Group = { code: string; severity: string; nodeId: string | null; locale: string | null; message: string; source: string; recordIds: string[]; details?: Record<string, unknown> };
+    const groups = new Map<string, Group>();
+    const add = (f: { code: string; severity: string; nodeId?: string; locale?: string; message: string; source: string; details?: Record<string, unknown> }, recordId: string | null) => {
       const key = `${f.code}|${f.nodeId ?? ''}|${f.locale ?? ''}|${recordId === null ? f.message : ''}`;
-      const g = groups.get(key) ?? { code: f.code, severity: f.severity, nodeId: f.nodeId ?? null, locale: f.locale ?? null, message: f.message, source: f.source, recordIds: [] };
+      // A wording finding keeps which rule and text it is (ids only), so the studio links it to its blocker.
+      const wording = f.code.startsWith('WORDING_') && typeof f.details?.check === 'string' ? { details: { check: f.details.check, textId: f.details.textId ?? null } } : {};
+      const g: Group = groups.get(key) ?? { code: f.code, severity: f.severity, nodeId: f.nodeId ?? null, locale: f.locale ?? null, message: f.message, source: f.source, recordIds: [], ...wording };
       if (recordId && !g.recordIds.includes(recordId)) g.recordIds.push(recordId);
       groups.set(key, g);
     };

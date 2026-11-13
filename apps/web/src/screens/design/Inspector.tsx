@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CATALOG_BY_TYPE, isConditionalSection, projectFields, tableColumnsFor, defaultFormatterFor, getPath, nodeMap, requiredNodeIds, applyCommand, effectivePageDesign, pagedProfileOf, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
+import { CATALOG_BY_TYPE, libraryOwnership, isConditionalSection, projectFields, tableColumnsFor, defaultFormatterFor, getPath, nodeMap, requiredNodeIds, applyCommand, effectivePageDesign, pagedProfileOf, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
 import { useScenarioEngine, useStudio } from '../../state/store';
 import { Icon } from '../../ui/icons';
@@ -19,6 +19,7 @@ import { GuardedSuggestion, WritingHelp, recordAssist, useReadOnlyReason } from 
 import { NotInEffectChip, PeriodChip, PeriodEditor } from '../dates/period';
 import { NodeLibrary, ReadOnlyWhenLinked, useLinkedNode } from '../library/NodeLibrary';
 import { LibraryChip } from '../library/LinkUI';
+import { WordingFindings } from '../wording/WordingFindings';
 
 /**
  * The fields a one-line condition can test. The two sample kinds keep their numbers, amounts, choices and yes/no fields;
@@ -384,6 +385,8 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
   const [editText, setEditText] = useState('');
   const [editCond, setEditCond] = useState<string | null>(null);
   const [addedAi, setAddedAi] = useState<string | null>(null);
+  // An alternative whose wording comes from the library is read-only here (with its chip), never typed into and refused.
+  const linkedParts = useMemo(() => (project.libraryLinks?.length ? libraryOwnership(project).parts : new Map()), [project]);
   const parseVal = (path: string, v: string) => { const f = fields.find((x) => x.path === path); if (!f) return v; if (f.type === 'bool') return v === 'true'; if (['int', 'cents', 'points'].includes(f.type)) return Number(v); return v; };
   const slugId = (title: string) => (node.id + '-' + title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')).slice(0, 60);
   /** The suggested version of the assistant goes through the same ADD_VARIANT command as "Add variant", with an id that is free. */
@@ -413,6 +416,7 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
         {(node.variantIds ?? []).map((vid) => {
           const p = parts.get(vid);
           const rv = rnode?.variants?.items.find((v) => v.id === vid);
+          const linkedWording = linkedParts.get(vid);
           return (
             <li key={vid} className={rv?.selected ? 'selected' : ''} data-testid={`variant-${vid}`}>
               <div className="row"><strong className="grow">{p?.title ?? vid}</strong>{rv?.selected && <span className="chip accent">Selected</span>}{node.fallbackVariantId === vid && <span className="chip">Fallback</span>}</div>
@@ -427,6 +431,7 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
               {editing === vid ? (
                 <div style={{ marginTop: 6 }}>
                   <textarea className="textarea" value={editText} onChange={(e) => setEditText(e.target.value)} aria-label={`Text for ${vid}`} data-testid="variant-edit-text" />
+                  <WordingFindings text={editText} scope="messages" onApply={setEditText} testId="variant-wording-findings" />
                   <WritingHelp text={editText} kind="message" locale="en-US" onUse={setEditText} />
                   <ReachLine nodeId={node.id} variantId={vid} />
                   <div className="row" style={{ marginTop: 6 }}>
@@ -434,11 +439,16 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
                     <button className="btn sm ghost" onClick={() => setEditing(null)}>Cancel</button>
                   </div>
                 </div>
+              ) : linkedWording ? (
+                <div className="variant-linked" data-testid={`variant-linked-${vid}`}>
+                  <div className="row wrap" style={{ gap: 6, marginTop: 4 }}><LibraryChip link={linkedWording} /><span className="muted" data-testid="variant-linked-note">Read-only: this wording comes from the library. Change it there, or unlink it below.</span></div>
+                  <div className="variant-text" aria-readonly="true">{p?.approvedLocales['en-US']}</div>
+                </div>
               ) : (
                 <div className="variant-text">{p?.approvedLocales['en-US']}</div>
               )}
               <div className="row" style={{ gap: 4, marginTop: 4 }}>
-                {editing !== vid && <button className="btn sm ghost" onClick={() => { setEditing(vid); setEditText(p?.approvedLocales['en-US'] ?? ''); }}>Edit text</button>}
+                {editing !== vid && !linkedWording && <button className="btn sm ghost" onClick={() => { setEditing(vid); setEditText(p?.approvedLocales['en-US'] ?? ''); }} data-testid={`variant-edit-${vid}`}>Edit text</button>}
                 {node.type === 'conditional-region' && editCond !== vid && <button className="btn sm ghost" onClick={() => setEditCond(vid)} data-testid={`edit-condition-${vid}`}>Edit condition</button>}
                 {node.fallbackVariantId !== vid && <button className="btn sm ghost" onClick={() => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: { fallbackVariantId: vid } })}>Make fallback</button>}
                 {(node.variantIds?.length ?? 0) > 1 && <button className="btn sm ghost" onClick={() => dispatch({ type: 'REMOVE_VARIANT', nodeId: node.id, variantId: vid })} aria-label={`Remove variant ${vid}`}><Icon.trash width={14} height={14} /></button>}
@@ -453,6 +463,7 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
       <div className="section-title">Add variant</div>
       <Field label="Title"><input className="input" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} data-testid="new-variant-title" /></Field>
       <Field label="Approved text (tokens like {{customer.givenName}} allowed)"><textarea className="textarea" value={newText} onChange={(e) => setNewText(e.target.value)} data-testid="new-variant-text" /></Field>
+      <WordingFindings text={newText} scope="messages" onApply={setNewText} testId="new-variant-wording-findings" />
       {node.type === 'conditional-region' && (
         <div className="row wrap" style={{ alignItems: 'flex-end' }}>
           <Field label="Condition field"><select className="select" value={cond.path} onChange={(e) => setCond({ ...cond, path: e.target.value })} data-testid="new-variant-cond-path">{fields.map((f) => <option key={f.path} value={f.path}>{f.path}</option>)}</select></Field>

@@ -1,0 +1,52 @@
+/* Wording rules: findings under a field, the rule editor and the Wording rules panel (screens/wording). Tokens only. */
+.wr-findings { container-type: inline-size; margin: 6px 0 4px; padding: 6px 10px 8px; border-radius: var(--iss-radius-md); background: var(--iss-surface-sunken); border: 1px solid var(--iss-border); text-align: left; display: flex; flex-direction: column; gap: 4px; }
+.wr-findings-head { margin: 0; font-size: 12.5px; }
+.wr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.wr-item { padding: 6px 0; border-bottom: 1px solid var(--iss-row-border); display: flex; flex-direction: column; gap: 4px; }
+.wr-item:last-child { border-bottom: 0; }
+.wr-item-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; }
+.wr-rule { font-weight: 600; color: var(--iss-text); overflow-wrap: anywhere; }
+.wr-sev { font-weight: 600; }
+.wr-msg { margin: 0; font-size: 12.5px; color: var(--iss-text); overflow-wrap: anywhere; line-height: 1.45; }
+.wr-match { background: var(--iss-warning-soft); color: inherit; padding: 0 2px; border-radius: 3px; text-decoration: underline; text-decoration-style: wavy; text-underline-offset: 3px; }
+.wr-pos { margin-left: 6px; }
+.wr-actions { gap: 6px; }
+.wr-note { margin: 0; font-size: 12px; }
+.wr-ai { margin-top: 4px; }
+@container (max-width: 520px) { .wr-findings .as-compare { grid-template-columns: 1fr; } }
+
+/* Rule editor (Library draft editor and a document's own rules). */
+.wr-editor { display: flex; flex-direction: column; gap: 8px; }
+.wr-rules { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.wr-rule-row { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: flex-end; padding: 8px 0; border-bottom: 1px solid var(--iss-row-border); }
+.wr-rule-row:last-child { border-bottom: 0; }
+.wr-rule-row .field { min-width: 0; }
+.wr-rule-row .input, .wr-rule-row .select { max-width: 100%; }
+.wr-rule-num { font-size: 12px; color: var(--iss-text-muted); font-variant-numeric: tabular-nums; align-self: center; min-width: 1.6em; }
+.wr-rule-move { display: flex; gap: 2px; }
+.wr-problem { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--iss-error-fg, var(--iss-text)); }
+.wr-try { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: var(--iss-radius-md); background: var(--iss-surface-sunken); border: 1px solid var(--iss-border); }
+.wr-try-result { margin: 0; padding-left: 18px; font-size: 12.5px; }
+.wr-sev-locked { font-size: 12px; color: var(--iss-text-muted); }
+
+/* The Wording rules panel on Content & Translations. */
+.wr-panel { margin: 0 0 12px; }
+.wr-panel > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; font-weight: 600; list-style: none; }
+.wr-panel > summary::-webkit-details-marker { display: none; }
+.wr-panel > summary::before { content: '▸'; color: var(--iss-text-muted); }
+.wr-panel[open] > summary::before { content: '▾'; }
+.wr-panel-body { padding: 0 12px 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px 20px; }
+.wr-col { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.wr-col h3 { margin: 0; }
+.wr-readonly-list { list-style: none; margin: 0; padding: 0; }
+.wr-readonly-list li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--iss-row-border); font-size: 13px; }
+.wr-readonly-list li:last-child { border-bottom: 0; }
+.wr-summary-list { list-style: none; margin: 0; padding: 0; }
+.wr-summary-list > li { border-bottom: 1px solid var(--iss-row-border); }
+.wr-summary-list > li:last-child { border-bottom: 0; }
+.wr-summary-btn { width: 100%; display: flex; gap: 8px; align-items: center; padding: 6px 2px; background: none; border: 0; color: var(--iss-text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.wr-summary-btn:hover { background: var(--iss-row-hover); }
+.wr-summary-btn .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.wr-summary-findings { list-style: none; margin: 0 0 6px; padding: 0 0 0 12px; display: flex; flex-direction: column; gap: 4px; }
+.wr-summary-findings li { font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.wr-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; }

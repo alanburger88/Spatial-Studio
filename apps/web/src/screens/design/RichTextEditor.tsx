@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import { Node as TipNode, mergeAttributes } from '@tiptap/core';
-import type { RichDoc } from '@iss/model';
+import { richFromMarkup, richToMarkup, type RichDoc } from '@iss/model';
+import { adaptCase, findPhrase, type WordingFinding } from '@iss/scenarios';
+import { WordingFindings } from '../wording/WordingFindings';
 
 /** Inline atom node for allowlisted data tokens: serialises as {type:'token', attrs:{path}}. */
 const TokenNode = TipNode.create({
@@ -45,7 +47,24 @@ export function RichTextEditor({ value, onCommit, onCancel }: { value: RichDoc |
     if (editor) activeEditor.current = editor;
     return () => { if (activeEditor.current === editor) activeEditor.current = null; };
   }, [editor]);
+  // The wording rules check the text as it is typed (the same markup Content & Translations shows).
+  const [markup, setMarkup] = useState(() => richToMarkup(value));
+  useEffect(() => {
+    if (!editor) return;
+    const update = () => setMarkup(richToMarkup(editor.getJSON() as RichDoc));
+    editor.on('update', update);
+    return () => { editor.off('update', update); };
+  }, [editor]);
   if (!editor) return null;
+  /** A replacement goes into the editor (one undo step there); the document changes only when the person finishes. */
+  const replace = (f: WordingFinding, replacement: string) => {
+    if (f.occurrences.length === 1 && f.occurrences[0].start === 0 && f.occurrences[0].end >= markup.length) { editor.commands.setContent(richFromMarkup(replacement) as any); setMarkup(replacement); return; }
+    const hits: Array<{ from: number; to: number; match: string }> = [];
+    editor.state.doc.descendants((node, pos) => { if (node.isText && node.text && f.match) for (const o of findPhrase(node.text, f.match, replacement)) hits.push({ from: pos + o.start, to: pos + o.end, match: o.match }); });
+    let tr = editor.state.tr;
+    for (const h of hits.reverse()) tr = tr.insertText(adaptCase(h.match, replacement), h.from, h.to);
+    if (hits.length) editor.view.dispatch(tr);
+  };
   const commit = () => onCommit(editor.getJSON() as RichDoc);
   return (
     <div className="rte" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); commit(); } e.stopPropagation(); }}>
@@ -64,6 +83,7 @@ export function RichTextEditor({ value, onCommit, onCancel }: { value: RichDoc |
         <button type="button" onMouseDown={(e) => { e.preventDefault(); onCancel(); }}>Cancel</button>
       </div>
       <EditorContent editor={editor} />
+      <WordingFindings text={markup} scope="messages" onReplace={replace} testId="rte-wording-findings" />
     </div>
   );
 }

@@ -158,7 +158,7 @@ export interface SessionInfo { authEnabled: boolean; user: SessionUser | null; p
 export interface WorkflowStep { action: string; from: WorkflowState; to: WorkflowState; user: string | null; at: string }
 export interface VersionDto { modelVersion: number; contentDigest: string; savedAt: string; savedBy: string | null; label: string | null; bytes: number; current: boolean; workflow: WorkflowStep[] }
 export interface VersionMeta { modelVersion: number; contentDigest: string; savedAt: string; savedBy: string | null; label: string | null; title: string }
-export interface BlockingGroup { code: string; severity: string; nodeId: string | null; locale: string | null; message: string; source: string; recordIds: string[] }
+export interface BlockingGroup { code: string; severity: string; nodeId: string | null; locale: string | null; message: string; source: string; recordIds: string[]; /** Wording rules: which rule and text (`check`), for the link to Blockers. */ details?: Record<string, unknown> }
 /** A customer-data blocker an approver set aside for one customer (docs/api/KNOWN_DATA_PROBLEMS.md). */
 export interface KnownDataProblemDto {
   id: string; blockerId: string; recordId: string; reason: string; markedBy: { id: string | null; name: string } | null; markedAt: string;
@@ -248,6 +248,8 @@ export const api = {
   /** Tell the activity log that a person applied an assistant proposal (label and counts only). Never blocks the UI. */
   assistApplied: (body: { projectId: string; feature: string; label: string; source: 'builtin' | 'ai'; changes?: number; modelVersion?: number }) => json<{ recorded: boolean }>('/api/v1/assist/applied', { method: 'POST', body: JSON.stringify(body) }).catch(() => ({ recorded: false })),
   /* Model-backed assistant suggestions. Each answers `mode: 'ai'` with suggestions or `mode: 'unavailable'` with an explanation (no AI key, or nothing usable). Nothing is saved. */
+  /** "Suggest compliant wording" (wording rules): the server checks the answer with the same checker and returns only options that break no "must" rule. */
+  assistCompliant: (id: string, body: { text: string; scope: 'messages' | 'disclosures' | 'labels' | 'email' | 'sms'; locale?: string; project?: Project }) => json<AssistReply & { options: Array<{ text: string; tokenCheck: { ok: boolean; missing: string[]; extra: string[] }; warnings: string[] }>; refused?: string[] }>(`/api/v1/projects/${id}/assist/rewrite`, { method: 'POST', body: JSON.stringify({ ...body, style: 'compliant' }) }),
   assistRewrite: (id: string, body: { text: string; style: 'shorter' | 'plainer' | 'warmer' | 'formal' | 'one-sms'; kind: 'message' | 'label' | 'email' | 'sms'; locale?: string; project?: Project }) => json<AssistReply & { options: Array<{ text: string; tokenCheck: { ok: boolean; missing: string[]; extra: string[] } }> }>(`/api/v1/projects/${id}/assist/rewrite`, { method: 'POST', body: JSON.stringify(body) }),
   assistNewVersion: (id: string, body: { nodeId: string; brief: string; project?: Project }) => json<AssistReply & { title?: string; text?: string }>(`/api/v1/projects/${id}/assist/new-version`, { method: 'POST', body: JSON.stringify(body) }),
   assistSubjectLines: (id: string, body: { current: string; brief?: string; project?: Project }) => json<AssistReply & { options: Array<{ text: string }> }>(`/api/v1/projects/${id}/assist/subject-lines`, { method: 'POST', body: JSON.stringify(body) }),
