@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { applyCommand, type Project } from '@iss/model';
 import { buildApp } from '../src/app';
-import { describeImage, draftNewVersion, meaningCheck, rewriteText, subjectLines, type AssistModel, type AssistTask } from '../src/assistAi';
+import { describeImage, draftNewVersion, draftRule, meaningCheck, rewriteText, subjectLines, type AssistModel, type AssistTask } from '../src/assistAi';
 
 let ctx: Awaited<ReturnType<typeof buildApp>>;
 beforeAll(async () => { ctx = await buildApp({ dataDir: mkdtempSync(path.join(tmpdir(), 'iss-as-')), logger: false }); });
@@ -103,6 +103,29 @@ describe('model-backed assistant features', () => {
     // a picture that is not a PNG/JPEG data URI is not sent anywhere
     const other = fake({ text: 'x' });
     expect((await describeImage(LIVE, other.model, p, { nodeId: 'issuer-logo' })).mode === 'ai' ? other.seen.length : 0).toBe((p.nodes.find((n) => n.id === 'issuer-logo')!.image?.src ?? '').startsWith('data:image/png;base64,') || (p.nodes.find((n) => n.id === 'issuer-logo')!.image?.src ?? '').startsWith('data:image/jpeg;base64,') ? 1 : 0);
+  });
+
+  it('a rule from a sentence: plain sentences need no model; a model draft is checked field by field and never saved', async () => {
+    const p = await project('aster-card-demo');
+    const plain = await inj('POST', '/api/v1/projects/aster-card-demo/assist/rule-draft', { sentence: 'When the new balance is over $500, show the payment reminder', forceOffline: true });
+    expect(plain.statusCode).toBe(200);
+    expect(plain.json().mode).toBe('builtin');
+    expect(plain.json().draft.rule).toMatchObject({ then: { op: 'selectVariant', variantId: 'payment-reminder' } });
+    // freer wording, no key: explained, no rule
+    const free = (await inj('POST', '/api/v1/projects/aster-card-demo/assist/rule-draft', { sentence: 'people who are really struggling should get the kind one', forceOffline: true })).json();
+    expect(free.draft.rule).toBeNull();
+    expect(free.message).toMatch(/AI key/);
+    // with a model: a valid proposal is accepted and labelled as AI
+    const good = await draftRule(LIVE, fake({ rule: { title: 'Struggling customers', scope: 'credit-statement', mode: 'exclusive', exclusiveGroup: 'payment-guidance', when: { op: 'gte', path: 'card.missedPayments', value: 3 }, then: { op: 'selectVariant', targetNodeId: 'payment-guidance', variantId: 'payment-support-offer' } } }).model, p, 'people who are really struggling should get the kind one');
+    expect(good.mode).toBe('ai');
+    expect(good.draft.source).toBe('ai');
+    expect(good.draft.rule?.id).toMatch(/^R\d+$/);
+    // a proposal with an unknown field or a made-up message is refused, with the reason
+    const bad = await draftRule(LIVE, fake({ rule: { title: 'x', when: { op: 'eq', path: 'card.mood', value: 'sad' }, then: { op: 'selectVariant', targetNodeId: 'payment-guidance', variantId: 'payment-kind' } } }).model, p, 'people who are really struggling should get the kind one');
+    expect(bad.draft.rule).toBeNull();
+    expect(bad.draft.uncertain.join(' ')).toMatch(/AI draft refused/);
+    // the stored project has no new rule
+    expect((await project('aster-card-demo')).rules.length).toBe(p.rules.length);
   });
 
   it('applied assistant proposals are recorded in the activity log', async () => {

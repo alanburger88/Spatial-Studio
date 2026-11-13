@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { isSupportedLanguage, projectLanguages } from '@iss/model';
 import { providerConfig } from '../assistant';
-import { describeImage, draftNewVersion, externalAssist, meaningCheck, rewriteText, subjectLines, type RewriteKind, type RewriteStyle } from '../assistAi';
+import { describeImage, draftNewVersion, draftRule, externalAssist, meaningCheck, rewriteText, subjectLines, type RewriteKind, type RewriteStyle } from '../assistAi';
 import type { RouteDeps } from './deps';
 
 const STYLES: RewriteStyle[] = ['shorter', 'plainer', 'warmer', 'formal', 'one-sms'];
@@ -52,6 +52,12 @@ export function registerAssistRoutes(app: FastifyInstance, deps: RouteDeps): voi
     if (locale === 'en-US' || !projectLanguages(project).includes(locale)) throw new ApiError(400, 'INVALID_LOCALE', 'Choose one of the project’s languages.');
     const ids = Array.isArray(b.ids) && b.ids.every((x) => typeof x === 'string') && b.ids.length <= 400 ? (b.ids as string[]) : undefined;
     return meaningCheck(cfgOf(b), model, project, { locale, ids });
+  });
+
+  app.post('/api/v1/projects/:projectId/assist/rule-draft', async (req) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const project = projectOf((req.params as any).projectId, b);
+    return draftRule(cfgOf(b), model, project, text(b.sentence, 'The description', 600));
   });
 
   app.post('/api/v1/projects/:projectId/assist/image-description', async (req) => {

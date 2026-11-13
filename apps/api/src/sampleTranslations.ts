@@ -5,7 +5,8 @@
  *
  * Keys are content-part ids and string ids (see `translatableStrings`). A sample is only offered while the English
  * text is still the seeded wording (checked by the caller), and it must keep the same data tokens.
- * The SMS samples avoid characters outside the GSM-7 alphabet so the message stays in 160-character segments.
+ * The SMS samples avoid characters outside the GSM-7 alphabet and are worded to fit one 160-character message for the
+ * sample customers (a larger balance can still push a message into a second part; the SMS meter shows it).
  */
 /** Spanish (US) for the fixed wording the outputs add (web page controls, page numbers, email footer). Shared by both sample projects. */
 const SYSTEM_ES_US: Record<string, string> = {
@@ -143,7 +144,7 @@ export const SAMPLE_TRANSLATIONS: Record<string, Record<string, Record<string, s
       '@email/subject': 'Su estado de cuenta de {{issuer.product}} está listo — pago mínimo de {{card.minimumDueCents}} con vencimiento el {{card.dueDate}}',
       '@email/title': 'Su estado de cuenta está listo',
       '@email/keyFactsHeading': 'Datos clave',
-      '@sms/text': 'DEMO {{issuer.name}}: Su estado de cuenta ya se puede consultar. Saldo nuevo {{card.newBalanceCents}}; pago requerido {{card.minimumDueCents}} antes del {{card.dueDate}}. {{link}}',
+      '@sms/text': 'DEMO {{issuer.name}}: Su estado de cuenta ya se puede ver. Saldo nuevo {{card.newBalanceCents}}; pago requerido {{card.minimumDueCents}} antes del {{card.dueDate}}. {{link}}',
     },
   },
   'harborcare-demo': {
