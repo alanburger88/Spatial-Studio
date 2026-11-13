@@ -770,25 +770,51 @@ export function customFieldUsage(project: Project): Array<{ path: string; where:
 const cleanPeriod = (p: EffectivePeriod): EffectivePeriod => ({ ...(p.from ? { from: p.from } : {}), ...(p.until ? { until: p.until } : {}) });
 const periodLabel = (p: EffectivePeriod): string => (p.from && p.until ? `from ${p.from} until ${p.until}` : p.from ? `from ${p.from}` : `until ${p.until}`);
 
-/** Where each calculated field is used (other calculations, rule conditions, conditions on components, bindings, wording, footers). */
-export function calculationUsage(project: Project): Array<{ key: string; where: string[] }> {
-  const map = new Map<string, Set<string>>();
-  const add = (path: string | undefined, where: string) => { if (!path?.startsWith(CALC_PREFIX)) return; const k = path.slice(CALC_PREFIX.length); if (!map.has(k)) map.set(k, new Set()); map.get(k)!.add(where); };
-  for (const c of project.calculatedFields ?? []) for (const k of exprDependencies(c.expr).calcs) add(`${CALC_PREFIX}${k}`, `calculation “${c.label}”`);
-  for (const r of project.rules) predicateLeafPaths(r.when).forEach((p) => add(p, `rule ${r.id}`));
+/**
+ * One place a calculated field is used, for a screen to link to: another calculation (`id` = its key), a rule (`id` =
+ * the rule id), a component of the document (`id` = `nodeId`), wording kept with the document (`id` = the content part
+ * or string id, `nodeId` when a component shows it) or the email or SMS (`id` = the string id). `label` is the same
+ * words as in `where`.
+ */
+export interface CalculationUse { kind: 'calculation' | 'rule' | 'component' | 'wording' | 'channel'; id: string; nodeId?: string; label: string }
+
+/**
+ * Where each calculated field is used (other calculations, rule conditions, conditions on components, bindings, wording,
+ * footers): `where` in words (for messages), `uses` as structured places (for links; two calculations or parts with the
+ * same name stay apart).
+ */
+export function calculationUsage(project: Project): Array<{ key: string; where: string[]; uses: CalculationUse[] }> {
+  const map = new Map<string, { where: Set<string>; uses: Map<string, CalculationUse> }>();
+  const add = (path: string | undefined, use: CalculationUse) => {
+    if (!path?.startsWith(CALC_PREFIX)) return;
+    const k = path.slice(CALC_PREFIX.length);
+    let m = map.get(k);
+    if (!m) { m = { where: new Set(), uses: new Map() }; map.set(k, m); }
+    m.where.add(use.label);
+    const id = `${use.kind}|${use.id}|${use.label}`;
+    if (!m.uses.has(id)) m.uses.set(id, use);
+  };
+  for (const c of project.calculatedFields ?? []) for (const k of exprDependencies(c.expr).calcs) add(`${CALC_PREFIX}${k}`, { kind: 'calculation', id: c.key, label: `calculation “${c.label}”` });
+  for (const r of project.rules) predicateLeafPaths(r.when).forEach((p) => add(p, { kind: 'rule', id: r.id, label: `rule ${r.id}` }));
   for (const n of project.nodes) {
-    const name = n.name ?? n.id;
-    predicateLeafPaths(n.visibleWhen).forEach((p) => add(p, name));
-    Object.values(n.variantConditions ?? {}).forEach((pr) => predicateLeafPaths(pr).forEach((p) => add(p, name)));
-    add(n.binding, name);
-    add(n.totalFrom, name);
-    (n.chart?.series ?? []).forEach((s) => add(s.path, name));
-    tokensIn(n.content).forEach((p) => add(p, name));
+    const use: CalculationUse = { kind: 'component', id: n.id, nodeId: n.id, label: n.name ?? n.id };
+    predicateLeafPaths(n.visibleWhen).forEach((p) => add(p, use));
+    Object.values(n.variantConditions ?? {}).forEach((pr) => predicateLeafPaths(pr).forEach((p) => add(p, use)));
+    add(n.binding, use);
+    add(n.totalFrom, use);
+    (n.chart?.series ?? []).forEach((s) => add(s.path, use));
+    tokensIn(n.content).forEach((p) => add(p, use));
   }
-  const text = (t: string | undefined, where: string) => { for (const m of (t ?? '').matchAll(/\{\{\s*(calc\.[A-Za-z0-9]+)\s*\}\}/g)) add(m[1], where); };
-  for (const c of project.contentParts) for (const t of Object.values(c.approvedLocales)) text(t, c.title);
-  for (const st of translatableStrings(project)) text(st.source, st.title);
-  return [...map].map(([key, where]) => ({ key, where: [...where] }));
+  const text = (t: string | undefined, use: CalculationUse) => { for (const m of (t ?? '').matchAll(/\{\{\s*(calc\.[A-Za-z0-9]+)\s*\}\}/g)) add(m[1], use); };
+  const shownBy = (partId: string): string | undefined => project.nodes.find((n) => n.id === partId || n.contentPartId === partId || (n.variantIds ?? []).includes(partId))?.id;
+  for (const c of project.contentParts) {
+    const nodeId = shownBy(c.id);
+    for (const t of Object.values(c.approvedLocales)) text(t, { kind: 'wording', id: c.id, ...(nodeId ? { nodeId } : {}), label: c.title });
+  }
+  for (const st of translatableStrings(project)) {
+    text(st.source, st.kind === 'channel' ? { kind: 'channel', id: st.id, label: st.title } : st.nodeId ? { kind: 'component', id: st.nodeId, nodeId: st.nodeId, label: st.title } : { kind: 'wording', id: st.id, label: st.title });
+  }
+  return [...map].map(([key, m]) => ({ key, where: [...m.where], uses: [...m.uses.values()] }));
 }
 
 /**

@@ -40,7 +40,7 @@ export function Calculations() {
   const ctx = useMemo(() => makeCtx(project, selected?.key ?? null), [project, selected?.key]);
   const fieldIndex = useMemo(() => projectFieldIndex(project), [project]);
   const wordsScope = useMemo(() => wordsScopeOf(project, fieldIndex), [project, fieldIndex]);
-  const usage = useMemo(() => new Map(calculationUsage(project).map((u) => [u.key, u.where])), [project]);
+  const usage = useMemo(() => new Map(calculationUsage(project).map((u) => [u.key, u.uses])), [project]);
 
   // The current customer, as the document would see it (overrides and journey included).
   const customer = useMemo(() => {
