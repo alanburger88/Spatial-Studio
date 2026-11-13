@@ -60,24 +60,23 @@ function glossaryFlag(row: TranslationRow, t: string, glossary: GlossaryEntry[])
   return { kind: 'glossary', severity: 'warning', message: `The glossary says to translate ${terms}${more}, but this text does not use ${missed.length === 1 ? 'that wording' : 'those wordings'}.` };
 }
 
+/** Common words that show a capitalised heading is wording, not somebody's name. */
+const COMMON_EN = new Set(['account', 'balance', 'payment', 'summary', 'date', 'amount', 'due', 'minimum', 'statement', 'claim', 'claims', 'plan', 'paid', 'member', 'service', 'status', 'details', 'key', 'facts', 'previous', 'purchases', 'credit', 'available', 'period', 'reference', 'description', 'billed', 'allowed', 'network', 'terms', 'explained', 'rewards', 'team', 'relationship', 'transactions', 'transaction', 'guide', 'notice', 'fees', 'interest', 'limit', 'number', 'name', 'address', 'total', 'page', 'document', 'header', 'sections', 'message', 'notices', 'filter', 'responsibility', 'deductible', 'appeal', 'update', 'covered', 'services', 'instructions', 'reminder', 'support', 'assistance', 'requested', 'arrangement', 'active', 'disclosures', 'demonstration', 'the', 'your', 'our', 'this', 'new', 'show', 'sort', 'clear', 'skip', 'not', 'all', 'more', 'for', 'and', 'with']);
+
 function untranslatedFlag(row: TranslationRow, t: string, project: Project, lang: string): Omit<TranslationFlag, 'textId' | 'source'> | null {
-  if (t.trim().replace(/\s+/g, ' ') !== row.sourceText.trim().replace(/\s+/g, ' ')) return null;
-  // Names, numbers and tokens are the same in every language.
-  const names = new Set([...letterWords(project.issuer?.name ?? ''), ...letterWords(project.issuer?.product ?? '')].map(fold));
-  const words = letterWords(row.sourceText).filter((w) => w.length > 1 && !names.has(fold(w)));
+  const english = row.sourceText.trim().replace(/\s+/g, ' ');
+  if (t.trim().replace(/\s+/g, ' ') !== english) return null;
+  // Names, numbers and data tokens are the same in every language: only real wording counts.
+  const issuer = new Set([...letterWords(project.issuer?.name ?? ''), ...letterWords(project.issuer?.product ?? '')].map(fold));
+  const words = letterWords(english).filter((w) => w.length > 1 && !issuer.has(fold(w)));
   if (words.length < 2) return null;
-  if (words.every((w) => /^\p{Lu}/u.test(w)) && !/[.!?:]$/.test(row.sourceText.trim()) && words.length <= 3 && words.every((w) => !/^(The|A|An|Your|Our|This|New|Total|Page|Show|Sort|Clear|Skip|Not)$/.test(w))) {
-    // "Morgan Lee", "HarborCare Select": looks like a name, not a sentence.
-    if (words.slice(1).every((w) => /^\p{Lu}/u.test(w)) && words.length >= 2 && row.sourceText.trim() === words.join(' ') && isProperName(words)) return null;
-  }
+  const looksLikeName = words.length <= 3 && words.every((w) => /^\p{Lu}/u.test(w) && !COMMON_EN.has(w.toLowerCase())) && !/[.!?:]$/.test(english);
+  if (looksLikeName) return null;
   return { kind: 'untranslated', severity: 'warning', message: `The ${lang} text is the same as the English. It may not have been translated.` };
 }
 
-/** Every word capitalised and none of them a common English word: treated as a name. */
-const COMMON_EN = new Set(['account', 'balance', 'payment', 'summary', 'date', 'amount', 'due', 'minimum', 'statement', 'claim', 'claims', 'plan', 'paid', 'member', 'service', 'status', 'details', 'key', 'facts', 'previous', 'purchases', 'credit', 'available', 'period', 'reference', 'description', 'billed', 'allowed', 'network', 'terms', 'explained', 'rewards', 'team', 'relationship', 'transactions', 'transaction', 'guide', 'notice', 'fees', 'interest', 'limit', 'number', 'name', 'address', 'total', 'page', 'document', 'header', 'sections', 'message', 'notices', 'filter', 'responsibility', 'deductible', 'appeal', 'update', 'covered', 'services', 'instructions', 'reminder', 'support', 'assistance', 'requested', 'arrangement', 'active', 'disclosures', 'demonstration']);
-const isProperName = (words: string[]): boolean => words.every((w) => !COMMON_EN.has(w.toLowerCase()));
-
-const numbersOf = (s: string): string[] => (wording(s).match(/\d+(?:[.,   ]\d{3})*(?:[.,]\d+)?/g) ?? []).map((n) => n.replace(/\D/g, '')).filter(Boolean).sort();
+/** Every run of digits outside data tokens and web addresses. Grouping marks differ by language ("1,000" and "1.000"), runs do not. */
+const numbersOf = (s: string): string[] => (wording(s).match(/\d+/g) ?? []).sort();
 
 function numberFlag(row: TranslationRow, t: string): Omit<TranslationFlag, 'textId' | 'source'> | null {
   const a = numbersOf(row.sourceText), b = numbersOf(t);
@@ -93,7 +92,7 @@ function numberFlag(row: TranslationRow, t: string): Omit<TranslationFlag, 'text
 function endMark(s: string): string {
   const t = s.replace(TOKENS, 'x').trim().replace(/[\s"'”’»)\]*_]+$/, '');
   const last = t.slice(-1);
-  if (last === '?' || last === '？' || last === ';' && false) return '?';
+  if (last === '?' || last === '？') return '?';
   if (last === '!' || last === '！') return '!';
   if (last === ':' || last === '：') return ':';
   return '';

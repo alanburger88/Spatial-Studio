@@ -58,6 +58,7 @@ function valueText(field: FieldDef | undefined, v: unknown): string {
   return String(v);
 }
 
+const DATE_WORDS: Record<string, string> = { gt: 'is after', gte: 'is on or after', lt: 'is before', lte: 'is on or before' };
 const OP_WORDS: Record<string, string> = { eq: 'is', ne: 'is not', gt: 'is more than', gte: 'is at least', lt: 'is less than', lte: 'is at most' };
 
 function predicateSentence(fields: Fields, p: Predicate, nested = false): string {
@@ -84,7 +85,11 @@ function predicateSentence(fields: Fields, p: Predicate, nested = false): string
     case 'isNull': return `${lowerFirst(fieldLabelOf(fields, p.path))} is empty`;
     case 'notNull': return `${lowerFirst(fieldLabelOf(fields, p.path))} is present`;
     case 'in': return `${lowerFirst(fieldLabelOf(fields, p.path))} is one of ${p.value.map((v) => valueText(fields.get(p.path), v)).join(', ')}`;
-    default: return `${lowerFirst(fieldLabelOf(fields, p.path))} ${OP_WORDS[p.op]} ${valueText(fields.get(p.path), p.value)}`;
+    default: {
+      const f = fields.get(p.path);
+      if (f?.type === 'date' && typeof p.value === 'string' && p.op !== 'eq' && p.op !== 'ne') return `${lowerFirst(f.label)} ${DATE_WORDS[p.op]} ${p.value}`;
+      return `${lowerFirst(fieldLabelOf(fields, p.path))} ${OP_WORDS[p.op]} ${valueText(f, p.value)}`;
+    }
   }
 }
 
@@ -304,13 +309,14 @@ function stem(w: string): string {
   return w.length > 3 && w.endsWith('s') && !w.endsWith('ss') && !w.endsWith('us') && !w.endsWith('is') ? w.slice(0, -1) : w;
 }
 
-const TOKEN = /\d{4}-\d{2}-\d{2}|(?<![a-z0-9])-?\$?\d+(?:,\d{3})*(?:\.\d+)?(?:k\b)?|>=|<=|!=|<>|==|[≥≤≠><=+$%,;:]|[a-zà-ÿ]+(?:'[a-z]+)?/g;
+// No lookbehind (older Safari): identifiers such as "r03" are kept whole by the word alternative instead.
+const TOKEN = /\d{4}-\d{2}-\d{2}|-?\$?\d+(?:,\d{3})*(?:\.\d+)?(?:k\b)?|>=|<=|!=|<>|==|[≥≤≠><=+$%,;:]|[a-z\u00e0-\u00ff][a-z0-9\u00e0-\u00ff]*(?:'[a-z]+)?/g;
 
 function tokenize(text: string): Tok[] {
   // Same length as the input so token positions index the original text.
   let norm = '';
   for (const ch of text) {
-    const c = ch === '’' || ch === '‘' ? "'" : ch === ' ' ? ' ' : ch;
+    const c = ch === '’' || ch === '‘' ? "'" : ch === '\u00a0' ? ' ' : ch;
     const l = c.toLowerCase();
     norm += l.length === c.length ? l : c;
   }
@@ -343,8 +349,8 @@ const RELATIVES = words('who whose with that where when if which having');
 const TYPE_NOUNS = words('message version variant text wording section block panel paragraph content copy part option alternative box area component');
 const STOP = words(`the a an customer cardholder member client patient person people account holder provider their they them he she his her its it who whom whose that which this these those
   has have had having is are was were be been being am does do did with of in on at for to by from there here currently now already ever still yet value number count total amount sum equal equals set as than then
-  any some own also just please should would will can may must get got gets receive received receives prefer prefers preferred want wants speak speaks speaking use uses using mark marked flag flagged made make
-  we our us you your i my me claim statement card plan document policy only s`);
+  any some also just only please prefer prefers preferred speak speaks speaking
+  we our us you your i my me claim statement card plan document policy s`);
 const NEGATIONS = words('not never without no non neither nor none');
 const TRUTHY = words('yes true');
 const FALSY = words('false off');
@@ -380,26 +386,29 @@ const AND_TAILS = new Set(['above', 'over', 'up', 'below', 'under']);
 
 /* ------------------------------------------------------------------ field and value vocabulary of the parser */
 
-/** Extra ways people name the sample fields. Only used when the project has the field. `*` = a few words in between. */
+/**
+ * Extra ways people name the sample fields. Only used when the project has the field. `*` = a few words in between.
+ * A leading `~` marks a looser wording: it is accepted, and the draft says how it was read.
+ */
 const FIELD_SYNONYMS: Record<string, string[]> = {
-  'card.missedPayments': ['missed * payment', 'payment missed', 'missed payment count', 'number of missed payment', 'late payment'],
-  'card.paymentStatus': ['payment status', 'payment state', 'account status', 'account standing'],
+  'card.missedPayments': ['missed * payment', 'payment missed', 'missed payment count', 'number of missed payment', '~late payment'],
+  'card.paymentStatus': ['payment status', 'payment state', '~account status', '~account standing'],
   'card.assistanceRequested': [
     'assistance requested', 'assistance request', 'help requested', 'support requested', 'payment assistance requested',
     ...['asked for', 'requested', 'applied for', 'asking for', 'requesting'].flatMap((v) => ['assistance', 'help', 'support', 'payment assistance', 'payment help', 'payment support', 'hardship assistance'].map((n) => `${v} ${n}`)),
   ],
   'card.arrangementStatus': ['arrangement status', 'arrangement', 'payment arrangement', 'payment arrangement status', 'payment plan', 'repayment plan', 'repayment arrangement'],
-  'card.tier': ['account tier', 'tier', 'account level', 'account type', 'card tier', 'customer tier'],
-  'card.channelPreference': ['channel preference', 'channel', 'preferred channel', 'delivery preference', 'delivery channel', 'delivery method', 'contact preference'],
+  'card.tier': ['account tier', 'tier', '~account level', '~account type', 'card tier', 'customer tier'],
+  'card.channelPreference': ['channel preference', 'channel', 'preferred channel', 'delivery preference', 'delivery channel', '~delivery method', '~contact preference'],
   'card.rewardsBalance': ['rewards balance', 'rewards', 'rewards points', 'points', 'loyalty points', 'rewards point balance'],
   'customer.locale': ['preferred locale', 'locale', 'language', 'preferred language'],
   'card.newBalanceCents': ['new balance', 'statement balance', 'current balance', 'closing balance', 'outstanding balance'],
   'card.previousBalanceCents': ['previous balance', 'prior balance', 'last balance', 'opening balance'],
   'card.minimumDueCents': ['minimum payment due', 'minimum payment', 'minimum due', 'minimum amount due'],
   'card.creditLimitCents': ['credit limit'],
-  'card.purchasesCents': ['purchases', 'spending', 'spend'],
+  'card.purchasesCents': ['purchases', '~spending', '~spend'],
   'card.paymentsCreditsCents': ['payments and credits', 'payments made', 'payments received'],
-  'card.interestFeesCents': ['fees and interest', 'interest and fees', 'fees', 'interest', 'fees charged', 'interest charged'],
+  'card.interestFeesCents': ['fees and interest', 'interest and fees', '~fees', '~interest', '~fees charged', '~interest charged'],
   'customer.accessibility.largeText': ['large text', 'large print', 'larger text', 'large text preference'],
   'customer.accessibility.highContrast': ['high contrast', 'high contrast preference'],
   'customer.givenName': ['given name', 'first name'],
@@ -408,10 +417,10 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   'claim.network': ['network status', 'network', 'provider network'],
   'claim.deductibleAppliedCents': ['deductible applied', 'deductible', 'deductible amount', 'applied to deductible'],
   'claim.liabilityConfirmed': ['member liability confirmed', 'liability confirmed', 'liability', 'member liability', 'responsibility confirmed', 'confirmed liability', 'confirmed responsibility'],
-  'claim.patientResponsibilityCents': ['member responsibility', 'patient responsibility', 'responsibility', 'member share', 'member owes', 'patient owes'],
+  'claim.patientResponsibilityCents': ['member responsibility', 'patient responsibility', 'responsibility', 'member share', '~member owes', '~patient owes'],
   'claim.billedCents': ['billed amount', 'billed', 'amount billed', 'provider billed'],
   'claim.allowedCents': ['allowed amount', 'allowed', 'amount allowed', 'plan allowed'],
-  'claim.planPaidCents': ['plan paid', 'paid by plan', 'plan payment'],
+  'claim.planPaidCents': ['plan paid', 'paid by plan', '~plan payment'],
   'claim.amountUnderReviewCents': ['amount under review'],
   'claim.contractualAdjustmentCents': ['contractual adjustment', 'adjustment'],
   'claim.claimId': ['claim id', 'claim number'],
@@ -420,20 +429,20 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   'member.memberId': ['member id', 'member number'],
 };
 
-/** Everyday words for the sample fields' allowed values. Only used when the field has that value. */
+/** Everyday words for the sample fields' allowed values. Only used when the field has that value. `~` = looser wording, reported. */
 const VALUE_SYNONYMS: Record<string, Record<string, string[]>> = {
-  'card.paymentStatus': { current: ['up to date', 'on time', 'paid up', 'in good standing'], overdue: ['past due', 'late', 'behind', 'in arrears', 'delinquent'] },
-  'card.tier': { premium: ['premier'], standard: ['regular', 'basic'] },
-  'card.arrangementStatus': { approved: ['active', 'agreed', 'in place'] },
-  'card.channelPreference': { digital: ['online', 'paperless'], print: ['paper', 'post', 'printed', 'mail'], email: ['e mail'] },
-  'claim.status': { 'processed-covered': ['covered', 'processed and covered'], 'denied-pending-review': ['denied', 'rejected', 'declined'], 'appeal-filed': ['appealed', 'under appeal', 'on appeal'], 'appeal-resolved': ['resolved'] },
+  'card.paymentStatus': { current: ['up to date', '~on time', '~paid up', '~in good standing'], overdue: ['past due', 'in arrears', '~late', '~behind', '~delinquent'] },
+  'card.tier': { premium: ['premier'], standard: ['~regular', '~basic'] },
+  'card.arrangementStatus': { approved: ['~active', '~agreed', '~in place'] },
+  'card.channelPreference': { digital: ['~online', '~paperless'], print: ['paper', 'printed', '~post', '~mail'], email: ['e mail'] },
+  'claim.status': { 'processed-covered': ['processed and covered', '~covered'], 'denied-pending-review': ['denied', '~rejected', '~declined'], 'appeal-filed': ['appealed', 'under appeal', 'on appeal'], 'appeal-resolved': ['~resolved'] },
 };
 
 /** Fields a sentence can never usefully test. */
 const NOT_FOR_RULES = new Set(['documentType', 'recordId']);
 
-interface Alias { toks: string[]; paths: string[]; weak: boolean }
-interface ValuePhrase { toks: string[]; path: string; value: string }
+interface Alias { toks: string[]; paths: string[]; weak: boolean; loose: boolean }
+interface ValuePhrase { toks: string[]; path: string; value: string; loose: boolean }
 interface Vocab { fields: Fields; usable: FieldDef[]; aliases: Alias[]; values: ValuePhrase[]; /** Phrases that contain "and"/"or" and must not be split. */ glued: string[][] }
 
 function buildVocab(project: Project): Vocab {
@@ -441,13 +450,15 @@ function buildVocab(project: Project): Vocab {
   const usable = [...fields.values()].filter((f) => !f.derived && f.type !== 'array' && !NOT_FOR_RULES.has(f.path));
   const byPhrase = new Map<string, Alias>();
   const add = (text: string, path: string, weak: boolean) => {
-    const toks = phrase(text.toLowerCase().replace(/[^a-z0-9*à-ÿ]+/g, ' ').trim());
+    const loose = text.startsWith('~');
+    const toks = phrase(text.toLowerCase().replace(/[^a-z0-9*\u00e0-\u00ff]+/g, ' ').trim());
     if (!toks.length || toks.every((t) => t === '*')) return;
     const key = toks.join(' ');
     const a = byPhrase.get(key);
-    if (!a) byPhrase.set(key, { toks, paths: [path], weak });
-    else if (a.weak && !weak) { a.paths = [path]; a.weak = false; }
-    else if (a.weak === weak && !a.paths.includes(path)) a.paths.push(path);
+    if (!a) byPhrase.set(key, { toks, paths: [path], weak, loose });
+    else if (a.weak && !weak) { a.paths = [path]; a.weak = false; a.loose = loose; }
+    else if (a.weak === weak && !a.paths.includes(path)) { a.paths.push(path); a.loose = a.loose && loose; }
+    else if (a.weak === weak && !loose) a.loose = false;
   };
   const heads = new Map<string, string[]>();
   for (const f of usable) {
@@ -457,6 +468,7 @@ function buildVocab(project: Project): Vocab {
     const last = humanise(f.path.split('.').slice(-1)[0]);
     add(last, f.path, false);
     add(last.replace(/ cents$/, ''), f.path, false);
+    add(f.path.split('.').slice(-1)[0].toLowerCase(), f.path, false);
     for (const s of own(FIELD_SYNONYMS, f.path) ?? []) add(s, f.path, false);
     const bw = bare.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
     if (bw.length >= 2) heads.set(bw[bw.length - 1], [...(heads.get(bw[bw.length - 1]) ?? []), f.path]);
@@ -466,8 +478,8 @@ function buildVocab(project: Project): Vocab {
 
   const values: ValuePhrase[] = [];
   const addValue = (text: string, path: string, value: string) => {
-    const toks = phrase(text.toLowerCase().replace(/[^a-z0-9à-ÿ]+/g, ' ').trim());
-    if (toks.length && !values.some((v) => v.path === path && v.value === value && v.toks.join(' ') === toks.join(' '))) values.push({ toks, path, value });
+    const toks = phrase(text.toLowerCase().replace(/[^a-z0-9\u00e0-\u00ff]+/g, ' ').trim());
+    if (toks.length && !values.some((v) => v.path === path && v.toks.join(' ') === toks.join(' '))) values.push({ toks, path, value, loose: text.startsWith('~') });
   };
   for (const f of usable) {
     if (f.type !== 'enum') continue;
@@ -485,7 +497,7 @@ function buildVocab(project: Project): Vocab {
 /* ------------------------------------------------------------------ condition clauses */
 
 interface Ctx { text: string; vocab: Vocab }
-interface Mention { idx: number[]; paths: string[]; weak: boolean; text: string }
+interface Mention { idx: number[]; paths: string[]; weak: boolean; loose: boolean; text: string }
 
 function matchAlias(a: string[], toks: Tok[], start: number): number[] | null {
   const idx: number[] = [];
@@ -514,8 +526,8 @@ function findMentions(ctx: Ctx, toks: Tok[]): Mention[] {
     const idx = matchAlias(a.toks, toks, i);
     if (!idx) continue;
     const same = all.find((m) => m.weak === a.weak && m.idx.join() === idx.join());
-    if (same) { for (const p of a.paths) if (!same.paths.includes(p)) same.paths.push(p); }
-    else all.push({ idx, paths: [...a.paths], weak: a.weak, text: idx.map((j) => toks[j].w).join(' ') });
+    if (same) { for (const p of a.paths) if (!same.paths.includes(p)) same.paths.push(p); same.loose = same.loose && a.loose; }
+    else all.push({ idx, paths: [...a.paths], weak: a.weak, loose: a.loose, text: idx.map((j) => toks[j].w).join(' ') });
   }
   // A shorter name inside a longer one ("balance" in "rewards balance") is not a separate mention.
   return all.filter((m) => !all.some((o) => o.idx.length > m.idx.length && m.idx.every((i) => o.idx.includes(i))));
@@ -619,7 +631,7 @@ function parseRemainder(ctx: Ctx, field: FieldDef, rest: Tok[]): ClauseTry {
   }
   const strong = ops.filter((o) => o !== 'eq');
   if (strong.length > 1) return no(`there are two different comparisons for ${lowerFirst(label)}`);
-  let op: CmpOp = strong[0] ?? 'eq';
+  let op = (strong[0] ?? 'eq') as CmpOp;
   const compared = strong.length > 0;
   let neg = false;
   const flip = (i: number) => { used[i] = true; neg = !neg; };
@@ -671,6 +683,7 @@ function parseRemainder(ctx: Ctx, field: FieldDef, rest: Tok[]): ClauseTry {
       return done({ op: o, path: field.path, value: 'none' }, field.path, o);
     }
     if (neg) op = NEGATE[op];
+    if (enumHit.loose) notes.push(`I read ${quoted(enumHit.idx.map((i) => rest[i].w).join(' '))} as ${lowerFirst(label)} ${quoted(humanise(enumHit.value))}.`);
     return done({ op, path: field.path, value: enumHit.value }, field.path, op);
   }
 
@@ -709,14 +722,14 @@ interface PrevClause { path: string; op: string }
 function parseClause(ctx: Ctx, toks: Tok[], prev: PrevClause | null): ClauseTry {
   const fields = ctx.vocab.fields;
   const mentions = findMentions(ctx, toks);
-  interface Hit { parsed: Parsed; weak: boolean; len: number; alias: string }
+  interface Hit { parsed: Parsed; weak: boolean; loose: boolean; len: number; alias: string }
   const hits: Hit[] = [];
   const reasons: string[] = [];
   for (const m of mentions) for (const path of m.paths) {
     const field = fields.get(path);
     if (!field) continue;
     const r = parseRemainder(ctx, field, toks.filter((_, i) => !m.idx.includes(i)));
-    if (r.ok) hits.push({ parsed: r.parsed, weak: m.weak, len: m.idx.length, alias: m.text });
+    if (r.ok) hits.push({ parsed: r.parsed, weak: m.weak, loose: m.loose, len: m.idx.length, alias: m.text });
     else reasons.push(r.reason);
   }
   if (hits.length) {
@@ -724,7 +737,10 @@ function parseClause(ctx: Ctx, toks: Tok[], prev: PrevClause | null): ClauseTry 
     const clean = strong.some((h) => !h.parsed.notes.length) ? strong.filter((h) => !h.parsed.notes.length) : strong;
     const longest = Math.max(...clean.map((h) => h.len));
     const best = clean.filter((h) => h.len === longest).filter((h, i, a) => a.findIndex((x) => sameJson(x.parsed.pred, h.parsed.pred)) === i);
-    if (best.length === 1) return { ok: true, parsed: best[0].parsed };
+    if (best.length === 1) {
+      const b = best[0];
+      return { ok: true, parsed: b.loose ? { ...b.parsed, notes: [...b.parsed.notes, `I read ${quoted(b.alias)} as ${lowerFirst(fieldLabelOf(fields, b.parsed.path))}.`] } : b.parsed };
+    }
     const names = [...new Set(best.map((h) => fieldLabelOf(fields, h.parsed.path)))];
     return no(`${quoted(best[0].alias)} could mean ${listText(names, 'or')}; say which one`);
   }
@@ -757,7 +773,7 @@ function parseClause(ctx: Ctx, toks: Tok[], prev: PrevClause | null): ClauseTry 
   return no(reasons[0] ?? 'it does not name a field I know');
 }
 
-interface Conditions { when: Predicate | null; notes: string[]; total: number; understood: number }
+interface Conditions { when: Predicate | null; notes: string[] }
 
 function parseConditions(ctx: Ctx, input: Tok[]): Conditions {
   const toks = input.map((t) => ({ ...t }));
@@ -791,19 +807,17 @@ function parseConditions(ctx: Ctx, input: Tok[]): Conditions {
   const notes: string[] = [];
   const parts: Array<{ pred: Predicate; join: 'and' | 'or' }> = [];
   let prev: PrevClause | null = null;
-  let understood = 0;
   clauses.forEach((c, i) => {
     let join: 'and' | 'or' = i === 0 ? 'and' : joins[i - 1] === ',' ? listJoin : (joins[i - 1] as 'and' | 'or');
     const r = parseClause(ctx, c, prev);
     const text = sliceText(ctx, c);
     if (!r.ok) { notes.push(`I did not understand ${quoted(text)} (${r.reason}), so it is not part of the draft.`); return; }
-    understood += 1;
     for (const n of r.parsed.notes) notes.push(`In ${quoted(text)}: ${n}`);
     if (r.parsed.op === 'ne-list') join = 'and';
     parts.push({ pred: r.parsed.pred, join });
     prev = { path: r.parsed.path, op: r.parsed.op === 'ne-list' ? 'ne' : r.parsed.op };
   });
-  if (!parts.length) return { when: null, notes, total: clauses.length, understood };
+  if (!parts.length) return { when: null, notes };
 
   // "and" binds tighter than "or".
   const groups: Predicate[][] = [[]];
@@ -814,7 +828,7 @@ function parseConditions(ctx: Ctx, input: Tok[]): Conditions {
   if (groups.length > 1 && groups.some((g) => g.length > 1)) {
     notes.push(`The sentence mixes “and” and “or”. I grouped it as: ${predicateSentence(ctx.vocab.fields, when)}. Check that this is the grouping you mean.`);
   }
-  return { when, notes, total: clauses.length, understood };
+  return { when, notes };
 }
 
 /* ------------------------------------------------------------------ what to show */
@@ -823,7 +837,7 @@ type TargetResult =
   | { ok: true; action: RuleAction; notes: string[] }
   | { ok: false; reason: string };
 
-const nameToks = (s: string): string[] => tokenize(s).map((t) => t.t).filter((t) => /^[a-z0-9à-ÿ]/.test(t));
+const nameToks = (s: string): string[] => tokenize(s).map((t) => t.t).filter((t) => /^[a-z0-9\u00e0-\u00ff]/.test(t));
 const stripTypeNouns = (t: string[]): string[] => { const out = [...t]; while (out.length > 1 && TYPE_NOUNS.has(out[out.length - 1])) out.pop(); return out; };
 const containsRun = (hay: string[], needle: string[]): boolean => needle.length > 0 && hay.some((_, i) => needle.every((x, k) => hay[i + k] === x));
 
@@ -849,7 +863,8 @@ function resolveTarget(project: Project, ctx: Ctx, input: Tok[]): TargetResult {
   const TRAILING = new Set(['instead', 'too', 'please', 'only', 'always']);
   while (toks.length > 1 && TRAILING.has(toks[toks.length - 1].w)) toks = toks.slice(0, -1);
   if (!toks.length) return { ok: false, reason: 'the sentence does not say what to show' };
-  const said = sliceText(ctx, toks);
+  const sayIt = (t: Tok[]): string => sliceText(ctx, t).replace(/^["“”']+|["“”']+$/g, '');
+  let said = sayIt(toks);
 
   const sets = variantSetsOf(project);
   const secs = sectionsOf(project);
@@ -870,10 +885,10 @@ function resolveTarget(project: Project, ctx: Ctx, input: Tok[]): TargetResult {
     if (!['in', 'within', 'for', 'of', 'on', 'from'].includes(toks[i].w)) continue;
     let comp = toks.slice(i + 1).map((t) => t.t);
     while (comp.length > 1 && DETERMINERS.has(comp[0])) comp = comp.slice(1);
-    comp = stripTypeNouns(comp);
+    const forms = [comp, stripTypeNouns(comp)];
     const nodes = [...sets.map((s) => ({ id: s.nodeId, name: s.name })), ...secs.map((s) => ({ id: s.nodeId, name: s.name }))]
-      .filter((n) => sameJson(nameToks(n.name), comp) || sameJson(nameToks(n.id), comp));
-    if (nodes.length === 1) { pool = cands.filter((c) => c.nodeId === nodes[0].id); words = toks.slice(0, i).map((t) => t.t); break; }
+      .filter((n) => forms.some((f) => sameJson(nameToks(n.name), f) || sameJson(nameToks(n.id), f)));
+    if (nodes.length === 1) { pool = cands.filter((c) => c.nodeId === nodes[0].id); words = toks.slice(0, i).map((t) => t.t); said = sayIt(toks.slice(0, i)); break; }
   }
   const variants = [words, stripTypeNouns(words)].filter((w, i, a) => i === 0 || !sameJson(w, a[0]));
   const dedupe = (cs: Cand[]): Cand[] => cs.filter((c, i, a) => a.findIndex((x) => x.key === c.key) === i);
@@ -900,19 +915,23 @@ interface SentenceParse {
   unsupported: boolean;
 }
 
+const MAX_SENTENCE = 600;
+
 function parseSentence(project: Project, sentence: string): SentenceParse {
-  const text = typeof sentence === 'string' ? sentence.slice(0, 600) : '';
+  const text = typeof sentence === 'string' ? sentence : '';
+  const fail = (problem: string, extra: Partial<SentenceParse> = {}): SentenceParse => ({ when: null, action: null, notes: [], problem, unsupported: false, ...extra });
+  // A long text is refused rather than cut: half a sentence would be read as a different rule.
+  if (text.length > MAX_SENTENCE) return fail(`The sentence is too long to read reliably (at most ${MAX_SENTENCE} characters). Describe one rule in one sentence.`);
   const ctx: Ctx = { text, vocab: buildVocab(project) };
   let toks = tokenize(text);
   while (toks.length && /^[,;:]$/.test(toks[toks.length - 1].w)) toks = toks.slice(0, -1);
   while (toks.length && ['please', 'then', 'also', 'and', 'always', ','].includes(toks[0].w)) toks = toks.slice(1);
-  const fail = (problem: string, extra: Partial<SentenceParse> = {}): SentenceParse => ({ when: null, action: null, notes: [], problem, unsupported: false, ...extra });
   if (!toks.length) return fail('There is no sentence to read.');
 
   // Things the rule model cannot express: say so instead of guessing.
   const ws = toks.map((t) => t.w);
   const hideAt = ws.findIndex((w, i) => ['hide', 'hides', 'hidden', 'remove', 'removes', 'suppress', 'omit', 'exclude', 'drop']
-    .includes(w) || ((w === 'not' || w === 'never' || w === 'stop') && SHOW_VERBS.has((ws[i + 1] ?? '').replace(/ing$/, ''))));
+    .includes(w) || ((w === 'not' || w === 'never' || w === 'stop') && ['show', 'display', 'include', 'send', 'showing', 'displaying', 'including', 'sending'].includes(ws[i + 1] ?? '')));
   if (hideAt >= 0) {
     return fail('Rules can only choose what to show (a version of a message, or an optional section); there is no “hide” rule. Describe who should see it instead.', { unsupported: true, notes: ['“Hide” is not supported: a rule can only show a version or a section.'] });
   }
@@ -944,7 +963,7 @@ function parseSentence(project: Project, sentence: string): SentenceParse {
     }
     if (at < 0) {
       const t = resolveTarget(project, ctx, toks.slice(1));
-      return fail(t.ok ? 'I understood what to show, but not which customers should get it. Add a condition, for example “… when payment status is overdue”.' : `I could not tell who should get it, and ${t.reason}.`, { action: t.ok ? t.action : null });
+      return fail(t.ok ? 'The sentence does not say which customers should get it. Add a condition with “when …” or “to customers who …”.' : `I could not tell who should get it, and ${t.reason}.`, { action: t.ok ? t.action : null });
     }
     target = toks.slice(1, at);
     let rest = toks.slice(condFrom);
@@ -957,8 +976,12 @@ function parseSentence(project: Project, sentence: string): SentenceParse {
     if (LEADS.has(toks[0].w)) from = 1;
     else if (toks[0].w === 'as' && toks[1]?.w === 'soon' && toks[2]?.w === 'as') from = 3;
     else if ((toks[0].w === 'for' || toks[0].w === 'to') && toks.slice(1, 6).some((t) => CUSTOMER_NOUNS.has(t.t))) from = 1;
-    let verbAt = toks.findIndex((t, i) => i > from && SHOW_VERBS.has(t.w) && [',', 'then', 'please', 'always', ':'].includes(toks[i - 1].w));
-    if (verbAt < 0) verbAt = toks.findIndex((t, i) => i > from && SHOW_VERBS.has(t.w));
+    // The verb after a comma or "then" first; among several, the one followed by something that can be shown.
+    const verbs = toks.map((t, i) => (i > from && SHOW_VERBS.has(t.w) ? i : -1)).filter((i) => i >= 0);
+    const marked = verbs.filter((i) => [',', 'then', 'please', 'always', ':'].includes(toks[i - 1].w));
+    const ordered = [...marked, ...verbs.filter((i) => !marked.includes(i))];
+    const tried = ordered.map((i) => ({ i, t: resolveTarget(project, ctx, toks.slice(i + 1)) }));
+    const verbAt = (tried.find((x) => x.t.ok && !x.t.notes.length) ?? tried.find((x) => x.t.ok) ?? tried[0])?.i ?? -1;
     if (verbAt < 0) {
       return fail('I could not find what to show. Start with “If …” and end with “show …”.');
     }
@@ -971,7 +994,7 @@ function parseSentence(project: Project, sentence: string): SentenceParse {
   const c = parseConditions(ctx, cond);
   const notes = [...c.notes, ...(t.ok ? t.notes : [])];
   if (!t.ok) return { when: c.when, action: null, notes, problem: `I could not tell what to show: ${t.reason}.`, unsupported: false };
-  if (!c.when) return { when: null, action: t.action, notes, problem: cond.length ? 'I understood what to show, but none of the conditions.' : 'I understood what to show, but the sentence has no condition.', unsupported: false };
+  if (!c.when) return { when: null, action: t.action, notes, problem: cond.length ? 'I could not use any of the conditions.' : 'The sentence has no condition, so I cannot tell which customers should get it.', unsupported: false };
   return { when: c.when, action: t.action, notes, problem: null, unsupported: false };
 }
 
@@ -1012,7 +1035,7 @@ export function draftRuleFromSentence(project: Project, sentence: string): RuleD
   const refuse = (problem: string): RuleDraft => {
     const understood: string[] = [];
     if (p.when) understood.push(`the condition (${predicateSentence(fields, p.when)})`);
-    if (p.action && p.problem !== null && !/^I understood what to show/.test(problem)) understood.push(`what to show (${actionSentence(project, p.action)})`);
+    if (p.action) understood.push(`what to show (${actionSentence(project, p.action)})`);
     const parts = [`No rule was drafted. ${problem}`];
     if (understood.length) parts.push(`I did understand ${listText(understood)}.`);
     if (!p.action && !p.unsupported) parts.push(availableTargets(project));
@@ -1158,7 +1181,8 @@ function checkAction(project: Project, raw: unknown, reasons: string[]): RuleAct
  * Checks untrusted JSON (a model's answer) and turns it into a draft. Nothing is repaired: an unknown field, target,
  * operator or property, a value of the wrong type or text that looks like code rejects the whole suggestion.
  * The id is always assigned here and the scope is the project's. `priority`, `mode`, `exclusiveGroup`, `version`,
- * `enabled` and `title` may be left out (they follow from the rest); when present they must be right.
+ * `enabled` and `title` may be left out (they follow from the rest); when present they must be right. The one
+ * adjustment made, and reported in `uncertain`, is a priority that would tie with an existing rule: it is re-placed.
  */
 export function validateRuleDraft(project: Project, raw: unknown, source: AssistSource): RuleDraft {
   const reasons: string[] = [];
@@ -1177,12 +1201,15 @@ export function validateRuleDraft(project: Project, raw: unknown, source: Assist
     reasons.push(then.op === 'selectVariant' ? `exclusiveGroup must be ${quoted(then.targetNodeId)}, the component the rule chooses a version in.` : 'A rule that shows a section has no exclusiveGroup.');
   }
   let priority: number | null = null;
+  const notes: string[] = [];
   if (raw.priority !== undefined) {
     if (typeof raw.priority !== 'number' || !Number.isInteger(raw.priority) || raw.priority < 0 || raw.priority > 10000) reasons.push('Priority must be a whole number from 0 to 10000 (or left out, to have it placed automatically).');
     else {
-      priority = raw.priority;
-      const tied = then?.op === 'selectVariant' ? project.rules.filter((r) => groupOf(r) === then.targetNodeId && r.priority === priority) : [];
-      if (tied.length) reasons.push(`Priority ${priority} is already used by ${shortList(tied.map((r) => quoted(displayTitle(project, r))))} for the same component, which would be a tie. Leave the priority out to have it placed automatically.`);
+      const wanted = raw.priority;
+      const tied = then?.op === 'selectVariant' ? project.rules.filter((r) => groupOf(r) === then.targetNodeId && r.priority === wanted) : [];
+      // A tie is never drafted: the rule is placed by its number of conditions instead, and the draft says so.
+      if (tied.length) notes.push(`The suggested priority ${wanted} is already used by ${shortList(tied.map((r) => quoted(displayTitle(project, r))))}, which would be a tie, so the rule was placed by its number of conditions instead.`);
+      else priority = wanted;
     }
   }
   if (raw.version !== undefined && (typeof raw.version !== 'number' || !Number.isInteger(raw.version) || raw.version < 1)) reasons.push('Version must be a whole number (a new rule starts at 1).');
@@ -1202,7 +1229,7 @@ export function validateRuleDraft(project: Project, raw: unknown, source: Assist
   });
   const errors = validateRule(rule, project);
   if (errors.length) { reasons.push(...errors); return refuse(); }
-  return { rule, restatement: restate(project, rule, 'future'), uncertain: [], source };
+  return { rule, restatement: restate(project, rule, 'future'), uncertain: notes, source };
 }
 
 /** Wording and ordering helpers shared with the rule review (one object so the assist index gains a single name). */

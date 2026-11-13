@@ -538,9 +538,16 @@ function writeDraft(d: Project, id: string, locale: string, text: string | null,
 
 /** Digest of the authorable content (excludes version counters and save timestamps). */
 export function projectContentDigest(project: Project): string {
+  // Projects are immutable values (every command returns a new object), so the digest is cached per object.
+  // Resolving one project for many customers (cube, blocker list, assistant impact checks) would otherwise re-hash it each time.
+  const hit = DIGESTS.get(project);
+  if (hit !== undefined) return hit;
   const { modelVersion: _v, lastSavedAt: _s, ...rest } = project;
-  return digestOf(rest);
+  const digest = digestOf(rest);
+  DIGESTS.set(project, digest);
+  return digest;
 }
+const DIGESTS = new WeakMap<Project, string>();
 
 /** Where each custom field is referenced (rule conditions, bindings, tokens) — used to block unsafe deletes. */
 export function customFieldUsage(project: Project): Array<{ path: string; where: string[] }> {

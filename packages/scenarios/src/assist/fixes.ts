@@ -1,8 +1,8 @@
 import {
-  applyCommand, languageShortName, projectFieldIndex, shortDigest, tokensIn, tokensInText,
+  applyCommand, applyJourney, buildContext, languageShortName, projectFieldIndex, shortDigest, tokensIn, tokensInText,
   type Command, type ContentPart, type DocNode, type FieldDef, type Predicate, type ProfileId, type Project, type RichBlock, type RichDoc, type RichInline, type Rule, type SyntheticRecord,
 } from '@iss/model';
-import { resolve, type Finding, type RNode, type Resolution } from '@iss/resolver';
+import { evaluatePredicate, resolve, type Finding, type RNode, type Resolution } from '@iss/resolver';
 import type { AssistLink, FindingGroup, FixImpact, FixProposal } from './types';
 
 /**
@@ -89,7 +89,7 @@ function population(project: Project, records: SyntheticRecord[], profileId: Pro
   if (!byRecords) { byRecords = new WeakMap(); popCache.set(project, byRecords); }
   let byKey = byRecords.get(records);
   if (!byKey) { byKey = new Map(); byRecords.set(records, byKey); }
-  const key = `${profileId ?? ''}|${journeyCursor ?? 'base'}`;
+  const key = `${profileId ?? ''}|${journeyCursor ?? 'base'}|${records.length}`;
   let snaps = byKey.get(key);
   if (!snaps) { snaps = snapshots(project, records, profileId, journeyCursor ?? null); byKey.set(key, snaps); }
   return snaps;
@@ -654,6 +654,30 @@ export function proposeFixes(project: Project, finding: Finding, ctx: { records:
   return finish(finding, draftsFor(project, finding, ctx));
 }
 
+/**
+ * The population after a change. A change that touches only rules cannot alter anything for a customer whom none of
+ * the changed rules matches (before or after), so those customers keep their "before" result and are not resolved again.
+ */
+function afterSnapshots(before: Project, after: Project, records: SyntheticRecord[], beforeSnaps: Snap[], profileId: ProfileId | undefined, journeyCursor: number | null): Snap[] {
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])] as Array<keyof Project>;
+  const rulesOnly = keys.every((k) => k === 'rules' || k === 'modelVersion' || before[k] === after[k]);
+  if (!rulesOnly) return snapshots(after, records, profileId, journeyCursor);
+  const was = new Map(before.rules.map((r) => [r.id, r]));
+  const now = new Map(after.rules.map((r) => [r.id, r]));
+  const conditions: Predicate[] = [];
+  for (const id of new Set([...was.keys(), ...now.keys()])) {
+    const a = was.get(id), b = now.get(id);
+    if (a === b) continue;
+    if (a) conditions.push(a.when);
+    if (b) conditions.push(b.when);
+  }
+  const events = after.journey?.events ?? [];
+  return ofType(after, records).map((record, i) => {
+    const ctx = buildContext(applyJourney(record, events, journeyCursor).record);
+    return conditions.some((w) => evaluatePredicate(w, ctx)) ? snapOf(resolve({ project: after, record, profileId, journeyCursor })) : beforeSnaps[i];
+  });
+}
+
 /** Whether the model after a change no longer has the issue, for findings no sample customer shows (what-ifs, static checks, page composition). Null = cannot tell. */
 function resolvedInModel(after: Project, f: Pick<Finding, 'code' | 'nodeId' | 'ruleId' | 'ruleIds' | 'message' | 'details'>): boolean | null {
   const node = after.nodes.find((n) => n.id === f.nodeId);
@@ -694,7 +718,7 @@ export function fixImpact(project: Project, proposal: FixProposal, records: Synt
 
   const cursor = opts?.journeyCursor ?? null;
   const before = population(project, records, opts?.profileId, cursor);
-  const after = snapshots(applied.project, records, opts?.profileId, cursor);
+  const after = afterSnapshots(project, applied.project, records, before, opts?.profileId, cursor);
   const unblocked: string[] = [];
   const newlyBlocked: string[] = [];
   let changed = 0;
@@ -716,10 +740,10 @@ export function fixImpact(project: Project, proposal: FixProposal, records: Synt
   const composer = ['FLOW_OVERFLOW_NO_CONTINUATION', 'TABLE_TOTAL_CLIPPED', 'ORPHANED_HEADING'].includes(issue.code);
   let summary: string;
   if (newlyBlocked.length) summary = `This would block ${customers(newlyBlocked.length)} who ${newlyBlocked.length === 1 ? 'is' : 'are'} fine today${unblocked.length ? `, while unblocking ${unblocked.length}` : ''}; review it before applying.`;
-  else if (how === 'unknown') summary = changed ? `${changed} of ${total} synthetic customers see a change, but it could not be confirmed that the issue is resolved${composer ? ' until the pages are composed again' : ''}.` : `None of the ${total} synthetic customers receives anything different; whether the issue is resolved could not be confirmed${composer ? ' until the pages are composed again' : ' on the sample customers'}.`;
-  else if (!resolves) summary = changed ? `This does not fully resolve the issue: ${changed} of ${total} synthetic customers see a change${unblocked.length ? ` and ${unblocked.length} ${unblocked.length === 1 ? 'is' : 'are'} unblocked` : ''}, but the issue remains for some.` : `This does not resolve the issue; none of the ${total} synthetic customers receives anything different.`;
-  else if (unblocked.length) summary = `Resolves the issue and unblocks ${unblocked.length} of ${total} synthetic customers; ${others > 0 ? `${others} more ${others === 1 ? 'sees' : 'see'} a change` : 'nobody else is affected'}.`;
-  else if (changed) summary = `Resolves the issue; ${changed} of ${total} synthetic customers ${changed === 1 ? 'sees' : 'see'} a change and nobody is newly blocked.`;
+  else if (how === 'unknown') summary = changed ? `${changed} of ${total} synthetic customers are affected, but it could not be confirmed that the issue is resolved${composer ? ' until the pages are composed again' : ''}.` : `None of the ${total} synthetic customers receives anything different; whether the issue is resolved could not be confirmed${composer ? ' until the pages are composed again' : ' on the sample customers'}.`;
+  else if (!resolves) summary = changed ? `This does not fully resolve the issue: ${changed} of ${total} synthetic customers are affected${unblocked.length ? ` and ${unblocked.length} ${unblocked.length === 1 ? 'is' : 'are'} unblocked` : ''}, but the issue remains for some.` : `This does not resolve the issue; none of the ${total} synthetic customers receives anything different.`;
+  else if (unblocked.length) summary = `Resolves the issue and unblocks ${unblocked.length} of ${total} synthetic customers; ${others > 0 ? `${others} more ${others === 1 ? 'is' : 'are'} affected` : 'nobody else is affected'}.`;
+  else if (changed) summary = `Resolves the issue; ${changed} of ${total} synthetic customers ${changed === 1 ? 'is' : 'are'} affected and nobody is newly blocked.`;
   else summary = `Resolves the issue; none of the ${total} synthetic customers receives anything different today${composer ? ' (page layout is confirmed when the pages are composed again)' : ''}.`;
   return { resolves, unblocked, newlyBlocked, changedCustomers: changed, totalCustomers: total, summary };
 }

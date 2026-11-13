@@ -51,7 +51,7 @@ const isGsm = (ch: string): boolean => smsEncoding(ch).encoding === 'GSM-7';
 const TYPOGRAPHIC: Array<{ re: RegExp; to: string; what: string }> = [
   { re: /[‘’‚‛′´`]/g, to: "'", what: 'curly apostrophes and single quotes with straight ones' },
   { re: /[“”„‟″«»]/g, to: '"', what: 'curly double quotes with straight ones' },
-  { re: /[‐‑‒–—―−]/g, to: '-', what: 'long dashes with hyphens' },
+  { re: /[‐-―−]/g, to: '-', what: 'long dashes with hyphens' },
   { re: /…/g, to: '...', what: 'the single “…” character with three full stops' },
   { re: /[  -   　]/g, to: ' ', what: 'non-breaking and special spaces with ordinary spaces' },
   { re: /[•‣◦⁃∙·]/g, to: '-', what: 'bullets with hyphens' },

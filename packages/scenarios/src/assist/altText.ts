@@ -78,14 +78,14 @@ export function suggestAltText(project: Project, nodeId: string): { text: string
   const saysLogo = LOGO.test(name) || LOGO.test(label) || node.a11y?.role === 'logo' || MARK.test(src && !/^data:/i.test(src) ? src : '');
   if (saysLogo) {
     if (issuer) return finish(`${issuer} logo`, `From the component name and its place ${placeWords[place]}`);
-    const own = tidy(name.replace(FILLER, ' '));
+    const own = tidy(noImageOf(name).replace(FILLER, ' '));
     return own ? finish(own, 'From the component name') : null;
   }
 
   // An accessibility label written by a person is the best description available.
   if (label && tidy(label.replace(FILLER, ' ')).length >= 3) return finish(label, 'From the accessibility label of the component');
 
-  const meaningful = tidy(name.replace(FILLER, ' '));
+  const meaningful = tidy(noImageOf(name).replace(FILLER, ' '));
   if (/[a-z]{3,}/i.test(meaningful)) {
     return finish(meaningful, `From the component name and its place ${placeWords[place]}`);
   }

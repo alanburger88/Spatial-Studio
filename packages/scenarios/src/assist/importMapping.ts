@@ -26,8 +26,9 @@ const GENERIC = new Set(['name', 'date', 'amount', 'number', 'id', 'status', 'st
 /** Leading words that only say whose value it is. */
 const SCOPE = new Set(['customer', 'cardholder', 'card', 'claim', 'member', 'patient', 'client', 'user']);
 
-function tokens(s: string): string[] {
-  const raw = s
+/** The words of a heading or path, before other names are folded together. */
+function plainTokens(s: string): string[] {
+  return s
     .replace(/#/g, ' number ')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
@@ -36,8 +37,10 @@ function tokens(s: string): string[] {
     .trim()
     .split(' ')
     .filter(Boolean);
-  return raw.flatMap((t) => TOKEN[t] ?? [t]).filter((t) => !NOISE.has(t));
 }
+const tokens = (s: string): string[] => plainTokens(s).flatMap((t) => TOKEN[t] ?? [t]).filter((t) => !NOISE.has(t));
+/** Same letters and digits, whatever the case, spacing or punctuation. */
+const squash = (s: string): string => plainTokens(s).filter((t) => !NOISE.has(t)).join('');
 const key = (ts: string[]): string => ts.join(' ');
 
 /** Other names people use for a field, by path. */
@@ -192,7 +195,8 @@ function matchOne(header: string, targets: Target[], derived: FieldDef[]): Found
       return { path: null, confidence: 'none', reason: `Could be “${hits[0].t.label}” or “${hits[1].t.label}”. Choose the field yourself.`, score: 0 };
     }
     const t = hits[0].t;
-    const why = hits[0].w === WEIGHT.alias ? `“${h}” is another name for “${t.label}”.` : `Same name as the field “${t.label}”, written differently.`;
+    const sameLetters = [t.path, t.path.split('.').slice(-1)[0] ?? '', t.label].some((n) => squash(n) === squash(h));
+    const why = h.toLowerCase() === t.label.toLowerCase() ? `It is the name of the field “${t.label}”.` : sameLetters ? `Same name as the field “${t.label}”, written differently.` : `“${h}” is another name for “${t.label}”.`;
     return { path: t.path, confidence: 'likely', reason: why, score: 5 + hits[0].w, target: t };
   }
 
@@ -273,7 +277,7 @@ function sampleProblem(f: FieldDef | undefined, index: number, rows: string[][])
     if (p) { bad++; first ??= p; }
   }
   if (!first) return undefined;
-  return `${first}${checked > 1 ? ` (${bad} of ${checked} sample values do not fit)` : ''}.`;
+  return `${first}.${checked > 1 ? ` ${bad} of ${checked} sample values ${bad === 1 ? 'does' : 'do'} not fit.` : ''}`;
 }
 
 /* ------------------------------------------------------------------ api */
