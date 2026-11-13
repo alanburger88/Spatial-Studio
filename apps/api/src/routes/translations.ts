@@ -15,7 +15,7 @@ export function registerTranslationRoutes(app: FastifyInstance, deps: RouteDeps)
     return l;
   };
   const usage = (project: ReturnType<typeof projectOr404>) =>
-    allRecords().filter((r) => r.documentType === project.documentType).map((record) => usageEntryFromResolution(project, record as any, resolve({ project, record }) as any));
+    allRecords(project.projectId).filter((r) => r.documentType === project.documentType).map((record) => usageEntryFromResolution(project, record as any, resolve({ project, record }) as any));
 
   app.get('/api/v1/projects/:projectId/translations.csv', async (req, reply) => {
     const project = projectOr404((req.params as any).projectId);

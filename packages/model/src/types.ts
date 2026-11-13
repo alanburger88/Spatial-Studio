@@ -402,7 +402,16 @@ export interface SyntheticRecord {
   /** Set on records imported by a user (JSON/CSV) rather than seeded fixtures. */
   imported?: boolean;
   sourceId?: string | null;
+  /** Set on records that belong to ONE project only (generated test customers, or data supplied for that project). */
+  projectId?: string;
+  /** Set on generated test customers: why this customer exists, in plain words. */
+  generated?: { label: string };
+  /** Values of the project's own data fields (`custom.<key>`). */
+  custom?: Record<string, unknown>;
 }
+
+/** Every record id: a short upper-case prefix, a dash, 4 to 6 digits (CARD-0001, EOB-5003, CARD-60012). */
+export const RECORD_ID_PATTERN = /^[A-Z]{2,6}-\d{4,6}$/;
 
 export interface Persona {
   id: string;

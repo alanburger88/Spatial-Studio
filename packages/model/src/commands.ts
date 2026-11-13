@@ -7,6 +7,7 @@ import { isSupportedLanguage, languageName, languageShortName, projectLanguages,
 import { isStringId, translatableStrings } from './strings';
 import { tokensOfText } from './translations';
 import { CHANNEL_TEXT_LIMITS, CHANNEL_TOKENS, EMAIL_SECTION_IDS } from './channels';
+import { RECORD_ID_PATTERN } from './types';
 import type { ChannelConfig, GlossaryEntry, TranslationOrigin } from './types';
 import type { BrandKit, ContentPart, CustomField, DocNode, Locale, TestCase, TextStyle, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
 import { validatePredicate, validateRule } from './validate';
@@ -336,7 +337,7 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
       const t = cmd.testCase;
       if (!/^[A-Za-z0-9-]{1,40}$/.test(t.id ?? '')) return reject('INVALID_TEST', 'Test case id must be letters, digits or dashes.');
       if (!t.name?.trim()) return reject('INVALID_TEST', 'Give the test case a name.');
-      if (!/^(CARD|EOB)-\d{4}$/.test(t.recordId ?? '')) return reject('INVALID_TEST', 'Test case needs a record ID.');
+      if (!RECORD_ID_PATTERN.test(t.recordId ?? '')) return reject('INVALID_TEST', 'Test case needs a record ID.');
       const existing = (project.testCases ?? []).some((x) => x.id === t.id);
       return { ok: true, label: `${existing ? 'Edit' : 'Add'} test “${t.name}”`, project: bump(project, (d) => {
         d.testCases = [...(d.testCases ?? []).filter((x) => x.id !== t.id), { ...t }];

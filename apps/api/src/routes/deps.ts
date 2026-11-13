@@ -11,8 +11,8 @@ export interface RouteDeps {
   ApiError: typeof ApiError;
   projectOr404(id: string): Project;
   recordOr404(id: string): SyntheticRecord;
-  /** Seeded fixtures plus locally imported records. */
-  allRecords(): SyntheticRecord[];
+  /** Seeded fixtures plus locally imported records; with a project id, also the records that belong to that project alone. */
+  allRecords(projectId?: string): SyntheticRecord[];
   /** Validates a client-supplied (possibly unsaved) project against the canonical shape and every rule. */
   checkDraftProject(p: unknown, projectId: string): Project;
   /** Resolves a ResolveBody-shaped request (projectId, recordId, overrides?, journeyCursor?, project?, outputContext?) and records an immutable run. */

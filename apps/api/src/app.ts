@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import { z } from 'zod';
-import { canonicalJson, customFieldDefs, fieldsFor, projectFields, projectContentDigest, validateRule, csvToRecords, prepareImport, IMPORT_LIMIT, SCHEMA_VERSION, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
+import { canonicalJson, customFieldDefs, fieldsFor, projectFields, projectContentDigest, validateRule, csvToRecords, prepareImport, IMPORT_LIMIT, SCHEMA_VERSION, RECORD_ID_PATTERN, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
 import { diffProjects, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_MAX, WORKFLOW_ACTIONS, WORKFLOW_LABEL, WORKFLOW_TRANSITIONS, ACTION_LABEL, type WorkflowAction } from '@iss/model';
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
@@ -32,7 +32,7 @@ export class ApiError extends Error {
 
 const ResolveBody = z.object({
   projectId: z.string().regex(/^[a-z0-9-]{3,64}$/),
-  recordId: z.string().regex(/^(CARD|EOB)-\d{4}$/),
+  recordId: z.string().regex(RECORD_ID_PATTERN),
   overrides: z.record(z.string(), z.any()).optional().default({}),
   outputContext: z.object({ profileId: z.enum(['paged-pdf', 'paged-afp-sim', 'html-responsive']).optional() }).optional().default({}),
   journeyCursor: z.number().int().min(0).max(50).nullable().optional().default(null),
@@ -80,13 +80,15 @@ export async function buildApp(opts: AppOptions = {}) {
 
   const projectOr404 = (id: string) => { const p = store.getProject(id); if (!p) throw new ApiError(404, 'NOT_FOUND', `Unknown project ${id}.`); return p; };
   /** Seeded synthetic fixtures plus any records the user imported locally. */
-  const allRecords = (): SyntheticRecord[] => [...RECORDS, ...store.importedRecords()];
-  const recordOr404 = (id: string) => { const r = allRecords().find((x) => x.recordId === id); if (!r) throw new ApiError(404, 'NOT_FOUND', `Unknown synthetic record ${id}.`); return r; };
+  /** Seeded fixtures and imported records (shared by every project), plus, when a project is named, the records that belong to it alone. */
+  const allRecords = (projectId?: string): SyntheticRecord[] => [...RECORDS, ...store.importedRecords(), ...(projectId ? store.projectRecords(projectId) : [])];
+  const recordOr404 = (id: string) => { const r = allRecords().find((x) => x.recordId === id) ?? store.projectRecord(id); if (!r) throw new ApiError(404, 'NOT_FOUND', `Unknown synthetic record ${id}.`); return r; };
 
   /** Resolve a request, persist it as an immutable run, and return the resolution + the exact request. */
   function runFor(body: ResolveBodyT): { res: Resolution; project: Project; request: ResolveBodyT } {
     const project = body.project ? checkDraftProject(body.project, body.projectId) : projectOr404(body.projectId);
     const record = recordOr404(body.recordId);
+    if (record.projectId && record.projectId !== project.projectId) throw new ApiError(400, 'RECORD_OTHER_PROJECT', `${record.recordId} is a test customer of another project.`);
     if (record.documentType !== project.documentType) throw new ApiError(400, 'RECORD_TYPE_MISMATCH', `${record.recordId} is a ${record.documentType} record; ${project.projectId} expects ${project.documentType}.`);
     const res = resolve({ project, record, overrides: body.overrides, journeyCursor: body.journeyCursor, claimIndex: body.claimIndex, profileId: (body.outputContext?.profileId ?? 'paged-pdf') as ProfileId, includeDrafts: body.includeDrafts === true && body.allowDraft === true });
     store.saveRun(res.runId, project.projectId, record.recordId, { ...body, project }, { result: res.result, contentDigest: res.contentDigest, modelVersion: project.modelVersion, projectDigest: res.projectDigest, rulesDigest: res.rulesDigest, engine: ENGINE_VERSION });
@@ -246,7 +248,7 @@ export async function buildApp(opts: AppOptions = {}) {
 
   /** Everything that must be true before the saved model can be approved: no blocking issue for any seeded or imported record, every pinned test passing. */
   function approvalReadiness(project: Project) {
-    const records = allRecords().filter((r) => r.documentType === project.documentType);
+    const records = allRecords(project.projectId).filter((r) => r.documentType === project.documentType);
     const groups = new Map<string, { code: string; severity: string; nodeId: string | null; locale: string | null; message: string; source: string; recordIds: string[] }>();
     const add = (f: { code: string; severity: string; nodeId?: string; locale?: string; message: string; source: string }, recordId: string | null) => {
       const key = `${f.code}|${f.nodeId ?? ''}|${f.locale ?? ''}|${recordId === null ? f.message : ''}`;
@@ -255,9 +257,9 @@ export async function buildApp(opts: AppOptions = {}) {
       groups.set(key, g);
     };
     for (const record of records) for (const f of resolve({ project, record }).findings) if (f.severity === 'blocking') add(f, record.recordId);
-    for (const f of [...staticRuleAnalysis(project, allRecords()), ...bindingAnalysis(project)]) if (f.severity === 'blocking') add(f, null);
+    for (const f of [...staticRuleAnalysis(project, allRecords(project.projectId)), ...bindingAnalysis(project)]) if (f.severity === 'blocking') add(f, null);
     // Same runner as Rules & Data → Tests, so "passes" means the same thing everywhere.
-    const tests = runTestCases(project, allRecords());
+    const tests = runTestCases(project, allRecords(project.projectId));
     const issues = [...groups.values()];
     const failedTests = tests.filter((t) => !t.pass);
     return { ready: issues.length === 0 && failedTests.length === 0, modelVersion: project.modelVersion, recordsChecked: records.length, blocking: issues, tests, testsRun: tests.length, testsFailed: failedTests.length };
@@ -427,7 +429,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const b = (req.body ?? {}) as { projectId?: string; project?: unknown; recordIds?: unknown; outputs?: unknown; includeBlocked?: boolean };
     if (typeof b.projectId !== 'string') throw new ApiError(400, 'INVALID_REQUEST', 'projectId is required.');
     const project = b.project ? checkDraftProject(b.project, b.projectId) : projectOr404(b.projectId);
-    const pool = allRecords().filter((r) => r.documentType === project.documentType);
+    const pool = allRecords(project.projectId).filter((r) => r.documentType === project.documentType);
     let records = pool;
     if (Array.isArray(b.recordIds)) {
       const want = new Set(b.recordIds.map(String));
@@ -497,10 +499,11 @@ export async function buildApp(opts: AppOptions = {}) {
     return { documentType: p.documentType, fields: projectFields(p), customFields: p.customFields ?? [], dimensions: DIMENSIONS.filter((d) => d.documentTypes.includes(p.documentType)), edgeCasePresets: EDGE_CASE_PRESETS.filter((e) => e.documentType === p.documentType) };
   });
 
-  app.get<{ Querystring: { documentType?: string; full?: string } }>('/api/v1/records', async (req) => {
-    const recs = allRecords().filter((r) => !req.query.documentType || r.documentType === req.query.documentType);
+  /** `projectId` adds the records that belong to that project alone (generated test customers, supplied data). */
+  app.get<{ Querystring: { documentType?: string; full?: string; projectId?: string } }>('/api/v1/records', async (req) => {
+    const recs = allRecords(req.query.projectId).filter((r) => !req.query.documentType || r.documentType === req.query.documentType);
     if (req.query.full === '1') return { seed: FIXTURE_SEED, syntheticOnly: true, records: recs };
-    return { seed: FIXTURE_SEED, syntheticOnly: true, records: recs.map((r) => ({ recordId: r.recordId, documentType: r.documentType, personaId: r.personaId ?? null, name: `${r.customer.givenName} ${r.customer.familyName}`, locale: r.customer.locale, status: (r.card as any)?.paymentStatus ?? (r.claims?.[0] as any)?.status, synthetic: !r.imported, imported: !!r.imported })) };
+    return { seed: FIXTURE_SEED, syntheticOnly: true, records: recs.map((r) => ({ recordId: r.recordId, documentType: r.documentType, personaId: r.personaId ?? null, name: `${r.customer.givenName} ${r.customer.familyName}`, locale: r.customer.locale, status: (r.card as any)?.paymentStatus ?? (r.claims?.[0] as any)?.status, synthetic: !r.imported, imported: !!r.imported, generated: r.generated ? r.generated.label : null, projectOnly: !!r.projectId })) };
   });
   app.get<{ Params: { recordId: string } }>('/api/v1/records/:recordId', async (req) => ({ record: recordOr404(req.params.recordId), synthetic: true }));
   app.get('/api/v1/personas', async () => ({ personas: PERSONAS }));
@@ -569,7 +572,7 @@ export async function buildApp(opts: AppOptions = {}) {
       const sev = list.filter((i) => i.severity !== 'info');
       suiteStatus[suite] = { status: sev.some((i) => i.severity === 'blocking' || i.severity === 'error') ? 'errors' : sev.length ? 'warnings' : 'clean', count: list.length, durationMs: Date.now() - t0 };
     };
-    if (suites.includes('rules')) { const t0 = t(); add('rules', [...res.findings.filter((f) => f.source === 'resolver' || f.source === 'domain'), ...staticRuleAnalysis(project, allRecords())].map((f) => toIssue(f, 'rules', { runId: res.runId, reproduction: repro })), t0); }
+    if (suites.includes('rules')) { const t0 = t(); add('rules', [...res.findings.filter((f) => f.source === 'resolver' || f.source === 'domain'), ...staticRuleAnalysis(project, allRecords(project.projectId))].map((f) => toIssue(f, 'rules', { runId: res.runId, reproduction: repro })), t0); }
     if (suites.includes('bindings')) {
       const t0 = t();
       const seen = new Set<string>();
@@ -633,14 +636,14 @@ export async function buildApp(opts: AppOptions = {}) {
   app.post('/api/v1/analysis/cube', async (req) => {
     const b = req.body as any;
     const project = b?.project ? checkDraftProject(b.project, b.projectId) : projectOr404(String(b?.projectId));
-    const cube = buildCube(new ScenarioEngine(project, allRecords()), (b?.axes ?? ['persona', 'output', 'journey']) as [DimensionId, DimensionId, DimensionId], { offsets: b?.offsets, filters: b?.filters });
+    const cube = buildCube(new ScenarioEngine(project, allRecords(project.projectId)), (b?.axes ?? ['persona', 'output', 'journey']) as [DimensionId, DimensionId, DimensionId], { offsets: b?.offsets, filters: b?.filters });
     if (cube.errors.length) throw new ApiError(400, 'INVALID_AXES', cube.errors.join(' '));
     return cube;
   });
   app.post('/api/v1/analysis/landscape', async (req) => {
     const b = req.body as any;
     const project = b?.project ? checkDraftProject(b.project, b.projectId) : projectOr404(String(b?.projectId));
-    return buildLandscape(new ScenarioEngine(project, allRecords()), { includeJourney: !!b?.includeJourney, filters: b?.filters });
+    return buildLandscape(new ScenarioEngine(project, allRecords(project.projectId)), { includeJourney: !!b?.includeJourney, filters: b?.filters });
   });
 
   app.get<{ Params: { artifactId: string } }>('/api/v1/artifacts/:artifactId', async (req, reply) => {
@@ -670,7 +673,7 @@ export async function buildApp(opts: AppOptions = {}) {
     recordOr404(recordId);
     const cfg = providerConfig();
     if (b.forceOffline === true) cfg.provider = 'offline';
-    const reply = await handleMessage(b.message, { project, records: allRecords(), recordId, overrides: ctx.overrides ?? {}, journeyCursor: ctx.journeyCursor ?? null, selectedNodeId: ctx.selectedNodeId ?? null }, cfg);
+    const reply = await handleMessage(b.message, { project, records: allRecords(project.projectId), recordId, overrides: ctx.overrides ?? {}, journeyCursor: ctx.journeyCursor ?? null, selectedNodeId: ctx.selectedNodeId ?? null }, cfg);
     if (reply.proposal) store.saveProposal(reply.proposal.proposalId, reply.proposal);
     return reply;
   });

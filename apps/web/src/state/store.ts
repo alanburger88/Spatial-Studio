@@ -210,9 +210,9 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ projectStatus: 'loading', projectError: null });
     try {
       const { project } = await api.project(projectId);
-      const sameDocType = get().records[0]?.documentType === project.documentType;
+      // Always reload: each project can have customers of its own (generated test customers), so the list is per project.
       const [recs, personas] = await Promise.all([
-        sameDocType ? Promise.resolve({ records: get().records }) : api.records(project.documentType),
+        api.records(project.documentType, project.projectId),
         get().personas.length ? Promise.resolve({ personas: get().personas }) : api.personas(),
       ]);
       const ctx = loadCtx(project);
@@ -295,7 +295,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   async refreshRecords() {
     const project = get().project;
     if (!project) { set({ records: [] }); return; }
-    const { records } = await api.records(project.documentType);
+    const { records } = await api.records(project.documentType, project.projectId);
     const ctx = get().ctx;
     set({ records });
     if (!records.some((r) => r.recordId === ctx.recordId)) get().setCtx({ recordId: defaultCtx(project).recordId, overrides: {}, journeyCursor: null });

@@ -169,7 +169,8 @@ export const api = {
   translationsCsvUrl: (id: string, locale: string) => `/api/v1/projects/${id}/translations.csv?locale=${encodeURIComponent(locale)}`,
   importTranslations: (id: string, body: { locale: string; csv: string; project?: Project }) => json<{ locale: string; drafts: Array<{ partId: string; text: string }>; errors: Array<{ row: number; partId: string; code: string; message: string }>; skipped: number; rows: number }>(`/api/v1/projects/${id}/translations/import`, { method: 'POST', body: JSON.stringify(body) }),
   schemas: (id: string) => json<{ fields: any[]; dimensions: any[]; edgeCasePresets: Array<{ id: string; label: string; description: string }> }>(`/api/v1/projects/${id}/schemas`),
-  records: (documentType: string) => json<{ records: SyntheticRecord[]; seed: string }>(`/api/v1/records?documentType=${documentType}&full=1`),
+  /** Customers for one kind of document. With a project id, also that project's own customers (generated test customers have `generated.label`). */
+  records: (documentType: string, projectId?: string) => json<{ records: SyntheticRecord[]; seed: string }>(`/api/v1/records?documentType=${documentType}&full=1${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ''}`),
   personas: () => json<{ personas: Persona[] }>('/api/v1/personas'),
   resolve: (req: ScenarioRequest) => json<any>('/api/v1/resolve', { method: 'POST', body: JSON.stringify(req) }),
   composePdf: (req: ScenarioRequest) => binary('/api/v1/compose/pdf', req),

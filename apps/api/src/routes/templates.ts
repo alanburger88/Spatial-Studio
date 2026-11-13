@@ -163,7 +163,7 @@ export function registerTemplateRoutes(app: FastifyInstance, deps: RouteDeps): v
     catch (e: any) { throw new ApiError(422, 'INVALID_PROJECT_FILE', `The file could not be read as a project: ${e?.message ?? e}`, { problems: [{ code: e?.code ?? 'INVALID', message: e?.message ?? String(e) }] }); }
 
     // Prove the studio can work out a document from it before storing anything.
-    const records = allRecords().filter((r) => r.documentType === project.documentType);
+    const records = allRecords(project.projectId).filter((r) => r.documentType === project.documentType);
     const known = new Set(records.map((r) => r.recordId));
     try { if (records[0]) resolve({ project, record: records[0], profileId: 'paged-pdf' }); }
     catch (e: any) { throw new ApiError(422, 'INVALID_PROJECT_FILE', 'The file has the right shape, but the studio could not work out a document from it, so it was not imported.', { problems: [{ code: 'CANNOT_RESOLVE', message: String(e?.message ?? e).slice(0, 300) }] }); }

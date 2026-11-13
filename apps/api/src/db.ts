@@ -41,6 +41,9 @@ export class Store {
       CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, user TEXT, user_name TEXT, action TEXT NOT NULL, project_id TEXT, model_version INTEGER, detail TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS audit_by_project ON audit(project_id, id);
+      CREATE TABLE IF NOT EXISTS project_records(record_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, document_type TEXT NOT NULL, origin TEXT NOT NULL, json TEXT NOT NULL, created_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS project_records_by_project ON project_records(project_id);
+      CREATE TABLE IF NOT EXISTS project_test_data(project_id TEXT PRIMARY KEY, json TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS templates(template_id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL, document_type TEXT NOT NULL, retired INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS template_versions(template_id TEXT NOT NULL, version INTEGER NOT NULL, json TEXT NOT NULL, meta TEXT NOT NULL, saved_at TEXT NOT NULL, PRIMARY KEY(template_id, version));
     `);
@@ -105,6 +108,44 @@ export class Store {
   }
   deleteAsset(assetId: string) { return Number(this.db.prepare('DELETE FROM assets WHERE asset_id=?').run(assetId).changes) > 0; }
 
+  /* ---------------------------------------------------------- records that belong to one project */
+
+  /** Generated test customers and data supplied for one project. Never visible to other projects. */
+  projectRecords(projectId: string, origin?: 'generated' | 'supplied'): SyntheticRecord[] {
+    const rows = (origin
+      ? this.db.prepare('SELECT json FROM project_records WHERE project_id=? AND origin=? ORDER BY record_id').all(projectId, origin)
+      : this.db.prepare('SELECT json FROM project_records WHERE project_id=? ORDER BY record_id').all(projectId)) as any[];
+    return rows.map((r) => JSON.parse(r.json));
+  }
+  /** Lookup by id across every project (ids are unique studio-wide). */
+  projectRecord(recordId: string): SyntheticRecord | undefined {
+    const r = this.db.prepare('SELECT json FROM project_records WHERE record_id=?').get(recordId) as any;
+    return r ? JSON.parse(r.json) : undefined;
+  }
+  /** Adds records for one project, giving each a studio-wide unique id `<PREFIX>-6xxxx`. Returns the stored records. */
+  addProjectRecords(projectId: string, prefix: string, origin: 'generated' | 'supplied', records: Array<Omit<SyntheticRecord, 'recordId'>>): SyntheticRecord[] {
+    const now = new Date().toISOString();
+    const max = (this.db.prepare('SELECT record_id FROM project_records').all() as any[]).reduce((m, r) => Math.max(m, Number(String(r.record_id).split('-')[1]) || 0), 60000);
+    const st = this.db.prepare('INSERT INTO project_records(record_id,project_id,document_type,origin,json,created_at) VALUES (?,?,?,?,?,?)');
+    return records.map((r, i) => {
+      const rec = { ...r, recordId: `${prefix}-${max + 1 + i}`, projectId } as SyntheticRecord;
+      st.run(rec.recordId, projectId, rec.documentType, origin, JSON.stringify(rec), now);
+      return rec;
+    });
+  }
+  clearProjectRecords(projectId: string, origin?: 'generated' | 'supplied'): number {
+    return Number((origin ? this.db.prepare('DELETE FROM project_records WHERE project_id=? AND origin=?').run(projectId, origin) : this.db.prepare('DELETE FROM project_records WHERE project_id=?').run(projectId)).changes);
+  }
+  /** What the last generation covered (targets and summary), for showing coverage without regenerating. */
+  getTestDataPlan(projectId: string): { plan: any; createdAt: string } | undefined {
+    const r = this.db.prepare('SELECT json, created_at FROM project_test_data WHERE project_id=?').get(projectId) as any;
+    return r ? { plan: JSON.parse(r.json), createdAt: r.created_at } : undefined;
+  }
+  setTestDataPlan(projectId: string, plan: unknown | null) {
+    this.db.prepare('DELETE FROM project_test_data WHERE project_id=?').run(projectId);
+    if (plan) this.db.prepare('INSERT INTO project_test_data(project_id,json,created_at) VALUES (?,?,?)').run(projectId, JSON.stringify(plan), new Date().toISOString());
+  }
+
   /* ---------------------------------------------------------- saved templates (frozen, numbered versions) */
 
   /** Saved templates with their version lists (newest first). Template content is not loaded. */
@@ -147,7 +188,7 @@ export class Store {
   /* ---------------------------------------------------------- projects (user copies) */
 
   deleteProject(projectId: string) {
-    for (const t of ['projects', 'snapshots', 'project_versions', 'workflow', 'workflow_events', 'comments']) this.db.prepare(`DELETE FROM ${t} WHERE project_id=?`).run(projectId);
+    for (const t of ['projects', 'snapshots', 'project_versions', 'workflow', 'workflow_events', 'comments', 'project_records', 'project_test_data']) this.db.prepare(`DELETE FROM ${t} WHERE project_id=?`).run(projectId);
   }
 
   seedFor(projectId: string): Project | undefined {

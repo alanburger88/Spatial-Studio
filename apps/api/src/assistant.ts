@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { projectFieldIndex, validateRule, type Project, type Rule, type SyntheticRecord } from '@iss/model';
+import { projectFieldIndex, validateRule, RECORD_ID_PATTERN, type Project, type Rule, type SyntheticRecord } from '@iss/model';
 import { describePredicate, explainNode, resolve, type Explanation, type Resolution } from '@iss/resolver';
 import { EDGE_CASE_PRESETS, DIMENSIONS } from '@iss/scenarios';
 import { PERSONAS } from '@iss/model/fixtures';
@@ -11,7 +11,7 @@ const VIEWS = ['design', 'exploded', 'cube', 'landscape', 'page-stack', 'rules-d
 const scalar = z.union([z.string().max(200), z.number().int(), z.boolean(), z.null()]);
 
 export const ActionSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('select_scenario'), recordId: z.string().regex(/^(CARD|EOB)-\d{4}$/), overrides: z.record(z.string(), z.any()).optional() }).strict(),
+  z.object({ action: z.literal('select_scenario'), recordId: z.string().regex(RECORD_ID_PATTERN), overrides: z.record(z.string(), z.any()).optional() }).strict(),
   z.object({ action: z.literal('set_scenario_fields'), fields: z.record(z.string().regex(/^[a-zA-Z.]+$/), scalar) }).strict(),
   z.object({ action: z.literal('navigate_view'), view: z.enum(VIEWS), nodeId: z.string().optional() }).strict(),
   z.object({ action: z.literal('open_project'), projectId: z.enum(['aster-card-demo', 'harborcare-demo']) }).strict(),
@@ -19,7 +19,7 @@ export const ActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('focus_component'), nodeId: z.string().max(64), view: z.enum(VIEWS).optional() }).strict(),
   z.object({ action: z.literal('explain_resolution'), nodeId: z.string().max(64) }).strict(),
   z.object({ action: z.literal('run_validation'), checks: z.array(z.enum(['rules', 'bindings', 'pagination', 'parity', 'accessibility'])).optional() }).strict(),
-  z.object({ action: z.literal('compare_scenarios'), recordIds: z.array(z.string().regex(/^(CARD|EOB)-\d{4}$/)).length(2) }).strict(),
+  z.object({ action: z.literal('compare_scenarios'), recordIds: z.array(z.string().regex(RECORD_ID_PATTERN)).length(2) }).strict(),
   z.object({ action: z.literal('generate_edge_case'), preset: z.enum(EDGE_CASE_PRESETS.map((p) => p.id) as [string, ...string[]]) }).strict(),
   z.object({ action: z.literal('propose_rule_edit'), ruleId: z.string().regex(/^R\d{2,3}$/), patch: z.object({ priority: z.number().int().min(0).max(10000).optional(), enabled: z.boolean().optional(), when: z.any().optional() }).strict() }).strict(),
   z.object({ action: z.literal('propose_content_edit'), contentPartId: z.string().max(64), locale: z.enum(['en-US', 'es-US']), text: z.string().max(600) }).strict(),
