@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { API, demoTool, open, resetAll } from './helpers';
+import { gotoScreen } from './nav-helper';
 
 /** Blockers phase 3: resolve one by one, with a progress bar the engine works out, and a test pinned for what was fixed. */
 
@@ -28,7 +29,7 @@ async function seedTieAndOpen(page: Page) {
   await open(page, P, 'rules-data');
   await demoTool(page, 'seed-d01');
   await page.getByTestId('demo-tools').getByRole('button', { name: 'Close demo tools' }).click();
-  await page.getByTestId('nav-S17').click();
+  await gotoScreen(page, 'S17');
   await expect(page.getByTestId(`bl-row-${TIE}`)).toBeVisible({ timeout: 30_000 });
 }
 async function badCopy(request: APIRequestContext) {
@@ -128,7 +129,7 @@ test('BR02 the pass can be left and resumed where it was; leaving loses nothing'
   await expect(page.getByTestId('bl-aside')).toBeVisible();
   await expect(page.getByTestId('bl-resolve-start')).toContainText(/Resume one by one \(\d+ blockers? left\)/);
   // away and back: the pass resumes on the same step
-  await page.getByTestId('nav-S17').click();
+  await gotoScreen(page, 'S17');
   await page.getByTestId('bl-resolve-start').click();
   await expect(page.getByTestId('bl-pass-step')).toHaveAttribute('data-blocker', secondId!);
 });
@@ -179,7 +180,7 @@ test('BR05 a layout blocker from the last full check says so in the pass and off
   expect((await request.put(`${API}/projects/${P}/records/${rec.recordId}`, { data: { record: { ...rec, card: { ...rec.card, transactions: many } } } })).ok()).toBeTruthy();
   await open(page, P, 'rules-data');
   await store(page, `window.__iss.store.getState().dispatch({ type: 'UPDATE_NODE', nodeId: 'transaction-table', patch: { flowContinuation: false } })`);
-  await page.getByTestId('nav-S17').click();
+  await gotoScreen(page, 'S17');
   await page.getByTestId('bl-run-full').click();
   await expect(page.getByTestId(`bl-row-${OVERFLOW}`)).toBeVisible({ timeout: 200_000 });
   await page.getByTestId('bl-resolve-start').click();
