@@ -74,6 +74,9 @@ const ROUTES: Record<string, Need> = {
   'POST /api/v1/projects/:projectId/duplicate': 'edit',
   'POST /api/v1/projects': 'edit',
   'POST /api/v1/projects/import': 'edit',
+  // Setting a document up from a description or sample data: creating it needs edit rights; the proposal stores nothing.
+  'POST /api/v1/projects/setup': 'edit',
+  'POST /api/v1/projects/setup/draft': 'any',
   // Publishing a starter for everyone is an approver's decision, like approving a document.
   'POST /api/v1/templates': 'approve',
   'PATCH /api/v1/templates/:templateId': 'approve',

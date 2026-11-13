@@ -21,6 +21,7 @@ import { registerTranslationRoutes } from './routes/translations';
 import { registerAssistRoutes } from './routes/assist';
 import { registerTestDataRoutes } from './routes/testData';
 import { registerRecordRoutes } from './routes/records';
+import { registerSetupRoutes } from './routes/setup';
 import type { RouteDeps } from './routes/deps';
 import { handleMessage, providerConfig, providerStatus, type Proposal } from './assistant';
 import { registerAuth, audit } from './auth';
@@ -222,6 +223,7 @@ export async function buildApp(opts: AppOptions = {}) {
   registerAssistRoutes(app, deps);
   registerTestDataRoutes(app, deps);
   registerRecordRoutes(app, deps);
+  registerSetupRoutes(app, deps);
 
   /* ------------------------------------------------ version history, review workflow, comments, audit */
 

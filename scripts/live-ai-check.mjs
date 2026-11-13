@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// A SMALL, deliberate check of every model-backed feature against a LIVE AI model (about nine calls; they are billed
+// A SMALL, deliberate check of every model-backed feature against a LIVE AI model (about ten calls; they are billed
 // to the key's owner). Never part of the automated tests. Start a stack with live AI first:
 //   LIVE_AI=1 node scripts/dev-isolated.mjs 4          (needs AI_PROVIDER=anthropic and AI_API_KEY in the environment or .env)
 //   node scripts/live-ai-check.mjs http://127.0.0.1:3104
+// One check alone (one call): LIVE_ONLY=setup node scripts/live-ai-check.mjs http://127.0.0.1:3104
 // Prints what each feature returned. It never prints the key.
 const API = `${process.argv[2] ?? 'http://127.0.0.1:3104'}/api/v1`;
 const P = 'aster-card-demo';
@@ -19,6 +20,50 @@ const record = (name, ok, detail) => { results.push({ name, ok }); console.log(`
 const health = await (await fetch(`${API}/health`)).json();
 console.log(`AI status: ${health.ai.mode} · ${health.ai.label}${health.ai.model ? ` · ${health.ai.model}` : ''}`);
 if (health.ai.mode !== 'external') { console.log('Live AI is not on for this stack; nothing was called.'); process.exit(2); }
+const finish = () => {
+  const failed = results.filter((r) => !r.ok);
+  console.log(`\n${results.length - failed.length} of ${results.length} live checks passed${failed.length ? `; failed: ${failed.map((f) => f.name).join('; ')}` : ''}.`);
+  process.exit(failed.length ? 1 : 0);
+};
+
+// 11. A new document set up from a description (one call; the proposal stores nothing). The setup must be more than a
+// stub: data fields, a table, a message whose wording depends on a condition, and a first customer without blocking issues.
+const checkSetup = async () => {
+  const description = 'A membership renewal notice for a gym called Northside Gym. Greet the member by name and say which plan renews on which date and what the monthly fee is. '
+    + 'Show a table of the fees charged this month (what it was for, the date and the amount) with a total. '
+    + 'Members whose last payment failed must get a different message asking them to update their payment details before the renewal date; everyone else gets a short thank-you. '
+    + 'End with small print saying fees are charged monthly in advance.';
+  const r = await post('/projects/setup/draft', { description });
+  const j = r.json;
+  const spec = j.spec ?? { fields: [], sections: [] };
+  const table = spec.sections.find((s) => s.type === 'table');
+  const messages = spec.sections.filter((s) => s.type === 'messages');
+  const conditional = messages.flatMap((m) => m.versions).filter((v) => v.when);
+  const blocking = j.preview?.blocking ?? null;
+  const ok = r.status === 200 && j.mode === 'proposal' && j.source === 'ai' && spec.fields.length >= 4 && !!table && conditional.length >= 1 && Array.isArray(blocking) && blocking.length === 0;
+  record('Set a new document up from a description', ok, j.mode !== 'proposal'
+    ? `status=${r.status} mode=${j.mode} ${r.ms} ms · ${clip(j.message ?? j.error?.message ?? j, 300)}`
+    : `source=${j.source} ${r.ms} ms · “${spec.title}” · ${spec.fields.length} data fields · sections: ${spec.sections.map((s) => s.type).join(', ')}\n      `
+      + `table: ${table ? `${table.list} (${(table.columns ?? []).join(', ')}${table.totalColumn ? `; total of ${table.totalColumn}` : ''})` : 'none'} · conditional versions: ${conditional.length} · blocking issues for the first customer: ${blocking ? blocking.length : 'unknown'} · would generate ${j.customers?.generated?.count} customers\n      `
+      + `${(j.outline?.lines ?? []).map((l) => clip(l, 170)).join('\n      ')}\n      notes (${(j.notes ?? []).length}): ${(j.notes ?? []).map((n) => clip(n, 200)).join(' | ') || 'none'}`);
+};
+if (process.env.LIVE_ONLY === 'setup') { await checkSetup(); finish(); }
+// Only on request (LIVE_ONLY=setup-data, one call): the same with sample data. The model is told the shape of the data
+// only, so what is checked here is that it kept the field names, so that every row is matched and accepted as a customer.
+if (process.env.LIVE_ONLY === 'setup-data') {
+  const data = ['first_name,last_name,plan,renewal_date,monthly_fee,payment_failed', 'Ana,Silva,Flex,2026-12-01,49.00,no', 'Ben,Okoro,Max,2026-12-15,120.00,yes', 'Cy,Lee,Flex,2026-12-20,49.00,no'].join('\n');
+  const r = await post('/projects/setup/draft', { description: 'A gym membership renewal notice: greet the member, show the plan, the renewal date and the monthly fee, and give members whose payment failed a different message asking them to update their payment details.', sampleData: { format: 'csv', data } });
+  const j = r.json;
+  const s = j.customers?.supplied;
+  const conditional = (j.spec?.sections ?? []).filter((x) => x.type === 'messages').flatMap((m) => m.versions).filter((v) => v.when);
+  const ok = r.status === 200 && j.mode === 'proposal' && j.source === 'ai' && s?.accepted === 3 && s?.rejectedCount === 0 && s.matching.every((m) => m.field) && conditional.length >= 1 && j.preview?.customer?.origin === 'supplied' && j.preview.blocking.length === 0;
+  record('Set a new document up from a description and sample data', ok, j.mode !== 'proposal'
+    ? `status=${r.status} mode=${j.mode} ${r.ms} ms · ${clip(j.message ?? j.error?.message ?? j, 300)}`
+    : `source=${j.source} ${r.ms} ms · fields: ${j.spec.fields.map((f) => `${f.label} (${f.type})`).join(', ')}\n      rows accepted: ${s?.accepted} of ${s?.total}; rejected: ${clip(s?.rejected ?? [], 300)}\n      `
+      + `columns: ${(s?.matching ?? []).map((m) => `${m.column} → ${m.field ?? 'not used'}`).join('; ')}\n      first customer: ${j.preview?.customer?.name} gets ${clip(j.preview?.messages ?? [], 200)} · blocking: ${j.preview?.blocking?.length}\n      `
+      + `versions: ${(j.outline?.sections ?? []).flatMap((x) => x.versions ?? []).map((v) => `“${v.title}” ${v.shownWhen}`).join(' ')}\n      notes (${(j.notes ?? []).length}): ${(j.notes ?? []).map((n) => clip(n, 200)).join(' | ') || 'none'}`);
+  finish();
+}
 
 // 1. Assistant chat: the question from the first live run. The reply must not disclaim who the customer is.
 {
@@ -95,6 +140,5 @@ if (health.ai.mode !== 'external') { console.log('Live AI is not on for this sta
   const flags = r.json.flags ?? [];
   record('Translation meaning check flags a draft that says something else', r.status === 200 && r.json.mode === 'ai' && flags.some((f) => f.textId === a.id), `mode=${r.json.mode} ${r.ms} ms · English: ${clip(a.approvedLocales['en-US'], 110)}\n      Spanish draft (deliberately wrong): “No tiene que hacer ningún pago este mes.”\n      flags: ${clip(flags, 300)}`);
 }
-const failed = results.filter((r) => !r.ok);
-console.log(`\n${results.length - failed.length} of ${results.length} live checks passed${failed.length ? `; failed: ${failed.map((f) => f.name).join('; ')}` : ''}.`);
-process.exit(failed.length ? 1 : 0);
+await checkSetup();
+finish();

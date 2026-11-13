@@ -13,7 +13,11 @@ import { providerStatus, type ProviderConfig } from './assistant';
  * Only the project's own wording (and, for descriptions, the project's own image) is sent — never customer data.
  * Without a live AI key every function answers `mode: 'unavailable'` with a plain explanation.
  */
-export interface AssistTask { system: string; user: string; tool: Anthropic.Tool; image?: { mediaType: 'image/png' | 'image/jpeg'; data: string } }
+export interface AssistTask {
+  system: string; user: string; tool: Anthropic.Tool; image?: { mediaType: 'image/png' | 'image/jpeg'; data: string };
+  /** A task with a long answer (a whole document setup) may ask for more room and more time than a rewrite needs. */
+  maxTokens?: number; timeoutMs?: number;
+}
 /** The model call, replaceable in tests. Resolves to the tool input, or null when the provider cannot answer. */
 export type AssistModel = (cfg: ProviderConfig, task: AssistTask) => Promise<unknown | null>;
 
@@ -21,27 +25,37 @@ export interface AssistReply { mode: 'ai' | 'unavailable'; providerStatus: strin
 export const NEEDS_KEY = 'This needs a live AI model, and no AI key is configured. Set AI_PROVIDER=anthropic and AI_API_KEY in the server’s .env to turn it on.';
 
 export const externalAssist: AssistModel = async (cfg, task) => {
-  const client = new Anthropic({ apiKey: cfg.apiKey, baseURL: cfg.baseUrl, timeout: Math.max(cfg.timeoutMs, 60_000), maxRetries: 1 });
+  // A long task is not tried a second time: it would double a wait that is already long (and what the person is billed).
+  const client = new Anthropic({ apiKey: cfg.apiKey, baseURL: cfg.baseUrl, timeout: Math.max(cfg.timeoutMs, task.timeoutMs ?? 60_000), maxRetries: task.timeoutMs ? 0 : 1 });
   try {
     // Forced tool choice is not supported on current models: tool_choice stays "auto", the prompt names the tool, and `strict` keeps the arguments schema-valid.
     const response = await (client.beta.messages as any).create({
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       model: cfg.model,
-      max_tokens: 8000,
+      max_tokens: task.maxTokens ?? 8000,
       output_config: { effort: 'medium' },
       system: task.system,
       tools: [task.tool],
       tool_choice: { type: 'auto' },
       messages: [{ role: 'user', content: task.image ? [{ type: 'image', source: { type: 'base64', media_type: task.image.mediaType, data: task.image.data } }, { type: 'text', text: task.user }] : task.user }],
     }) as Anthropic.Message;
-    if (response.stop_reason === 'refusal' || response.stop_reason === 'max_tokens') return null;
     const block = response.content.find((b) => b.type === 'tool_use') as Anthropic.ToolUseBlock | undefined;
-    return block ? block.input : null;
-  } catch {
+    if (response.stop_reason === 'refusal' || response.stop_reason === 'max_tokens' || !block) { whyNoAnswer(task, `the model stopped with "${response.stop_reason}"${block ? '' : ' without calling the tool'}`); return null; }
+    return block.input;
+  } catch (e: any) {
+    whyNoAnswer(task, `${e?.status ? `HTTP ${e.status}: ` : ''}${String(e?.error?.error?.message ?? e?.message ?? e).slice(0, 400)}`);
     return null;
   }
 };
+
+/**
+ * A person is only ever told "the AI model did not answer". With AI_DEBUG=1 the server's own log also says why
+ * (the provider's status and error text, or the stop reason): never the request, the answer or the key.
+ */
+function whyNoAnswer(task: AssistTask, reason: string): void {
+  if (process.env.AI_DEBUG === '1') console.error(`[assist] ${task.tool.name}: no answer: ${reason}`);
+}
 
 const strictTool = (name: string, description: string, properties: Record<string, unknown>, required: string[]): Anthropic.Tool => ({ name, description, strict: true, input_schema: { type: 'object', additionalProperties: false, required, properties } } as Anthropic.Tool);
 const live = (cfg: ProviderConfig) => providerStatus(cfg).mode === 'external';
