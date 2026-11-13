@@ -127,3 +127,13 @@ Verify with `npx tsc -p tsconfig.json --noEmit`, screenshots in light + dark (`T
 - **A template is a project without identity.** Use `templateContentOf(project)` to make one and `projectFromSavedTemplate(...)` to start from one (`packages/model/src/templates.ts`). Do not copy projects by hand: these strip `derivedFrom`, `fromTemplate`, `importedFrom`, `lastSavedAt`.
 - **Anything read from a file is untrusted.** `projectFileProblems(raw)` runs before `checkDraftProject`, and the import route resolves a document before storing. New project fields that hold a URL or an image must be added to those checks.
 - **Provenance fields** (`fromTemplate`, `importedFrom`, `derivedFrom`) are ignored by the project diff and must stay out of change summaries.
+
+## Three kinds of document, project-owned customers, setup (v0.9) — rules
+
+- **Never write a two-way kind check.** `DocumentType` is `credit-statement | eob | custom`. Code that says `kind === 'eob' ? A : B` silently gives a `custom` project card behaviour. Use `projectFields(project)`, `DOCUMENT_TYPE_LABEL`, and deliberate branches for all three.
+- **`custom` has no shared customers.** Its records always belong to the project (`record.projectId`), with ids `REC-6xxxx`. The API guarantees at least one. Never default to `CARD-0001`.
+- **Lists** are custom fields of type `list` with `itemFields`; they are `array` field definitions with a derived `custom.<key>.count`. Anything that edits custom fields must preserve `itemFields`.
+- **Customers are edited through `routes/records.ts`** (Data Explorer). Shared customers (samples, imported) are never changed; copy first. Bookkeeping fields are owned by the server.
+- **A setup is data, not a project.** A model (or the built-in reader) produces a `SetupSpec`; `checkSetupSpec` cleans it and `projectFromSetupSpec` builds the project through ordinary commands. The server never trusts a client-sent project for creation.
+- **Tests never use a live AI key** (vitest and the test servers force the built-in assistant). Live checks are run on purpose with `scripts/live-ai-check.mjs` against a `LIVE_AI=1` stack.
+
