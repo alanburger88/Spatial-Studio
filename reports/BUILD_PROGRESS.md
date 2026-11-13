@@ -1,6 +1,6 @@
 # Autonomous implementation checkpoint
 
-**Status:** POC v0.8 (generated test customers per project, assistant panel fixes, live AI checked; on top of v0.7 templates phase 1) built and verified locally (2026-11-13). Branch `claude/magical-franklin-aonsol`.
+**Status:** POC v0.9 (Data Explorer, documents with their own data, setup from a description; on top of v0.8) built and verified locally (2026-11-13). Branch `claude/magical-franklin-aonsol`.
 
 ## Gate log
 
@@ -21,8 +21,8 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | Pack validation | PASS |
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
-| Unit tests | 443/443 |
-| Browser tests | 172/172 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests + 36 v0.5 tests + 25 v0.6 assistant tests + 9 v0.7 tests + 11 v0.8 tests: generated test customers 8, assistant explanation and panel resize 3) |
+| Unit tests | 556/556 |
+| Browser tests | 204/204 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests + 36 v0.5 tests + 25 v0.6 assistant tests + 9 v0.7 tests + 11 v0.8 tests + 32 v0.9 tests: Data Explorer 17, own-data documents 8, setup from a description 7) |
 | Build | OK |
 
 ## v0.2 additions (all verified by the tests above)
@@ -105,13 +105,21 @@ Engines are pure functions in `packages/scenarios/src/assist/`; model-backed fea
 - **Menu:** "2D Design Studio" is "Design Studio" in the menu; the screen heading keeps the contract's title.
 - **In progress, not in this build:** a blank project with its own data fields (a third kind of document, with list fields), and setting up a template from a description.
 
+## v0.9 additions (D77–D79)
+
+- **Data Explorer** (new screen, Build menu): every customer as a nested record with typed fields, list rows inside the tree, a Form/JSON switch and a live "what this customer gets" panel. Samples and imported customers are read-only; copies, edits and deletions apply to the document's own customers.
+- **Documents with their own data** (a third kind, "Your own data"): a Blank project with the user's issuer name and colour, data fields the user defines including lists with columns, tables bound to lists with a total, customers generated or supplied for the project. The two sample kinds are unchanged (goldens pass).
+- **Set up a document from a description or a data file** (New project → Describe your document): a proposal of fields, sections, messages with conditions and email/SMS wording that the person reviews, edits, re-checks and approves before anything is created.
+- **Live AI on screen, checked on purpose:** `scripts/live-ui-check.mjs` drove the real screens against Claude Opus 5.5 and all four checks passed (a described document proposed and created; the assistant panel answering about the current customer; a rewrite suggestion; a translation draft for one text). Screenshots: `reports/evidence/screens/live-0*.png`.
+
 ## Not verified / open
 
+- **v0.9, not verified:** Data Explorer — the browser Back button does not warn about unsaved edits; no accessibility scan; imported customers and the server-rejection display were not exercised in the browser. Own-data documents — dark mode, Technical view and 1280×720 were not checked by eye; the PDF's appearance was checked by text and parity checks, not by eye across layouts; the page's letterhead zone cannot be resized. Setup — column matching cannot be overridden by hand; the built-in reader assumes dollars and ISO dates; generated list rows are placeholders with zero amounts; the slow-request busy state was not observed beyond the live run (about 17 seconds).
+- **Live AI on screen:** only the four flows above were looked at with a live model. An AI image description, an SMS fitted by AI, subject lines, a new message version, a rule drafted from a free sentence and meaning flags were verified against the live model at the server (`scripts/live-ai-check.mjs`) but not rendered on screen from a live reply.
 - **Generated test customers (v0.8):** three states were never triggered in a test or screenshot: the collapse of more than five unreachable items, the "limit reached" note, and the "document has changed since" note. Nothing larger than the two samples plus a few added rules was generated for, so timing on a large document is unknown.
 - **Templates (v0.7):** roles are enforced and tested on the server (author, reviewer, approver, admin). In the browser only the "not allowed" state was checked, by simulating an author's session; no browser run was made with sign-in switched on. Moving a template between two installations was not tried (the project file route was: export, then import into the same installation). A template version cannot be deleted, only superseded or retired.
 - **Phases 2 to 7 of the template work** (releases and packages, data dictionary and mappings, shared library, assisted import, first CCM adapter, runnable package) are **not built**.
 - **Live AI, checked on purpose (2026-11-13):** with a key supplied by the product owner, `scripts/live-ai-check.mjs` made one call per model-backed feature against Claude Opus 5.5 and all 11 checks passed: the assistant recognises the current customer by name and finds another by name; translation drafts (3 texts, data fields intact); rewrite (plainer); SMS fit in one message; a new message version; subject lines; a rule from a free-form sentence; image description of an uploaded picture (and an honest decline for a built-in mark); the translation meaning check flagged a deliberately wrong draft. These checks call the **server**; the same results were **not looked at in the browser** with live AI on, so on-screen rendering of live results is still unverified. Automated tests always force the built-in assistant and never use the key.
-- **Assistant, model-backed features on screen:** the screens were exercised with a stand-in model and intercepted replies only. An AI image description, an AI rewrite of an SMS and AI meaning flags have still never been rendered on screen from a live reply.
 - **Assistant, combinations not checked (v0.6):** the read-only (viewer) role, the HarborCare sample project, Technical view and windows narrower than 1280 px were not checked on every new assistant surface. The side panel was checked at 1000×700 on one screen only.
 - **Assistant, known limits (v0.6):** rule sentences and Activity search understand English only; the reading level is English only; the History change summary compares the previous saved version with the current one (not automatically "since last approved"); a project reset does not clear its review state.
 - **Live AI provider:** not exercised; no credentials were used. This now includes AI translation: the request, the handling of its output and the fallback are tested with a stand-in translator, but no real model call was made.
