@@ -9,7 +9,7 @@ import { canonicalJson, customFieldDefs, fieldsFor, projectFields, projectConten
 import { diffProjects, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_MAX, WORKFLOW_ACTIONS, WORKFLOW_LABEL, WORKFLOW_TRANSITIONS, ACTION_LABEL, type WorkflowAction } from '@iss/model';
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
-import { renderPagedDocument, renderInteractiveHtml, compareManifests, afpSimulation, AFP_SIMULATION_LABEL, PAGED_RENDERER_VERSION, HTML_RENDERER_VERSION } from '@iss/renderers';
+import { renderPagedDocument, renderInteractiveHtml, compareManifests, afpSimulation, pageDesignFindings, AFP_SIMULATION_LABEL, PAGED_RENDERER_VERSION, HTML_RENDERER_VERSION } from '@iss/renderers';
 import { ScenarioEngine, blockerIdOf, buildCube, buildLandscape, generateEdgeCase, replayJourney, runTestCases, EDGE_CASE_PRESETS, DIMENSIONS, type DimensionId } from '@iss/scenarios';
 import { staticRuleAnalysis, bindingAnalysis, modelAccessibility, axeToFindings, toIssue, type ValidationIssue, type Suite } from '@iss/validation';
 import { Composer } from './composer';
@@ -608,7 +608,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const body = req.body as any;
     const html = renderPagedDocument(res, project, { profileId: body?.outputContext?.profileId === 'paged-afp-sim' ? 'paged-afp-sim' : 'paged-pdf', watermark: body?.outputContext?.profileId === 'paged-afp-sim' ? 'AFP SIMULATION — NOT AN AFP STREAM' : '' });
     const comp = await composer.composePaged(html, { snapshot: true, pdf: body?.verifyPdf === true });
-    return { runId: res.runId, recordId: res.recordId, modelVersion: project.modelVersion, contentDigest: res.contentDigest, engine: comp.metrics.engine, pageCount: comp.metrics.pageCount, pdfPageCount: comp.metrics.pdfPageCount ?? null, durationMs: comp.metrics.durationMs, pages: comp.metrics.pages, diagnostics: comp.metrics.diagnostics, snapshot: comp.snapshot, extracted: { ...comp.extracted, text: undefined }, findings: res.findings, transactionCount: res.result.documentFacts.transactionCount ?? null };
+    return { runId: res.runId, recordId: res.recordId, modelVersion: project.modelVersion, contentDigest: res.contentDigest, engine: comp.metrics.engine, pageCount: comp.metrics.pageCount, pdfPageCount: comp.metrics.pdfPageCount ?? null, durationMs: comp.metrics.durationMs, pages: comp.metrics.pages, page: (comp.metrics as { page?: unknown }).page ?? null, diagnostics: comp.metrics.diagnostics, snapshot: comp.snapshot, extracted: { ...comp.extracted, text: undefined }, findings: res.findings, transactionCount: res.result.documentFacts.transactionCount ?? null };
   });
 
   app.post('/api/v1/compose/afp-sim', async (req, reply) => {
@@ -655,7 +655,9 @@ export async function buildApp(opts: AppOptions = {}) {
       const t0 = t();
       const comp = await composer.composePaged(renderPagedDocument(res, project));
       pageCount = comp.metrics.pageCount;
-      add('pagination', comp.metrics.diagnostics.map((d: any) => toIssue({ code: d.code, severity: d.severity, nodeId: d.nodeId, page: d.page, message: d.message, source: 'composer', details: { rowsPlaced: d.rowsPlaced, rowsClipped: d.rowsClipped } }, 'pagination', { runId: res.runId, reproduction: repro })), t0);
+      // What only real pages show (from the composer), plus what the page design itself says without composing.
+      const design = pageDesignFindings(project).map((f) => toIssue({ code: f.code, severity: f.severity, nodeId: f.nodeId, message: f.message, source: 'composer' }, 'pagination', { runId: res.runId, reproduction: repro }));
+      add('pagination', [...comp.metrics.diagnostics.map((d: any) => toIssue({ code: d.code, severity: d.severity, nodeId: d.nodeId, page: d.page, message: d.message, source: 'composer', details: { rowsPlaced: d.rowsPlaced, rowsClipped: d.rowsClipped } }, 'pagination', { runId: res.runId, reproduction: repro })), ...design], t0);
     }
     let parity: ReturnType<typeof compareManifests> | null = null;
     let a11yHtml: string | null = null;
