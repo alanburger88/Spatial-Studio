@@ -96,6 +96,8 @@ Sizes: S = about a day of build and verification, M = a few days, L = a week or 
 
 ### Wave 1 — Trust, proof and finding your way
 
+**Status: built and verified on 2026-11-13** (709 unit tests, 285 browser tests, lint, build, pack and app checks). What was and was not verified is in `reports/BUILD_PROGRESS.md` (v0.11) and decisions D87–D91.
+
 The things that make the studio unlike a template tool, plus the navigation they will live in.
 
 | Item | Size | Why first | Depends on |

@@ -1,6 +1,6 @@
 # Before & after, and Proof for any customer
 
-Status: **design for wave 1 of the roadmap (`docs/ROADMAP.md`). Not built yet.** Both live under **Releases** in the menu, as tabs beside the release list.
+Status: **built in wave 1 of the roadmap (`docs/ROADMAP.md`); see the "As built" notes in each section.** Both live under **Releases** in the menu, as tabs beside the release list.
 
 ## Before & after
 

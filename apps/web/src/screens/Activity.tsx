@@ -124,11 +124,20 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
     case 'auth.login': return 'Signed in';
     case 'auth.logout': return 'Signed out';
     case 'auth.login_failed': return `Failed sign-in for ${d.email ?? 'an unknown account'}`;
-    default: return `Changed data (${d.route ?? e.action})`;
+    default: {
+      // Requests that have no audit entry of their own. Known ones are worded; the address is kept for the rest.
+      const worded = ROUTE_WORDS[String(d.route ?? '')];
+      return worded ?? `Changed data (${d.route ?? e.action})`;
+    }
   }
 }
 
 
+/** Plain words for requests recorded only by the catch-all audit entry (they change nothing by themselves). */
+const ROUTE_WORDS: Record<string, string> = {
+  '/api/v1/projects/:projectId/translate': 'Asked for translation drafts (nothing changes until they are saved)',
+  '/api/v1/projects/import': 'Checked a project file before bringing it in',
+};
 const ACTION_WORDS: Record<string, string> = { 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs', 'release.create': 'New releases', 'release.promote': 'Moves to Production', 'release.withdraw': 'Withdrawn releases', 'release.handover': 'Handover entries', 'release.package': 'Release packages', 'release.runtime': 'Runnable packages', 'known-data.add': 'Known data problems set aside', 'known-data.remove': 'Known data problems removed', 'known-data.lapse': 'Known data problems that lapsed', 'proof.produce': 'Documents produced from a release', 'proof.import': 'Proof records added', 'proof.verify': 'Proof checks' };
 const actionLabel = (a: string): string => ACTION_WORDS[a] ?? CATEGORIES.find((c) => c.id === a)?.label ?? a;
 
