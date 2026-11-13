@@ -24,6 +24,7 @@ const loaders = {
   AiAssistant: () => import('./screens/AiAssistant'),
   Translations: () => import('./screens/Translations'),
   EmailSms: () => import('./screens/EmailSms'),
+  DataExplorer: () => import('./screens/DataExplorer'),
   Activity: () => import('./screens/Activity'),
 };
 const screen = <K extends keyof typeof loaders>(name: K) => lazy(() => (loaders[name]() as Promise<Record<string, ComponentType<any>>>).then((m) => ({ default: m[name] })));
@@ -39,6 +40,7 @@ const PreviewExport = screen('PreviewExport');
 const AiAssistant = screen('AiAssistant');
 const Translations = screen('Translations');
 const EmailSms = screen('EmailSms');
+const DataExplorer = screen('DataExplorer');
 const Activity = screen('Activity') as ComponentType<{ global?: boolean }>;
 
 function usePrefetchScreens() {
@@ -100,6 +102,7 @@ export function App() {
         <Route path="/studio/:project/assistant" element={S(<AiAssistant />)} />
         <Route path="/studio/:project/content" element={S(<Translations />)} />
         <Route path="/studio/:project/channels" element={S(<EmailSms />)} />
+        <Route path="/studio/:project/data" element={S(<DataExplorer />)} />
         <Route path="/studio/:project/activity" element={S(<Activity />)} />
         <Route path="*" element={<PlainShell><div className="empty"><strong>Page not found</strong><a href="/projects">Back to Project Gallery</a></div></PlainShell>} />
       </Routes>

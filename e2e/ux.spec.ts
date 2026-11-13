@@ -13,8 +13,8 @@ test('U01 menu is grouped by job and keeps every screen; top bar controls are la
   await open(page, 'aster-card-demo', 'design');
   const nav = page.getByRole('navigation', { name: 'Studio views' });
   for (const g of ['Build', 'Explore', 'Check & publish', 'Help & admin']) await expect(nav.getByRole('group', { name: g })).toBeVisible();
-  await expect(nav.getByRole('link')).toHaveCount(15);
-  await expect(nav.getByRole('group', { name: 'Build' }).getByRole('link')).toHaveText(['Design Studio', 'Rules & Data', 'Content & Translations', 'Email & SMS']);
+  await expect(nav.getByRole('link')).toHaveCount(16);
+  await expect(nav.getByRole('group', { name: 'Build' }).getByRole('link')).toHaveText(['Design Studio', 'Rules & Data', 'Data Explorer', 'Content & Translations', 'Email & SMS']);
   await expect(nav.getByRole('group', { name: 'Check & publish' }).getByRole('link')).toHaveText(['Validate & Compare', 'Preview & Export']);
   await expect(page.getByTestId('nav-S09')).toHaveAttribute('title', /Check the document for problems/);
   const bar = page.getByRole('banner');

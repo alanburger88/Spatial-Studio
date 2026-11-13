@@ -39,16 +39,21 @@ export const SCREENS = [
   { id: 'S13', path: 'content', label: 'Content & Translations', icon: Icon.list, group: 'build', hint: 'Manage wording and approved translations' },
   { id: 'S14', path: 'activity', label: 'Activity', icon: ActivityIcon, group: 'help', hint: 'Who changed what, and when' },
   { id: 'S15', path: 'channels', label: 'Email & SMS', icon: MailIcon, group: 'build', hint: 'Edit the email and text-message wording and choose what the email shows' },
+  { id: 'S16', path: 'data', label: 'Data Explorer', icon: DataIcon, group: 'build', hint: 'See, edit, add and remove the customers this document is tested with' },
 ] as const;
 
 /** Menu groups, in working order. Screen IDs and Alt+N shortcuts are unchanged; only the menu order is grouped. */
 export const NAV_GROUPS = [
   { id: 'home', label: null, screens: ['S01'] },
-  { id: 'build', label: 'Build', screens: ['S02', 'S07', 'S13', 'S15'] },
+  { id: 'build', label: 'Build', screens: ['S02', 'S07', 'S16', 'S13', 'S15'] },
   { id: 'explore', label: 'Explore', screens: ['S03', 'S04', 'S05', 'S06', 'S08'] },
   { id: 'check', label: 'Check & publish', screens: ['S09', 'S10'] },
   { id: 'help', label: 'Help & admin', screens: ['S11', 'S12', 'S14'] },
 ] as const;
+
+function DataIcon(p: SVGProps<SVGSVGElement>) {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M5 5h5M5 5v14M5 11h5M5 19h5M10 5h9M13 11h6M13 19h6M10 11h0M10 19h0" /></svg>;
+}
 
 function MailIcon(p: SVGProps<SVGSVGElement>) {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>;
