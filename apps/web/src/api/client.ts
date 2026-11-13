@@ -1,4 +1,4 @@
-import type { SetupSpec, DocumentType, HandoverEntry, HandoverKind, Permission, Persona, Project, ProjectDiff, ReleaseEvent, ReleaseInfo, ReleasePackageStatus, ReleaseStage, Role, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
+import type { SetupSpec, DocumentType, HandoverEntry, HandoverKind, Permission, Persona, Project, ProjectDiff, ReleaseEvent, ReleaseInfo, ReleasePackageStatus, ReleaseStage, Role, RuntimePackageStatus, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
 import type { RowMatch, SetupOutline, TestResult } from '@iss/scenarios';
 
 /** Typed client for the local Spatial Studio API (/api/v1, proxied by Vite). */
@@ -313,4 +313,9 @@ export const api = {
   },
   packageDownloadUrl: (releaseId: string) => `/api/v1/releases/${releaseId}/package`,
   releaseTemplateUrl: (releaseId: string) => `/api/v1/releases/${releaseId}/template`,
+  // The runnable package of a release (phase 7): the release plus the pinned engine, a data contract and a proof pack.
+  runtimeStatus: (releaseId: string) => json<{ runtime: RuntimePackageStatus }>(`/api/v1/releases/${releaseId}/runtime/status`),
+  /** Starts building it in the background (a ready one is only checked, never replaced). Answers at once unless `wait`. */
+  prepareRuntime: (releaseId: string, body: { wait?: boolean; verify?: boolean } = {}) => json<{ runtime: RuntimePackageStatus; started: boolean }>(`/api/v1/releases/${releaseId}/runtime`, { method: 'POST', body: JSON.stringify(body) }),
+  runtimeDownloadUrl: (releaseId: string) => `/api/v1/releases/${releaseId}/runtime`,
 };

@@ -6,6 +6,7 @@ import { Dialog, Tech } from '../../ui/common';
 import { localeLabel } from '../../ui/plain';
 import { fmtAbs, When } from '../../shell/History';
 import { PackageSection } from './PackageSection';
+import { RuntimeSection } from './RuntimeSection';
 import { HandoverSection } from './HandoverSection';
 import { STANDING_CHIP, personName } from './format';
 
@@ -33,6 +34,7 @@ export function ReleaseDetail({ detail, releases, role, onChanged }: DetailProps
       <StageHistory history={detail.history} />
       <Actions detail={detail} releases={releases} role={role} onChanged={onChanged} />
       <PackageSection release={r} onChanged={onChanged} />
+      <RuntimeSection release={r} onChanged={onChanged} />
       <HandoverSection release={r} entries={detail.handover} role={role} onChanged={onChanged} />
     </div>
   );

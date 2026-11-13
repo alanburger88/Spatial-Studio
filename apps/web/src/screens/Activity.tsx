@@ -101,6 +101,17 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
         default: return `Worked on ${what}`;
       }
     }
+    case 'release.runtime': {
+      const what = `the runnable package for release ${d.number} of “${d.title}”`;
+      switch (d.event) {
+        case 'started': return `Started preparing ${what}`;
+        case 'ready': return `Finished preparing ${what}${d.bytes ? ` (${(Number(d.bytes) / 1024 / 1024).toFixed(1)} MB, ${plural(Number(d.files ?? 0), 'file')})` : ''}`;
+        case 'failed': return `Could not prepare ${what}${d.reason ? `: ${d.reason}` : ''}`;
+        case 'check-started': return `Started checking ${what}`;
+        case 'checked': return d.reason ? `Could not check ${what}: ${d.reason}` : `Checked ${what}: ${d.same ? 'a new build matches the kept package' : 'a new build differs from the kept package (the kept package is unchanged)'}`;
+        default: return `Worked on ${what}`;
+      }
+    }
     case 'auth.login': return 'Signed in';
     case 'auth.logout': return 'Signed out';
     case 'auth.login_failed': return `Failed sign-in for ${d.email ?? 'an unknown account'}`;
@@ -109,7 +120,7 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
 }
 
 
-const ACTION_WORDS: Record<string, string> = { 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs', 'release.create': 'New releases', 'release.promote': 'Moves to Production', 'release.withdraw': 'Withdrawn releases', 'release.handover': 'Handover entries', 'release.package': 'Release packages' };
+const ACTION_WORDS: Record<string, string> = { 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs', 'release.create': 'New releases', 'release.promote': 'Moves to Production', 'release.withdraw': 'Withdrawn releases', 'release.handover': 'Handover entries', 'release.package': 'Release packages', 'release.runtime': 'Runnable packages' };
 const actionLabel = (a: string): string => ACTION_WORDS[a] ?? CATEGORIES.find((c) => c.id === a)?.label ?? a;
 
 /* ------------------------------------------------------------------ grouping */

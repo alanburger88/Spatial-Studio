@@ -21,6 +21,7 @@ COPY packages/renderers/package.json packages/renderers/
 COPY packages/resolver/package.json packages/resolver/
 COPY packages/scenarios/package.json packages/scenarios/
 COPY packages/validation/package.json packages/validation/
+COPY packages/runtime/package.json packages/runtime/
 RUN pnpm install --frozen-lockfile --prod=false
 
 COPY . .
