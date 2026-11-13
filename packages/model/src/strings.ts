@@ -2,7 +2,7 @@ import type { ChannelConfig, ContentPart, DocNode, Project, RichBlock, RichDoc, 
 import { richFromMarkup } from './rich';
 import { channelConfig, channelStrings, setChannelString } from './channels';
 import { SOURCE_LANGUAGE } from './languages';
-import { SYSTEM_STRINGS, SYSTEM_STRING_KEYS, systemStringId } from './systemStrings';
+import { SYSTEM_STRINGS, systemStringId, systemStringKeysFor } from './systemStrings';
 
 /**
  * Translatable strings: every customer-visible text that is NOT a content part — figure labels, headings and other
@@ -103,7 +103,7 @@ export function translatableStrings(project: Project): StringItem[] {
   for (const p of usedPartsOf(project)) if (hasWords(p.title)) out.push({ id: `@title/${p.id}`, kind: 'label', title: `${p.title} · heading`, source: p.title });
   for (const c of channelStrings(project)) if (hasWords(c.source)) out.push({ id: c.id, kind: 'channel', title: c.title, source: c.source });
   // Fixed wording the outputs add (web page controls, page numbers, email footer, "under review" phrases).
-  for (const k of SYSTEM_STRING_KEYS) if (hasWords(SYSTEM_STRINGS[k])) out.push({ id: systemStringId(k), kind: 'system', title: `Fixed wording · ${k.replace(/([A-Z])/g, ' $1').toLowerCase()}`, source: SYSTEM_STRINGS[k] });
+  for (const k of systemStringKeysFor(project.documentType)) if (hasWords(SYSTEM_STRINGS[k])) out.push({ id: systemStringId(k), kind: 'system', title: `Fixed wording · ${k.replace(/([A-Z])/g, ' $1').toLowerCase()}`, source: SYSTEM_STRINGS[k] });
   return out;
 }
 
@@ -162,7 +162,7 @@ export function localizeProject(project: Project, locale: string | null | undefi
     if (text !== undefined) setChannelString(ch, c.id, text);
   }
   const system: Record<string, string> = {};
-  for (const k of SYSTEM_STRING_KEYS) {
+  for (const k of systemStringKeysFor(project.documentType)) {
     if (!hasWords(SYSTEM_STRINGS[k])) continue;
     const text = pick(systemStringId(k));
     if (text !== undefined) system[k] = text;

@@ -104,8 +104,14 @@ export const EOB_FIELDS: FieldDef[] = [
   { path: 'claim.amountUnderReviewCents', type: 'cents', label: 'Amount under review' },
 ];
 
+/**
+ * "Your own data": only what every customer has (name, preferred language, accessibility preferences). Everything else
+ * a document of this kind shows or tests is one of the project's own data fields (`custom.<key>`).
+ */
+export const CUSTOM_FIELDS: FieldDef[] = common.map((f) => (f.path === 'documentType' ? { ...f, enumValues: ['custom'] } : f));
+
 export function fieldsFor(documentType: DocumentType): FieldDef[] {
-  return documentType === 'eob' ? EOB_FIELDS : CARD_FIELDS;
+  return documentType === 'eob' ? EOB_FIELDS : documentType === 'custom' ? CUSTOM_FIELDS : CARD_FIELDS;
 }
 
 export function fieldIndex(documentType: DocumentType): Map<string, FieldDef> {
@@ -113,6 +119,9 @@ export function fieldIndex(documentType: DocumentType): Map<string, FieldDef> {
 }
 
 export const CUSTOM_FIELD_KEY = /^[a-zA-Z][a-zA-Z0-9]{0,39}$/;
+/** A list field has 1 to 8 columns. */
+export const CUSTOM_LIST_MAX_COLUMNS = 8;
+const LIST_COLUMN_TYPES = new Set<string>(['string', 'int', 'cents', 'date']);
 
 /** Data contract of one project: the standard fields of its document type plus its custom fields. */
 export function projectFields(project: Pick<Project, 'documentType' | 'customFields'>): FieldDef[] {
@@ -123,15 +132,32 @@ export function projectFieldIndex(project: Pick<Project, 'documentType' | 'custo
   return new Map(projectFields(project).map((f) => [f.path, f]));
 }
 
+/**
+ * The typed field definitions of a project's own data fields. A list field becomes a collection (`array`) with its
+ * columns, followed by a derived `custom.<key>.count` (the number of rows), evaluated like `card.transactions.count`.
+ */
 export function customFieldDefs(custom: CustomField[] | undefined): FieldDef[] {
-  return (custom ?? []).map((c) => ({ path: `custom.${c.key}`, type: c.type, label: c.label, enumValues: c.type === 'enum' ? c.enumValues ?? [] : undefined, required: !!c.required, example: c.example, dimension: !!c.dimension }));
+  return (custom ?? []).flatMap((c): FieldDef[] => {
+    if (c.type === 'list') {
+      return [
+        { path: `custom.${c.key}`, type: 'array', label: c.label, required: !!c.required, itemFields: (Array.isArray(c.itemFields) ? c.itemFields : []).map((it) => ({ key: it.key, type: it.type, label: it.label })) },
+        { path: `custom.${c.key}.count`, type: 'int', label: `${c.label} count`, derived: true },
+      ];
+    }
+    return [{ path: `custom.${c.key}`, type: c.type, label: c.label, enumValues: c.type === 'enum' ? c.enumValues ?? [] : undefined, required: !!c.required, example: c.example, dimension: !!c.dimension }];
+  });
 }
 
-/** Validation for a set of custom fields (keys, labels, types, enum values, no clash with standard labels). */
+/** The project's list fields (collections a Repeating Table or a chart can be bound to), as field definitions. */
+export function customListFields(custom: CustomField[] | undefined): FieldDef[] {
+  return customFieldDefs(custom).filter((f) => f.type === 'array');
+}
+
+/** Validation for a set of custom fields (keys, labels, types, enum values, list columns, no clash with standard labels). */
 export function validateCustomFields(documentType: DocumentType, custom: CustomField[]): string[] {
   const errors: string[] = [];
   const seen = new Set<string>();
-  const types = new Set(['string', 'int', 'cents', 'bool', 'date', 'enum']);
+  const types = new Set(['string', 'int', 'cents', 'bool', 'date', 'enum', 'list']);
   for (const c of custom) {
     if (!CUSTOM_FIELD_KEY.test(c.key ?? '')) errors.push(`Key “${c.key}” must start with a letter and use only letters and digits (max 40).`);
     if (seen.has(c.key)) errors.push(`Key “${c.key}” is used twice.`);
@@ -140,6 +166,21 @@ export function validateCustomFields(documentType: DocumentType, custom: CustomF
     if (!types.has(c.type)) errors.push(`Field “${c.key}” has an unsupported type ${c.type}.`);
     if (c.type === 'enum' && (!Array.isArray(c.enumValues) || !c.enumValues.length || c.enumValues.some((v) => typeof v !== 'string' || !v.trim()))) errors.push(`Field “${c.key}” needs at least one allowed value.`);
     if (c.type === 'enum' && new Set(c.enumValues).size !== (c.enumValues ?? []).length) errors.push(`Field “${c.key}” lists an allowed value twice.`);
+    if (c.type === 'list') {
+      const name = c.label?.trim() || c.key;
+      const cols = Array.isArray(c.itemFields) ? c.itemFields : [];
+      if (!cols.length) errors.push(`List “${name}” needs at least one column.`);
+      if (cols.length > CUSTOM_LIST_MAX_COLUMNS) errors.push(`List “${name}” can have at most ${CUSTOM_LIST_MAX_COLUMNS} columns.`);
+      const colKeys = new Set<string>();
+      for (const col of cols) {
+        if (!CUSTOM_FIELD_KEY.test(col?.key ?? '')) errors.push(`List “${name}”: column key “${col?.key}” must start with a letter and use only letters and digits (max 40).`);
+        else if (colKeys.has(col.key)) errors.push(`List “${name}” uses the column key “${col.key}” twice.`);
+        colKeys.add(col?.key);
+        if (!col?.label?.trim() || col.label.length > 60) errors.push(`List “${name}”: column “${col?.key}” needs a label (max 60 characters).`);
+        if (!LIST_COLUMN_TYPES.has(col?.type)) errors.push(`List “${name}”: column “${col?.label?.trim() || col?.key}” must be text, a whole number, an amount or a date.`);
+      }
+      if (c.dimension) errors.push(`List “${name}” cannot be a comparison dimension. Use its number of rows in a rule instead.`);
+    } else if (c.itemFields !== undefined) errors.push(`Field “${c.key}” has columns but is not a list.`);
   }
   const std = new Set(fieldsFor(documentType).map((f) => f.label.toLowerCase()));
   for (const c of custom) if (std.has(c.label?.trim().toLowerCase())) errors.push(`Label “${c.label}” is already a standard field.`);

@@ -86,8 +86,17 @@ interface Ctx {
 function valueFor(c: Ctx, path: string, nodeId: string, lineage: string[]): { value: unknown; known: boolean } {
   lineage.push(path);
   const known = c.fields.has(path);
+  if (!known && !path) {
+    // Nothing chosen yet (a table inserted before the project has a list to show).
+    const node = c.project.nodes.find((n) => n.id === nodeId);
+    const what = node?.type === 'repeating-table' || node?.type === 'chart' ? 'a list' : 'a data field';
+    c.findings.push({ code: 'INVALID_BINDING', severity: 'blocking', nodeId, source: 'binding', message: `“${node?.name ?? nodeId}” is not bound to ${what} yet.`, suggestion: `Choose ${what} for it in the Inspector.`, details: { path } });
+    return { value: null, known: false };
+  }
   if (!known) {
-    c.findings.push({ code: 'INVALID_BINDING', severity: 'blocking', nodeId, source: 'binding', message: `Unknown field path “${path}” in ${nodeId}. Only allowlisted ${c.project.documentType} schema paths can be bound.`, suggestion: 'Pick a field from the token picker.', details: { path } });
+    // A document with its own data has no built-in schema to name: its fields are the customer's name and language plus the project's own.
+    const allowed = c.project.documentType === 'custom' ? 'Only the customer fields and this project’s own data fields can be used.' : `Only allowlisted ${c.project.documentType} schema paths can be bound.`;
+    c.findings.push({ code: 'INVALID_BINDING', severity: 'blocking', nodeId, source: 'binding', message: `Unknown field path “${path}” in ${nodeId}. ${allowed}`, suggestion: 'Pick a field from the token picker.', details: { path } });
     return { value: null, known: false };
   }
   return { value: getPath(c.ctx, path), known: true };
@@ -144,6 +153,15 @@ function partText(c: Ctx, partId: string): { text: string; locale: string; missi
   const localized = part.approvedLocales[want as 'en-US'];
   if (localized) return { text: localized, locale: want, missingLocale: false, part };
   return { text: part.approvedLocales['en-US'] ?? '', locale: 'en-US', missingLocale: want !== 'en-US', part };
+}
+
+/**
+ * The column a table sums in its footer: the one marked `total`, else the amount column of the two built-in lists
+ * (a transaction's amount, a claim's billed amount). Undefined when the table has no total.
+ */
+export function totalColumnKey(columns: Array<{ key: string; total?: boolean }> | undefined): string | undefined {
+  const cols = columns ?? [];
+  return (cols.find((col) => col.total) ?? cols.find((col) => col.key === 'amountCents' || col.key === 'billedCents'))?.key;
 }
 
 function plainOf(blocks: RBlock[] | undefined): string {
@@ -350,7 +368,9 @@ export function resolve(input: ResolveInput): Resolution {
         const { value, known } = valueFor(c, path, node.id, lineage);
         const f = c.fields.get(path);
         const formatter = node.formatter ?? (f?.type === 'cents' ? 'usd-cents' : f?.type === 'date' ? 'date' : 'text');
-        let display = known ? formatValue(value, formatter, c.locale) : `{{${path}}}`;
+        // Yes/no values use the document language's own words where they have been translated (as tokens in text do).
+        const yesNo = typeof value === 'boolean' && formatter === 'text' ? c.sys[value ? 'valueYes' : 'valueNo'] : undefined;
+        let display = known ? yesNo ?? formatValue(value, formatter, c.locale) : `{{${path}}}`;
         const missing = !known || value === null || value === '';
         let guarded = false;
         if (missing && known) {
@@ -378,7 +398,11 @@ export function resolve(input: ResolveInput): Resolution {
         const rows: RTableRow[] = [];
         let total = 0;
         let hasMoney = false;
-        if (known && !Array.isArray(value)) findings.push({ code: 'INVALID_BINDING', severity: 'blocking', nodeId: node.id, source: 'binding', message: `${path} is not a collection.` });
+        // One of the project's own lists that a customer simply does not have (no value at all) is an empty table, not a broken binding.
+        const absentList = known && value === null && path.startsWith('custom.') && c.fields.get(path)?.type === 'array';
+        if (known && !Array.isArray(value) && !absentList) findings.push({ code: 'INVALID_BINDING', severity: 'blocking', nodeId: node.id, source: 'binding', message: `${path} is not a collection.` });
+        // The column that is summed: the one marked for it, else the amount column of the built-in lists.
+        const amountKey = totalColumnKey(node.columns);
         (Array.isArray(value) ? value : []).forEach((item: any, i: number) => {
           const cells: RTableRow['cells'] = {};
           for (const col of node.columns ?? []) {
@@ -386,7 +410,6 @@ export function resolve(input: ResolveInput): Resolution {
             const rowGuard = col.domainRole === 'member-liability' && docType === 'eob' && item?.liabilityConfirmed !== true;
             cells[col.key] = rowGuard ? { raw, display: sysText(c.sys, 'guardUnderReview'), guarded: true } : { raw, display: formatValue(raw, col.format, c.locale), ...(col.format === 'usd-cents' && typeof raw === 'number' ? { cents: raw } : {}) };
           }
-          const amountKey = (node.columns ?? []).find((col) => col.key === 'amountCents' || col.key === 'billedCents')?.key;
           if (amountKey && typeof item?.[amountKey] === 'number') { total += item[amountKey]; hasMoney = true; }
           rows.push({ id: String(item?.id ?? item?.claimId ?? `${node.id}-row-${i + 1}`), cells });
         });
@@ -400,21 +423,24 @@ export function resolve(input: ResolveInput): Resolution {
       case 'chart': {
         const ch = node.chart ?? { kind: 'bar' as const };
         const data: Array<{ label: string; value: number; display: string }> = [];
+        // Amounts are shown as money; a whole-number field or column (a count, a quantity) as a plain number.
+        const shown = (v: number, type: string | undefined) => (type === 'int' || type === 'points' ? formatValue(v, 'int', c.locale) : formatCents(v, c.locale));
         if (ch.series?.length) {
           for (const s of ch.series) {
             const { value, known } = valueFor(c, s.path, node.id, lineage);
             if (!known || typeof value !== 'number' || value <= 0) continue;
             if (s.path === 'claim.patientResponsibilityCents' && !liabilityConfirmed) continue;
-            data.push({ label: s.label, value, display: formatCents(value, c.locale) });
+            data.push({ label: s.label, value, display: shown(value, c.fields.get(s.path)?.type) });
           }
         } else if (node.binding) {
           const { value } = valueFor(c, node.binding, node.id, lineage);
+          const valueType = c.fields.get(node.binding)?.itemFields?.find((it) => it.key === (ch.valueKey ?? 'amountCents'))?.type;
           const groups = new Map<string, number>();
           for (const item of Array.isArray(value) ? value : []) {
             const key = String(item?.[ch.groupBy ?? 'merchant'] ?? 'Other');
             groups.set(key, (groups.get(key) ?? 0) + (Number.isInteger(item?.[ch.valueKey ?? 'amountCents']) ? item[ch.valueKey ?? 'amountCents'] : 0));
           }
-          [...groups.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, ch.limit ?? 5).forEach(([label, v]) => data.push({ label, value: v, display: formatCents(v, c.locale) }));
+          [...groups.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, ch.limit ?? 5).forEach(([label, v]) => data.push({ label, value: v, display: shown(v, valueType) }));
         }
         const summary = data.length ? `${ch.title ?? 'Chart'}: ` + data.map((d) => `${d.label} ${d.display}`).join('; ') + '.' : `${ch.title ?? 'Chart'}: no data for this scenario.`;
         r.chart = { kind: ch.kind, title: ch.title ?? 'Chart', data, summary };
@@ -533,7 +559,8 @@ export function resolve(input: ResolveInput): Resolution {
   }
 
   // 7. Facts and semantic manifest.
-  const documentFacts: Record<string, unknown> = docType === 'credit-statement'
+  // A document with its own data has no facts the engine knows by name: everything it shows is in the tree and the manifest.
+  const documentFacts: Record<string, unknown> = docType === 'custom' ? {} : docType === 'credit-statement'
     ? { newBalanceCents: (effective as any).card?.newBalanceCents ?? null, minimumDueCents: (effective as any).card?.minimumDueCents ?? null, transactionCount: Array.isArray((effective as any).card?.transactions) ? (effective as any).card.transactions.length : 0 }
     : (() => { const cl = Object.keys(claim ?? {}).length ? claim : null; return { claimId: cl ? cl.claimId : null, billedCents: cl ? cl.billedCents : null, allowedCents: cl ? cl.allowedCents : null, planPaidCents: cl ? cl.planPaidCents : null, patientResponsibilityCents: cl ? cl.patientResponsibilityCents : null, liabilityConfirmed: cl ? cl.liabilityConfirmed : null, notABill: true }; })();
 
@@ -585,10 +612,26 @@ export function buildResolverManifest(project: Project, record: any, root: RNode
     n.children.forEach(walk);
   };
   walk(root);
-  const identity: Record<string, string> = { name: `${record.customer?.givenName ?? ''} ${record.customer?.familyName ?? ''}`.trim() };
+  let identity: Record<string, string> = { name: `${record.customer?.givenName ?? ''} ${record.customer?.familyName ?? ''}`.trim() };
   if (record.card?.maskedAccount) identity.account = record.card.maskedAccount;
   if (record.card?.issuedAt) identity.statementDate = record.card.issuedAt;
   if (record.member?.memberId) identity.memberId = record.member.memberId;
+  if (project.documentType === 'custom') {
+    // A document with its own data may show the customer's name in full, in part or not at all (an empty page shows
+    // nothing). Its identity is the name as far as the document shows it, which is what every output can be checked against.
+    const shownNames: Record<string, string> = {};
+    const see = (path: string | undefined, text: string) => { if ((path === 'customer.givenName' || path === 'customer.familyName') && !(path in shownNames)) shownNames[path] = text.trim(); };
+    const seen = (n: RNode) => {
+      if (!n.visible) return;
+      for (const b of n.text ?? []) for (const i of [...(b.inlines ?? []), ...(b.items ?? []).flat()]) if (i.kind === 'token') see(i.path, i.text);
+      for (const i of n.headerFooter?.inlines ?? []) if (i.kind === 'token') see(i.path, i.text);
+      if (n.type === 'bound-field' && n.field) see(n.field.path, n.field.display);
+      n.children.forEach(seen);
+    };
+    seen(root);
+    const name = [shownNames['customer.givenName'], shownNames['customer.familyName']].filter(Boolean).join(' ');
+    identity = name ? { name } : {};
+  }
   return {
     schema: 'semantic-manifest/1', producer: 'resolver', projectId: project.projectId, modelVersion: project.modelVersion, recordId: record.recordId, documentType: project.documentType, locale,
     selectedVariants: result.selectedVariants, requiredNodeIds: result.requiredNodes, visibleNodeIds: visible.sort(), money, guardedLiabilityNodeIds: guarded.sort(), disclosures, identity, tableRows, tableTotalsCents: tableTotals, actions, facts: result.documentFacts,

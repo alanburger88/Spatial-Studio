@@ -6,7 +6,20 @@
 
 export const SCHEMA_VERSION = '1.0.0' as const;
 
-export type DocumentType = 'credit-statement' | 'eob';
+/**
+ * The kind of document a project is. `credit-statement` and `eob` come with a built-in set of data fields and sample
+ * customers. `custom` ("Your own data") has only the customer's name and language plus the data fields the project
+ * defines itself; its customers always belong to the project (generated for it, or supplied by the user).
+ */
+export type DocumentType = 'credit-statement' | 'eob' | 'custom';
+/** What a person sees for each kind of document. */
+export const DOCUMENT_TYPE_LABEL: Record<DocumentType, string> = {
+  'credit-statement': 'Credit-card statement',
+  eob: 'Explanation of benefits',
+  custom: 'Your own data',
+};
+export const DOCUMENT_TYPES = Object.keys(DOCUMENT_TYPE_LABEL) as DocumentType[];
+export const isDocumentType = (v: unknown): v is DocumentType => typeof v === 'string' && (DOCUMENT_TYPES as string[]).includes(v);
 export type ProfileId = 'paged-pdf' | 'paged-afp-sim' | 'html-responsive';
 /** A BCP-47 language tag from the supported list in `languages.ts` ("en-US" is the source language). */
 export type Locale = string;
@@ -130,6 +143,8 @@ export interface TableColumn {
   align?: 'left' | 'right' | 'center';
   /** Domain guard: member-liability columns are never shown as debt when liability is unconfirmed. */
   domainRole?: 'member-liability';
+  /** Sum this amount column in the table footer (and in the email). At most one column; tables of the built-in kinds total their amount column without it. */
+  total?: boolean;
 }
 
 export type Formatter = 'usd-cents' | 'date' | 'text' | 'int' | 'percent' | 'points';
@@ -433,12 +448,21 @@ export interface ComponentCatalogEntry {
   canContainChildren: boolean;
 }
 
-/** A user-defined data field. Records carry its value under `custom.<key>`. */
+/** One column of a list field: every row of the list carries a value under `key`. */
+export interface CustomListColumn {
+  key: string;
+  label: string;
+  type: 'string' | 'int' | 'cents' | 'date';
+}
+
+/** A user-defined data field. Records carry its value under `custom.<key>` (a list field: an array of rows). */
 export interface CustomField {
   key: string;
   label: string;
-  type: 'string' | 'int' | 'cents' | 'bool' | 'date' | 'enum';
+  type: 'string' | 'int' | 'cents' | 'bool' | 'date' | 'enum' | 'list';
   enumValues?: string[];
+  /** List fields only: the columns of each row (1 to 8). Rules can test the number of rows through `custom.<key>.count`. */
+  itemFields?: CustomListColumn[];
   required?: boolean;
   example?: string;
   /** Offer as a Cube/Landscape filter dimension. */

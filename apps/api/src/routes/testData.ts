@@ -1,16 +1,17 @@
 import type { FastifyInstance } from 'fastify';
-import { projectContentDigest, type Project, type SyntheticRecord } from '@iss/model';
-import { RECORDS } from '@iss/model/fixtures';
-import { planTestData, type TestDataPlan } from '@iss/scenarios';
+import { projectContentDigest, type Project } from '@iss/model';
+import { planTestData } from '@iss/scenarios';
 import { audit } from '../auth';
+import { baseRecordsFor, ensureCustomer, generateTestCustomers, publicPlan } from '../projectCustomers';
 import type { RouteDeps } from './deps';
-
-const PREFIX: Record<string, string> = { 'credit-statement': 'CARD', eob: 'EOB' };
 
 /**
  * Generated test customers: synthetic records made FOR ONE PROJECT so that every rule, message version and optional
  * section is exercised, with edge values around each threshold. They belong to that project only, are marked as
  * generated everywhere, and regenerating replaces the previous set. Nothing here touches the shared sample or imported records.
+ *
+ * A document with its own data ("custom") has no shared customers at all, so its generated and supplied customers are
+ * the only ones it has: removing them leaves one starting customer behind (see `ensureCustomer`).
  */
 export function registerTestDataRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const { store, ApiError, projectOr404, checkDraftProject } = deps;
@@ -23,19 +24,21 @@ export function registerTestDataRoutes(app: FastifyInstance, deps: RouteDeps): v
     if (!outcomes && !edges) throw new ApiError(400, 'NOTHING_TO_GENERATE', 'Choose at least one of: every outcome, edge values.');
     return { outcomes, edges };
   };
-  /** Shared customers of this kind of document that the generator may start from (never earlier generated ones). */
-  const baseRecords = (project: Project): SyntheticRecord[] => [...RECORDS, ...store.importedRecords(), ...store.projectRecords(project.projectId, 'supplied')].filter((r) => r.documentType === project.documentType);
-  const publicPlan = (plan: TestDataPlan, ids: string[] = []) => ({
-    summary: plan.summary,
-    targets: plan.targets.map((t) => ({ ...t, recordId: t.customer === null ? null : ids[t.customer] ?? null })),
-    customers: plan.customers.map((c, i) => ({ recordId: ids[i] ?? null, name: `${c.record.customer.givenName} ${c.record.customer.familyName}`, label: c.label, locale: c.record.customer.locale, targets: c.targets.length })),
+  /** The customer a project was given so that it is not left without one, as the responses report it. */
+  const keptOf = (b: ReturnType<typeof ensureCustomer>) => (b ? { recordId: b.record.recordId, name: b.name, label: b.label } : null);
+  /** What a removal answers. A document with its own data also says how many customers it has left and which one was created to keep it previewable. */
+  const afterRemoval = (saved: Project, removed: number, baseline: ReturnType<typeof ensureCustomer>) => (saved.documentType !== 'custom' ? { removed } : {
+    removed,
+    remaining: store.projectRecords(saved.projectId).length,
+    kept: keptOf(baseline),
+    ...(baseline ? { note: `This document has only its own customers, so one starting customer (${baseline.name}) was created to keep it previewable.` } : {}),
   });
 
   /** What generating would create. Stores nothing. */
   app.post<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/test-data/plan', async (req) => {
     projectOr404(req.params.projectId);
     const project = modelOf(req.params.projectId, req.body);
-    const plan = planTestData(project, baseRecords(project), optionsOf(req.body));
+    const plan = planTestData(project, baseRecordsFor(store, project), optionsOf(req.body));
     return { ...publicPlan(plan), existing: store.projectRecords(project.projectId, 'generated').length };
   });
 
@@ -62,23 +65,35 @@ export function registerTestDataRoutes(app: FastifyInstance, deps: RouteDeps): v
     const saved = projectOr404(req.params.projectId);
     const project = modelOf(req.params.projectId, req.body);
     const options = optionsOf(req.body);
-    const plan = planTestData(project, baseRecords(project), options);
-    const removed = store.clearProjectRecords(project.projectId, 'generated');
-    const prefix = PREFIX[project.documentType] ?? 'REC';
-    const stored = store.addProjectRecords(project.projectId, prefix, 'generated', plan.customers.map((c) => ({ ...c.record, documentType: project.documentType, generated: { label: c.label } })));
-    const pub = publicPlan(plan, stored.map((r) => r.recordId));
-    store.setTestDataPlan(project.projectId, { ...pub, options, forModelVersion: project.modelVersion, forDigest: projectContentDigest(project), unsavedModel: projectContentDigest(project) !== projectContentDigest(saved) });
+    const { plan, pub, stored, removed, baseline } = generateTestCustomers(store, project, options, saved);
     audit(store, req, 'testdata.generate', { projectId: project.projectId, modelVersion: project.modelVersion, detail: { customers: stored.length, replaced: removed, outcomes: options.outcomes, edges: options.edges, unreachable: plan.summary.unreachable, capped: plan.summary.capped } });
     reply.status(201);
-    return { ...pub, generated: stored.length, replaced: removed };
+    return { ...pub, generated: stored.length, replaced: removed, ...(baseline ? { kept: keptOf(baseline) } : {}) };
   });
 
-  /** Remove the project's generated customers. Sample and imported customers are never touched. */
+  /**
+   * Remove the project's generated customers. Sample and imported customers are never touched.
+   * A document with its own data is never left without a customer: when nothing else remains, one starting customer is
+   * created and reported as `kept`.
+   */
   app.delete<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/test-data', async (req) => {
     const saved = projectOr404(req.params.projectId);
     const removed = store.clearProjectRecords(saved.projectId, 'generated');
     store.setTestDataPlan(saved.projectId, null);
-    audit(store, req, 'testdata.clear', { projectId: saved.projectId, detail: { removed } });
-    return { removed };
+    const baseline = ensureCustomer(store, saved);
+    audit(store, req, 'testdata.clear', { projectId: saved.projectId, detail: { removed, ...(baseline ? { keptOne: baseline.record.recordId } : {}) } });
+    return afterRemoval(saved, removed, baseline);
+  });
+
+  /**
+   * Remove the customers that were supplied for this project (imported with its `projectId`). Generated customers stay.
+   * As above, a document with its own data keeps one starting customer when nothing else remains.
+   */
+  app.delete<{ Params: { projectId: string } }>('/api/v1/projects/:projectId/records/supplied', async (req) => {
+    const saved = projectOr404(req.params.projectId);
+    const removed = store.clearProjectRecords(saved.projectId, 'supplied');
+    const baseline = ensureCustomer(store, saved);
+    audit(store, req, 'records.clear', { projectId: saved.projectId, detail: { documentType: saved.documentType, scope: 'project', removed, ...(baseline ? { keptOne: baseline.record.recordId } : {}) } });
+    return afterRemoval(saved, removed, baseline);
   });
 }

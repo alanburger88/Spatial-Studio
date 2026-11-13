@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import { z } from 'zod';
-import { canonicalJson, customFieldDefs, fieldsFor, projectFields, projectContentDigest, validateRule, csvToRecords, prepareImport, IMPORT_LIMIT, SCHEMA_VERSION, RECORD_ID_PATTERN, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
+import { canonicalJson, customFieldDefs, fieldsFor, projectFields, projectContentDigest, validateRule, validateCustomFields, isDocumentType, csvToRecords, prepareImport, IMPORT_ID_BASE, IMPORT_LIMIT, RECORD_ID_PREFIX, SCHEMA_VERSION, RECORD_ID_PATTERN, DOCUMENT_TYPE_LABEL, type DocumentType, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
 import { diffProjects, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_MAX, WORKFLOW_ACTIONS, WORKFLOW_LABEL, WORKFLOW_TRANSITIONS, ACTION_LABEL, type WorkflowAction } from '@iss/model';
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
@@ -23,6 +23,7 @@ import { registerTestDataRoutes } from './routes/testData';
 import type { RouteDeps } from './routes/deps';
 import { handleMessage, providerConfig, providerStatus, type Proposal } from './assistant';
 import { registerAuth, audit } from './auth';
+import { firstCustomers } from './projectCustomers';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -49,6 +50,13 @@ type ResolveBodyT = z.infer<typeof ResolveBody>;
 function checkDraftProject(p: any, projectId: string): Project {
   if (!p || typeof p !== 'object' || p.projectId !== projectId || !Array.isArray(p.nodes) || !Array.isArray(p.rules) || !Array.isArray(p.contentParts) || !Array.isArray(p.presentationProfiles)) throw new ApiError(400, 'INVALID_PROJECT', 'Draft project does not match the canonical project shape.');
   if (p.schemaVersion !== SCHEMA_VERSION) throw new ApiError(400, 'SCHEMA_VERSION', `Unsupported schemaVersion ${p.schemaVersion}.`);
+  if (!isDocumentType(p.documentType)) throw new ApiError(400, 'INVALID_PROJECT', `Unknown kind of document ${String(p.documentType)}.`);
+  // The project's own data fields define what its rules, bindings and customer records may use, so a malformed list never gets stored.
+  if (p.customFields !== undefined) {
+    if (!Array.isArray(p.customFields) || p.customFields.some((f: unknown) => !f || typeof f !== 'object' || Array.isArray(f))) throw new ApiError(400, 'INVALID_PROJECT', 'The project’s data fields cannot be read.');
+    const errs = validateCustomFields(p.documentType, p.customFields);
+    if (errs.length) throw new ApiError(422, 'INVALID_FIELDS', errs.join(' '));
+  }
   const ids = new Set<string>();
   for (const n of p.nodes) { if (typeof n.id !== 'string' || ids.has(n.id)) throw new ApiError(400, 'INVALID_PROJECT', `Duplicate or invalid node id ${n.id}.`); ids.add(n.id); }
   for (const r of p.rules) { const errs = validateRule(r, p); if (errs.length) throw new ApiError(422, 'INVALID_RULE', `${r.id}: ${errs.join(' ')}`, { ruleId: r.id }); }
@@ -146,6 +154,8 @@ export async function buildApp(opts: AppOptions = {}) {
     if (!ifMatch || !Number.isInteger(expected)) throw new ApiError(428, 'PRECONDITION_REQUIRED', 'Save requires If-Match with the project model version you loaded.');
     if (expected !== current.modelVersion) throw new ApiError(409, 'VERSION_CONFLICT', `Project is at version ${current.modelVersion}; you edited version ${expected}.`, { currentVersion: current.modelVersion });
     const incoming = checkDraftProject((req.body as any)?.project ?? req.body, req.params.projectId);
+    // The kind decides which customers a document has (a document with its own data has only its own), so it is fixed at creation.
+    if ((incoming.documentType === 'custom') !== (current.documentType === 'custom')) throw new ApiError(400, 'DOCUMENT_TYPE_FIXED', 'The kind of document cannot be changed after it is created. Start a new project instead.');
     if (incoming.modelVersion <= current.modelVersion && projectContentDigest(incoming) !== projectContentDigest(current)) incoming.modelVersion = current.modelVersion + 1;
     const wasState = store.getWorkflow(current.projectId).state;
     const saved = store.putProject(incoming, undefined, { by: by(req) });
@@ -181,9 +191,11 @@ export async function buildApp(opts: AppOptions = {}) {
     const { lastSavedAt: _l, ...rest } = src as Project & { lastSavedAt?: string };
     const copy = { ...rest, projectId: id, title, modelVersion: 1, derivedFrom: { projectId: src.projectId, modelVersion: src.modelVersion } } as Project;
     const saved = store.putProject(copy, projectContentDigest(copy), { by: by(req), label: `Duplicated from “${src.title}” v${src.modelVersion}` });
-    audit(store, req, 'project.duplicate', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { from: src.projectId, fromVersion: src.modelVersion, title } });
+    // A copy of a document with its own data starts with customers of its own (the original's customers stay with the original).
+    const customers = firstCustomers(store, saved);
+    audit(store, req, 'project.duplicate', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { from: src.projectId, fromVersion: src.modelVersion, title, ...(saved.documentType === 'custom' ? { customers } : {}) } });
     reply.status(201);
-    return { project: saved, duplicatedFrom: src.projectId };
+    return { project: saved, duplicatedFrom: src.projectId, ...(saved.documentType === 'custom' ? { customers } : {}) };
   });
   app.patch<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId', async (req) => {
     const current = projectOr404(req.params.projectId);
@@ -437,7 +449,7 @@ export async function buildApp(opts: AppOptions = {}) {
       const want = new Set(b.recordIds.map(String));
       records = pool.filter((r) => want.has(r.recordId));
       const missing = [...want].filter((id) => !pool.some((r) => r.recordId === id));
-      if (missing.length) throw new ApiError(400, 'UNKNOWN_RECORDS', `Not ${project.documentType} records: ${missing.slice(0, 5).join(', ')}.`);
+      if (missing.length) throw new ApiError(400, 'UNKNOWN_RECORDS', project.documentType === 'custom' ? `Not customers of this document: ${missing.slice(0, 5).join(', ')}.` : `Not ${project.documentType} records: ${missing.slice(0, 5).join(', ')}.`);
     }
     if (!records.length) throw new ApiError(400, 'EMPTY_BATCH', 'Choose at least one record.');
     if (records.length > BATCH_LIMIT) throw new ApiError(413, 'BATCH_TOO_LARGE', `At most ${BATCH_LIMIT} records per batch.`);
@@ -463,12 +475,25 @@ export async function buildApp(opts: AppOptions = {}) {
 
   /* Imported scenario records: validated against the typed data contract; stored locally only. */
   app.post<{ Body: Record<string, any> }>('/api/v1/records/import', async (req) => {
-    const b = (req.body ?? {}) as { documentType?: string; format?: string; data?: unknown; dryRun?: boolean; projectId?: string };
-    if (b.documentType !== 'credit-statement' && b.documentType !== 'eob') throw new ApiError(400, 'INVALID_REQUEST', 'documentType must be credit-statement or eob.');
-    const documentType = b.documentType;
+    const b = (req.body ?? {}) as { documentType?: string; format?: string; data?: unknown; dryRun?: boolean; projectId?: string; scope?: string };
     // Custom data fields of the chosen project are accepted in addition to the standard contract.
     const target = b.projectId ? projectOr404(b.projectId) : undefined;
-    if (target && target.documentType !== documentType) throw new ApiError(400, 'RECORD_TYPE_MISMATCH', `${target.projectId} is a ${target.documentType} project.`);
+    // A document with its own data has no shared customers: its records are always supplied FOR one project, which must be named.
+    if (b.documentType === 'custom' && !target) throw new ApiError(400, 'PROJECT_REQUIRED', `Customers for a document with its own data (“${DOCUMENT_TYPE_LABEL.custom}”) belong to one project. Send that project’s projectId with the import.`);
+    // With a project named, the kind may be left out: it is the project's.
+    const wanted = b.documentType === undefined || b.documentType === null || b.documentType === '' ? target?.documentType : b.documentType;
+    if (!isDocumentType(wanted)) throw new ApiError(400, 'INVALID_REQUEST', 'documentType must be credit-statement or eob (or leave it out and send the projectId of the document the customers are for).');
+    const documentType: DocumentType = wanted;
+    if (target && target.documentType !== documentType) throw new ApiError(400, 'RECORD_TYPE_MISMATCH', target.documentType === 'custom' || documentType === 'custom' ? `“${target.title}” is a different kind of document (${DOCUMENT_TYPE_LABEL[target.documentType]}).` : `${target.projectId} is a ${target.documentType} project.`);
+    if (b.scope !== undefined && b.scope !== 'project' && b.scope !== 'shared') throw new ApiError(400, 'INVALID_REQUEST', 'scope must be "project" or "shared".');
+    if (b.scope === 'project' && !target) throw new ApiError(400, 'PROJECT_REQUIRED', 'Send the projectId of the document these customers are for.');
+    if (b.scope === 'shared' && documentType === 'custom') throw new ApiError(400, 'INVALID_REQUEST', 'Customers of a document with its own data cannot be shared with other documents.');
+    /**
+     * Where the accepted rows go. For one project ("supplied": validated against that project's fields, visible only
+     * there, removable with DELETE /projects/:id/records/supplied): always for a document with its own data, and for the
+     * built-in kinds when asked with scope "project". Otherwise as before: shared by every document of that kind.
+     */
+    const forProject = !!target && (documentType === 'custom' || b.scope === 'project');
     const extra = customFieldDefs(target?.customFields);
     let items: unknown[];
     if (b.format === 'csv') {
@@ -483,12 +508,16 @@ export async function buildApp(opts: AppOptions = {}) {
     }
     if (!items.length) throw new ApiError(400, 'EMPTY_IMPORT', 'No records found in the file.');
     if (items.length > IMPORT_LIMIT) throw new ApiError(413, 'IMPORT_TOO_LARGE', `At most ${IMPORT_LIMIT} records per import.`);
-    const rows = prepareImport(items, documentType, store.nextImportNumber(documentType), extra);
-    const ok = rows.filter((r) => r.record).map((r) => r.record!);
-    if (!b.dryRun && ok.length) store.addImportedRecords(ok);
+    const rows = prepareImport(items, documentType, forProject ? IMPORT_ID_BASE : store.nextImportNumber(documentType), extra);
+    let ok = rows.filter((r) => r.record).map((r) => r.record!);
+    if (forProject) {
+      // The project's own records get studio-wide unique ids of their own (never reused); a dry run shows none yet.
+      const mine = ok.map(({ recordId: _provisional, ...rest }) => rest);
+      ok = b.dryRun ? mine.map((r) => ({ ...r, recordId: '', projectId: target!.projectId }) as SyntheticRecord) : store.addProjectRecords(target!.projectId, RECORD_ID_PREFIX[documentType], 'supplied', mine);
+    } else if (!b.dryRun && ok.length) store.addImportedRecords(ok);
     if (b.dryRun) req.audited = true;
-    else audit(store, req, 'records.import', { projectId: target?.projectId ?? null, detail: { documentType, format: b.format === 'csv' ? 'csv' : 'json', imported: ok.length, rejected: rows.length - ok.length, recordIds: ok.slice(0, 20).map((r) => r.recordId) } });
-    return { documentType, dryRun: !!b.dryRun, imported: ok.map((r) => ({ recordId: r.recordId, sourceId: r.sourceId ?? null, name: `${r.customer.givenName} ${r.customer.familyName}` })), rejected: rows.filter((r) => !r.record).map(({ row, sourceId, errors }) => ({ row, sourceId, errors })), total: items.length };
+    else audit(store, req, 'records.import', { projectId: target?.projectId ?? null, detail: { documentType, format: b.format === 'csv' ? 'csv' : 'json', imported: ok.length, rejected: rows.length - ok.length, recordIds: ok.slice(0, 20).map((r) => r.recordId), ...(forProject ? { scope: 'project' } : {}) } });
+    return { documentType, dryRun: !!b.dryRun, ...(forProject ? { projectId: target!.projectId, scope: 'project' as const } : {}), imported: ok.map((r) => ({ recordId: r.recordId || null, sourceId: r.sourceId ?? null, name: `${r.customer.givenName} ${r.customer.familyName}` })), rejected: rows.filter((r) => !r.record).map(({ row, sourceId, errors }) => ({ row, sourceId, errors })), total: items.length };
   });
   app.delete<{ Querystring: { documentType?: string } }>('/api/v1/records/imported', async (req) => {
     const removed = store.clearImportedRecords(req.query.documentType);
@@ -503,7 +532,10 @@ export async function buildApp(opts: AppOptions = {}) {
 
   /** `projectId` adds the records that belong to that project alone (generated test customers, supplied data). */
   app.get<{ Querystring: { documentType?: string; full?: string; projectId?: string } }>('/api/v1/records', async (req) => {
-    const recs = allRecords(req.query.projectId).filter((r) => !req.query.documentType || r.documentType === req.query.documentType);
+    // A document with its own data only ever sees its own customers, whatever kind is asked for.
+    const ownOnly = req.query.projectId && !req.query.documentType && store.getProject(req.query.projectId)?.documentType === 'custom' ? 'custom' : undefined;
+    const kind = req.query.documentType || ownOnly;
+    const recs = allRecords(req.query.projectId).filter((r) => !kind || r.documentType === kind);
     if (req.query.full === '1') return { seed: FIXTURE_SEED, syntheticOnly: true, records: recs };
     return { seed: FIXTURE_SEED, syntheticOnly: true, records: recs.map((r) => ({ recordId: r.recordId, documentType: r.documentType, personaId: r.personaId ?? null, name: `${r.customer.givenName} ${r.customer.familyName}`, locale: r.customer.locale, status: (r.card as any)?.paymentStatus ?? (r.claims?.[0] as any)?.status, synthetic: !r.imported, imported: !!r.imported, generated: r.generated ? r.generated.label : null, projectOnly: !!r.projectId })) };
   });
@@ -671,8 +703,11 @@ export async function buildApp(opts: AppOptions = {}) {
     if (typeof b?.message !== 'string' || !b.message.trim() || b.message.length > 2000) throw new ApiError(400, 'INVALID_MESSAGE', 'Message must be 1–2000 characters.');
     const ctx = b.context ?? {};
     const project = b.project ? checkDraftProject(b.project, String(ctx.projectId)) : projectOr404(String(ctx.projectId));
-    const recordId = String(ctx.recordId ?? (project.documentType === 'eob' ? 'EOB-0001' : 'CARD-0001'));
-    recordOr404(recordId);
+    // Without a chosen customer: the first sample customer of the kind, or, for a document with its own data, its first own customer.
+    const recordId = String(ctx.recordId ?? (project.documentType === 'custom' ? store.projectRecords(project.projectId)[0]?.recordId ?? '' : project.documentType === 'eob' ? 'EOB-0001' : 'CARD-0001'));
+    if (!recordId) throw new ApiError(400, 'NO_CUSTOMER', 'This document has no customers yet. Generate test customers first.');
+    const chosen = recordOr404(recordId);
+    if (chosen.projectId && chosen.projectId !== project.projectId) throw new ApiError(400, 'RECORD_OTHER_PROJECT', 'That customer belongs to another document.');
     const cfg = providerConfig();
     if (b.forceOffline === true) cfg.provider = 'offline';
     const reply = await handleMessage(b.message, { project, records: allRecords(project.projectId), recordId, overrides: ctx.overrides ?? {}, journeyCursor: ctx.journeyCursor ?? null, selectedNodeId: ctx.selectedNodeId ?? null }, cfg);

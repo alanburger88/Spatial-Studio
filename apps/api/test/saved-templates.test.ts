@@ -26,7 +26,7 @@ describe('saved templates (auth off: local admin)', () => {
 
     const list = (await inj('GET', '/api/v1/templates')).json();
     expect(list.canSave).toBe(true);
-    expect(list.templates.map((t: any) => t.source)).toEqual(['builtin', 'builtin', 'builtin', 'saved']);
+    expect(list.templates.map((t: any) => t.source)).toEqual(['builtin', 'builtin', 'builtin', 'builtin', 'saved']);
 
     const preview = (await inj('GET', `/api/v1/templates/${template.id}/project`)).json();
     expect(preview.version).toBe(1);
@@ -83,8 +83,8 @@ describe('saved templates (auth off: local admin)', () => {
     expect((await inj('PATCH', '/api/v1/templates/blank-letter', { retired: true })).statusCode).toBe(404);
     expect((await inj('PATCH', '/api/v1/templates/saved-aster-statement-starter', {})).statusCode).toBe(400);
     expect((await inj('PATCH', '/api/v1/templates/saved-aster-statement-starter', { retired: true })).json().template.retired).toBe(true);
-    expect((await inj('GET', '/api/v1/templates')).json().templates).toHaveLength(3);
-    expect((await inj('GET', '/api/v1/templates?includeRetired=true')).json().templates).toHaveLength(4);
+    expect((await inj('GET', '/api/v1/templates')).json().templates).toHaveLength(4);
+    expect((await inj('GET', '/api/v1/templates?includeRetired=true')).json().templates).toHaveLength(5);
     // projects already started from it are untouched, and it can still be opened by id
     expect((await project('spring-statement')).fromTemplate.templateId).toBe('saved-aster-statement-starter');
     expect((await inj('PATCH', '/api/v1/templates/saved-aster-statement-starter', { retired: false })).json().template.retired).toBe(false);
@@ -96,7 +96,7 @@ describe('saved templates (auth off: local admin)', () => {
   it('reset removes saved templates only, and needs confirmation', async () => {
     expect((await inj('POST', '/api/v1/templates/reset', {})).statusCode).toBe(400);
     expect((await inj('POST', '/api/v1/templates/reset', { confirm: true })).json().removed).toBe(1);
-    expect((await inj('GET', '/api/v1/templates?includeRetired=true')).json().templates.map((t: any) => t.id)).toEqual(['credit-card-statement', 'explanation-of-benefits', 'blank-letter']);
+    expect((await inj('GET', '/api/v1/templates?includeRetired=true')).json().templates.map((t: any) => t.id)).toEqual(['credit-card-statement', 'explanation-of-benefits', 'blank-letter', 'blank-project']);
   });
 });
 

@@ -38,7 +38,9 @@ export function staticRuleAnalysis(project: Project, records: SyntheticRecord[])
   }
   for (const r of rules) {
     const hits = ctxs.filter((c) => evaluatePredicate(r.when, c)).length;
-    if (!hits && r.mode !== 'obligation') out.push({ code: 'RULE_NOT_REACHED_IN_FIXTURES', severity: 'info', ruleId: r.id, source: 'rules-static', message: `${r.id} matched none of the ${recs.length} seeded ${project.documentType} records (bounded fixture analysis, not a formal proof).`, details: { evaluated: recs.length } });
+    // A document with its own data has no seeded records: it is checked against the project's own customers.
+    const against = project.documentType === 'custom' ? `this project’s ${recs.length} ${recs.length === 1 ? 'customer' : 'customers'} (a bounded check, not a formal proof)` : `the ${recs.length} seeded ${project.documentType} records (bounded fixture analysis, not a formal proof)`;
+    if (!hits && r.mode !== 'obligation') out.push({ code: 'RULE_NOT_REACHED_IN_FIXTURES', severity: 'info', ruleId: r.id, source: 'rules-static', message: `${r.title && project.documentType === 'custom' ? `“${r.title}”` : r.id} matched none of ${against}.`, details: { evaluated: recs.length } });
   }
   for (const n of project.nodes) {
     if (n.type !== 'variant-set') continue;

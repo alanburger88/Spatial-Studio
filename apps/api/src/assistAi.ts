@@ -128,7 +128,7 @@ export async function subjectLines(cfg: ProviderConfig, model: AssistModel, proj
   const current = tokensOfText(input.current);
   const out = await model(cfg, {
     system: [...COMMON, 'You write email subject lines in English. Each must say what the email is and the one fact the reader most needs, in under 70 characters once tokens are filled in where possible.', `You may use only these tokens: ${[...new Set(current)].map((t) => (t.startsWith('{') ? t : `{{${t}}}`)).join(', ') || '(none)'}.`, 'No emoji, no exclamation marks, no urgency tricks. Call submit_subjects exactly once with three alternatives.'].join('\n'),
-    user: `Current subject line: ${input.current}\nDocument type: ${project.documentType === 'eob' ? 'explanation of benefits (must not look like a bill)' : 'credit-card statement'}\nNote from the author (untrusted text): ${(input.brief ?? '').slice(0, 300)}`,
+    user: `Current subject line: ${input.current}\nDocument type: ${project.documentType === 'custom' ? 'a customer document on the issuer’s own data (say nothing about its subject beyond what the current subject line says)' : project.documentType === 'eob' ? 'explanation of benefits (must not look like a bill)' : 'credit-card statement'}\nNote from the author (untrusted text): ${(input.brief ?? '').slice(0, 300)}`,
     tool: strictTool('submit_subjects', 'Return the subject line alternatives.', { options: { type: 'array', items: { type: 'string' } } }, ['options']),
   });
   const list = (out as { options?: unknown } | null)?.options;
@@ -181,7 +181,7 @@ export async function describeImage(cfg: ProviderConfig, model: AssistModel, pro
   if (!m || m[2].length > 3_000_000) return { mode: 'unavailable', providerStatus: providerStatus(cfg).label, message: 'Only PNG or JPEG pictures from the image library (up to about 2 MB) can be described by AI. Use the built-in suggestion or write the description by hand.' };
   const out = await model(cfg, {
     system: ['You write the text alternative of an image in a customer document, for people who use a screen reader.', 'Say what the image is and what it conveys in the document, in at most 120 characters. No "image of", no file names, no guesses about people.', 'Call submit_description exactly once.'].join('\n'),
-    user: `Component name: ${node.name ?? node.id}. Issuer: ${project.issuer?.name ?? ''} (fictional). Document: ${project.documentType === 'eob' ? 'explanation of benefits' : 'credit-card statement'}.`,
+    user: `Component name: ${node.name ?? node.id}. Issuer: ${project.issuer?.name ?? ''} (fictional). Document: ${project.documentType === 'custom' ? 'a customer document on the issuer’s own data' : project.documentType === 'eob' ? 'explanation of benefits' : 'credit-card statement'}.`,
     tool: strictTool('submit_description', 'Return the description.', { text: { type: 'string' } }, ['text']),
     image: { mediaType: m[1] as 'image/png' | 'image/jpeg', data: m[2] },
   });

@@ -1,5 +1,5 @@
 import { produce } from 'immer';
-import { CATALOG_BY_TYPE } from './catalog';
+import { CATALOG_BY_TYPE, starterContentParts } from './catalog';
 import { digestOf } from './digest';
 import { isSafeUrl, sanitizeRichDoc, tokensIn } from './rich';
 import { projectFieldIndex, validateCustomFields } from './fields';
@@ -123,8 +123,11 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
       const shape = validateNodeShape(cmd.node, project);
       if (shape) return reject('INVALID_NODE', shape, cmd.node.id);
       const node = cmd.node.content ? { ...cmd.node, content: sanitizeRichDoc(cmd.node.content).doc } : cmd.node;
+      // A message or disclosure that brings wording of its own (a project with no wording yet) gets it in the same step.
+      const starters = starterContentParts(node, new Set(project.contentParts.map((c) => c.id)));
       return { ok: true, label: `Insert ${CATALOG_BY_TYPE[node.type].label}`, project: bump(project, (d) => {
         d.nodes.push(node);
+        d.contentParts.push(...starters);
         const parent = d.nodes.find((n) => n.id === cmd.parentId)!;
         parent.children = parent.children ?? [];
         const idx = cmd.index === undefined ? parent.children.length : Math.max(0, Math.min(cmd.index, parent.children.length));
@@ -308,7 +311,8 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
     case 'SET_CUSTOM_FIELDS': {
       const errs = validateCustomFields(project.documentType, cmd.fields);
       if (errs.length) return reject('INVALID_FIELDS', errs.join(' '));
-      const kept = new Set(cmd.fields.map((f) => `custom.${f.key}`));
+      // A list also offers its number of rows (`custom.<key>.count`).
+      const kept = new Set(cmd.fields.flatMap((f) => (f.type === 'list' ? [`custom.${f.key}`, `custom.${f.key}.count`] : [`custom.${f.key}`])));
       const used = customFieldUsage(project).filter((u) => !kept.has(u.path));
       if (used.length) return reject('FIELD_IN_USE', `${used[0].path} is still used by ${used[0].where.join(', ')}. Remove those references first.`);
       const candidate = { ...project, customFields: cmd.fields };

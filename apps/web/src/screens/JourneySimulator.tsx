@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fieldsFor, type JourneyEvent, type Scalar } from '@iss/model';
+import { fieldsFor, type DocumentType, type JourneyEvent, type Scalar } from '@iss/model';
 import { explainNode, resolve } from '@iss/resolver';
 import { replayJourney, type JourneySnapshot } from '@iss/scenarios';
 import { renderInteractiveHtml } from '@iss/renderers';
@@ -68,7 +68,7 @@ function toDraft(e: JourneyEvent | null, type: string, docType: string): Draft {
 /* ---------------------------------------------------------- O05 event editor */
 
 function EventEditor({ docType, initial, existingIds, existingEvent, onSave, onClose }: {
-  docType: 'credit-statement' | 'eob';
+  docType: DocumentType;
   initial: Draft;
   existingIds: Set<string>;
   existingEvent: JourneyEvent | null;
@@ -77,7 +77,7 @@ function EventEditor({ docType, initial, existingIds, existingEvent, onSave, onC
 }) {
   const [d, setD] = useState<Draft>(initial);
   const [errors, setErrors] = useState<string[]>([]);
-  const prefix = docType === 'eob' ? 'claim.' : 'card.';
+  const prefix = docType === 'eob' ? 'claim.' : docType === 'custom' ? 'custom.' : 'card.';
   const fields = useMemo(() => fieldsFor(docType).filter((f) => f.path.startsWith(prefix) && !f.derived && f.type !== 'array'), [docType, prefix]);
   const fieldOf = (p: string) => fields.find((f) => f.path === p);
   const types = Object.keys(TEMPLATES[docType] ?? {});
