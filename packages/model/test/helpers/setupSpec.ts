@@ -27,7 +27,7 @@ export function gymSetup(): SetupSpec {
       {
         type: 'messages', name: 'Payment note',
         versions: [
-          { title: 'Payment failed', text: 'Your last payment of {Monthly fee} did not go through, {First name}. Please update your card before {Renewal date}.', when: { field: 'Payment status', test: 'is', value: 'failed' } },
+          { title: 'Payment failed', text: 'Your last payment of {Monthly fee} did not go through, {First name}. Please update your payment details before {Renewal date}.', when: { field: 'Payment status', test: 'is', value: 'failed' } },
           { title: 'Premium member', text: 'Thank you for being one of our premium members.', when: { field: 'Monthly fee', test: 'atLeast', value: 100 } },
           { title: 'Frequent visitor', text: 'You came in {Visits this month} times this month. Keep it up!', when: { field: 'Visits this month', test: 'moreThan', value: 12 } },
           { title: 'Nothing to do', text: 'There is nothing you need to do.', fallback: true },

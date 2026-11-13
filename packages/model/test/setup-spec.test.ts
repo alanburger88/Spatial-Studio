@@ -323,7 +323,7 @@ describe('building a project from a document setup', () => {
     for (const r of project.rules) expect(validateRule(r, project)).toEqual([]);
     const part = (id: string) => project.contentParts.find((c) => c.id === id)!;
     expect(project.contentParts.map((c) => `${c.id}:${c.type}:${c.title}`)).toEqual(['message-5-v1:text:Payment failed', 'message-5-v2:text:Premium member', 'message-5-v3:text:Frequent visitor', 'message-5-v4:text:Nothing to do', 'notice-7:disclosure:Notice']);
-    expect(part('message-5-v1').approvedLocales['en-US']).toBe('Your last payment of {{custom.monthlyFeeCents}} did not go through, {{customer.givenName}}. Please update your card before {{custom.renewalDate}}.');
+    expect(part('message-5-v1').approvedLocales['en-US']).toBe('Your last payment of {{custom.monthlyFeeCents}} did not go through, {{customer.givenName}}. Please update your payment details before {{custom.renewalDate}}.');
     expect(part('notice-7').approvedLocales['en-US']).toBe('Fees are charged monthly in advance. You can cancel at any time before {{custom.renewalDate}}.');
     expect(byId.get('notice-7')).toMatchObject({ contentPartId: 'notice-7', required: true, protected: true });
     expect(byId.get('action-8')!.action).toEqual({ label: 'Manage your membership', url: 'https://example.com/membership', fallbackText: 'Visit example.com/membership' });

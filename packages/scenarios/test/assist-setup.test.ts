@@ -68,7 +68,7 @@ describe('a document built from a setup, end to end (the gym renewal notice)', (
     expect(textOf(find(res.root, 'heading-1'))).toBe('Your Flex membership renews soon');
     expect(find(res.root, 'heading-1')!.text![0].kind).toBe('h2');
     expect(textOf(find(res.root, 'greeting'))).toBe('Hello Robin Okoye,\nyour Flex plan renews on Dec 1, 2026 for $49.00 a month.');
-    expect(textOf(find(res.root, 'message-5'))).toBe('Your last payment of $49.00 did not go through, Robin. Please update your card before Dec 1, 2026.');
+    expect(textOf(find(res.root, 'message-5'))).toBe('Your last payment of $49.00 did not go through, Robin. Please update your payment details before Dec 1, 2026.');
     expect(textOf(find(res.root, 'notice-7'))).toBe('Fees are charged monthly in advance. You can cancel at any time before Dec 1, 2026.');
     expect(['figure-3-1', 'figure-3-2', 'figure-3-3', 'figure-3-4'].map((id) => { const f = find(res.root, id)!.field!; return `${f.label}: ${f.display}`; }))
       .toEqual(['Monthly fee: $49.00', 'Renewal date: Dec 1, 2026', 'Visits this month: 9', 'Renews automatically: Yes']);
