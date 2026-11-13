@@ -24,5 +24,6 @@ export * from './expressions';
 export * from './formula';
 export * from './formulaWords';
 export * from './lookup';
+export * from './lookupPaste';
 export * from './effective';
 export * from './library';

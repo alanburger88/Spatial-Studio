@@ -116,8 +116,10 @@ function tokenize(src: string): Tok[] {
 
 /* ------------------------------------------------------------------ parser */
 
-const FUNCTION_NAMES = new Set(FORMULA_FUNCTIONS.map((f) => f.name));
-const KEYWORDS = new Set(['AND', 'OR', 'NOT', 'IN', 'IS', 'EMPTY', 'PRESENT', 'WHERE', 'TRUE', 'FALSE', 'NULL']);
+// Built on first use, not when the module loads, so a bundle that never parses a formula can leave the parser out.
+let functionNames: Set<string> | null = null;
+const FUNCTION_NAMES = (): Set<string> => (functionNames ??= new Set(FORMULA_FUNCTIONS.map((f) => f.name)));
+const KEYWORDS: ReadonlySet<string> = /* @__PURE__ */ new Set(['AND', 'OR', 'NOT', 'IN', 'IS', 'EMPTY', 'PRESENT', 'WHERE', 'TRUE', 'FALSE', 'NULL']);
 const COMPARE: Record<string, ComparisonOp> = { '=': 'eq', '<>': 'ne', '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte' };
 const describe = (t: Tok): string => (t.kind === 'eof' ? 'the end of the formula' : `“${t.text}”`);
 
@@ -211,7 +213,7 @@ class Parser {
     const nameTok = this.next();
     const start = nameTok.start;
     const name = nameTok.text.toUpperCase();
-    if (!FUNCTION_NAMES.has(name)) fail(`“${nameTok.text}” is not a function. The functions are ${[...FUNCTION_NAMES].join(', ')}.`, nameTok.start, nameTok.end);
+    if (!FUNCTION_NAMES().has(name)) fail(`“${nameTok.text}” is not a function. The functions are ${[...FUNCTION_NAMES()].join(', ')}.`, nameTok.start, nameTok.end);
     this.expect('lp', `an opening bracket “(” after ${name}`);
     const close = (): void => { const t = this.peek(); if (t.kind !== 'rp') fail(t.kind === 'comma' ? `${name} has too many values here.` : `Expected a closing bracket “)” to end ${name}(…), found ${describe(t)}.`, t.start, t.end); this.next(); };
     const comma = (): void => { const t = this.peek(); if (t.kind !== 'comma') fail(t.kind === 'rp' ? `${name} needs more values. It is written ${FORMULA_FUNCTIONS.find((f) => f.name === name)!.signature}.` : `Expected a comma “,” here, found ${describe(t)}.`, t.start, t.end); this.next(); };
