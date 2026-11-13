@@ -1,6 +1,6 @@
 # Autonomous implementation checkpoint
 
-**Status:** POC v0.3 (polish pass + "Now" and "Next" bundles) built and verified locally (2026-11-12). Branch `claude/magical-franklin-aonsol`.
+**Status:** POC v0.6 (assistant on every screen, on top of v0.5 languages and channels) built and verified locally (2026-11-13). Branch `claude/magical-franklin-aonsol`.
 
 ## Gate log
 
@@ -21,8 +21,8 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | Pack validation | PASS |
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
-| Unit tests | 139/139 |
-| Browser tests | 127/127 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests + 36 v0.5 tests: blockers 3, HTML web 18, translations 6, Email & SMS 9) |
+| Unit tests | 380/380 |
+| Browser tests | 152/152 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests + 36 v0.5 tests + 25 v0.6 assistant tests: fixes 6, rules 5, writing 7, side panel 6, import 1) |
 | Build | OK |
 
 ## v0.2 additions (all verified by the tests above)
@@ -74,8 +74,27 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 - **Exploded Document:** states that versions are the same for every output and shows the document language.
 - **First download:** 486 kB → 525 kB (160 kB → 172 kB compressed): the language table and wording catalogue load with the shell.
 
+## v0.6 additions (approved scope change: an assistant across the studio — nine decisions, D65–D71)
+
+Policy (D65): the assistant proposes and a person approves; every applied proposal is one Undo step and is recorded in Activity as assistant-assisted; results are labelled *Built-in* (computed by the studio) or *AI suggestion* (from a model); it never approves, exports or publishes.
+
+| Area | What was built | Works without an AI key | Needs an AI key |
+|---|---|---|---|
+| Side panel (D71) | **Ask AI** in every screen header; knows the screen, customer and selection; shares its conversation with the AI Assistant screen | Explain, change summary, jump-to actions, the guided assistant | Free-form model answers |
+| Validate & Compare (D66) | **Suggested fix** per issue with its effect on all synthetic customers; **Fix all safe issues** | Everything | — |
+| Rules & Data (D67, D68) | **Describe a rule**, **Review my rules**, **Find coverage gaps** with a scenario and a ready-to-pin test | Common sentence shapes, the review, coverage | Freer rule sentences |
+| Writing (D69) | Reading level, **Fit in one message**, rewrite actions, new message version, subject lines | Reading level, SMS fit | Rewrites, new versions, subject lines |
+| Translations (D69) | **Check drafts**, per-language **Glossary** | The check and the glossary | Meaning check, AI drafts |
+| Small helpers (D69–D71) | Image descriptions, Explain everywhere, column matching on import, plain-word Activity search | All four (image description from the component's name and place) | Description from the picture itself |
+| History / Review (D71) | **Summarise changes** with customer impact | Everything | — |
+
+Engines are pure functions in `packages/scenarios/src/assist/`; model-backed features go through `/api/v1/projects/:id/assist/*`, where model output is validated before it is returned.
+
 ## Not verified / open
 
+- **Assistant, model-backed features (v0.6):** no live model call was made (no key in this environment). Rewrites, new message versions, subject lines and free-form rule sentences were exercised only with a stand-in model on the server and intercepted replies in the browser. An AI image description, an AI rewrite of an SMS and AI meaning flags on translations were **never rendered on screen**, even simulated; only their server handling is tested.
+- **Assistant, combinations not checked (v0.6):** the read-only (viewer) role, the HarborCare sample project, Technical view and windows narrower than 1280 px were not checked on every new assistant surface. The side panel was checked at 1000×700 on one screen only.
+- **Assistant, known limits (v0.6):** rule sentences and Activity search understand English only; the reading level is English only; the History change summary compares the previous saved version with the current one (not automatically "since last approved"); a project reset does not clear its review state.
 - **Live AI provider:** not exercised; no credentials were used. This now includes AI translation: the request, the handling of its output and the fallback are tested with a stand-in translator, but no real model call was made.
 - **Sample Spanish drafts:** written for the demo by the build agent; not reviewed by a translator.
 - **Other languages:** only Spanish was looked at in the outputs. French and others were exercised in unit tests (formatting, adding, obligations) but no translated document in them was inspected.

@@ -74,10 +74,12 @@ Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the 
 - **All customers' blockers**: Validate & Compare → **All customers** lists every blocking issue across the synthetic customers, with who is affected.
 - **Interactive HTML** is laid out as a web page (sticky summary bar, section menu, searchable and sortable tables); the studio previews it in a phone, tablet or desktop frame.
 - **Assistant** (works without an AI key unless noted; it proposes, you approve, and every applied proposal is one Undo):
+  - *Every screen*: **Ask AI** in the header opens a side panel that knows the screen, the customer and the selection. **Explain** says in plain words why a customer gets a message; **Summarise changes** lists what changed between saved versions and how many synthetic customers are affected.
   - *Validate & Compare*: every issue has a **Suggested fix** with its effect on all synthetic customers; **Fix all safe issues** applies the low-risk ones in one step.
   - *Rules & Data*: **Describe a rule** in a sentence, **Review my rules**, and **Find coverage gaps** (a scenario and a ready-to-pin test for anything no customer exercises).
   - *Writing help*: reading level, **Fit in one message** for SMS, image descriptions and **Check drafts** for translations are built in; rewrites, new message versions, subject lines and meaning checks need an AI key. A per-language **Glossary** keeps terms consistent.
   - *Import records*: columns are matched to data fields with a reason, and values that do not fit are flagged.
+  - *Activity*: search in plain words ("what did the reviewer approve last week"); changes applied from the assistant are listed as such.
 - **Document Cube filters**: click a legend chip to show only intersections with that outcome (several can be on at once), or **Problems only** for those with blocking issues or warnings. The Grid and table fade the rest; the 3D view hides them. The 3D view opens on one layer (the previewed customer's) with previous/next buttons; choose **All layers** for the whole cube.
 - **Demo tools** (status bar): deliberate defects for demonstrations (rule tie, missing Spanish wording, table overflow, unconfirmed liability, no matching message) live in one panel that opens only when you click it.
 - **2D Design Studio zoom**: the page fits the panel width by default (*Width*); *Page* shows the whole sheet. On windows narrower than 1500 px the component list starts closed so the page shows near full size; open it with **Components** (your choice is remembered).
@@ -114,6 +116,7 @@ pnpm verify
 | `pnpm verify:app` | The pack's independent live-service smoke check (18 checks) |
 | `pnpm evidence` | Regenerates real PDFs, HTML, parity and composition manifests into `reports/evidence/` |
 | `node scripts/screens.mjs` | Captures all 12 screens from the running app |
+| `node scripts/screens-assist.mjs` | Captures five assistant screens (explain, suggested fix, describe a rule, coverage gaps, translation check) from the running app |
 
 ## The screens
 
