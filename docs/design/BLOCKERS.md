@@ -1,6 +1,6 @@
 # Blockers: seeing them, sharing them, resolving them
 
-Status: **design agreed in a workshop with the product owner on 2026-11-13 (eight decisions). Nothing in this document is built yet.**
+Status: **design agreed in a workshop with the product owner on 2026-11-13 (eight decisions). Phases 1 to 3 are built (see the phase list and "As built: phases 2 and 3"); phases 4 to 6 are not.**
 
 ## Where we start from
 

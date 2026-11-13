@@ -186,6 +186,7 @@ function ReviewPanelInner() {
 
             <section className="drawer-section" aria-labelledby="wf-ready-h" data-testid="review-readiness">
               <h3 id="wf-ready-h">Ready to approve? {r && <span className="count">checked v{r.modelVersion}</span>}</h3>
+              <p className="muted" style={{ margin: '0 0 8px' }}><Link to={`/studio/${pid}/compare`} onClick={close} data-testid="review-compare-link">See what customers will see differently</Link> compared with the last release.</p>
               {!r ? <p className="muted"><span className="spinner" /> Checking every synthetic record and test…</p> : (
                 <>
                 {!r.ready && <p className="wf-reason" style={{ margin: '0 0 8px' }} data-testid="readiness-summary">Approval is blocked by {r.blocking.length} blocking issue{r.blocking.length === 1 ? '' : 's'} and {r.testsFailed} failing test{r.testsFailed === 1 ? '' : 's'} in saved version v{r.modelVersion}.</p>}
