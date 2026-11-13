@@ -262,6 +262,46 @@ The release with the studio's own engine, a data contract and a proof pack, for 
 
 `RuntimePackageStatus` is `ReleasePackageStatus` without `summary`, plus `engine: { version, sha256 } | null` (the engine file inside it) and `proofCases: number | null`. `404 NOT_FOUND` for an unknown release. A build fails with a plain reason when the release package cannot be built, or when the engine or a renderer has changed since the release was made.
 
+### Accessible PDF record (wave 2)
+
+Whether a release's PDF is accessible, and to which level of proof. Handlers: `apps/api/src/routes/pdfAccessibility.ts`; the checks: [`docs/design/PDF_ACCESSIBILITY.md`](../design/PDF_ACCESSIBILITY.md). A record is made **on demand**, not when the release is created (composing and checking a PDF takes a second or more, veraPDF far longer). Records are added, never changed; the release detail shows the latest. A release reset and made again under the same id does not inherit the records of the earlier one.
+
+| Route | Who | What it does |
+|---|---|---|
+| `GET /api/v1/pdf-accessibility/verapdf` | signed in | Whether veraPDF is installed on the studio's machine: `{ "installed": false, "message" }` or `{ "installed": true, "version": string \| null }`. It is found at `VERAPDF_PATH` or on the `PATH`; the studio never downloads or installs it. |
+| `GET /api/v1/releases/:releaseId/pdf-accessibility` | signed in | `{ "record": ReleasePdfRecord \| null, "verapdf": <as above> }`: the latest record of this release, or `null` when the PDF has not been checked yet. |
+| `POST /api/v1/releases/:releaseId/pdf-accessibility` | edit (the default for a write not listed in `auth.ts`) | Composes the release's frozen document for one customer (the first built-in sample customer of its kind, otherwise the document's own first customer), runs the studio's checks and, when installed, veraPDF against PDF/UA-1, and adds a record. No body. `200` `{ "record": ReleasePdfRecord }`. |
+
+`ReleasePdfRecord`:
+
+```jsonc
+{
+  "id": 3,                                  // the record's number, in the order they were made
+  "releaseId": "aster-card-demo-r2",
+  "at": "2026-11-13T10:42:00.000Z",         // when the check ran
+  "by": "Ana Approver",                     // who asked (null when sign-in is off)
+  "recordId": "CARD-0001",                  // the customer the PDF was composed for: an id, never customer data
+  "level": "studio",                        // "studio" | "verapdf"
+  "levelLabel": "Checked by the studio",    // or "Validated by veraPDF" (only when veraPDF ran)
+  "studio": {
+    "checker": "iss-pdf-a11y/…",             // the studio's checker and its version
+    "pageCount": 2,
+    "summary": { "ran": 11, "passed": 10, "failed": 1, "notChecked": 0 },
+    "checks": [{ "id": "tagged", "label": "Tagged, with a structure tree", "status": "passed" }],   // "passed" | "failed" | "not-checked", the eleven checks
+    "findings": 1                           // how many findings the checks reported
+  },
+  "verapdf": { "status": "not-installed", "message": "…" }   // veraPDF is asked to run when installed
+  // or { "status": "ran", "version", "compliant", "failedRules": [{ "id", "description", "count", "knownLimit"? }] }
+  // or { "status": "error" | "timeout", "message", "version" }
+}
+```
+
+"Checked by the studio" is never presented as validation against PDF/UA. `knownLimit` on a failed veraPDF rule names a limit the studio already states (no PDF/UA identifier, decoration not marked as an artifact, links without a separate description).
+
+Errors: `404 NOT_FOUND` (unknown release), `410 RELEASE_CONTENT_MISSING` (the release's stored content is missing), `409 NO_CUSTOMER` (no customer to compose a PDF for).
+
+Audit: `release.pdf-accessibility` with `detail: { releaseId, number, recordId, level, passed, failed, verapdf }` (the status of the veraPDF run, never its output).
+
 ### Reset (tests and demos only)
 
 `POST /api/v1/releases/reset` with `{ "confirm": true }` removes every release. It answers `403 RESET_DISABLED` unless the server was started with `RELEASES_RESET=allow`, and needs an admin. It exists so browser tests can start clean; in normal use nothing deletes a release.
@@ -278,6 +318,7 @@ Every state change writes one, with names and numbers and never content. `detail
 | `release.handover` | handover entry added | `kind` ("Received" or "Live"), `stage` (label or null), `withNote` |
 | `release.package` | package work started or ended | `event`: `started`, `ready` (`sha256`, `bytes`, `files`), `failed` (`reason`), `check-started`, `checked` (`same`, `sha256`, `keptSha256`, `reason?`) |
 | `release.runtime` | runnable package work started or ended | `event` as for `release.package`; `ready` also has `engine` (`version`, `sha256`) and `releasePackageBuilt` (the release package was prepared for it) |
+| `release.pdf-accessibility` | the release's PDF was checked (above) | `recordId`, `level`, `passed`, `failed`, `verapdf` (the status of its run); no `title` |
 
 Reasons and notes a person typed are kept on the release (history and handover log), not in the audit log. `workflow.approve` also says which release it made: `detail.release = { number, created }`. `project.delete` says `releasesKept`.
 

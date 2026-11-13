@@ -324,6 +324,12 @@ export function packageAssets(project: Project) {
   };
   for (const n of project.nodes) add(n.image?.src, 'component', n.name ?? n.id);
   add(project.brand?.logoDataUri, 'brand logo', project.issuer?.name ?? project.title);
+  // Page backgrounds of the page design (both paged profiles carry the same design; the PDF one is read).
+  const paged = project.presentationProfiles.find((p) => p.id === 'paged-pdf');
+  for (const [id, name] of [['first', 'First page'], ['following', 'Following pages'], ['last', 'Last page']] as const) {
+    const bg = paged?.pageTemplates?.[id]?.background;
+    if (bg?.kind === 'image') add(bg.image, 'page background', name);
+  }
   const assets = [...byPath.values()].sort((a, b) => (a.path < b.path ? -1 : 1));
   const index = {
     formatVersion: 1,
