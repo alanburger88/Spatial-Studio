@@ -55,7 +55,8 @@ export function compareManifests(expected: SemanticManifest, pdf?: ExtractedMani
   add('required-nodes', 'Required semantic nodes present', expected.requiredNodeIds, (m) => expected.requiredNodeIds.filter((id) => m.visibleNodeIds.includes(id)));
   add('table-rows', 'Table row counts', expected.tableRows, (m) => m.tableRows);
   add('table-totals', 'Table totals (cents)', expected.tableTotalsCents, (m) => m.tableTotalsCents);
-  add('identity', 'Customer identity', { name: expected.identity.name, ...(expected.identity.account ? { account: expected.identity.account } : {}), ...(expected.identity.memberId ? { memberId: expected.identity.memberId } : {}) }, (m) => m.identity);
+  // A document with its own data names the customer only as far as it shows the name (an empty page: not at all).
+  add('identity', 'Customer identity', { ...(expected.identity.name !== undefined ? { name: expected.identity.name } : {}), ...(expected.identity.account ? { account: expected.identity.account } : {}), ...(expected.identity.memberId ? { memberId: expected.identity.memberId } : {}) }, (m) => m.identity);
   add('actions', 'Action destinations', expected.actions.map((a) => a.url).sort(), (m) => m.actions.map((a) => a.url).sort(), false, 'HTML renders an active link; PDF prints the URL/QR fallback.');
 
   // Visible-node differences are allowed only for non-semantic nodes (no money, disclosure, variant or table facts).

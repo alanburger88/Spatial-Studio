@@ -49,7 +49,7 @@ const TOOL: Anthropic.Tool = {
 export const externalTranslate: Translator = async (cfg, locale, items, project) => {
   const client = new Anthropic({ apiKey: cfg.apiKey, baseURL: cfg.baseUrl, timeout: Math.max(cfg.timeoutMs, 90_000), maxRetries: 1 });
   const system = [
-    `You translate the wording of a customer document (${project.documentType === 'eob' ? 'a health-plan explanation of benefits' : 'a credit-card statement'}) from English (United States) into ${languageName(locale)} (${locale}).`,
+    `You translate the wording of a customer document (${project.documentType === 'custom' ? 'a letter or notice written on the issuer’s own data; its subject is whatever the wording itself says' : project.documentType === 'eob' ? 'a health-plan explanation of benefits' : 'a credit-card statement'}) from English (United States) into ${languageName(locale)} (${locale}).`,
     'Call submit_translations exactly once with one entry per item id. Translate every item; never skip, merge or add items.',
     'Rules:',
     '- Keep every {{token}} exactly as written (same spelling, same number of occurrences). Tokens are data fields filled in later; move them where the grammar needs them.',

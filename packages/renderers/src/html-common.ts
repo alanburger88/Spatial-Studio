@@ -1,7 +1,7 @@
 import qrcode from 'qrcode-generator';
 import type { Project } from '@iss/model';
 import type { RBlock, RInline, RNode } from '@iss/resolver';
-import { formatCents } from '@iss/resolver';
+import { formatCents, totalColumnKey } from '@iss/resolver';
 import { HTML_STRINGS, fmtString, type HtmlStringKey } from './html-strings';
 
 export function esc(s: unknown): string {
@@ -223,6 +223,8 @@ function nodeInnerHtmlBase(n: RNode, mode: RenderMode, renderChild: (c: RNode) =
       const useBrandLogo = !!brand?.logoDataUri && n.image!.src.startsWith('asset:');
       const src = imageSrc(useBrandLogo ? brand!.logoDataUri! : n.image!.src, accent);
       const alt = useBrandLogo ? (brand!.logoAlt ?? n.image!.alt) : n.image!.alt;
+      // No picture chosen yet (a freshly inserted image in a project that has no built-in mark): a neutral empty frame.
+      if (!src && !n.image!.src) return `<div class="iss-img-missing iss-img-empty" ${alt ? `role="img" aria-label="${esc(alt)}"` : 'aria-hidden="true"'} style="box-sizing:border-box;min-height:32pt;border:1px dashed #94A3B8;border-radius:4px;background:#F8FAFC"></div>`;
       return src ? `<img class="iss-img" src="${src}" alt="${esc(alt)}" style="object-fit:${esc(n.image!.fit)}"/>` : `<div class="iss-img-missing">${esc(modeText(mode, 'imageUnavailable'))}</div>`;
     }
     case 'shape': {
@@ -248,7 +250,9 @@ export function tableHtml(n: RNode, mode: RenderMode): string {
     return `<td class="${c.align === 'right' ? 'num' : ''}${cell?.guarded ? ' guarded' : ''}" data-sort="${esc(sortVal)}"${cell?.cents !== undefined ? ` data-cents="${cell.cents}"` : ''}>${esc(cell?.display ?? '')}</td>`;
   }).join('')}</tr>`).join('');
   const empty = t.rows.length ? '' : `<tr class="iss-empty"><td colspan="${t.columns.length}">${esc(modeText(mode, 'tableEmpty'))}</td></tr>`;
-  const amountCol = t.columns.findIndex((c) => c.key === 'amountCents' || c.key === 'billedCents');
+  // The same column the resolver summed (the one marked for a total, else the built-in amount column).
+  const totalKey = totalColumnKey(t.columns);
+  const amountCol = t.columns.findIndex((c) => c.key === totalKey);
   const foot = t.totalCents !== undefined && amountCol >= 0
     ? `<tfoot><tr><th scope="row" colspan="${amountCol}">${esc(modeText(mode, t.rows.length === 1 ? 'tableTotalOne' : 'tableTotalMany', { label: t.columns[amountCol].label.toLowerCase(), count: t.rows.length }))}</th><td class="num" data-table-total-cents="${t.totalCents}">${esc(formatCents(t.totalCents))}</td>${t.columns.length - amountCol - 1 > 0 ? `<td colspan="${t.columns.length - amountCol - 1}"></td>` : ''}</tr></tfoot>`
     : '';

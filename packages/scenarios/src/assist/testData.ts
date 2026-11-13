@@ -114,6 +114,18 @@ function completed(project: Project, source: SyntheticRecord | null, locales: st
   return record as unknown as SyntheticRecord;
 }
 
+/**
+ * One complete customer built from the project's field definitions alone: every field filled in, English, three rows in
+ * every list. What a project with no customers of its own can always be previewed with (a document with its own data
+ * has no shared sample customers to fall back on). Pure and deterministic.
+ */
+export function baselineCustomer(project: Project): GeneratedCustomer {
+  const locales = [...new Set([SOURCE_LANGUAGE, ...projectLanguages(project)])];
+  const { recordId: _id, ...rest } = completed(project, null, locales);
+  const record: Omit<SyntheticRecord, 'recordId'> = { ...rest, documentType: project.documentType, customer: { ...rest.customer, givenName: GIVEN[0], familyName: FAMILY[0] } };
+  return { record, label: 'Starting customer: every field filled in', targets: [] };
+}
+
 /* ------------------------------------------------------------------ conditions */
 
 interface Leaf { node: Predicate; path: string; op: string; values: Scalar[] }

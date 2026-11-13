@@ -1,4 +1,4 @@
-import { digestOf, getPath, shortDigest, type Overrides, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
+import { digestOf, getPath, projectLanguages, shortDigest, SOURCE_LANGUAGE, type DocumentType, type Overrides, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
 import { resolve, type Resolution } from '@iss/resolver';
 
 /* ------------------------------------------------------------- dimensions */
@@ -8,14 +8,18 @@ export type DimensionId = 'persona' | 'journey' | 'output' | 'language' | 'payme
 export interface DimensionDef {
   id: DimensionId;
   label: string;
-  documentTypes: Array<'credit-statement' | 'eob'>;
+  documentTypes: DocumentType[];
 }
 
+/**
+ * What scenarios can be compared by. A document with its own data ("custom") is compared by customer, journey state,
+ * output and language; the card and claim dimensions do not apply to it and are not offered.
+ */
 export const DIMENSIONS: DimensionDef[] = [
-  { id: 'persona', label: 'Persona', documentTypes: ['credit-statement', 'eob'] },
-  { id: 'journey', label: 'Journey state', documentTypes: ['credit-statement', 'eob'] },
-  { id: 'output', label: 'Output profile', documentTypes: ['credit-statement', 'eob'] },
-  { id: 'language', label: 'Language', documentTypes: ['credit-statement', 'eob'] },
+  { id: 'persona', label: 'Persona', documentTypes: ['credit-statement', 'eob', 'custom'] },
+  { id: 'journey', label: 'Journey state', documentTypes: ['credit-statement', 'eob', 'custom'] },
+  { id: 'output', label: 'Output profile', documentTypes: ['credit-statement', 'eob', 'custom'] },
+  { id: 'language', label: 'Language', documentTypes: ['credit-statement', 'eob', 'custom'] },
   { id: 'paymentStatus', label: 'Payment status', documentTypes: ['credit-statement'] },
   { id: 'accountTier', label: 'Account tier', documentTypes: ['credit-statement'] },
   { id: 'channel', label: 'Channel preference', documentTypes: ['credit-statement'] },
@@ -58,6 +62,12 @@ export function dimensionValue(dim: DimensionId, s: Scenario, res: Resolution, p
   switch (dim) {
     case 'persona': {
       if (project.documentType === 'eob') { const st = String(claim.status ?? 'unknown'); return { key: st, label: `Claim: ${st}` }; }
+      // A customer without a persona that was generated for this project, and every customer of a document with its
+      // own data, is its own category: named by why it was generated, else by the customer's name.
+      if (!rec.personaId && (rec.generated || project.documentType === 'custom')) {
+        const name = `${rec.customer?.givenName ?? ''} ${rec.customer?.familyName ?? ''}`.trim();
+        return { key: String(rec.recordId), label: (typeof rec.generated?.label === 'string' && rec.generated.label.trim()) || name || 'Customer' };
+      }
       const pid = rec.personaId ?? 'none';
       return { key: pid, label: `${pid} ${PERSONA_NAMES[pid] ?? ''}`.trim() };
     }
@@ -157,7 +167,7 @@ export function buildCube(engine: ScenarioEngine, axes: [DimensionId, DimensionI
   const errors: string[] = [];
   if (new Set(axes).size !== 3) errors.push('Each dimension can be used on only one axis.');
   const project = engine.project;
-  for (const a of axes) if (!DIMENSIONS.find((d) => d.id === a)?.documentTypes.includes(project.documentType)) errors.push(`${a} is not available for ${project.documentType}.`);
+  for (const a of axes) if (!DIMENSIONS.find((d) => d.id === a)?.documentTypes.includes(project.documentType)) errors.push(project.documentType === 'custom' ? `${DIMENSIONS.find((d) => d.id === a)?.label ?? a} is not available for a document with its own data.` : `${a} is not available for ${project.documentType}.`);
   const usesJourney = axes.includes('journey') || !!opts.filters?.journey;
   const usesOutput = axes.includes('output') || !!opts.filters?.output;
   const cursors = usesJourney ? journeyStates(project).map((j) => j.cursor) : [opts.journeyCursor ?? null];
@@ -203,7 +213,8 @@ function declaredCategories(dim: DimensionId, project: Project): Array<{ key: st
   switch (dim) {
     case 'output': return OUTPUT_PROFILES.map((o) => ({ key: o.id, label: o.label }));
     case 'journey': return journeyStates(project).map((j) => ({ key: String(j.cursor ?? 'baseline'), label: j.label }));
-    case 'language': return [{ key: 'en-US', label: 'en-US' }, { key: 'es-US', label: 'es-US' }];
+    // A document with its own data declares its own languages (English alone until one is added); the samples keep their two.
+    case 'language': return project.documentType === 'custom' ? [SOURCE_LANGUAGE, ...projectLanguages(project)].map((l) => ({ key: l, label: l })) : [{ key: 'en-US', label: 'en-US' }, { key: 'es-US', label: 'es-US' }];
     case 'paymentStatus': return project.documentType === 'credit-statement' ? [{ key: 'current', label: 'current' }, { key: 'overdue', label: 'overdue' }] : [];
     case 'accountTier': return project.documentType === 'credit-statement' ? [{ key: 'standard', label: 'standard' }, { key: 'premium', label: 'premium' }] : [];
     case 'channel': return project.documentType === 'credit-statement' ? ['email', 'digital', 'print'].map((k) => ({ key: k, label: k })) : [];
@@ -287,7 +298,8 @@ export function buildLandscape(engine: ScenarioEngine, opts: { includeJourney?: 
     const v = pvs ? g.sig.variants[pvs] : null;
     return {
       clusterId: 'cl-' + key.slice(0, 10), signature: g.sig,
-      label: [v ?? 'unresolved', ...g.sig.sections].join(' + '),
+      // A document with its own data may have no message set at all: then the cluster is named by its sections, or as the one outcome everyone gets.
+      label: !pvs && project.documentType === 'custom' ? (g.sig.sections.join(' + ') || 'Same document for everyone') : [v ?? 'unresolved', ...g.sig.sections].join(' + '),
       count: g.items.length, recordIds: [...new Set(g.items.map((i) => i.s.recordId))], scenarios: g.items.map((i) => i.s),
       contributingRuleIds: [...rules].sort(), blockingScenarios: blocking, warningScenarios: warn, findingCodes: codes, representative: rep.s,
       metrics: { ruleComplexity: rules.size, exceptionCount: Object.values(codes).reduce((a, b) => a + b, 0) },
@@ -302,7 +314,9 @@ export function buildLandscape(engine: ScenarioEngine, opts: { includeJourney?: 
   const total = clusters.reduce((s, c) => s + c.count, 0);
   return {
     clusters, universeSize: total, plannedSize: scenarios.length, evaluated,
-    countBasis: opts.includeJourney ? `Seeded synthetic records × ${cursors.length} journey states (generated combinations, unweighted)` : 'Seeded synthetic records (actual fixture count, unweighted)',
+    countBasis: project.documentType === 'custom'
+      ? (opts.includeJourney ? `This project’s synthetic customers × ${cursors.length} journey states (generated combinations, unweighted)` : 'This project’s synthetic customers (actual count, unweighted)')
+      : opts.includeJourney ? `Seeded synthetic records × ${cursors.length} journey states (generated combinations, unweighted)` : 'Seeded synthetic records (actual fixture count, unweighted)',
     positioning: 'Column = selected primary variant in variant-set order; row = cluster size (descending). Same signatures always land in the same place.',
     reconciles: total === evaluated,
   };
@@ -314,6 +328,7 @@ function mulberry32(seed: number) {
   return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
+/** Ready-made what-ifs on the sample data of the two built-in kinds. A document with its own data has none: its edge values come from "Generate test customers". */
 export interface EdgeCasePreset { id: string; label: string; documentType: 'credit-statement' | 'eob'; description: string }
 
 export const EDGE_CASE_PRESETS: EdgeCasePreset[] = [
@@ -410,6 +425,9 @@ const STATE_PATHS = ['card.paymentStatus', 'card.missedPayments', 'card.assistan
 export function replayJourney(project: Project, record: SyntheticRecord, overrides: Overrides = {}, profileId: ProfileId = 'paged-pdf'): JourneySnapshot[] {
   const out: JourneySnapshot[] = [];
   const states = journeyStates(project);
+  // The values worth showing at each step: the card and claim state for the built-in kinds; for a document with its
+  // own data, whatever its journey events change.
+  const statePaths = project.documentType === 'custom' ? [...new Set(project.journey.events.flatMap((e) => e.effects.map((x) => x.path)))] : STATE_PATHS;
   for (const st of states) {
     const res = resolve({ project, record, overrides, journeyCursor: st.cursor, profileId });
     const ctx: any = { ...res.effectiveRecord, claim: (res.effectiveRecord as any).claims?.[0] };
@@ -420,7 +438,7 @@ export function replayJourney(project: Project, record: SyntheticRecord, overrid
       kind: st.cursor === null ? 'baseline' : step && !step.applied ? 'skipped' : event?.emits === 'immutable-issued-snapshot' ? 'issued' : 'preview',
       runId: res.runId, contentDigest: res.contentDigest, selectedVariants: res.result.selectedVariants, matchedRuleIds: res.result.matchedRuleIds,
       changes: (step?.changes ?? []) as JourneySnapshot['changes'], skippedReason: step?.skippedReason,
-      state: Object.fromEntries(STATE_PATHS.map((p) => [p, getPath(ctx, p)]).filter(([, v]) => v !== null)),
+      state: Object.fromEntries(statePaths.map((p) => [p, getPath(ctx, p)]).filter(([, v]) => v !== null)),
     });
   }
   return out;

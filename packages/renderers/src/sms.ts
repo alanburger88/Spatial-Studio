@@ -41,6 +41,7 @@ export interface SmsRender {
 export function smsText(f: ChannelFacts): string {
   if (f.texts) return fillChannelText(f.texts.sms, f);
   const url = f.actions[0]?.url;
+  if (f.documentType === 'custom') return `DEMO ${f.issuer}: Your document is ready.${url ? ` Details: ${url}` : ''}`;
   if (f.documentType === 'eob') {
     return `DEMO ${f.issuer}: Your Explanation of Benefits${f.claimId ? ` for claim ${f.claimId}` : ''} is ready. THIS IS NOT A BILL.${url ? ` Details: ${url}` : ''}`;
   }
@@ -99,8 +100,8 @@ export function checkChannelParity(res: Resolution, email: EmailRender, sms: Sms
     add({ id: 'dates', label: 'Due date string in email and SMS', status: ok ? 'match' : 'mismatch', blocking: true, expected: due.display, email: eh.includes(due.display) && et.includes(due.display), sms: sms.text.includes(due.display) });
   } else add({ id: 'dates', label: 'Due date string in email and SMS', status: 'not-applicable', blocking: false });
 
-  // SMS amounts (card only)
-  const smsMoney = email.facts.documentType === 'eob' ? [] : money.filter((k) => k.nodeId === 'billing-summary' || k.nodeId === 'payment-due');
+  // SMS amounts (card only: the statement's default SMS quotes the new balance and the minimum payment)
+  const smsMoney = email.facts.documentType !== 'credit-statement' ? [] : money.filter((k) => k.nodeId === 'billing-summary' || k.nodeId === 'payment-due');
   if (smsMoney.length) {
     const miss = smsMoney.filter((k) => !sms.text.includes(formatCents(m.money[k.nodeId], res.locale)));
     add({ id: 'sms-money', label: 'SMS amounts equal the manifest', status: miss.length ? 'mismatch' : 'match', blocking: true, expected: Object.fromEntries(smsMoney.map((k) => [k.nodeId, formatCents(m.money[k.nodeId], res.locale)])), sms: miss.length ? { missing: miss.map((k) => k.nodeId) } : 'present' });

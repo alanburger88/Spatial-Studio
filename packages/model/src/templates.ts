@@ -1,6 +1,8 @@
 import { richFromMarkup } from './rich';
 import { deepClone } from './data';
-import type { DocNode, DocumentType, Project } from './types';
+import { validateCustomFields } from './fields';
+import { SCHEMA_VERSION, isDocumentType } from './types';
+import type { DocNode, DocumentType, PresentationProfile, Project } from './types';
 
 export interface TemplateInfo {
   id: string;
@@ -34,11 +36,46 @@ export const TEMPLATE_TITLE_MAX = 80;
 export const TEMPLATE_DESCRIPTION_MAX = 300;
 export const TEMPLATE_NOTE_MAX = 200;
 
+/** The starter that begins from nothing: an empty page and the project's own data fields. */
+export const BLANK_PROJECT_TEMPLATE_ID = 'blank-project';
+
 export const TEMPLATES: TemplateInfo[] = [
   { id: 'credit-card-statement', title: 'Credit-card statement', documentType: 'credit-statement', description: 'The Aster Card monthly statement: balance summary, payment guidance driven by rules, transactions, rewards and mandatory disclosures.' },
   { id: 'explanation-of-benefits', title: 'Explanation of benefits', documentType: 'eob', description: 'The HarborCare explanation of benefits: claim amounts, claim message rules, member responsibility and the not-a-bill banner.' },
   { id: 'blank-letter', title: 'Blank letter', documentType: 'credit-statement', description: 'A minimal letter: issuer header, a personalised greeting, one body paragraph and a footer. No rules yet.' },
+  { id: BLANK_PROJECT_TEMPLATE_ID, title: 'Blank project', documentType: 'custom', description: 'An empty page with your own data fields: only the customer’s name and language are given. You add the fields, the layout and the rules, and the studio generates customers to preview with.' },
 ];
+
+/**
+ * The page and web profiles every project starts with: US Letter pages with 14 mm margins (and the flow region that
+ * leaves room for a first-page header), the AFP feasibility simulation of the same pages, and the responsive web page.
+ * A fresh copy on every call. The two sample projects use exactly these.
+ */
+export function defaultPresentationProfiles(): PresentationProfile[] {
+  const flowRegion = { firstPageTopPt: 184, otherPagesTopPt: 84, bottomPt: 738 };
+  return [
+    { id: 'paged-pdf', kind: 'paged', paper: 'US-Letter', pageMarginsMm: [14, 14, 14, 14], flowRegion: { ...flowRegion } },
+    {
+      id: 'paged-afp-sim', kind: 'afp-simulation', paper: 'US-Letter', duplex: false, simulationOnly: true,
+      pageMarginsMm: [14, 14, 14, 14],
+      flowRegion: { ...flowRegion },
+      afp: {
+        formdef: 'F1ISSSIM (conceptual)',
+        pagedef: 'P1LTR01 (conceptual)',
+        fontMap: { 'Inter Regular': 'X0ISS10 (concept mapping)', 'Inter Bold': 'X0ISSB0 (concept mapping)' },
+        overlays: ['O1ISSHDR (issuer header, concept)'],
+        resources: ['Page segment: issuer mark (concept)', 'Code page: T1001208 (concept)', 'Coded font mapping (concept)', 'Medium map: simplex letter (concept)'],
+      },
+    },
+    { id: 'html-responsive', kind: 'responsive', breakpointsPx: [600, 960] },
+  ];
+}
+
+/** The issuer colour a blank project gets when none is chosen: a neutral slate that reads on white and under white button text. */
+export const NEUTRAL_ACCENT = '#475569';
+export const ISSUER_NAME_MIN = 2;
+export const ISSUER_NAME_MAX = 60;
+export const ACCENT_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 /**
  * The approved sample projects the templates are derived from. The model package does not import the fixture
@@ -52,6 +89,34 @@ export interface TemplateOptions {
   title: string;
   /** Blank letter only: which sample data the letter is written against. */
   documentType?: DocumentType;
+  /** Blank project only: who the document is from (defaults to the title). */
+  issuerName?: string;
+  /** Blank project only: the issuer's colour as `#rrggbb` (defaults to a neutral slate). */
+  accent?: string;
+}
+
+/**
+ * A project built from nothing: no sample logo, header, footer, wording, rules or data fields. One empty page (the
+ * root container with no components), English only, the standard page and web profiles, and the user's own issuer.
+ */
+export function blankProject(opts: Pick<TemplateOptions, 'projectId' | 'title' | 'issuerName' | 'accent'>): Project {
+  const name = opts.issuerName?.trim() || opts.title;
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    projectId: opts.projectId,
+    title: opts.title,
+    documentType: 'custom',
+    modelVersion: 1,
+    rootNodeId: 'doc-root',
+    nodes: [{ id: 'doc-root', type: 'container', name: 'Document', children: [] }],
+    presentationProfiles: defaultPresentationProfiles(),
+    rules: [],
+    contentParts: [],
+    journey: { snapshotPolicy: 'issued-is-immutable', events: [] },
+    issuer: { name, accent: opts.accent && ACCENT_PATTERN.test(opts.accent) ? opts.accent : NEUTRAL_ACCENT, product: opts.title },
+    customFields: [],
+    languages: [],
+  };
 }
 
 function seedFor(documentType: DocumentType, explicit?: Project[]): Project {
@@ -63,7 +128,10 @@ function seedFor(documentType: DocumentType, explicit?: Project[]): Project {
 export function projectFromTemplate(templateId: string, opts: TemplateOptions, explicitSeeds?: Project[]): Project {
   const info = TEMPLATES.find((t) => t.id === templateId);
   if (!info) throw new Error(`Unknown template ${templateId}.`);
-  const docType: DocumentType = templateId === 'blank-letter' ? (opts.documentType ?? info.documentType) : info.documentType;
+  // The blank project needs no sample to start from.
+  if (templateId === BLANK_PROJECT_TEMPLATE_ID) return blankProject(opts);
+  // A blank letter is written against one of the two sample data sets (a document with its own data starts from "Blank project").
+  const docType: DocumentType = templateId === 'blank-letter' ? (opts.documentType && opts.documentType !== 'custom' ? opts.documentType : info.documentType) : info.documentType;
   const base = deepClone(seedFor(docType, explicitSeeds));
   const { lastSavedAt: _l, ...rest } = base as Project & { lastSavedAt?: string };
   const project: Project = { ...rest, projectId: opts.projectId, title: opts.title, modelVersion: 1 };
@@ -149,7 +217,12 @@ export function projectFileProblems(raw: unknown): ProjectFileProblem[] {
   if (out.length) return out;
   if (typeof p.schemaVersion !== 'string') bad('SCHEMA_VERSION', 'The file does not say which project format version it uses.');
   if (typeof p.title !== 'string' || !p.title.trim()) bad('TITLE', 'The project in the file has no title.');
-  if (p.documentType !== 'credit-statement' && p.documentType !== 'eob') bad('DOCUMENT_TYPE', `The file is for a kind of document this studio does not have data for (${String(p.documentType)}).`);
+  if (!isDocumentType(p.documentType)) bad('DOCUMENT_TYPE', `The file is for a kind of document this studio does not have data for (${String(p.documentType)}).`);
+  // The project's own data fields decide what a customer record may hold, so they are checked like the rest of the file.
+  if (p.customFields !== undefined) {
+    if (!Array.isArray(p.customFields) || p.customFields.some((f: unknown) => !f || typeof f !== 'object' || Array.isArray(f))) bad('DATA_FIELDS', 'The list of data fields in the file cannot be read.');
+    else if (isDocumentType(p.documentType)) for (const e of validateCustomFields(p.documentType, p.customFields).slice(0, 5)) bad('DATA_FIELDS', `A data field in the file is not valid: ${e}`);
+  }
   if (!p.issuer || typeof p.issuer !== 'object' || typeof p.issuer.name !== 'string') bad('ISSUER', 'The project in the file has no issuer.');
   if (!p.journey || typeof p.journey !== 'object' || !Array.isArray(p.journey.events)) bad('JOURNEY', 'The project in the file has no journey.');
   const ids = new Set<string>();

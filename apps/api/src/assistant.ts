@@ -84,7 +84,7 @@ export function validateActions(raw: unknown[], ctx: AssistantContext): { ok: As
     }
     if (act.action === 'propose_rule_edit' && !ctx.project.rules.some((r) => r.id === act.ruleId)) { rejected.push({ action: a, reason: `Unknown rule ${act.ruleId}` }); continue; }
     if (act.action === 'propose_content_edit' && !ctx.project.contentParts.some((c) => c.id === act.contentPartId)) { rejected.push({ action: a, reason: `Unknown content part ${act.contentPartId}` }); continue; }
-    if (act.action === 'generate_edge_case' && EDGE_CASE_PRESETS.find((p) => p.id === act.preset)?.documentType !== ctx.project.documentType) { rejected.push({ action: a, reason: `${act.preset} does not apply to ${ctx.project.documentType}` }); continue; }
+    if (act.action === 'generate_edge_case' && EDGE_CASE_PRESETS.find((p) => p.id === act.preset)?.documentType !== ctx.project.documentType) { rejected.push({ action: a, reason: ctx.project.documentType === 'custom' ? 'Ready-made edge cases are not available for a document with its own data. Generate test customers instead.' : `${act.preset} does not apply to ${ctx.project.documentType}` }); continue; }
     ok.push(act);
   }
   return { ok, rejected };
@@ -127,6 +127,11 @@ export function normalizeMessage(message: string): string {
 
 export function suggestedQuestions(project: Project): string[] {
   const rule = project.rules.find((r) => r.mode !== 'obligation' && r.enabled !== false) ?? project.rules[0];
+  // A document with its own data: only what applies to any document (no sample customers, no ready-made edge cases).
+  if (project.documentType === 'custom') return [
+    ...(project.nodes.some((n) => n.type === 'variant-set') ? ['Why is this message showing?'] : []), 'What rules apply?', 'Run validation',
+    ...(rule ? [`Change ${rule.id} priority to ${rule.priority + 20}`] : []), 'Open cube', 'Open landscape', 'Translate this document', 'Edit the email wording',
+  ];
   if (project.documentType === 'credit-statement') return [
     'Choose assistance case CARD-0002', 'Show me a Spanish-speaking cardholder who has missed two payments and requests assistance', 'Why is this message showing?',
     'What rules apply?', 'Show Spanish edge case', 'Run validation', rule ? `Change ${rule.id} priority to ${rule.priority + 20}` : 'Open cube', 'Switch to EOB',
@@ -145,17 +150,22 @@ export function offlineInterpret(message: string, ctx: AssistantContext): Offlin
   const notes: string[] = [];
   const facts: string[] = [];
   const isCard = ctx.project.documentType === 'credit-statement';
-  const ids = n.match(/\b(?:card|eob)-\d{4}\b/g)?.map((s) => s.toUpperCase()) ?? [];
+  /** A document with its own data: nothing below that is about cards, claims or the sample personas applies to it. */
+  const ownData = ctx.project.documentType === 'custom';
+  const mine = ctx.records.filter((r) => r.documentType === ctx.project.documentType);
+  const fullName = (r: SyntheticRecord) => `${r.customer.givenName} ${r.customer.familyName}`.trim();
+  const ids = n.match(/\b(?:card|eob|rec)-\d{4,6}\b/g)?.map((s) => s.toUpperCase()) ?? [];
   const verb = /\b(show|open|go|navigate|take me|view|see|jump|bring up|display|launch|export|download|generate|render|switch|use|load|pick|select|choose|find|give|try|simulate)\b/;
 
   if (/\b(help|what can you do|what can i ask|how do i use|capabilities|examples?)\b/.test(n) && !actions.length && n.split(' ').length <= 8) {
     return { reply: 'Offline assistant (scripted capability): I am the guided assistant. I can select scenarios and personas, set scenario fields, explain the engine trace, list matching rules, run validation, open views and propose rule edits. Examples are below; choose one to fill the box.', actions, understood: true, suggestions: suggestedQuestions(ctx.project) };
   }
 
-  const wantsEob = /\b(eob|harbor ?care|health ?care|explanation of benefits|claims?)\b/.test(n) && /\b(switch|open|go|use|load|change to|take me|back)\b/.test(n);
-  const wantsCard = /\b(aster|credit card|card statement|card demo|bank)\b/.test(n) && /\b(switch|open|go|use|load|change to|take me|back)\b/.test(n);
-  if (wantsEob && isCard) { actions.push({ action: 'open_project', projectId: 'harborcare-demo' }); notes.push('open the HarborCare EOB project'); }
-  else if (wantsCard && !isCard) { actions.push({ action: 'open_project', projectId: 'aster-card-demo' }); notes.push('open the Aster Card project'); }
+  // In a document with its own data, everyday words such as "claims" or "bank" may be the user's own subject: only the samples' names switch project.
+  const wantsEob = (ownData ? /\b(harbor ?care|explanation of benefits)\b/ : /\b(eob|harbor ?care|health ?care|explanation of benefits|claims?)\b/).test(n) && /\b(switch|open|go|use|load|change to|take me|back)\b/.test(n);
+  const wantsCard = (ownData ? /\b(aster)\b/ : /\b(aster|credit card|card statement|card demo|bank)\b/).test(n) && /\b(switch|open|go|use|load|change to|take me|back)\b/.test(n);
+  if (wantsEob && (isCard || ownData)) { actions.push({ action: 'open_project', projectId: 'harborcare-demo' }); notes.push(ownData ? 'open the HarborCare sample project' : 'open the HarborCare EOB project'); }
+  else if (wantsCard && !isCard) { actions.push({ action: 'open_project', projectId: 'aster-card-demo' }); notes.push(ownData ? 'open the Aster sample project' : 'open the Aster Card project'); }
   else if ((wantsEob && !isCard) || (wantsCard && isCard)) facts.push(`You are already in the ${isCard ? 'Aster Card' : 'HarborCare EOB'} project.`);
 
   /* rule references: "R04", "r4", "rule 4" */
@@ -188,10 +198,22 @@ export function offlineInterpret(message: string, ctx: AssistantContext): Offlin
     const hit = PERSONAS.find((p) => new RegExp(`\\b${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '[- ]?')}\\b`).test(n) && ctx.records.some((r) => r.documentType === ctx.project.documentType && r.personaId === p.id));
     const rec = hit && ctx.records.find((r) => r.documentType === ctx.project.documentType && r.personaId === hit.id);
     if (hit && rec) { actions.push({ action: 'select_scenario', recordId: rec.recordId }); notes.push(`select ${rec.recordId}, the “${hit.name}” persona`); personaMatched = true; }
+    // A document with its own data has no personas: its customers are found by name.
+    if (ownData && !personaMatched) {
+      const named = mine.find((r) => { const name = normalizeMessage(fullName(r)); return name.includes(' ') && n.includes(name); });
+      if (named) { actions.push({ action: 'select_scenario', recordId: named.recordId }); notes.push(`select the customer ${fullName(named)}`); personaMatched = true; }
+    }
   }
 
   const exportWords = /\b(export|pdf|html|afp|download)\b/.test(n);
-  if (!personaMatched && /\bedge.?case\b|\bgenerate\b|\bstress\b/.test(n) && !exportWords) {
+  if (ownData && !personaMatched && /\bedge.?case\b|\bstress\b/.test(n) && !exportWords) {
+    // No ready-made what-ifs exist for data the studio knows nothing about; the generator covers the same ground.
+    facts.push('There are no ready-made edge cases for a document with its own data. In Rules & Data, “Generate test customers” creates a customer for every outcome and for the values around every threshold your rules use.');
+  } else if (ownData && !personaMatched && !ids.length && /\bgenerate\b/.test(n) && /\b(customers?|test data|records?|people|data)\b/.test(n) && !exportWords) {
+    actions.push({ action: 'navigate_view', view: 'rules-data' }); notes.push('open Rules & Data, where “Generate test customers” creates a customer for every outcome (the assistant does not generate them for you)');
+  } else if (ownData) {
+    // Nothing is inferred about data fields the studio does not know: scenario values are set in the What-if panel.
+  } else if (!personaMatched && /\bedge.?case\b|\bgenerate\b|\bstress\b/.test(n) && !exportWords) {
     const preset = /spanish|espanol|es-us/.test(n) ? 'spanish-missing-content' : /250|high.?volume|stress/.test(n) ? 'stress-250' : /zero/.test(n) ? 'zero-transactions' : /long/.test(n) ? 'long-merchant' : /threshold/.test(n) ? 'threshold-exact' : /denied|liabil/.test(n) ? 'claim-denied-unknown-liability' : /several|multi/.test(n) ? 'claim-several-lines' : isCard ? 'crossed-priorities' : 'claim-appeal';
     actions.push({ action: 'generate_edge_case', preset }); notes.push(`generate edge case “${preset}”`);
   } else if (!ids.length && !personaMatched && !actions.some((a: any) => a.action === 'open_project')) {
@@ -231,9 +253,15 @@ export function offlineInterpret(message: string, ctx: AssistantContext): Offlin
     const nodes = ctx.project.nodes;
     const node = ctx.selectedNodeId && nodes.some((x) => x.id === ctx.selectedNodeId && (x.type === 'variant-set' || x.type === 'conditional-region')) ? ctx.selectedNodeId : nodes.find((x) => x.type === 'variant-set')?.id;
     if (node && !actions.some((a: any) => a.action === 'explain_resolution')) { actions.push({ action: 'explain_resolution', nodeId: node }); notes.push(asksRules && !asksWhy ? `show the rules that apply, from the engine trace for ${node}` : `explain ${node} from the engine trace`); }
+    if (ownData && !node && asksWhy && !asksRules) facts.push('This document has no message that varies by customer yet, so there is nothing to explain: every customer gets the same content. Add a message with versions and a rule to change that.');
     if (asksRules) {
       const rec = ctx.records.find((r) => r.recordId === ctx.recordId);
-      if (rec) { const r = resolve({ project: ctx.project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor }); facts.push(`For ${ctx.recordId} the engine matched ${r.result.matchedRuleIds.length ? r.result.matchedRuleIds.join(', ') : 'no rules'} (run ${r.runId}).`); }
+      if (rec && ownData) {
+        // Names, not ids: the customer and the rules as the author named them.
+        const r = resolve({ project: ctx.project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor });
+        const titles = r.result.matchedRuleIds.map((id) => { const rule = ctx.project.rules.find((x) => x.id === id); return rule?.title ? `“${rule.title}”` : id; });
+        facts.push(!ctx.project.rules.length ? 'This document has no rules yet, so every customer gets the same document.' : `For ${fullName(rec) || 'this customer'} the engine matched ${titles.length ? titles.join(', ') : 'no rules'} (run ${r.runId}).`);
+      } else if (rec) { const r = resolve({ project: ctx.project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor }); facts.push(`For ${ctx.recordId} the engine matched ${r.result.matchedRuleIds.length ? r.result.matchedRuleIds.join(', ') : 'no rules'} (run ${r.runId}).`); }
     }
   }
   if (/\b(validat\w*|run checks?|check (the|this|my) (document|statement|eob|design|template)|compliance|compliant|preflight|lint|qa)\b/.test(n)) { actions.push({ action: 'run_validation' }); notes.push('run validation'); }
@@ -307,11 +335,12 @@ export function assistantModelContext(ctx: AssistantContext, res: Resolution) {
     projectId: ctx.project.projectId, documentType: ctx.project.documentType, recordId: ctx.recordId, selectedNodeId: ctx.selectedNodeId,
     currentCustomer: current ? { id: current.recordId, name: nameOf(current) ?? 'the selected customer', persona: personaOf(current), locale: current.customer.locale, changedFields: Object.keys(ctx.overrides ?? {}) } : null,
     views: VIEWS, edgeCasePresets: EDGE_CASE_PRESETS.filter((p) => p.documentType === ctx.project.documentType).map((p) => p.id),
-    scenarioFields: [...projectFieldIndex(ctx.project).values()].filter((f) => !f.derived && f.type !== 'array').map((f) => ({ path: f.path, type: f.type, values: f.enumValues })),
+    scenarioFields: [...projectFieldIndex(ctx.project).values()].filter((f) => !f.derived && f.type !== 'array').map((f) => ({ path: f.path, type: f.type, values: f.enumValues, ...(f.path.startsWith('custom.') ? { label: f.label } : {}) })),
     rules: ctx.project.rules.map((r) => ({ id: r.id, mode: r.mode, priority: r.priority, condition: describePredicate(r.when), enabled: r.enabled !== false })),
     nodes: ctx.project.nodes.map((n) => ({ id: n.id, type: n.type, name: n.name })),
     // The current customer is always included, even when the list is cut short.
-    records: [...(current ? [current] : []), ...ofType.filter((r) => r !== current)].slice(0, 150).map((r) => ({ id: r.recordId, name: nameOf(r), persona: personaOf(r) ?? r.personaId, locale: r.customer.locale, status: (r.card as any)?.paymentStatus ?? (r.claims?.[0] as any)?.status })),
+    // `about` says why a generated test customer exists ("Reaches “Payment support”"); a document with its own data has no persona or status to go by.
+    records: [...(current ? [current] : []), ...ofType.filter((r) => r !== current)].slice(0, 150).map((r) => ({ id: r.recordId, name: nameOf(r), persona: personaOf(r) ?? r.personaId, locale: r.customer.locale, status: (r.card as any)?.paymentStatus ?? (r.claims?.[0] as any)?.status, ...(r.generated?.label ? { about: r.generated.label } : {}) })),
     currentRun: { runId: res.runId, selectedVariants: res.result.selectedVariants, matchedRuleIds: res.result.matchedRuleIds },
   };
 }
@@ -328,6 +357,7 @@ export async function externalInterpret(cfg: ProviderConfig, message: string, ct
     'Rule and content edits are proposals only; the user must approve. All data is synthetic. Never include code.',
     'context.currentCustomer is the customer the user is looking at right now. When the user names that customer or says "this customer", they mean context.currentCustomer; never question or disclaim who it is. To find another customer the user names, match the name against context.records[].name.',
     'In your reply, refer to customers by name and to rules, messages and components by their names, not by ids, unless the user used an id.',
+    ...(ctx.project.documentType === 'custom' ? ['This document uses the author’s own data fields (context.scenarioFields). It is not a card statement or a benefits explanation: never mention cards, claims, balances or bills unless the document’s own fields or the user do. It has no edge-case presets (context.edgeCasePresets is empty); do not use generate_edge_case.'] : []),
   ].join('\n');
   const context = assistantModelContext(ctx, res);
   try {

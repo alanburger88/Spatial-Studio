@@ -11,7 +11,7 @@ import { Icon } from '../ui/icons';
 import { PagePreview } from '../doc/PagePreview';
 import './ProjectGallery.css';
 
-const DOC_LABEL: Record<DocumentType, string> = { 'credit-statement': 'Credit-card statement', eob: 'Healthcare EOB' };
+const DOC_LABEL: Record<DocumentType, string> = { 'credit-statement': 'Credit-card statement', eob: 'Healthcare EOB', custom: 'Your own data' };
 
 function useMiniPreview(projectId: string, recordId: string, version: number) {
   const [state, setState] = useState<{ res: Resolution; project: Project } | null>(null);

@@ -17,6 +17,19 @@ export const CHANNEL_TEXT_LIMITS = { subject: 200, preheader: 200, title: 120, k
 
 export function defaultChannels(project: Pick<Project, 'documentType'>): ChannelConfig {
   const sections = EMAIL_SECTION_IDS.map((id) => ({ id, show: true }));
+  if (project.documentType === 'custom') {
+    // A document with its own data: nothing is known about what it shows, so the wording names only the issuer,
+    // the key figures (when the document has any) and the link (when it has one).
+    return {
+      email: {
+        subject: 'Your {{issuer.name}} document is ready',
+        preheader: 'Your {{issuer.name}} document is ready. {{keyFacts}}',
+        title: 'Your document is ready',
+        intro: '', closing: '', keyFactsHeading: 'Key facts', sections,
+      },
+      sms: { text: 'DEMO {{issuer.name}}: Your document is ready. Details: {{link}}' },
+    };
+  }
   if (project.documentType === 'eob') {
     return {
       email: {

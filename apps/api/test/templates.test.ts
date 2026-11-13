@@ -11,10 +11,10 @@ afterAll(async () => { await ctx.app.close(); });
 const inj = (method: any, url: string, payload?: any) => ctx.app.inject({ method, url, payload });
 
 describe('templates', () => {
-  it('lists the three templates', async () => {
+  it('lists the four templates', async () => {
     const r = (await inj('GET', '/api/v1/templates')).json();
     expect(r.templates.map((t: any) => t.id)).toEqual(TEMPLATES.map((t) => t.id));
-    expect(r.templates).toHaveLength(3);
+    expect(r.templates).toHaveLength(4);
   });
 
   it('creates an editable project from each template that resolves', async () => {

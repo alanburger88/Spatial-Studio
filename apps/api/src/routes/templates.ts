@@ -3,11 +3,14 @@ import {
   TEMPLATES, TEMPLATE_DESCRIPTION_MAX, TEMPLATE_NOTE_MAX, TEMPLATE_TITLE_MAX, SCHEMA_VERSION,
   projectFromTemplate, projectFromSavedTemplate, registerTemplateSeeds, projectContentDigest, projectFileProblems, projectInFile,
   templateContentOf, templateCounts, roleCan,
-  type DocumentType, type Project, type TemplateInfo,
+  ACCENT_PATTERN, BLANK_PROJECT_TEMPLATE_ID, DOCUMENT_TYPE_LABEL, ISSUER_NAME_MAX, ISSUER_NAME_MIN,
+  type DocumentType, type Project, type SyntheticRecord, type TemplateInfo,
 } from '@iss/model';
 import { seedProjects as fixtureSeeds } from '@iss/model/fixtures';
 import { resolve } from '@iss/resolver';
+import { baselineCustomer } from '@iss/scenarios';
 import { audit } from '../auth';
+import { firstCustomers } from '../projectCustomers';
 import type { RouteDeps } from './deps';
 
 const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'project';
@@ -24,11 +27,33 @@ export function registerTemplateRoutes(app: FastifyInstance, deps: RouteDeps): v
   registerTemplateSeeds(fixtureSeeds());
 
   const by = (req: FastifyRequest) => (req.user ? { id: req.user.id, name: req.user.name } : null);
-  const docTypeOf = (v: unknown): DocumentType | undefined => {
+  /** `documentType` chooses the sample data a Blank letter is written against. The Blank project is always a document with its own data. */
+  const docTypeOf = (v: unknown, templateId?: string): DocumentType | undefined => {
+    if (templateId === BLANK_PROJECT_TEMPLATE_ID) return undefined;
     if (v === undefined || v === null || v === '') return undefined;
+    if (v === 'custom') throw new ApiError(400, 'INVALID_DOCUMENT_TYPE', `A document with its own data (“${DOCUMENT_TYPE_LABEL.custom}”) starts from the “Blank project” template. documentType here must be credit-statement or eob.`);
     if (v !== 'credit-statement' && v !== 'eob') throw new ApiError(400, 'INVALID_DOCUMENT_TYPE', 'documentType must be credit-statement or eob.');
     return v;
   };
+  /** Blank project only: who the document is from and the issuer's colour. Both optional. */
+  const issuerOf = (body: Record<string, any>): { issuerName?: string; accent?: string } => {
+    const out: { issuerName?: string; accent?: string } = {};
+    if (body.issuerName !== undefined && body.issuerName !== null && body.issuerName !== '') {
+      const name = oneLine(body.issuerName, 200);
+      if (name.length < ISSUER_NAME_MIN || name.length > ISSUER_NAME_MAX) throw new ApiError(400, 'INVALID_ISSUER_NAME', `The issuer name must be ${ISSUER_NAME_MIN}–${ISSUER_NAME_MAX} characters.`);
+      out.issuerName = name;
+    }
+    if (body.accent !== undefined && body.accent !== null && body.accent !== '') {
+      if (typeof body.accent !== 'string' || !ACCENT_PATTERN.test(body.accent)) throw new ApiError(400, 'INVALID_ACCENT', 'The colour must be a 6-digit hex value such as #1F4E79.');
+      out.accent = body.accent.toLowerCase();
+    }
+    return out;
+  };
+  /**
+   * A customer to preview a document with its own data before it has any (a template thumbnail, the check of an imported
+   * file): built from the project's field definitions, never stored.
+   */
+  const previewRecordOf = (project: Project): SyntheticRecord => ({ ...baselineCustomer(project).record, recordId: 'REC-0000' });
   const builtIn = (): TemplateInfo[] => TEMPLATES.map((t) => ({ ...t, source: 'builtin' as const }));
   const templateOr404 = (id: string): TemplateInfo => {
     const t = builtIn().find((x) => x.id === id) ?? store.getSavedTemplate(id);
@@ -72,11 +97,13 @@ export function registerTemplateRoutes(app: FastifyInstance, deps: RouteDeps): v
   /** Unsaved preview of a template (used for gallery thumbnails). Nothing is stored. */
   app.get<{ Params: { templateId: string }; Querystring: { documentType?: string; version?: string } }>('/api/v1/templates/:templateId/project', async (req) => {
     const t = templateOr404(req.params.templateId);
+    // A template of a document with its own data has no stored customer to draw it with: one is sent along (`previewRecord`).
+    const withPreview = <T extends { project: Project }>(out: T) => (out.project.documentType === 'custom' ? { ...out, previewRecord: previewRecordOf(out.project) } : out);
     if (t.source === 'saved') {
       const c = savedContent(t, versionOf(req.query.version));
-      return { template: t, version: c.version, project: projectFromSavedTemplate(c.content, { projectId: `template-${t.id}`, title: t.title, templateId: t.id, version: c.version, templateTitle: t.title }) };
+      return withPreview({ template: t, version: c.version, project: projectFromSavedTemplate(c.content, { projectId: `template-${t.id}`, title: t.title, templateId: t.id, version: c.version, templateTitle: t.title }) });
     }
-    return { template: t, project: projectFromTemplate(t.id, { projectId: `template-${t.id}`, title: t.title, documentType: docTypeOf(req.query.documentType) }) };
+    return withPreview({ template: t, project: projectFromTemplate(t.id, { projectId: `template-${t.id}`, title: t.title, documentType: docTypeOf(req.query.documentType, t.id) }) });
   });
 
   /**
@@ -133,12 +160,14 @@ export function registerTemplateRoutes(app: FastifyInstance, deps: RouteDeps): v
       project = checkDraftProject(projectFromSavedTemplate(c.content, { projectId: id, title, templateId: t.id, version: c.version, templateTitle: t.title }), id);
       label = `Created from template “${t.title}” v${c.version}`;
     } else {
-      project = checkDraftProject(projectFromTemplate(t.id, { projectId: id, title, documentType: docTypeOf(body.documentType) }), id);
+      project = checkDraftProject(projectFromTemplate(t.id, { projectId: id, title, documentType: docTypeOf(body.documentType, t.id), ...(t.id === BLANK_PROJECT_TEMPLATE_ID ? issuerOf(body) : {}) }), id);
     }
     const saved = store.putProject(project, projectContentDigest(project), { by: by(req), label });
-    audit(store, req, 'project.create', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { title, templateId: t.id, templateTitle: t.title, templateVersion: saved.fromTemplate?.version ?? null } });
+    // A document with its own data has no shared sample customers: it gets its first customers now (templates never carry any).
+    const customers = firstCustomers(store, saved);
+    audit(store, req, 'project.create', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { title, templateId: t.id, templateTitle: t.title, templateVersion: saved.fromTemplate?.version ?? null, ...(saved.documentType === 'custom' ? { customers } : {}) } });
     reply.status(201);
-    return { project: saved, createdFrom: t.id, templateVersion: saved.fromTemplate?.version ?? null };
+    return { project: saved, createdFrom: t.id, templateVersion: saved.fromTemplate?.version ?? null, ...(saved.documentType === 'custom' ? { customers } : {}) };
   });
 
   /**
@@ -162,17 +191,23 @@ export function registerTemplateRoutes(app: FastifyInstance, deps: RouteDeps): v
     try { project = checkDraftProject({ ...rest, projectId: id, title, modelVersion: 1, importedFrom }, id); }
     catch (e: any) { throw new ApiError(422, 'INVALID_PROJECT_FILE', `The file could not be read as a project: ${e?.message ?? e}`, { problems: [{ code: e?.code ?? 'INVALID', message: e?.message ?? String(e) }] }); }
 
-    // Prove the studio can work out a document from it before storing anything.
+    // Prove the studio can work out a document from it before storing anything. A document with its own data has no
+    // shared customers to try it on, so it is tried on a customer built from its own field definitions.
+    const ownData = project.documentType === 'custom';
     const records = allRecords(project.projectId).filter((r) => r.documentType === project.documentType);
     const known = new Set(records.map((r) => r.recordId));
-    try { if (records[0]) resolve({ project, record: records[0], profileId: 'paged-pdf' }); }
+    try {
+      const probe: SyntheticRecord | undefined = ownData ? previewRecordOf(project) : records[0];
+      if (probe) resolve({ project, record: probe, profileId: 'paged-pdf' });
+    }
     catch (e: any) { throw new ApiError(422, 'INVALID_PROJECT_FILE', 'The file has the right shape, but the studio could not work out a document from it, so it was not imported.', { problems: [{ code: 'CANNOT_RESOLVE', message: String(e?.message ?? e).slice(0, 300) }] }); }
 
     const warnings: string[] = [];
     const lostTests = (project.testCases ?? []).filter((t: any) => t.recordId && !known.has(t.recordId));
-    if (lostTests.length) warnings.push(`${lostTests.length} pinned test${lostTests.length === 1 ? ' uses a customer' : 's use customers'} that this studio does not have. ${lostTests.length === 1 ? 'It is' : 'They are'} kept and will fail until those customers are imported.`);
+    if (lostTests.length) warnings.push(`${lostTests.length} pinned test${lostTests.length === 1 ? ' uses a customer' : 's use customers'} that this studio does not have. ${lostTests.length === 1 ? 'It is' : 'They are'} kept and will fail until ${ownData ? 'they are pointed at one of the new customers' : 'those customers are imported'}.`);
     if (store.getProject(String(file.projectId ?? ''))) warnings.push(`The document this file was exported from (“${store.getProject(String(file.projectId))!.title}”) is still here. The import is a separate new document; nothing is replaced.`);
-    if ((project.customFields ?? []).length) warnings.push(`${project.customFields!.length} extra data field${project.customFields!.length === 1 ? '' : 's'} came with the file. Synthetic customers here have no values for ${project.customFields!.length === 1 ? 'it' : 'them'} until you add them.`);
+    if (ownData) warnings.push('A project file never carries customers. New test customers are generated for this document from its data fields and rules.');
+    else if ((project.customFields ?? []).length) warnings.push(`${project.customFields!.length} extra data field${project.customFields!.length === 1 ? '' : 's'} came with the file. Synthetic customers here have no values for ${project.customFields!.length === 1 ? 'it' : 'them'} until you add them.`);
     const report = {
       from: { projectId: importedFrom.projectId, title: importedFrom.title, modelVersion: importedFrom.modelVersion },
       counts: templateCounts(project),
@@ -181,8 +216,9 @@ export function registerTemplateRoutes(app: FastifyInstance, deps: RouteDeps): v
     };
     if (body.dryRun === true) return { dryRun: true, wouldCreate: { projectId: id, title }, report };
     const saved = store.putProject(project, projectContentDigest(project), { by: by(req), label: `Imported from file “${importedFrom.title}” v${importedFrom.modelVersion}` });
-    audit(store, req, 'project.import', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { title, fromProjectId: importedFrom.projectId, fromTitle: importedFrom.title, fromVersion: importedFrom.modelVersion, warnings: warnings.length } });
+    const customers = firstCustomers(store, saved);
+    audit(store, req, 'project.import', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { title, fromProjectId: importedFrom.projectId, fromTitle: importedFrom.title, fromVersion: importedFrom.modelVersion, warnings: warnings.length, ...(ownData ? { customers } : {}) } });
     reply.status(201);
-    return { project: saved, report };
+    return { project: saved, report, ...(ownData ? { customers } : {}) };
   });
 }

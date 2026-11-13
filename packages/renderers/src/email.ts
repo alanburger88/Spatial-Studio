@@ -12,6 +12,8 @@ import { esc, imageSrc } from './html-common';
  */
 export const EMAIL_RENDERER_VERSION = 'email-renderer/1';
 export const SYNTHETIC_CUE = 'Synthetic demonstration data — not a real statement or claim.';
+/** The same cue for a document with its own data, which is neither a statement nor a claim. */
+export const SYNTHETIC_CUE_DOCUMENT = 'Synthetic demonstration data — not a real document.';
 export const NOT_DETERMINED = 'Not determined — under review';
 const TABLE_INLINE_MAX_ROWS = 10;
 
@@ -60,9 +62,13 @@ export function extractChannelFacts(res: Resolution, project: Project): ChannelF
     const f = nodes.get(id)?.field; if (!f) return undefined;
     return { nodeId: id, label: f.label, display: f.display, ...(f.cents !== undefined ? { cents: f.cents } : {}), guarded: !!f.guarded };
   };
-  const keyIds = isEob ? ['claim-identifiers', 'plan-paid', 'member-responsibility'] : ['billing-summary', 'payment-due', 'payment-due-date'];
+  // A document with its own data has no figures the studio knows by name: its key figures are its first summary figures.
+  const ownData = project.documentType === 'custom';
+  const keyIds = ownData ? [] : isEob ? ['claim-identifiers', 'plan-paid', 'member-responsibility'] : ['billing-summary', 'payment-due', 'payment-due-date'];
   let keyFacts = keyIds.map(fact).filter((x): x is ChannelFact => !!x);
   if (!keyFacts.length) keyFacts = ordered.filter((n) => n.type === 'summary-metric').slice(0, 3).map((n) => fact(n.id)!).filter(Boolean);
+  // Never a label with nothing beside it (a figure the customer has no value for, set to show blank).
+  if (ownData) keyFacts = keyFacts.filter((k) => k.display.trim() !== '');
   const logoNode = nodes.get('issuer-logo')?.image ?? ordered.find((n) => n.type === 'image')?.image;
   const logoSrc = logoNode ? imageSrc(logoNode.src, accent) : null;
 
@@ -76,14 +82,14 @@ export function extractChannelFacts(res: Resolution, project: Project): ChannelF
       const sel = n.variants?.unresolved ? [] : (n.variants?.items.filter((i) => i.selected) ?? []);
       if (sel.length) sections.push({ nodeId: n.id, title: sel.map((s) => s.title).join(' · '), blocks: n.text ?? sel.flatMap((s) => s.text), missingLocale: sel.some((s) => s.missingLocale) });
     } else if (n.type === 'disclosure' && n.disclosure) {
-      disclosures.push({ nodeId: n.id, contentPartId: n.disclosure.contentPartId, version: n.disclosure.version, title: n.disclosure.title, blocks: n.text ?? [], banner: n.disclosure.contentPartId === 'not-a-bill-banner' });
+      disclosures.push({ nodeId: n.id, contentPartId: n.disclosure.contentPartId, version: n.disclosure.version, title: n.disclosure.title, blocks: n.text ?? [], banner: !ownData && n.disclosure.contentPartId === 'not-a-bill-banner' });
     } else if (n.type === 'action-link' && n.action && isHttps(n.action.url)) {
       actions.push({ nodeId: n.id, label: n.action.label, url: n.action.url });
     } else if (n.type === 'repeating-table' && n.table) {
       const t = n.table;
       const total = t.totalCents !== undefined ? formatCents(t.totalCents, res.locale) : undefined;
       if (t.rows.length > TABLE_INLINE_MAX_ROWS) {
-        summaries.push({ nodeId: n.id, kind: 'table', text: total ? sysText(res.systemStrings, 'emailTableSummaryTotal', { caption: t.caption, count: t.rows.length, total }) : sysText(res.systemStrings, 'emailTableSummary', { caption: t.caption, count: t.rows.length }) });
+        summaries.push({ nodeId: n.id, kind: 'table', text: total ? sysText(res.systemStrings, ownData ? 'emailTableSummaryTotalDocument' : 'emailTableSummaryTotal', { caption: t.caption, count: t.rows.length, total }) : sysText(res.systemStrings, ownData ? 'emailTableSummaryDocument' : 'emailTableSummary', { caption: t.caption, count: t.rows.length }) });
       } else if (t.rows.length) {
         tables.push({ nodeId: n.id, caption: t.caption, columns: t.columns.map((c) => ({ label: c.label, align: c.align })), rows: t.rows.map((r) => t.columns.map((c) => r.cells[c.key]?.display ?? '')), ...(total ? { totalDisplay: total } : {}) });
       }
@@ -96,11 +102,12 @@ export function extractChannelFacts(res: Resolution, project: Project): ChannelF
   const claimId = res.result.documentFacts.claimId;
   return {
     issuer: project.issuer?.name ?? 'Issuer', product: project.issuer?.product ?? project.issuer?.name ?? 'Issuer', accent, lang: res.locale || 'en-US', documentType: project.documentType,
-    customerName: String(res.semanticManifest.identity.name ?? ''),
+    // The customer's own name (the manifest's identity is the name as far as the DOCUMENT shows it, which may be not at all).
+    customerName: `${res.effectiveRecord?.customer?.givenName ?? ''} ${res.effectiveRecord?.customer?.familyName ?? ''}`.trim(),
     logo: logoSrc && logoNode ? { src: logoSrc, alt: logoNode.alt } : null,
     notABill: isEob || res.result.documentFacts.notABill === true,
     ...(typeof claimId === 'string' ? { claimId } : {}),
-    dueDate: fact('payment-due-date'),
+    dueDate: ownData ? undefined : fact('payment-due-date'),
     keyFacts, greeting: nodes.get('greeting')?.text ?? [], sections, actions, disclosures, summaries, tables,
     ...(res.channelTexts ? { texts: res.channelTexts } : {}),
     strings: res.systemStrings ?? {},
@@ -132,6 +139,7 @@ export function notABillPhrase(f: ChannelFacts): string {
 
 export function emailSubject(f: ChannelFacts): string {
   if (f.texts) return fillChannelText(f.texts.subject, f);
+  if (f.documentType === 'custom') return `Your ${f.issuer} document is ready`;
   if (f.documentType === 'eob') return `Your ${f.issuer} Explanation of Benefits is ready — this is not a bill`;
   const due = f.keyFacts.find((k) => k.nodeId === 'payment-due');
   const date = f.dueDate;
@@ -183,7 +191,7 @@ export function emailHtml(f: ChannelFacts, subject: string, preheader: string): 
   const parts: string[] = [];
   // header
   parts.push(`<tr><td style="padding:20px 24px;border-bottom:4px solid ${A};background-color:#ffffff;">${f.logo ? `<img src="${esc(f.logo.src)}" width="150" height="40" alt="${esc(f.logo.alt)}" style="display:block;border:0;outline:none;height:40px;width:150px;max-width:100%;">` : `<span style="${FONT}font-size:20px;font-weight:bold;color:${A};">${esc(f.issuer)}</span>`}</td></tr>`);
-  const title = f.texts?.title || (f.documentType === 'eob' ? 'Your Explanation of Benefits is ready' : 'Your statement is ready');
+  const title = f.texts?.title || (f.documentType === 'custom' ? 'Your document is ready' : f.documentType === 'eob' ? 'Your Explanation of Benefits is ready' : 'Your statement is ready');
   parts.push(row(`<h1 style="margin:0;${FONT}font-size:22px;line-height:28px;color:${INK};">${esc(title)}</h1>`, '24px 24px 12px'));
   if (f.notABill) {
     const banner = f.disclosures.find((d) => d.banner);
@@ -234,7 +242,7 @@ export function emailHtml(f: ChannelFacts, subject: string, preheader: string): 
   const disc = f.disclosures.filter((d) => !d.banner);
   if (disc.length) parts.push(row(`<div style="border-top:1px solid ${LINE};padding-top:16px;">${disc.map((d) => `<h3 style="margin:0 0 6px;${FONT}font-size:14px;line-height:20px;color:${INK};">${esc(d.title)}</h3><div style="${FONT}font-size:13px;line-height:19px;color:${MUTED};">${blocksEmail(d.blocks, A).replace(/font-size:15px;line-height:22px;color:#1a202c/g, `font-size:13px;line-height:19px;color:${MUTED}`)}</div>`).join('')}</div>`));
   // footer
-  parts.push(`<tr><td style="padding:16px 24px;background-color:#edf2f7;${FONT}font-size:12px;line-height:18px;color:${MUTED};"><strong style="color:${INK};">DEMO DATA.</strong> ${esc(SYNTHETIC_CUE)}<br>Sent by ${esc(f.issuer)} (fictional).</td></tr>`);
+  parts.push(`<tr><td style="padding:16px 24px;background-color:#edf2f7;${FONT}font-size:12px;line-height:18px;color:${MUTED};"><strong style="color:${INK};">DEMO DATA.</strong> ${esc(f.documentType === 'custom' ? SYNTHETIC_CUE_DOCUMENT : SYNTHETIC_CUE)}<br>Sent by ${esc(f.issuer)} (fictional).</td></tr>`);
 
   return `<!doctype html>
 <html lang="${esc(f.lang)}" xmlns="http://www.w3.org/1999/xhtml">
@@ -274,7 +282,7 @@ export function emailText(f: ChannelFacts, subject: string): string {
   }
   if (f.texts?.closing.length) L.push(blocksText(f.texts.closing), '');
   for (const d of f.disclosures.filter((x) => !x.banner)) L.push(`== ${d.title} ==`, blocksText(d.blocks), "");
-  L.push('--', `${sysText(f.strings, 'emailDemoData')} ${sysText(f.strings, 'emailSyntheticCue')}`, sysText(f.strings, 'emailSentBy', { issuer: f.issuer }));
+  L.push('--', `${sysText(f.strings, 'emailDemoData')} ${sysText(f.strings, f.documentType === 'custom' ? 'emailSyntheticCueDocument' : 'emailSyntheticCue')}`, sysText(f.strings, 'emailSentBy', { issuer: f.issuer }));
   return L.join('\n');
 }
 
