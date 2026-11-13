@@ -118,14 +118,14 @@ export function ProposalCard({ proposal, impact, applied, busy, onApply, onOpen,
  * A wording suggestion beside the original. The person accepts it into the field (where they can still edit it),
  * or discards it. Nothing is written until they accept.
  */
-export function SuggestionCompare({ original, suggestion, source, note, onAccept, onDiscard, acceptLabel = 'Use this' }: { original: string; suggestion: string; source: AssistSource | 'sample'; note?: ReactNode; onAccept: () => void; onDiscard?: () => void; acceptLabel?: string }) {
+export function SuggestionCompare({ original, suggestion, source, note, onAccept, onDiscard, acceptLabel = 'Use this', blockedReason }: { original: string; suggestion: string; source: AssistSource | 'sample'; note?: ReactNode; onAccept: () => void; onDiscard?: () => void; acceptLabel?: string; /** When set, the suggestion can be read but not used, and this says why (read-only role, changed data fields). */ blockedReason?: string | null }) {
   return (
     <div className="as-compare" data-testid="assist-suggestion">
       <div className="as-compare-col"><span className="as-compare-lbl">Now</span><p>{original || <span className="muted">Empty</span>}</p></div>
       <div className="as-compare-col new"><span className="as-compare-lbl">Suggestion <SourceChip source={source} /></span><p data-testid="assist-suggestion-text">{suggestion}</p></div>
       {note && <div className="as-compare-note">{note}</div>}
       <div className="row wrap as-card-actions">
-        <button type="button" className="btn primary sm" onClick={onAccept} data-testid="assist-accept">{acceptLabel}</button>
+        <button type="button" className="btn primary sm" onClick={onAccept} disabled={!!blockedReason} title={blockedReason ?? undefined} data-testid="assist-accept">{acceptLabel}</button>
         {onDiscard && <button type="button" className="btn ghost sm" onClick={onDiscard} data-testid="assist-discard">Discard</button>}
       </div>
     </div>

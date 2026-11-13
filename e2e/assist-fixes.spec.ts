@@ -38,6 +38,7 @@ test('F02 "No message matches": the fallback proposal resolves it', async ({ pag
   await open(page, 'aster-card-demo', 'rules-data');
   await demoTool(page, 'remove-fallback');
   await demoTool(page, 'no-match-scenario');
+  await page.getByTestId('demo-tools').getByRole('button', { name: 'Close demo tools' }).click();
   await page.evaluate(() => localStorage.setItem('iss.validateScope', 'this'));
   await page.getByTestId('nav-S09').click(); // in-app navigation keeps the unsaved defect
   await ready(page);

@@ -104,7 +104,7 @@ function SummaryBody({ s, fromLabel, toLabel, note, testId }: { s: ChangeSummary
           </div>
           <div className="cs-sections">
             {s.sections.map((sec, k) => (
-              <details key={sec.area} className="cs-section" data-area={sec.area} open={k === 0}>
+              <details key={sec.area} className="cs-section" data-area={sec.area} open>
                 <summary><span>{sec.title}</span> <span className="chip count">{sec.items.length}</span></summary>
                 <ul>{sec.items.map((it, n) => <li key={n}>{it}</li>)}</ul>
               </details>

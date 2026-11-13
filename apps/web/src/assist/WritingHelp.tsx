@@ -53,16 +53,9 @@ export function lengthChange(before: string, after: string): string {
 export function GuardedSuggestion({ blockedReason, ...props }: { blockedReason?: string | null } & Parameters<typeof SuggestionCompare>[0]) {
   const ro = useReadOnlyReason();
   const reason = blockedReason ?? ro;
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const b = ref.current?.querySelector<HTMLButtonElement>('[data-testid="assist-accept"]');
-    if (!b) return;
-    b.disabled = !!reason;
-    if (reason) b.title = reason; else b.removeAttribute('title');
-  });
   return (
-    <div ref={ref} className="wh-guarded" data-blocked={reason ? 'true' : undefined}>
-      <SuggestionCompare {...props} note={<>{props.note}{reason && <span className="wh-reason" data-testid="assist-blocked-reason">{reason}</span>}</>} />
+    <div className="wh-guarded" data-blocked={reason ? 'true' : undefined}>
+      <SuggestionCompare {...props} blockedReason={reason} note={<>{props.note}{reason && <span className="wh-reason" data-testid="assist-blocked-reason">{reason}</span>}</>} />
     </div>
   );
 }

@@ -553,15 +553,15 @@ function BlockerDetail({ group: g, data, loading, onlyBlocking, onPreview, onGo,
       <div className="panel-body vc-detail" aria-labelledby="vc-detail-title" data-testid="blocker-detail" data-code={g.code}>
         <h2 className="vc-detail-code">{BLOCK_TITLE(g.code)} <Tech><span className="chip code">{g.code}</span></Tech></h2>
         <p className="vc-detail-msg">{g.message}</p>
+        {g.suggestion && <><h3 className="section-title">Suggested correction</h3><div className="callout accent" data-testid="issue-suggestion">{g.suggestion}</div></>}
+        <h3 className="section-title">Suggested fix</h3>
+        <SuggestedFix key={g.key} finding={finding} recordId={g.recordIds[0]} onOpenLink={onOpenLink} />
         <dl className="kv vc-kv">
           <dt>Reach</dt><dd>{g.recordIds.length} of {data.total} synthetic customers</dd>
           {g.nodeId && <><dt>Section</dt><dd><Named name={nodeTitle(project, g.nodeId)} code={g.nodeId} /></dd></>}
           {g.ruleIds.length > 0 && <><dt>Rules</dt><dd>{g.ruleIds.map((r) => { const rule = project.rules.find((x) => x.id === r); return <span key={r} className="vc-rule">{rule ? ruleTitle(project, rule) : null} <span className="chip code">{r}</span></span>; })}</dd></>}
           {g.locale && <><dt>Language</dt><dd title={g.locale}>{localeLabel(g.locale)}</dd></>}
         </dl>
-        {g.suggestion && <><h3 className="section-title">Suggested correction</h3><div className="callout accent" data-testid="issue-suggestion">{g.suggestion}</div></>}
-        <h3 className="section-title">Suggested fix</h3>
-        <SuggestedFix key={g.key} finding={finding} recordId={g.recordIds[0]} onOpenLink={onOpenLink} />
         <h3 className="section-title">Affected customers</h3>
         <ul className="list-rows vc-affected" data-testid="blocker-customers" aria-label="Affected synthetic customers">
           {names.map((n) => (
@@ -670,6 +670,9 @@ function Inspector({ issue: i, members, onGo, onOpenLink, sourceLabel, stale }: 
           </div>
         )}
         {stale && <div className="callout warning">This report is out of date and is being re-run; the issue may no longer apply.</div>}
+        {i.suggestion && <><h3 className="section-title">Suggested correction</h3><div className="callout accent" data-testid="issue-suggestion">{i.suggestion}</div></>}
+        <h3 className="section-title">Suggested fix</h3>
+        <SuggestedFix key={i.issueId} finding={finding} scenario onOpenLink={onOpenLink} />
         <dl className="kv vc-kv">
           <dt>Suite</dt><dd>{suiteLabel}</dd>
           <dt>Severity</dt><dd><SeverityLabel severity={i.severity} /></dd>
@@ -679,9 +682,6 @@ function Inspector({ issue: i, members, onGo, onOpenLink, sourceLabel, stale }: 
           {i.locale && <><dt>Language</dt><dd title={i.locale}>{localeLabel(i.locale)}</dd></>}
           {i.source && <><dt>Source</dt><dd>{i.source}</dd></>}
         </dl>
-        {i.suggestion && <><h3 className="section-title">Suggested correction</h3><div className="callout accent" data-testid="issue-suggestion">{i.suggestion}</div></>}
-        <h3 className="section-title">Suggested fix</h3>
-        <SuggestedFix key={i.issueId} finding={finding} scenario onOpenLink={onOpenLink} />
         <h3 className="section-title">Reproduction</h3>
         {rep ? (
           <div className="vc-repro">

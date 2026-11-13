@@ -82,10 +82,11 @@ details.tr-skipped ul { margin: 4px 0 0; padding-left: 18px; }
 .tr-flag-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .tr-flag-kind { font-weight: 700; }
 .tr-flag-msg { color: var(--iss-text); overflow-wrap: anywhere; }
-.tr-glossary { display: flex; flex-direction: column; gap: 10px; min-width: min(640px, 80vw); }
+.tr-glossary { display: flex; flex-direction: column; gap: 10px; width: 100%; min-width: 0; }
 .tr-glossary-lead { margin: 0; font-size: 12.5px; }
 .tr-glossary-table { table-layout: fixed; width: 100%; }
-.tr-glossary-table th:nth-child(1), .tr-glossary-table th:nth-child(2) { width: 32%; }
-.tr-glossary-table th:nth-child(4) { width: 44px; }
+.tr-glossary-table th:nth-child(1), .tr-glossary-table th:nth-child(2) { width: 30%; }
+.tr-glossary-table th:nth-child(4) { width: 40px; }
+.tr-glossary-table { box-sizing: border-box; }
 .tr-glossary-table td { padding: 4px 6px; vertical-align: middle; }
 .tr-glossary-table .input { width: 100%; }
