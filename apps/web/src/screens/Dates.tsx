@@ -185,6 +185,7 @@ function Timeline({ entries, issueDate, records, project }: { entries: TimelineE
             <li key={e.date} className={current ? 'selected' : ''} aria-current={current || undefined} data-testid={`dates-boundary-${e.date}`} data-reached={e.reached.length} data-evaluated={e.evaluated}>
               <div className="dt-day-head">
                 <h3 className="dt-day">{dayWords(e.date)}</h3>
+                {current && <span className="chip accent" data-testid={`dates-current-${e.date}`}>Previewing this day</span>}
                 {next === e.date && issueDate && <span className="chip info">Next change after the preview date</span>}
                 <span className="chip count" data-testid={`dates-boundary-reached-${e.date}`}>Reaches {e.reached.length} of {e.evaluated} synthetic customers</span>
               </div>
@@ -197,8 +198,8 @@ function Timeline({ entries, issueDate, records, project }: { entries: TimelineE
                 </details>
               )}
               <div className="row dt-day-actions">
-                <button type="button" className={`btn sm ${current ? 'primary' : ''}`} aria-pressed={current} onClick={() => setIssueDate(e.date)} data-testid={`dates-use-${e.date}`}>Preview as issued on {dayWords(e.date)}</button>
-                <button type="button" className={`btn sm ghost ${issueDate === e.dayBefore ? 'primary' : ''}`} aria-pressed={issueDate === e.dayBefore} onClick={() => setIssueDate(e.dayBefore)} data-testid={`dates-use-before-${e.date}`}>The day before</button>
+                <button type="button" className="btn sm" aria-pressed={current} onClick={() => setIssueDate(e.date)} data-testid={`dates-use-${e.date}`}>Preview as issued on {dayWords(e.date)}</button>
+                <button type="button" className="btn sm ghost" aria-pressed={issueDate === e.dayBefore} onClick={() => setIssueDate(e.dayBefore)} data-testid={`dates-use-before-${e.date}`}>The day before ({dayWords(e.dayBefore)})</button>
               </div>
             </li>
           );
