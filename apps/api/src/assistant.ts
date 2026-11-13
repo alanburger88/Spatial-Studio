@@ -7,7 +7,7 @@ import { PERSONAS } from '@iss/model/fixtures';
 
 /* ------------------------------------------------------- typed allowlist */
 
-const VIEWS = ['design', 'exploded', 'cube', 'landscape', 'page-stack', 'rules-data', 'journey', 'validate', 'outputs', 'demo', 'assistant'] as const;
+const VIEWS = ['design', 'exploded', 'cube', 'landscape', 'page-stack', 'rules-data', 'journey', 'validate', 'outputs', 'demo', 'assistant', 'content', 'channels'] as const;
 const scalar = z.union([z.string().max(200), z.number().int(), z.boolean(), z.null()]);
 
 export const ActionSchema = z.discriminatedUnion('action', [
@@ -237,6 +237,14 @@ export function offlineInterpret(message: string, ctx: AssistantContext): Offlin
     }
   }
   if (/\b(validat\w*|run checks?|check (the|this|my) (document|statement|eob|design|template)|compliance|compliant|preflight|lint|qa)\b/.test(n)) { actions.push({ action: 'run_validation' }); notes.push('run validation'); }
+  // Translation and channel wording: the assistant points to the screen that does it; it never writes or approves text itself.
+  if (/\btranslat\w*\b/.test(n) || (!actions.length && /\b(other languages?|another language|add (a |another )?language|first[- ]pass)\b/.test(n))) {
+    actions.push({ action: 'navigate_view', view: 'content' });
+    notes.push('open Content & Translations: choose or add the language, then “Draft missing with AI” prepares first-pass drafts for a person to review, edit and approve (nothing is approved automatically)');
+  } else if (!actions.length && /\b(e-?mails?|sms|text messages?|subject line|preheader)\b/.test(n) && /\b(edit|change|word\w*|design|write|rewrite|customi[sz]e|subject|sections?)\b/.test(n)) {
+    actions.push({ action: 'navigate_view', view: 'channels' });
+    notes.push('open Email & SMS, where the subject, preview text, opening, closing and the text message are edited and the email sections are chosen');
+  }
   if (!actions.some((a: any) => a.action === 'open_project' || a.action === 'run_validation')) for (const [re, view] of VIEW_WORDS) if (re.test(n) && verb.test(n) && !(view === 'design' && /edge.?case/.test(n))) {
     actions.push({ action: 'navigate_view', view }); notes.push(view === 'outputs' && exportWords ? 'open Outputs, where PDF/HTML export is run (the assistant does not export for you)' : `open ${view}`); break;
   }

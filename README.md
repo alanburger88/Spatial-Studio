@@ -68,6 +68,11 @@ Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the 
 - **Top bar**: *Previewing as* chooses the synthetic customer, *Output* the channel; *Saved · vN* opens version history. View, theme, tour and shortcuts live in the settings menu (sliders icon).
 - **Checks run by themselves**: Validate & Compare and Preview & Export build their results when opened and again when the document or customer changes, and say whether what you see is up to date. Automatic previews reuse an existing export instead of adding to the export history.
 - **Detail panels are never empty**: the Cube, Landscape, Page Stack, Validate and the Design inspector open with the most relevant item already selected.
+- **Languages** (Content & Translations): add any of 47 left-to-right languages with **Add language**. Every text a customer reads is listed in three groups (messages & disclosures, labels & headings, email & SMS). **Draft missing with AI** prepares first-pass drafts (with a live AI key; without one, the two sample projects load labelled sample drafts for Spanish). Drafts are never approved automatically: edit them, then **Approve** one by one or **Approve reviewed drafts…**.
+- **Switch the document language**: the **Language** selector in the top bar (*Auto* follows the customer's own preference). The Design canvas, Exploded view and Preview & Export (PDF, HTML, email, SMS) follow it. Previews show unapproved drafts and are marked as drafts; a clean export uses approved text only and stays blocked until required text is approved.
+- **Email & SMS** (Build menu): edit the subject, preview text, heading, opening and closing text and the text message, insert data fields, choose which sections the email shows and in what order, and watch the live preview with the SMS length and segment count.
+- **All customers' blockers**: Validate & Compare → **All customers** lists every blocking issue across the synthetic customers, with who is affected.
+- **Interactive HTML** is laid out as a web page (sticky summary bar, section menu, searchable and sortable tables); the studio previews it in a phone, tablet or desktop frame.
 - **Document Cube filters**: click a legend chip to show only intersections with that outcome (several can be on at once), or **Problems only** for those with blocking issues or warnings. The Grid and table fade the rest; the 3D view hides them. The 3D view opens on one layer (the previewed customer's) with previous/next buttons; choose **All layers** for the whole cube.
 - **Demo tools** (status bar): deliberate defects for demonstrations (rule tie, missing Spanish wording, table overflow, unconfirmed liability, no matching message) live in one panel that opens only when you click it.
 - **2D Design Studio zoom**: the page fits the panel width by default (*Width*); *Page* shows the whole sheet. On windows narrower than 1500 px the component list starts closed so the page shows near full size; open it with **Components** (your choice is remembered).
@@ -105,13 +110,14 @@ pnpm verify
 | `pnpm evidence` | Regenerates real PDFs, HTML, parity and composition manifests into `reports/evidence/` |
 | `node scripts/screens.mjs` | Captures all 12 screens from the running app |
 
-## The 12 screens
+## The screens
 
 | Route | Screen |
 |---|---|
 | `/projects` | S01 Project Gallery |
 | `/studio/:project/design` | S02 2D Design Studio — drag/drop 15 components, rich text with data tokens, fixed + flow layout, profiles, inspector |
 | `/studio/:project/exploded/:nodeId` | S03 **Exploded Document** — the signature 2.5D view of a component's real variants |
+| `/studio/:project/channels` | S15 Email & SMS — wording, data fields, sections and live preview |
 | `/studio/:project/cube` | S04 Document Cube — three configurable scenario dimensions |
 | `/studio/:project/landscape` | S05 Scenario Landscape — outcome clusters, reach and risk |
 | `/studio/:project/page-stack` | S06 Page Composition Stack — composer-measured pages, continuation, overflow |

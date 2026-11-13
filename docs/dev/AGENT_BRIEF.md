@@ -101,3 +101,14 @@ The user reviewed the app and approved 11 changes. The lead owns `shell/*`, `ui/
 4. **No empty side panels.** A detail panel must never open on "Select a …": pre-select the most useful item (stated per assignment). Do not push the pre-selection into the URL or the shared store selection unless the assignment says so — it must not change what other screens show.
 
 Verify with `npx tsc -p tsconfig.json --noEmit`, screenshots in light + dark (`THEME=dark`), Business + Technical (`VIEW=technical`), at 1440×900, 1280×720 and 1000×700, on both `aster-card-demo` and `harborcare-demo`. Do not run the Playwright suite (the lead does); do not commit.
+
+## Languages and channels (v0.5) — rules for every screen and renderer
+
+- **Never hard-code customer-visible English in a renderer.** Fixed wording goes in `SYSTEM_STRINGS` (`packages/model/src/systemStrings.ts`) and is read with `sysText(res.systemStrings, key, vars)` or `modeText(mode, key, vars)`; placeholders are `{name}`. It then appears in Content & Translations automatically.
+- **Any new text field on a node** must get a slot in `slotsOf` (`packages/model/src/strings.ts`) so it is translatable; ids are `@<nodeId>/<field>`.
+- **The document language** is `res.locale`; format dates and amounts with `formatValue`/`formatCents`/`formatDate` and that locale. Do not call `Intl` in renderers or the resolver (browser and server must agree).
+- **Drafts:** `resolve({ includeDrafts: true })` is for previews only. The server honours `includeDrafts` only with `allowDraft`. A screen that previews must say so when `res.translation.draftsShown.length > 0`.
+- **Translation writes** go through `SET_TRANSLATION_DRAFT(S)`, `APPROVE_TRANSLATION(S)`; AI or sample output is always stored with `origin` and never approved by code.
+- **Email/SMS wording** lives in `project.channels` (`channelConfig`, `SET_CHANNELS`); renderers read the resolved `res.channelTexts`.
+- **Top bar:** it is full. Do not add controls to it; check 1000, 1280, 1440 and 1920 px after any change.
+

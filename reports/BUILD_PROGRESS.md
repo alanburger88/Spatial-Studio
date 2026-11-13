@@ -21,7 +21,7 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | Pack validation | PASS |
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
-| Unit tests | 114/114 |
+| Unit tests | 139/139 |
 | Browser tests | 91/91 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests) |
 | Build | OK |
 
@@ -64,9 +64,21 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 - Logo: the official InfoSlips artwork was supplied afterwards and is now in the top bar, the sign-in page and the browser tab (D53). Exported documents keep the issuer's own brand.
 - Document Cube: legend switches and *Problems only* filter the Grid, 3D view and table; the 3D view opens on one layer with a stepper (D54).
 
+## v0.5 additions (approved scope changes: languages, email/SMS editing, HTML web experience, blocker list)
+
+- **Languages (D56–D58, D63):** project language list (47 languages), every customer-visible text translatable, top-bar Language selector, draft-marked previews with approved-only exports.
+- **AI first-pass translation (D59–D60):** drafts only, token-checked, human approval; bundled Spanish sample drafts for the two sample projects.
+- **Email & SMS editing (D61):** new screen S15; wording with data fields, section choice and order, live preview, SMS meter.
+- **Interactive HTML (D62):** web-style structure and interactions; device frames in the studio.
+- **Cross-customer blocker list (D55):** *All customers* view in Validate & Compare.
+- **Exploded Document:** states that versions are the same for every output and shows the document language.
+
 ## Not verified / open
 
-- **Live AI provider:** not exercised; no credentials were used.
+- **Live AI provider:** not exercised; no credentials were used. This now includes AI translation: the request, the handling of its output and the fallback are tested with a stand-in translator, but no real model call was made.
+- **Sample Spanish drafts:** written for the demo by the build agent; not reviewed by a translator.
+- **Other languages:** only Spanish was looked at in the outputs. French and others were exercised in unit tests (formatting, adding, obligations) but no translated document in them was inspected.
+- **Email clients:** the email is checked as HTML in Chromium only, not in real mail clients.
 - **Firefox/Safari:** smoke test not run.
 - **Assistive technology:** screen-reader manual pass not run.
 - **Deployment:** none; not authorised.
