@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { Project, SyntheticRecord } from '@iss/model';
 import { RECORDS } from '@iss/model/fixtures';
 import { buildProofRecord, resolve, type ProofRecord } from '@iss/resolver';
-import { renderPagedDocument } from '@iss/renderers';
+import { renderEmail, renderInteractiveHtml, renderPagedDocument, renderSms } from '@iss/renderers';
 import { buildApp } from '../src/app';
 import { proofProblems } from '../src/proofs';
 import { releaseTemplate, type PackageComposer } from '../src/releasePackage';
@@ -348,6 +348,50 @@ describe('producing from a release, looking up and verifying', () => {
       if (saved.p === undefined) delete process.env.PROOFS_RESET; else process.env.PROOFS_RESET = saved.p;
       if (saved.r === undefined) delete process.env.RELEASES_RESET; else process.env.RELEASES_RESET = saved.r;
     }
+  });
+});
+
+/* ====================================================================== releases approved with translation drafts */
+
+describe('a release approved while it had translation drafts is produced from its template (approved wording only)', () => {
+  let ctx: Ctx;
+  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, releasePackage: { composer: stubComposer() } }); });
+  afterAll(async () => { await ctx.app.close(); });
+  const h = helpers(() => ctx);
+  const DRAFT = 'BORRADOR SIN APROBAR';
+
+  it('gives the run id, content fingerprint and output bytes of the release package template, never draft wording; a runtime record verifies as same', async () => {
+    await h.save(EOB, (p) => { for (const c of p.contentParts) c.draftLocales = { ...(c.draftLocales ?? {}), 'es-US': `${DRAFT} ${c.id}` }; });
+    const rel = await h.approve(EOB);
+    const frozen = ctx.store.releaseProject(rel.id)!;
+    expect(frozen.contentParts.some((c) => c.draftLocales?.['es-US']?.startsWith(DRAFT))).toBe(true); // the stored approved version carries the drafts
+    const template = releaseTemplate(frozen);
+    expect(JSON.stringify(template)).not.toContain(DRAFT);
+    // The template is what GET /releases/:id/template serves (the package's template.json).
+    expect(JSON.stringify(await h.json('GET', `/api/v1/releases/${rel.id}/template`))).toBe(JSON.stringify(template));
+
+    const rec = RECORDS.find((r) => r.documentType === 'eob' && r.customer.locale === 'es-US') ?? RECORDS.find((r) => r.documentType === 'eob')!;
+    const made = (await h.produce(rel.id, { recordId: rec.recordId })).json();
+    const proof = (await h.json('GET', `/api/v1/proofs/${made.results[0].proofId}`)).proof as ProofRecord;
+    const fromTemplate = resolve({ project: template, record: rec, profileId: 'paged-pdf' });
+    const fromFrozen = resolve({ project: frozen, record: rec, profileId: 'paged-pdf' });
+    expect(fromFrozen.runId).not.toBe(fromTemplate.runId); // why the stored project must not be used
+    expect(proof.runId).toBe(fromTemplate.runId);
+    expect(proof.contentDigest).toBe(fromTemplate.contentDigest);
+    const email = renderEmail(fromTemplate, template), sms = renderSms(fromTemplate, template), html = renderInteractiveHtml(fromTemplate, template);
+    expect(proof.outputs).toEqual([
+      { channel: 'html', kind: 'bytes', sha256: sha(html), size: Buffer.byteLength(html) },
+      { channel: 'email', kind: 'bytes', sha256: sha(email.html), size: Buffer.byteLength(email.html) },
+      { channel: 'sms', kind: 'bytes', sha256: sha(sms.text), size: Buffer.byteLength(sms.text) },
+    ]);
+    const v = (await h.verify(proof.proofId, { recordId: rec.recordId })).json();
+    expect(v.same).toBe(true);
+    expect(JSON.stringify(v.recreated)).not.toContain(DRAFT);
+
+    // A record the runnable package would write (from template.json, same fingerprints) verifies as the same.
+    const runtime = buildProofRecord({ release: { id: rel.id, documentId: EOB, number: rel.number, contentDigest: rel.contentDigest }, resolution: fromTemplate, record: rec, producer: 'runtime', producedAt: '2026-11-12T09:00:00.000Z', customerRef: 'RUNTIME-REF-1', outputs: proof.outputs });
+    expect((await h.importFile(jsonl([runtime]), false)).json()).toMatchObject({ added: 1, unknownRelease: 0 });
+    expect((await h.verify(runtime.proofId, { record: rec })).json()).toMatchObject({ same: true, differences: [] });
   });
 });
 
