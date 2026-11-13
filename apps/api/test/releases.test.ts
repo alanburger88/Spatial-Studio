@@ -686,7 +686,9 @@ describe('the release package (composition replaced by a stub)', () => {
     const sample = (await json('GET', '/api/v1/records/CARD-0001')).record;
     const { recordId: _id, ...row } = sample;
     const withName = (name: typeof IMPORTED) => ({ ...row, customer: { ...row.customer, ...name }, card: { ...row.card, transactions: row.card.transactions.map((t: any, i: number) => (i === 0 ? { ...t, merchant: 'Quackenbush-Merchant' } : t)) } });
-    ids.imported = (await json('POST', '/api/v1/records/import', { documentType: 'credit-statement', format: 'json', data: [withName(IMPORTED)] })).imported[0].recordId;
+    // The imported customer's own data also contradicts itself; an approver sets that aside (a known data problem), naming them in the reason.
+    const importedRow = withName(IMPORTED);
+    ids.imported = (await json('POST', '/api/v1/records/import', { documentType: 'credit-statement', format: 'json', data: [{ ...importedRow, card: { ...importedRow.card, paymentStatus: 'current', missedPayments: 2 } }] })).imported[0].recordId;
     ids.supplied = (await json('POST', '/api/v1/records/import', { documentType: 'credit-statement', projectId: CARD, scope: 'project', format: 'json', data: [withName(SUPPLIED)] })).imported[0].recordId;
     expect((await inj('POST', `/api/v1/projects/${CARD}/test-data`, { outcomes: true, edges: false })).statusCode).toBe(201);
     const records = (await json('GET', `/api/v1/records?documentType=credit-statement&full=1&projectId=${CARD}`)).records as any[];
@@ -713,6 +715,8 @@ describe('the release package (composition replaced by a stub)', () => {
       part.draftLocales = { ...(part.draftLocales ?? {}), 'es-US': 'BORRADOR sin aprobar' };
       p.translationOrigins = { ...(p.translationOrigins ?? {}), '@payment-due/label': 'ai' };
     });
+    const known = await inj('POST', `/api/v1/projects/${CARD}/known-data-problems`, { blockerId: 'inconsistent-payment-state~payment-guidance', recordId: ids.imported, reason: `${IMPORTED.givenName} ${IMPORTED.familyName}'s file (${ids.imported}) is corrected upstream` });
+    expect(known.statusCode).toBe(201);
     expect((await approve(CARD)).release).toMatchObject({ created: true, release: { id: REL, package: { status: 'not-built' } } });
 
     const url = `/api/v1/releases/${REL}/package`;
@@ -827,7 +831,8 @@ describe('the release package (composition replaced by a stub)', () => {
     for (const [p, data] of files) {
       if (p.endsWith('.pdf')) continue;
       const stamps = data.toString('utf8').match(/20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g) ?? [];
-      for (const s of stamps) expect([release.approvedAt, release.createdAt], `${p}: ${s}`).toContain(s);
+      // ... and when an approver set a customer's data problem aside, which the release records with it
+      for (const s of stamps) expect([release.approvedAt, release.createdAt, ...(release.knownDataProblems ?? []).map((k: any) => k.markedAt)], `${p}: ${s}`).toContain(s);
       expect(data.toString('utf8'), p).not.toContain(builtAt);
     }
   });
@@ -1105,6 +1110,8 @@ describe('the release package (composition replaced by a stub)', () => {
       for (const secret of SECRETS) expect(body.includes(secret), `${secret} in ${p}`).toBe(false);
     }
     for (const secret of SECRETS) expect(zip.includes(Buffer.from(secret, 'utf8')), secret).toBe(false);
+    // a known data problem on the imported customer is recorded with no id and no name: only that one such customer was set aside
+    expect(parsed('manifest.json').knownDataProblems).toEqual([{ blockerId: 'inconsistent-payment-state~payment-guidance', blocker: 'The account is “up to date” but lists missed payments', customer: { kind: 'imported' }, reason: 'the customer\'s file (the customer) is corrected upstream', markedBy: 'Local admin', markedAt: expect.any(String) }]);
     // the same holds for what the routes serve file by file
     const listing = await json('GET', `/api/v1/releases/${REL}/package/files`);
     for (const f of listing.files) {
