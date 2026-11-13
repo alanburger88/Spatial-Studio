@@ -2,13 +2,13 @@
 
 Status: **proposed order, awaiting the product owner's approval. Nothing in this document is built unless it says so.**
 Written 2026-11-13 after a critical review and ten decisions taken one by one with the product owner.
-A researched comparison with named competitors is being written alongside (`docs/research/COMPETITORS.md`); claims below about competitors are from general knowledge until that lands, and are marked *(to confirm)*.
+A comparison with named competitors is in `docs/research/COMPETITORS.md`. **It rests on search-result summaries only:** the vendors' own pages could not be opened from the build environment (their sites are outside its allowed network), so every finding there needs confirming on the source page before it is used in a sales claim.
 
 ## The critical review in brief
 
 **Where the studio is already strong**
 
-- **It can explain itself.** For any customer it says which message was chosen and why, in plain words, and shows every alternative (Exploded, Cube, Landscape). Template tools generally show the result, not the reasoning *(to confirm)*.
+- **It can explain itself.** For any customer it says which message was chosen and why, in plain words, and shows every alternative (Exploded, Cube, Landscape). No public evidence was found of a per-customer explanation in Quadient Inspire, OpenText Exstream, SmartCOMM, Messagepoint or Papyrus; Messagepoint's rule check against sample data is the closest.
 - **Testing is built in and confirmed by the engine.** Coverage gaps, generated test customers with edge values, pinned tests, journeys, and a Blockers list with the effect of each fix shown before it is applied.
 - **The assistant proposes; people approve.** Every suggestion shows its effect on all customers, is one undoable step, and is labelled built-in or AI.
 - **Outputs are deterministic and releases are frozen.** PDF, web page, email and SMS come from one model with parity checks; a release is a self-describing package.
@@ -23,6 +23,37 @@ A researched comparison with named competitors is being written alongside (`docs
 - **Teamwork is basic.** Nobody is notified, reviewers need an account, two editors collide on save.
 - **Eighteen screens and no guided path.**
 - **Live AI has been seen on screen for four flows only.**
+
+## What the comparison with named products showed
+
+Source: `docs/research/COMPETITORS.md` (107 public sources, search-result summaries only, researched 2026-11-13). "No public evidence" means searched and not found; it does not prove a product lacks a feature.
+
+**Where the studio is, or would be, ahead (no public evidence found for any of the five products)**
+
+- Explaining to a business user why one customer gets one message. *Built.*
+- Generating test customers to cover every rule outcome, with coverage shown. *Built.*
+- Seeing every alternative at once (Exploded, Cube, Landscape). Messagepoint's master-to-variation hierarchy is the nearest. *Built.*
+- Wording and rules that start and end on a date. *Wave 2.*
+- Reviewers proofing without an account. *Wave 4.*
+- A release another system runs as-is, with a proof pack it can verify itself. *Wave 1.*
+
+**Where competitors are clearly ahead today**
+
+| Their strength | Who | The studio today | In the roadmap? |
+|---|---|---|---|
+| Comparing whole output runs between versions, in a release pipeline | Quadient (Compare Bundle, StreamDiff, DocDiff), OpenText (Output Compare) | One customer at a time; change summary in words | Partly: "Before and after" (wave 1). **A whole-base check before Production is not yet in it** |
+| Print streams and finishing (AFP, PostScript, PCL, barcodes, OMR, inserts, postal presort) | Quadient, OpenText, Papyrus | PDF only; AFP is a simulation | Wave 5, needs a print partner |
+| Finding duplicate wording across thousands of templates; AI-assisted migration | Messagepoint (Rationalizer), Quadient (InspireXpress+), Precisely | Nothing | Wave 3 |
+| Variants that inherit from a master | Messagepoint (patented) | Nothing | Wave 5; the patent needs a legal look before design |
+| AI writing help with governance: tone and sentiment scoring, 80–100+ languages, personal-data detection, a record of AI changes | All four main vendors | Rewrite, translation, proposals a person approves, AI labelled in Activity. No sentiment score, **no personal-data check on what is sent to the model** | Partly: wording checker (wave 2) |
+| Business users editing only the regions a designer unlocks, for one-off letters | OpenText (Empower), SmartCOMM (Draft Editor), Quadient | Nothing | **Not in the roadmap** |
+| Approval chains: several approvers, in parallel or in sequence, observers | SmartCOMM, OpenText, Quadient | One approval by one person with the right role | **Not in the roadmap** (four-eyes was not chosen) |
+| Accessible PDF at volume, with a validator | Papyrus, OpenText, Quadient (as a separate product) | Tagged by the browser, never validated | Wave 2 |
+| Archive with retention and legal holds | Quadient | Nothing | Partly: "Proof for any customer" (wave 1) is a record, not an archive |
+| Right-to-left languages | Papyrus only | None | Wave 5 |
+| Hosted service, containers, managed operation | All | Local proof of concept | **Not chosen** (security and operations plan) |
+
+**Reported weaknesses of the competitors** (review sites, small samples): steep learning curve, licence cost and complexity, the need for specialists, and painful migration. Ease of use and a clear path in are therefore worth as much as any single feature, which supports doing navigation and the guided path first.
 
 ## What was chosen
 
