@@ -27,6 +27,7 @@ import { registerReleaseRoutes } from './routes/releases';
 import { registerRuntimeRoutes } from './routes/runtime';
 import { knownDataProblemsInForce, registerKnownDataRoutes } from './routes/knownData';
 import { registerProofRoutes } from './routes/proofs';
+import { registerLibraryRoutes } from './routes/library';
 import { ReleasePackages, createRelease, releaseInfo } from './releases';
 import { chromiumPackageComposer, type PackageComposer } from './releasePackage';
 import type { RouteDeps } from './routes/deps';
@@ -259,6 +260,7 @@ export async function buildApp(opts: AppOptions = {}) {
   registerRuntimeRoutes(app, deps, opts.releasePackage?.composer ?? chromiumPackageComposer(composer));
   registerKnownDataRoutes(app, deps);
   registerProofRoutes(app, deps, { composer: opts.releasePackage?.composer ?? chromiumPackageComposer(composer) });
+  registerLibraryRoutes(app, deps);
 
   /* ------------------------------------------------ version history, review workflow, comments, audit */
 

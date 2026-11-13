@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
-  DERIVED_FIELDS_VERSION, DOCUMENT_TYPE_LABEL, RECORD_ID_PREFIX, SOURCE_LANGUAGE, addDaysToIso, buildContext, dateBoundaries, dayWords, defaultFormatterFor, digestOf, evaluateCalculations, exprDependencies,
+  DERIVED_FIELDS_VERSION, DOCUMENT_TYPE_LABEL, LIBRARY_KIND_LABEL, libraryListOf, RECORD_ID_PREFIX, SOURCE_LANGUAGE, addDaysToIso, buildContext, dateBoundaries, dayWords, defaultFormatterFor, digestOf, evaluateCalculations, exprDependencies,
   formulaInWords, getPath, languageName, lookupTableProblems, printFormula, projectFieldIndex, wordsScopeOf,
   projectContentDigest, projectFields, projectFileContentOf, projectLanguages, releaseId, releasePackageName, tokensIn, tokensInText, translatableStrings, translationStatus,
   type DocNode, type FieldDef, type Predicate, type Project, type ReleasePackageSummary, type SyntheticRecord, type TestCase,
@@ -548,7 +548,7 @@ export function expectedOutcome(project: Project, res: Resolution) {
 
 /* ------------------------------------------------------------------ README */
 
-function readmeHtml(a: { title: string; kind: string; number: number; approver: string | null; approvedAt: string; fileName: string; languages: ReleasePackageSummary['languages']; plan: ScenarioPlan; references: PlannedScenario[]; known?: StoredRelease['knownDataProblems']; dates?: string }): string {
+function readmeHtml(a: { title: string; kind: string; number: number; approver: string | null; approvedAt: string; fileName: string; languages: ReleasePackageSummary['languages']; plan: ScenarioPlan; references: PlannedScenario[]; known?: StoredRelease['knownDataProblems']; dates?: string; library?: string }): string {
   const row = (cells: string[]) => `<tr>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
   const knownRows = (a.known ?? []).map((k) => row([escHtml(k.blocker), 'id' in k.customer ? `${k.customer.kind === 'sample' ? 'Sample customer' : 'Generated customer'} <code>${escHtml(k.customer.id)}</code>` : 'One customer who is not synthetic (no id or name recorded)', escHtml(k.reason), escHtml(k.markedBy ?? '—')])).join('\n');
   const scenarioRows = a.plan.scenarios.map((s) => row([
@@ -602,7 +602,7 @@ ${knownRows ? `<h2>Known data problems</h2>
 ${knownRows}
 </table>
 
-` : ''}${a.dates ?? ''}<h2>Languages</h2>
+` : ''}${a.dates ?? ''}${a.library ?? ''}<h2>Languages</h2>
 ${a.languages.length ? `<table>
 <tr><th>Language</th><th>Texts</th><th>Approved</th><th>Not translated</th><th>File</th></tr>
 ${languageRows}
@@ -783,7 +783,17 @@ ${boundaries.map((b) => `<tr><td>${escHtml(dayWords(b.date))}</td><td>${b.change
 </table>` : ''}
 
 ` : '';
-  add('README.html', 'readme', readmeHtml({ title: release.title, kind: DOCUMENT_TYPE_LABEL[release.documentType], number: release.number, approver: release.approvedBy?.name ?? null, approvedAt: release.approvedAt, fileName, languages, plan, references, known: release.knownDataProblems, dates: datesHtml }));
+  // Shared library: what this release took from it, item by item (the content itself is in template.json like the rest).
+  const fromLibrary = libraryListOf(template);
+  const libraryHtml = fromLibrary.length ? `<h2>What came from the library</h2>
+<p>These parts of the document were linked to the studio's shared library when it was approved. Their content is in <code>template.json</code> like everything else; the package does not depend on the library.</p>
+<table>
+<tr><th>Item</th><th>Kind</th><th>Version</th></tr>
+${fromLibrary.map((l) => `<tr><td>${escHtml(l.title)}</td><td>${escHtml(LIBRARY_KIND_LABEL[l.kind])}</td><td>${l.version}</td></tr>`).join('\n')}
+</table>
+
+` : '';
+  add('README.html', 'readme', readmeHtml({ title: release.title, kind: DOCUMENT_TYPE_LABEL[release.documentType], number: release.number, approver: release.approvedBy?.name ?? null, approvedAt: release.approvedAt, fileName, languages, plan, references, known: release.knownDataProblems, dates: datesHtml, library: libraryHtml }));
 
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const contents: PackageFile[] = files.map((f) => ({ path: f.path, sha256: sha256(f.data), bytes: f.data.length, role: f.role }));
@@ -813,6 +823,11 @@ ${boundaries.map((b) => `<tr><td>${escHtml(dayWords(b.date))}</td><td>${b.change
      * comes from, and every day on which what it says changes, with the scenarios on each side of the day.
      */
     ...(template.documentDate ? { documentDate: template.documentDate, dateBoundaries: boundaries.map((b) => ({ date: b.date, changes: b.changes.map(({ words: w, ...c }) => ({ ...c, words: w })), scenarios: { dayBefore: sideOf(b.date, 'before')?.id ?? null, onTheDay: sideOf(b.date, 'on')?.id ?? null } })) } : {}),
+    /**
+     * What came from the shared library (an addition to format 1: readers that do not know it ignore it): each linked item
+     * with its kind and the approved version the release holds. The content itself is in template.json. Absent when none.
+     */
+    ...(fromLibrary.length ? { library: fromLibrary } : {}),
     syntheticOnly: true,
     notIncluded: ['customer data', 'draft wording and unapproved translations', 'stage and handover record', 'data/mapping-<ccm>.json', 'library/', 'font files', 'AFP print stream', 'the engine'],
     /** Every file in the package except this one. A reader must ignore roles and paths it does not know. */
