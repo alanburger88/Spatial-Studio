@@ -5,6 +5,7 @@ import path from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { deflateSync } from 'node:zlib';
 import { buildApp } from '../src/app';
+import { Store } from '../src/db';
 
 let ctx: Awaited<ReturnType<typeof buildApp>>;
 beforeAll(async () => { ctx = await buildApp({ dataDir: mkdtempSync(path.join(tmpdir(), 'iss-ab-')), logger: false }); });
@@ -105,8 +106,8 @@ describe('export history', () => {
     expect(pdfs[0].artifactId).toBe(second.headers['x-artifact-id']);
     expect((await inj('GET', `/api/v1/artifacts/${pdfs[0].artifactId}`)).rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
     // the earlier build is out of the history, but a link to it that was already copied still downloads
+    // (two builds inside the same second can be byte-identical, in which case they are one and the same export)
     const earlier = String(first.headers['x-artifact-id']);
-    expect(earlier).not.toBe(pdfs[0].artifactId);
     expect((await inj('GET', `/api/v1/artifacts/${earlier}`)).rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
     // a different customer is a different document: its export is kept alongside
     const other = await inj('POST', '/api/v1/compose/pdf', { projectId: 'harborcare-demo', recordId: 'EOB-0003' });
@@ -115,4 +116,23 @@ describe('export history', () => {
     const all = (await inj('GET', '/api/v1/artifacts?projectId=harborcare-demo')).json().artifacts.filter((a: any) => a.kind === 'pdf');
     expect(all).toHaveLength(2);
   }, 120_000);
+
+  it('a superseded PDF leaves the history but stays downloadable; identical bytes become the latest again', () => {
+    const store = new Store(mkdtempSync(path.join(tmpdir(), 'iss-sup-')));
+    store.saveRun('run-x', 'p1', 'r1', {}, {});
+    const meta = { draft: false, renderer: 'paged-1' };
+    const a = store.saveArtifact('run-x', 'pdf', 'doc.pdf', Buffer.from('%PDF-first'), meta, 1);
+    const b = store.saveArtifact('run-x', 'pdf', 'doc.pdf', Buffer.from('%PDF-second'), meta, 1);
+    expect(b.artifactId).not.toBe(a.artifactId);
+    expect(store.listArtifacts({ runId: 'run-x' }).map((x) => x.artifactId)).toEqual([b.artifactId]);
+    expect(store.getArtifact(a.artifactId)?.bytes.toString()).toBe('%PDF-first');
+    expect(store.getArtifact(a.artifactId)?.meta.supersededBy).toBe(b.artifactId);
+    // a draft of the same document is a different export and is kept alongside
+    const d = store.saveArtifact('run-x', 'pdf', 'doc.pdf', Buffer.from('%PDF-draft'), { ...meta, draft: true }, 1);
+    expect(store.listArtifacts({ runId: 'run-x' }).map((x) => x.artifactId).sort()).toEqual([b.artifactId, d.artifactId].sort());
+    // the first bytes again: that export is the latest once more and the second is superseded
+    store.saveArtifact('run-x', 'pdf', 'doc.pdf', Buffer.from('%PDF-first'), meta, 1);
+    expect(store.listArtifacts({ runId: 'run-x' }).map((x) => x.artifactId).sort()).toEqual([a.artifactId, d.artifactId].sort());
+    expect(store.getArtifact(b.artifactId)?.bytes.toString()).toBe('%PDF-second');
+  });
 });

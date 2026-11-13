@@ -21,7 +21,7 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | Pack validation | PASS |
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
-| Unit tests | 113/113 |
+| Unit tests | 114/114 |
 | Browser tests | 89/89 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 11 v0.4 UX tests) |
 | Build | OK |
 
