@@ -1,5 +1,8 @@
-import type { Project } from '@iss/model';
+import { effectivePageDesign, pagedProfileOf, type Project } from '@iss/model';
 import type { Finding, RBlock, RInline, RNode, Resolution } from '@iss/resolver';
+import { renderPagedDocument, usesPageDesign } from '@iss/renderers';
+import type { Composer } from './composer';
+import { runVeraPdf, VERAPDF_NOT_INSTALLED, type VeraPdfResult } from './verapdf';
 
 /**
  * "Checked by the studio": the studio opens the PDF it produced and checks what a person using a screen reader depends
@@ -874,3 +877,45 @@ function textOfEl(pages: Array<{ tree: PageTree; read: PageRead }>, e: El): stri
   walk(e);
   return ids.map((id) => pg.read.mcText.get(id) ?? '').join('').replace(/\s+/g, ' ').trim();
 }
+
+/* ------------------------------------------------------------------ one document, as the studio exports it */
+
+/** The two levels of proof for one composed PDF, and when they were made. */
+export interface PdfAccessibilityResult {
+  /** When the checks ran (ISO time). */
+  checkedAt: string;
+  recordId: string;
+  /** "Checked by the studio": always present. */
+  studio: PdfA11yReport;
+  /** "Validated by veraPDF": its result, `not-installed`, or `not-run` when it was not asked for. */
+  verapdf: VeraPdfResult | { status: 'not-run'; message: string };
+}
+
+/** Pages of a composition that carry a page background (page design), from the page template each page used. */
+export function backgroundPagesOf(project: Project, res: Resolution, pages: Array<{ index: number; template?: string }>): number[] {
+  if (!usesPageDesign(res, project)) return [];
+  const d = effectivePageDesign(pagedProfileOf(project, 'paged-pdf'));
+  return pages.filter((p) => (p.template === 'last' ? d.last?.background : p.template === 'following' ? d.following.background : d.first.background)).map((p) => p.index);
+}
+
+/**
+ * Composes the document's PDF exactly as the export does (paged-pdf, no watermark) and checks it: the studio's checks
+ * always; veraPDF too when `verapdf` is asked for and it is installed. Failures are blocking when the document requires
+ * an accessible PDF (`project.accessiblePdfRequired`), warnings otherwise.
+ */
+export async function checkDocumentPdf(composer: Composer, res: Resolution, project: Project, opts: { verapdf?: boolean; env?: NodeJS.ProcessEnv; verapdfTimeoutMs?: number } = {}): Promise<PdfAccessibilityResult> {
+  const comp = await composer.composePaged(renderPagedDocument(res, project, { profileId: 'paged-pdf', watermark: '' }), { pdf: true, parts: true });
+  const pages = comp.metrics.pages as unknown as Array<{ index: number; nodeIds: string[]; fixedNodeIds: string[]; flowBottomPt: number; template?: string }>;
+  const studio = await checkPdfAccessibility(comp.pdf!, {
+    locale: res.locale, required: !!project.accessiblePdfRequired, colours: documentColours(project),
+    parts: pdfPartsOf(res, project, { pages, parts: comp.parts ?? [] }), backgroundPages: backgroundPagesOf(project, res, pages),
+  });
+  const verapdf = opts.verapdf ? await runVeraPdf(comp.pdf!, { env: opts.env, timeoutMs: opts.verapdfTimeoutMs }) : { status: 'not-run' as const, message: 'veraPDF was not asked to run for this check.' };
+  return { checkedAt: new Date().toISOString(), recordId: res.recordId, studio, verapdf };
+}
+
+/** The level of proof reached, in the words the screens use. Never says more than was run. */
+export function proofLevelOf(r: Pick<PdfAccessibilityResult, 'verapdf'>): { level: 'studio' | 'verapdf'; label: string } {
+  return r.verapdf.status === 'ran' ? { level: 'verapdf', label: 'Validated by veraPDF' } : { level: 'studio', label: 'Checked by the studio' };
+}
+export { VERAPDF_NOT_INSTALLED };

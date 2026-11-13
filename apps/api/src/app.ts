@@ -26,6 +26,8 @@ import { registerReleaseRoutes } from './routes/releases';
 import { registerRuntimeRoutes } from './routes/runtime';
 import { knownDataProblemsInForce, registerKnownDataRoutes } from './routes/knownData';
 import { registerProofRoutes } from './routes/proofs';
+import { registerPdfAccessibilityRoutes } from './routes/pdfAccessibility';
+import { checkDocumentPdf, type PdfAccessibilityResult } from './pdfAccessibility';
 import { ReleasePackages, createRelease, releaseInfo } from './releases';
 import { chromiumPackageComposer, type PackageComposer } from './releasePackage';
 import type { RouteDeps } from './routes/deps';
@@ -240,6 +242,7 @@ export async function buildApp(opts: AppOptions = {}) {
   registerRuntimeRoutes(app, deps, opts.releasePackage?.composer ?? chromiumPackageComposer(composer));
   registerKnownDataRoutes(app, deps);
   registerProofRoutes(app, deps, { composer: opts.releasePackage?.composer ?? chromiumPackageComposer(composer) });
+  registerPdfAccessibilityRoutes(app, deps);
 
   /* ------------------------------------------------ version history, review workflow, comments, audit */
 
@@ -669,14 +672,19 @@ export async function buildApp(opts: AppOptions = {}) {
       parity = compareManifests(res.semanticManifest, comp.extracted, h.extracted);
       add('parity', parity.checks.filter((c) => c.status === 'mismatch').map((c) => toIssue({ code: 'PARITY_MISMATCH', severity: c.blocking ? 'blocking' : 'warning', source: 'parity', message: `${c.label}: PDF and/or HTML differ from the resolved semantic facts.`, details: { check: c.id, expected: c.expected, pdf: c.pdf, html: c.html } }, 'parity', { runId: res.runId, reproduction: repro })), t0);
     }
+    let pdfAccessibility: PdfAccessibilityResult | null = null;
     if (suites.includes('accessibility')) {
       const t0 = t();
-      const axe = await runAxe(composer, a11yHtml!);
-      add('accessibility', [...modelAccessibility(project, res), ...axeToFindings(axe)].map((f) => toIssue(f, 'accessibility', { runId: res.runId })), t0);
+      // `accessibilityScope: 'pdf'` (the full check) runs only the PDF accessibility part; otherwise the model checks and axe on the web page too.
+      const pdfOnly = body?.accessibilityScope === 'pdf';
+      const web = pdfOnly ? [] : [...modelAccessibility(project, res), ...axeToFindings(await runAxe(composer, a11yHtml!))];
+      // PDF accessibility (wave 2): the studio's own checks on the composed PDF; veraPDF as well when asked for and installed.
+      pdfAccessibility = await checkDocumentPdf(composer, res, project, { verapdf: body?.verapdf === true });
+      add('accessibility', [...web, ...pdfAccessibility.studio.findings].map((f) => toIssue(f, 'accessibility', { runId: res.runId, ...(f.code.startsWith('PDF_A11Y_') ? { reproduction: repro } : {}) })), t0);
     }
     const counts = { blocking: 0, error: 0, warning: 0, info: 0 } as Record<string, number>;
     issues.forEach((i) => (counts[i.severity] = (counts[i.severity] ?? 0) + 1));
-    return { runId: res.runId, modelVersion: project.modelVersion, contentDigest: res.contentDigest, suites: suiteStatus, counts, issues, parity, pageCount, note: 'Automated checks are necessary but not sufficient; this is not WCAG or regulatory certification.' };
+    return { runId: res.runId, modelVersion: project.modelVersion, contentDigest: res.contentDigest, suites: suiteStatus, counts, issues, parity, pageCount, pdfAccessibility, note: 'Automated checks are necessary but not sufficient; this is not WCAG or regulatory certification.' };
   });
 
   app.post('/api/v1/journeys/replay', async (req) => {

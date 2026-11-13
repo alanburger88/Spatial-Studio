@@ -335,6 +335,11 @@ export interface Project {
   fromTemplate?: { templateId: string; version: number; title: string };
   /** Set when the project was brought in from a studio project file: what the file said it was. */
   importedFrom?: { projectId: string; title: string; modelVersion: number; importedAt: string };
+  /**
+   * "Accessible PDF is required" (wave 2): when true, a failed check of the studio's PDF accessibility checks is a
+   * blocker (layout and pages) found by the full check; when absent or false, it is a warning. Absent = off.
+   */
+  accessiblePdfRequired?: boolean;
 }
 
 /** One preferred term: the English `source` should be rendered as `target` in that language. */

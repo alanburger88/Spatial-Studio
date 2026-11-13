@@ -630,6 +630,60 @@ function personFixes(project: Project, f: Finding): Draft[] {
   return [linkDraft(f.nodeId ? `Look at ${q(name)}` : 'Look at this issue', `${f.message} No automatic fix is available for this kind of issue.`, f.nodeId && project.nodes.some((n) => n.id === f.nodeId) ? design : { view: 'validate', label: 'Open Validate & Compare' })];
 }
 
+/* ------------------------------------------------------------------ the studio's PDF accessibility checks (wave 2) */
+
+/** Fixes for what the PDF accessibility checks find, at the source: a change where one is safe to propose, else the place to do it. */
+function pdfAccessibilityFixes(project: Project, f: Finding): Draft[] {
+  const node = project.nodes.find((n) => n.id === f.nodeId);
+  const name = nodeName(project, f.nodeId);
+  const design = designLink(project, f.nodeId);
+  const said = typeof f.details?.fix === 'string' ? f.details.fix : '';
+  switch (f.code) {
+    case 'PDF_A11Y_IMAGE_NO_DESCRIPTION':
+    case 'PDF_A11Y_FIGURE_NO_ALT':
+      if (node?.type === 'image') return altFixes(project, f);
+      return [linkDraft(f.nodeId ? `Describe the picture in ${q(name)}` : 'Describe the picture', `${said || 'A picture in the PDF has no description.'} Pictures are described in the Design view.`, design)];
+    case 'PDF_A11Y_TABLE_NO_HEADERS': {
+      if (node?.type === 'repeating-table' && f.details?.continued === true && node.repeatHeader !== 'always') {
+        return [changeDraft(project, {
+          title: `Repeat the header row of ${q(name)} on each page`,
+          explanation: `Where ${q(name)} continues on the next page it has no header row, so a screen reader cannot say which column a value is in. This repeats the header row at the top of every page the table continues on. The header row takes a little room, so page breaks can move for customers with long tables.`,
+          commands: [{ type: 'UPDATE_NODE', nodeId: node.id, patch: { repeatHeader: 'always' } }],
+          risk: 'review', riskReason: 'Changes how continued tables look and can move page breaks.',
+        }, design)];
+      }
+      return [linkDraft(`Give ${q(name)} column headings`, `${said || 'A table in the PDF has no header cells.'} Add or name its columns in the Design view.`, design)];
+    }
+    case 'PDF_A11Y_READING_ORDER': {
+      const other = typeof f.details?.otherNodeId === 'string' ? f.details.otherNodeId : null;
+      const root = project.nodes.find((n) => n.id === project.rootNodeId);
+      const fixedBoth = f.details?.placement === 'fixed' && f.details?.otherPlacement === 'fixed';
+      if (node && other && root?.children?.includes(node.id) && root.children.includes(other) && fixedBoth) {
+        const rest = root.children.filter((c) => c !== node.id);
+        const at = rest.indexOf(other) + (f.details?.readBefore === true ? 1 : 0);
+        return [changeDraft(project, {
+          title: `List ${q(name)} ${f.details?.readBefore === true ? 'after' : 'before'} ${q(nodeName(project, other))}`,
+          explanation: `Both are fixed on the page, and fixed items are read in the order they are listed. Listing ${q(name)} where it sits on the page makes a screen reader read it in that order. Nothing moves on the PDF page; the web page and email follow the list, so their order can change.`,
+          commands: [{ type: 'MOVE_NODE', nodeId: node.id, parentId: root.id, index: at }],
+          risk: 'review', riskReason: 'The web page and email show components in the listed order.',
+        }, design)];
+      }
+      return [linkDraft(`Put ${q(name)} in reading order`, `${said || 'A part of the PDF is read out of order.'}`, design)];
+    }
+    case 'PDF_A11Y_LOW_CONTRAST': {
+      const brandOrStyle = f.details?.colour === 'brand' || f.details?.colour === 'style';
+      return [linkDraft(brandOrStyle ? 'Choose a colour with more contrast in Styles & brand' : `Change the colours of ${q(name)}`, `${f.message}${brandOrStyle ? ' Open Styles & brand from the Design view.' : ''}`, { ...design, label: brandOrStyle ? 'Open Design (Styles & brand)' : design.label })];
+    }
+    case 'PDF_A11Y_LINK_TEXT':
+      return [linkDraft(`Make the link in ${q(name)} say where it goes`, 'Link text such as “click here” says nothing to someone using a screen reader. Describe where the link goes.', designLink(project, f.nodeId, 'Edit the text', textIdFor(project, f.nodeId)))];
+    case 'PDF_A11Y_LIST_NOT_TAGGED':
+      return [linkDraft(`Use a real list in ${q(name)}`, 'Typed bullets or numbers are read as plain text. Use the list button in the text editor so the PDF tags the list as a list.', designLink(project, f.nodeId, 'Edit the text', textIdFor(project, f.nodeId)))];
+    case 'PDF_A11Y_HEADING_SKIPPED':
+    default:
+      return [linkDraft(f.nodeId ? `Fix the headings in ${q(name)}` : 'Fix the headings', said || f.message, f.nodeId ? design : { view: 'validate', label: 'Open Validate & Compare' })];
+  }
+}
+
 /* ------------------------------------------------------------------ public API */
 
 interface FixCtx { records: SyntheticRecord[]; recordId?: string; overrides?: Record<string, unknown>; journeyCursor?: number | null; profileId?: ProfileId }
@@ -646,6 +700,14 @@ function draftsFor(project: Project, f: Finding, ctx: FixCtx): Draft[] {
     case 'IMAGE_ALT_MISSING':
     case 'A11Y_IMAGE_ALT': return altFixes(project, f);
     case 'A11Y_CHART_TITLE': return chartTitleFixes(project, f);
+    case 'PDF_A11Y_IMAGE_NO_DESCRIPTION':
+    case 'PDF_A11Y_FIGURE_NO_ALT':
+    case 'PDF_A11Y_TABLE_NO_HEADERS':
+    case 'PDF_A11Y_READING_ORDER':
+    case 'PDF_A11Y_LOW_CONTRAST':
+    case 'PDF_A11Y_LINK_TEXT':
+    case 'PDF_A11Y_HEADING_SKIPPED':
+    case 'PDF_A11Y_LIST_NOT_TAGGED': return pdfAccessibilityFixes(project, f);
     case 'UNKNOWN_VARIANT': return unknownVariantFixes(project, f);
     case 'UNKNOWN_SECTION': return unknownSectionFixes(project, f);
     case 'MISSING_CONTENT_PART': return missingPartFixes(project, f);
@@ -715,6 +777,10 @@ function resolvedInModel(after: Project, f: Pick<Finding, 'code' | 'nodeId' | 'r
     case 'INVALID_BINDING': { const path = pathOf(f); return path === undefined ? null : !used(usageOf(after, f.nodeId ?? '', path)); }
     case 'IMAGE_ALT_MISSING':
     case 'A11Y_IMAGE_ALT': return !!node && (!!node.decorative || !!node.image?.alt?.trim());
+    // PDF accessibility (model-level only; the PDF check confirms it when the pages are composed again).
+    case 'PDF_A11Y_IMAGE_NO_DESCRIPTION':
+    case 'PDF_A11Y_FIGURE_NO_ALT': return node?.type === 'image' ? !!node.decorative || !!node.image?.alt?.trim() : null;
+    case 'PDF_A11Y_TABLE_NO_HEADERS': return node?.type === 'repeating-table' && f.details?.continued === true ? node.repeatHeader === 'always' : null;
     case 'A11Y_CHART_TITLE': return !!node?.chart?.title?.trim();
     case 'UNKNOWN_VARIANT': return rulesOf().every((r) => r.enabled === false || (r.then.op === 'selectVariant' && (node?.variantIds ?? []).includes(r.then.variantId)));
     case 'UNKNOWN_SECTION': return rulesOf().every((r) => r.enabled === false || (r.then.op === 'showSection' && (after.nodes.some((n) => n.id === (r.then as { targetNodeId: string }).targetNodeId) || after.contentParts.some((c) => c.id === (r.then as { targetNodeId: string }).targetNodeId))));
@@ -754,7 +820,7 @@ export function fixImpact(project: Project, proposal: FixProposal, records: Synt
   else { const m = resolvedInModel(applied.project, issue); resolves = m === true; how = m === null ? 'unknown' : 'model'; }
 
   const others = changed - unblocked.length;
-  const composer = ['FLOW_OVERFLOW_NO_CONTINUATION', 'TABLE_TOTAL_CLIPPED', 'ORPHANED_HEADING', 'KEEP_TOGETHER_CANNOT_FIT'].includes(issue.code);
+  const composer = ['FLOW_OVERFLOW_NO_CONTINUATION', 'TABLE_TOTAL_CLIPPED', 'ORPHANED_HEADING', 'KEEP_TOGETHER_CANNOT_FIT'].includes(issue.code) || issue.code.startsWith('PDF_A11Y_');
   let summary: string;
   if (newlyBlocked.length) summary = `This would block ${customers(newlyBlocked.length)} who ${newlyBlocked.length === 1 ? 'is' : 'are'} fine today${unblocked.length ? `, while unblocking ${unblocked.length}` : ''}; review it before applying.`;
   else if (how === 'unknown') summary = changed ? `${changed} of ${total} synthetic customers are affected, but it could not be confirmed that the issue is resolved${composer ? ' until the pages are composed again' : ''}.` : `None of the ${total} synthetic customers receives anything different; whether the issue is resolved could not be confirmed${composer ? ' until the pages are composed again' : ' on the sample customers'}.`;
