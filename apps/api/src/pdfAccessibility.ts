@@ -78,6 +78,8 @@ export interface PdfA11yContext {
    * taken to be part of the background (a picture such as a logo mark can contain text): it is decoration, not checked.
    */
   backgroundPages?: number[];
+  /** Where the composed pages draw decoration (from the composer): text drawn outside the tags inside it is part of a decorative picture. */
+  decoration?: ComposedDecoration[];
 }
 
 export type PdfA11yFinding = Finding & { source: 'accessibility'; details: { check: PdfCheckId; title: string; fix: string; [k: string]: unknown } };
@@ -103,11 +105,22 @@ export interface PdfA11yReport {
 
 /** What the composer reads from the composed pages: each component's text per page, in page order. */
 export interface ComposedPartText { page: number; nodeId: string; text: string; fixed: boolean }
+/** Where decoration is drawn on a composed page, in pt from the page's top left corner (x0, y0, x1, y1). */
+export interface ComposedDecoration { page: number; box: [number, number, number, number] }
 
 /** Runs in the composed page (before the PDF is printed): the text of every top-level component on every page. */
 export const PDF_PARTS_JS = String.raw`
 (function () {
-  var out = [];
+  var out = [], decoration = [];
+  // Where the decoration is (pictures without a description, things hidden from assistive technology): text drawn
+  // inside it, such as the words of a logo used as decoration, is part of the picture. In pt from the page's top left.
+  document.querySelectorAll('#iss-pages > .page').forEach(function (pg, i) {
+    var pr = pg.getBoundingClientRect();
+    pg.querySelectorAll('img[alt=""], [aria-hidden="true"], [role="presentation"], [role="none"]').forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) decoration.push({ page: i + 1, box: [(r.left - pr.left) * 0.75, (r.top - pr.top) * 0.75, (r.right - pr.left) * 0.75, (r.bottom - pr.top) * 0.75] });
+    });
+  });
   // Text that is not drawn (visually hidden summaries) or hidden from assistive technology is not in the PDF tags.
   var hide = document.createElement('style');
   hide.textContent = '.iss-sr,[aria-hidden="true"]{display:none!important}';
@@ -124,7 +137,7 @@ export const PDF_PARTS_JS = String.raw`
     });
   });
   hide.parentNode.removeChild(hide);
-  return out;
+  return { parts: out, decoration: decoration };
 })()
 `;
 
@@ -284,7 +297,7 @@ async function loadPdfjs(): Promise<any> {
   return import('pdfjs-dist/legacy/build/pdf.mjs');
 }
 
-function readOperators(pdfjs: any, ol: { fnArray: number[]; argsArray: any[] }, fontBold: (id: string) => boolean, pattern: (id: string) => unknown, image: (id: string) => Img | null, hasBackground: boolean): PageRead {
+function readOperators(pdfjs: any, ol: { fnArray: number[]; argsArray: any[] }, fontBold: (id: string) => boolean, pattern: (id: string) => unknown, image: (id: string) => Img | null, hasBackground: boolean, decoration: Box[] = []): PageRead {
   const O = pdfjs.OPS;
   /** `paint`: the fill is a pattern (gradient stops, or null when its colours cannot be known). */
   interface GS { ctm: Mat; fill: RGB; paint: RGB[] | null | undefined; ca: number; clip: Box | null; group: number }
@@ -371,7 +384,7 @@ function readOperators(pdfjs: any, ol: { fnArray: number[]; argsArray: any[] }, 
         const sizePt = Math.abs(size) * scale;
         const [x, y] = apply(m, Math.abs(size) * 0.25, Math.abs(size) * 0.3);
         const cur = curMc();
-        const background = hasBackground && !mc.length && !seenTaggedText;
+        const background = !mc.length && ((hasBackground && !seenTaggedText) || decoration.some((b) => inside(b, x, y)));
         if (cur) { out.mcText.set(cur.mcid!, (out.mcText.get(cur.mcid!) ?? '') + text); if (text.trim()) seenTaggedText = true; }
         else if (background) out.backgroundText += text;
         else if (!mc.length) out.untaggedText += text;
@@ -485,9 +498,11 @@ export async function checkPdfAccessibility(pdf: Uint8Array, ctx: PdfA11yContext
       const page = await doc.getPage(i);
       const ol = await page.getOperatorList();
       const objs = await resolveObjects(pdfjs, page, ol);
+      const pageHeight = Array.isArray(page.view) ? Number(page.view[3]) : 792;
+      const deco = (ctx.decoration ?? []).filter((d) => d.page === i).map((d) => [d.box[0], pageHeight - d.box[3], d.box[2], pageHeight - d.box[1]] as Box);
       const read = readOperators(pdfjs, ol, (id) => {
         try { const f = page.commonObjs.has(id) ? page.commonObjs.get(id) : null; return /bold|black|heavy|semibold|demi/i.test(String(f?.name ?? '')); } catch { return false; }
-      }, (id) => objs.get(id) ?? null, (id) => { const im = objs.get(id); return im && typeof im === 'object' && 'data' in (im as object) ? (im as Img) : null; }, (ctx.backgroundPages ?? []).includes(i));
+      }, (id) => objs.get(id) ?? null, (id) => { const im = objs.get(id); return im && typeof im === 'object' && 'data' in (im as object) ? (im as Img) : null; }, (ctx.backgroundPages ?? []).includes(i), deco);
       const struct = (await page.getStructTree().catch(() => null)) as StructNode | null;
       const tree = buildTree(i, struct, read);
       const annots = (await page.getAnnotations().catch(() => [])) as Array<{ subtype?: string; url?: string; unsafeUrl?: string; dest?: unknown; contentsObj?: { str?: string } }>;
@@ -800,7 +815,7 @@ export async function checkPdfAccessibility(pdf: Uint8Array, ctx: PdfA11yContext
         });
       }
       const bad = seen.size;
-      const notes = [inFigures ? 'Text that is part of a picture or logo is not checked.' : '', inBackground ? 'Text drawn as part of a page background is decoration and is not checked.' : '', overPictures ? `Text over a picture (${overPictures} characters on page${overPicturePages.size === 1 ? '' : 's'} ${[...overPicturePages].join(', ')}) could not be checked.` : ''].filter(Boolean).join(' ');
+      const notes = [inFigures ? 'Text that is part of a picture or logo is not checked.' : '', inBackground ? 'Text drawn as part of a page background or a decorative picture is decoration and is not checked.' : '', overPictures ? `Text over a picture (${overPictures} characters on page${overPicturePages.size === 1 ? '' : 's'} ${[...overPicturePages].join(', ')}) could not be checked.` : ''].filter(Boolean).join(' ');
       if (!checkedGlyphs && !bad) set('contrast', 'not-checked', `Not checked: no text could be measured. ${notes}`.trim());
       else if (bad) set('contrast', 'failed', `${bad} text colour${bad === 1 ? '' : 's'} below the WCAG AA ratio (4.5:1, or 3:1 for large text). ${notes}`.trim());
       else if (overPictures) set('contrast', 'not-checked', `The text that could be measured meets the WCAG AA ratio, but not all of it could be measured. ${notes}`.trim());
@@ -908,7 +923,7 @@ export async function checkDocumentPdf(composer: Composer, res: Resolution, proj
   const pages = comp.metrics.pages as unknown as Array<{ index: number; nodeIds: string[]; fixedNodeIds: string[]; flowBottomPt: number; template?: string }>;
   const studio = await checkPdfAccessibility(comp.pdf!, {
     locale: res.locale, required: !!project.accessiblePdfRequired, colours: documentColours(project),
-    parts: pdfPartsOf(res, project, { pages, parts: comp.parts ?? [] }), backgroundPages: backgroundPagesOf(project, res, pages),
+    parts: pdfPartsOf(res, project, { pages, parts: comp.parts ?? [] }), backgroundPages: backgroundPagesOf(project, res, pages), decoration: comp.decoration ?? [],
   });
   const verapdf = opts.verapdf ? await runVeraPdf(comp.pdf!, { env: opts.env, timeoutMs: opts.verapdfTimeoutMs }) : { status: 'not-run' as const, message: 'veraPDF was not asked to run for this check.' };
   return { checkedAt: new Date().toISOString(), recordId: res.recordId, studio, verapdf };
