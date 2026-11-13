@@ -135,7 +135,7 @@ test('BD03 a known data problem sets one customer aside: counts, status, reason,
 
   // Activity names it in plain words
   await open(page, P, 'activity');
-  await expect(page.getByText(`Set aside a known data problem for ${IMPORTED.givenName} ${IMPORTED.familyName}: The account is “up to date” but lists missed payments`)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(`Set aside a known data problem for ${IMPORTED.givenName} ${IMPORTED.familyName}: The account is “up to date” but lists missed payments`).first()).toBeVisible({ timeout: 30_000 });
 
   // Remove: the customer counts as stopped again
   await openBlocker(page, DATA);
