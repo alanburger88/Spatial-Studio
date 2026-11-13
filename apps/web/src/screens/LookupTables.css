@@ -39,6 +39,7 @@
 .lk-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .lk-count { margin-left: auto; font-size: 12px; }
 .lk-grid { position: relative; height: clamp(240px, 46vh, 460px); overflow: auto; border: 1px solid var(--iss-border-strong); border-radius: 10px; background: var(--iss-surface); }
+.lk-grid.lk-readonly { background: var(--iss-surface-sunken); border-style: dashed; }
 .lk-grid:focus-within { box-shadow: var(--iss-focus); }
 .lk-body { position: relative; }
 .lk-row { position: absolute; left: 0; display: flex; min-width: 100%; width: max-content; border-bottom: 1px solid var(--iss-row-border); background: var(--iss-surface); }

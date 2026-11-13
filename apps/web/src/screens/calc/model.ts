@@ -264,8 +264,10 @@ export const TYPE_NAME: Record<CalcType, string> = { number: 'Number', money: 'A
 export function issueDateFor(project: Pick<Project, 'documentDate'>, ctx: unknown, given: string | null): string | null {
   const src = project.documentDate;
   if (!src) return null;
+  // As the resolver does: a day given for the preview wins over the customer's own date.
+  if (given && isIsoDay(given)) return given;
   if (src.source === 'field') { const v = getPath(ctx, src.path); return isIsoDay(v) ? v : null; }
-  return given && isIsoDay(given) ? given : null;
+  return null;
 }
 
 export interface CustomerValue { recordId: string; value: CalcValue | null; missing?: Missing }

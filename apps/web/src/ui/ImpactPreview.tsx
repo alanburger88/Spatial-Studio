@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Project } from '@iss/model';
 import { impactOf, type Impact, type ImpactChange } from '@iss/scenarios';
 import { indexTree } from '@iss/resolver';
-import { useScenarioEngine, useStudio } from '../state/store';
+import { usePreviewDate, useScenarioEngine, useStudio } from '../state/store';
 import { Tech, Biz } from './common';
 import { nodeTitle } from './plain';
 import './ImpactPreview.css';
@@ -12,16 +12,17 @@ const DEBOUNCE_MS = 250;
 /** Debounced impact of a proposed model change over every record of the project's document type. */
 export function useImpact(before: Project | null, after: Project | null): { impact: Impact | null; pending: boolean; ms: number | null } {
   const records = useStudio((s) => s.records);
+  const issueDate = usePreviewDate();
   const [state, setState] = useState<{ impact: Impact | null; ms: number | null; for: unknown }>({ impact: null, ms: null, for: null });
   useEffect(() => {
     if (!before || !after) return;
     const h = setTimeout(() => {
       const t0 = performance.now();
-      const impact = impactOf(before, after, records);
+      const impact = impactOf(before, after, records, issueDate);
       setState({ impact, ms: Math.round(performance.now() - t0), for: after });
     }, DEBOUNCE_MS);
     return () => clearTimeout(h);
-  }, [before, after, records]);
+  }, [before, after, records, issueDate]);
   const current = state.for === after && !!after;
   return { impact: current ? state.impact : null, pending: !!after && !current, ms: current ? state.ms : null };
 }

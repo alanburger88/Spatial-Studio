@@ -654,8 +654,11 @@ function SmsTab({ req, isEob }: { req: ScenarioRequest; isEob: boolean }) {
 
 /* ------------------------------------------------------------ AFP simulation */
 
+const TEMPLATE_WORDS: Record<string, string> = { first: 'First page', following: 'Following pages', last: 'Last page', 'first+last': 'First and last page' };
+
 function AfpTab({ job, want, now, who, stale, onRun, onCancel }: { job: Job<any>; want: string | null; now: number; who: string; stale: boolean; onRun: () => void; onCancel: () => void }) {
   const s = job.result;
+  const designed = (s?.continuationRegions ?? []).some((c: any) => c.template);
   return (
     <>
       <div className="ox-afp-banner" role="note" data-testid="afp-sim-label">
@@ -673,8 +676,11 @@ function AfpTab({ job, want, now, who, stale, onRun, onCancel }: { job: Job<any>
             <section className="ox-card"><h3>Form definition / page definition (concept)</h3>
               <dl className="kv"><dt>FORMDEF</dt><dd><span className="chip code">{s.formdef}</span></dd><dt>PAGEDEF</dt><dd><span className="chip code">{s.pagedef}</span></dd>{/* run id is shown in Technical view only */}</dl>
               <Tech><dl className="kv"><dt>Run ID</dt><dd><span className="chip code">{s.runId}</span></dd></dl></Tech>
-              <h4>Continuation regions</h4>
-              {(s.continuationRegions ?? []).map((c: any, i: number) => <dl key={i} className="kv"><dt>{c.name}</dt><dd>first {c.firstPageTopPt} · others {c.otherPagesTopPt} · bottom {c.bottomPt} pt</dd></dl>)}
+              <h4>{(s.continuationRegions ?? []).some((c: any) => c.template) ? 'Page templates' : 'Continuation regions'}</h4>
+              {(s.continuationRegions ?? []).map((c: any, i: number) => c.template
+                // A document with its own page design: each page template's flow area and columns.
+                ? <dl key={i} className="kv" data-testid={`afp-region-${c.template}`}><dt>{c.name}</dt><dd>area from {c.xPt}, {c.yPt} pt · {c.wPt} × {c.hPt} pt · {c.columns === 1 ? '1 column' : `${c.columns} columns, ${c.columnGapPt} pt apart`}</dd></dl>
+                : <dl key={i} className="kv"><dt>{c.name}</dt><dd>first {c.firstPageTopPt} · others {c.otherPagesTopPt} · bottom {c.bottomPt} pt</dd></dl>)}
             </section>
             <section className="ox-card"><h3>Font map</h3>
               {Object.keys(s.fontMap ?? {}).length === 0 ? <span className="muted">None defined.</span> : <dl className="kv">{Object.entries(s.fontMap).map(([k, v]) => <Fragment key={k}><dt>{k}</dt><dd className="mono">{String(v)}</dd></Fragment>)}</dl>}
@@ -690,8 +696,8 @@ function AfpTab({ job, want, now, who, stale, onRun, onCancel }: { job: Job<any>
           </div>
           <section className="ox-card"><h3>Page sequence</h3>
             <table className="table ox-seq">
-              <thead><tr><th>Sheet</th><th>Side</th><th>Page</th><th>Nodes</th><th>Continued tables</th></tr></thead>
-              <tbody>{(s.pageSequence ?? []).map((p: any) => <tr key={p.page}><td>{p.sheet}</td><td>{p.side}</td><td>{p.page}</td><td>{(p.nodeIds ?? []).join(', ')}</td><td>{(p.continuedTables ?? []).join(', ') || '—'}</td></tr>)}</tbody>
+              <thead><tr><th>Sheet</th><th>Side</th><th>Page</th>{designed && <th>Page template</th>}<th>Nodes</th><th>Continued tables</th></tr></thead>
+              <tbody>{(s.pageSequence ?? []).map((p: any) => <tr key={p.page}><td>{p.sheet}</td><td>{p.side}</td><td>{p.page}</td>{designed && <td data-testid={`afp-page-template-${p.page}`}>{TEMPLATE_WORDS[p.template] ?? p.template ?? '—'}{p.columns > 1 ? ` · ${p.columns} columns` : ''}</td>}<td>{(p.nodeIds ?? []).join(', ')}</td><td>{(p.continuedTables ?? []).join(', ') || '—'}</td></tr>)}</tbody>
             </table>
           </section>
           {(s.warnings ?? []).length > 0 && <div className="callout warning"><ul className="ox-warn">{s.warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}</ul></div>}

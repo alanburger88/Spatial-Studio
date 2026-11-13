@@ -85,7 +85,7 @@
 .cb-combiner { gap: 8px; }
 
 /* results */
-.calc-asof { margin-bottom: 12px; }
+.calc-side .preview-date-field { margin-bottom: 12px; }
 .calc-side .panel-body { display: flex; flex-direction: column; gap: 8px; }
 .calc-side .section-title { margin: 6px 0 0; }
 .calc-used-h { margin-top: 14px !important; }

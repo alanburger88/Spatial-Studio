@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Project } from '@iss/model';
 import { summarizeChanges, type ChangeSummary } from '@iss/scenarios';
 import { api, type VersionDto } from '../api/client';
-import { useStudio } from '../state/store';
+import { usePreviewDate, useStudio } from '../state/store';
 import { Loading } from '../ui/common';
 import { SourceChip } from './common';
 import './panel.css';
@@ -40,6 +40,8 @@ export function ChangeSummaryCard({ pid, from, to, fromLabel, toLabel, note, tes
 }) {
   const records = useStudio((s) => s.records);
   const working = useStudio((s) => s.project);
+  // The customer impact is worked out on the day the studio previews ("As issued on"), like every other screen.
+  const issueDate = usePreviewDate();
   const [state, setState] = useState<{ summary: ChangeSummary } | { error: string } | null>(null);
 
   useEffect(() => {
@@ -52,12 +54,12 @@ export function ChangeSummaryCard({ pid, from, to, fromLabel, toLabel, note, tes
         // Let the "Working" state paint before the heavy part (it resolves every synthetic customer twice).
         await new Promise((r) => window.setTimeout(r, 30));
         if (!live) return;
-        setState({ summary: summarizeChanges(before, after, records) });
+        setState({ summary: summarizeChanges(before, after, records, { issueDate }) });
       } catch (e) { if (live) setState({ error: e instanceof Error ? e.message : String(e) }); }
     })();
     return () => { live = false; };
     // The working copy is only read when `to` is 'working'; its identity changes on every edit, which is what we want.
-  }, [pid, from, to, to === 'working' ? working : null, records]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pid, from, to, to === 'working' ? working : null, records, issueDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (from === null) return <div className="cs-card" data-testid={testId}><p className="cs-none">This is the first saved version, so there is nothing earlier to compare with.</p></div>;
   if (!state) return <div className="cs-card" data-testid={testId} aria-busy="true"><Loading label="Working out what changed…" /></div>;

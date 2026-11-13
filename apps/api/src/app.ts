@@ -6,7 +6,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import { z } from 'zod';
 import { canonicalJson, customFieldDefs, fieldsFor, projectFields, projectContentDigest, validateRule, validateCustomFields, isDocumentType, csvToRecords, prepareImport, IMPORT_ID_BASE, IMPORT_LIMIT, RECORD_ID_PREFIX, SCHEMA_VERSION, RECORD_ID_PATTERN, DOCUMENT_TYPE_LABEL, type DocumentType, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
-import { addDaysToIso, dateBoundaries, isIsoDay, projectFileProblems, diffProjects, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_MAX, WORKFLOW_ACTIONS, WORKFLOW_LABEL, WORKFLOW_TRANSITIONS, ACTION_LABEL, type WorkflowAction } from '@iss/model';
+import { isIsoDay, projectFileProblems, diffProjects, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_MAX, WORKFLOW_ACTIONS, WORKFLOW_LABEL, WORKFLOW_TRANSITIONS, ACTION_LABEL, type WorkflowAction } from '@iss/model';
 import { libraryLinkProblems } from '@iss/model';
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
@@ -36,7 +36,7 @@ import type { RouteDeps } from './routes/deps';
 import { handleMessage, providerConfig, providerStatus, type Proposal } from './assistant';
 import { registerAuth, audit } from './auth';
 import { firstCustomers } from './projectCustomers';
-import { dated, issueDateFrom, scenarioEngineFor } from './issueDate';
+import { approvalDays, dated, issueDateFrom, scenarioEngineFor } from './issueDate';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -88,11 +88,7 @@ function checkDraftProject(p: any, projectId: string): Project {
   return p as Project;
 }
 
-/** The days a document whose date is given for each run is checked on before approval: each boundary and the day before the first (a fixed day when it has none). */
-export function approvalDays(project: Project): string[] {
-  const days = dateBoundaries(project).map((b) => b.date);
-  return days.length ? [addDaysToIso(days[0], -1), ...days] : ['2026-01-01'];
-}
+export { approvalDays } from './issueDate';
 
 export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides env AUTH=on (tests). */ auth?: boolean; /** Replaces the AI translation call (tests). */ translator?: import('./translate').Translator; /** Replaces the assistant's model call (tests). */ assistModel?: import('./assistAi').AssistModel; /** Release packages: replaces the browser composition and lowers the scenario caps (tests). */ releasePackage?: { composer?: PackageComposer; scenarioCap?: number; referenceCap?: number } }
 
@@ -722,7 +718,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const record = recordOr404(String(b?.recordId));
     const overrides = b?.overrides ?? {};
     const issueDate = issueDateFrom(b?.issueDate, ApiError);
-    const snaps = replayJourney(project, record, overrides);
+    const snaps = replayJourney(project, record, overrides, 'paged-pdf', issueDate);
     const issued = [];
     for (const s of snaps.filter((x) => x.kind === 'issued')) {
       const res = resolve({ project, record, overrides, journeyCursor: s.cursor, ...(issueDate ? { issueDate } : {}) });

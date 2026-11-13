@@ -46,6 +46,7 @@ const FIELD_WORD: Record<string, string> = {
   importance: 'importance', domainRole: 'domain role', contentPartId: 'linked wording', policy: 'selection policy', ruleDriven: 'shown-by-rule setting', repeatHeader: 'header repeat',
   flowContinuation: 'continuation', sortable: 'sorting', filterable: 'filtering', action: 'link', qr: 'QR code', explanation: 'explanation', headerFooter: 'header/footer text',
   primary: 'primary colour', accent: 'accent colour', fontFamily: 'font', logoDataUri: 'logo', logoAlt: 'logo description',
+  accessiblePdfRequired: 'The “Accessible PDF is required” setting',
 };
 const word = (f: string) => FIELD_WORD[f] ?? f.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
 const short = (s: string | null, n = 140) => (s === null ? '' : s.length > n ? `${s.slice(0, n - 1)}…` : s);

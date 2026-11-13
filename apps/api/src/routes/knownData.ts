@@ -3,6 +3,7 @@ import type { Project, ReleaseKnownDataProblem, SyntheticRecord } from '@iss/mod
 import { RECORDS } from '@iss/model/fixtures';
 import { customerBlockers, knownDataProblemRefusal, splitKnownDataProblems, type CustomerBlocker } from '@iss/scenarios';
 import { audit } from '../auth';
+import { approvalDays, issueDateFrom } from '../issueDate';
 import type { Store, StoredKnownDataProblem } from '../db';
 import type { RouteDeps } from './deps';
 
@@ -23,18 +24,35 @@ const nameOf = (r: SyntheticRecord): string => `${r.customer?.givenName ?? ''} $
 export interface KnownInForce extends StoredKnownDataProblem { blocker: Pick<CustomerBlocker, 'title' | 'kind' | 'fields'>; customer: SyntheticRecord }
 
 /**
+ * The days a customer's blockers are judged on. With a day given ("as issued on", the day the screen shows), that day
+ * first; and always the days approval checks (every boundary of a document whose date is given for each run, otherwise
+ * the customer's own date), so an entry set aside on one day does not lapse because the screen shows another.
+ */
+function judgedOn(project: Project, issueDate: string | null): Array<string | null> {
+  const base: Array<string | null> = project.documentDate?.source === 'run' ? approvalDays(project) : [null];
+  return issueDate && project.documentDate ? [issueDate, ...base.filter((d) => d !== issueDate)] : base;
+}
+
+/** A customer's blockers on each day it is judged on, the first day's first (one entry per blocker id). */
+function blockersOn(project: Project, record: SyntheticRecord, issueDate: string | null): CustomerBlocker[] {
+  const by = new Map<string, CustomerBlocker>();
+  for (const day of judgedOn(project, issueDate)) for (const b of customerBlockers(project, record, day ? { issueDate: day } : undefined)) if (!by.has(b.id)) by.set(b.id, b);
+  return [...by.values()];
+}
+
+/**
  * Which stored entries are in force for the document as saved, and which have lapsed (the blocker no longer stops that
  * customer because the customer's data or the document changed, or the customer is gone). One resolution per customer
- * that has an entry; nothing is changed.
+ * and day that has an entry; nothing is changed. `issueDate`: the day the screen shows (see `judgedOn`).
  */
-export function knownDataStatus(store: Store, project: Project, records: SyntheticRecord[]): { active: KnownInForce[]; lapsed: StoredKnownDataProblem[] } {
+export function knownDataStatus(store: Store, project: Project, records: SyntheticRecord[], issueDate: string | null = null): { active: KnownInForce[]; lapsed: StoredKnownDataProblem[] } {
   const stored = store.knownDataProblems(project.projectId);
   if (!stored.length) return { active: [], lapsed: [] };
   const byRecord = new Map<string, { record: SyntheticRecord; blockers: CustomerBlocker[] } | null>();
   const of = (recordId: string) => {
     if (!byRecord.has(recordId)) {
       const record = records.find((r) => r.recordId === recordId && r.documentType === project.documentType);
-      byRecord.set(recordId, record ? { record, blockers: customerBlockers(project, record) } : null);
+      byRecord.set(recordId, record ? { record, blockers: blockersOn(project, record, issueDate) } : null);
     }
     return byRecord.get(recordId)!;
   };
@@ -72,8 +90,8 @@ function view(k: KnownInForce, project: Project, store: Store) {
 export type KnownDataProblemView = ReturnType<typeof view>;
 
 /** The known data problems in force for a document, as the API and the approval check list them; lapsed entries are removed first. */
-export function knownDataProblemsInForce(store: Store, req: FastifyRequest | null, project: Project, records: SyntheticRecord[]): { list: KnownDataProblemView[]; active: KnownInForce[]; lapsedNote: string | null; lapsed: StoredKnownDataProblem[] } {
-  const { active, lapsed } = knownDataStatus(store, project, records);
+export function knownDataProblemsInForce(store: Store, req: FastifyRequest | null, project: Project, records: SyntheticRecord[], issueDate: string | null = null): { list: KnownDataProblemView[]; active: KnownInForce[]; lapsedNote: string | null; lapsed: StoredKnownDataProblem[] } {
+  const { active, lapsed } = knownDataStatus(store, project, records, issueDate);
   const lapsedNote = removeLapsed(store, req, project, lapsed, records);
   return { list: active.map((k) => view(k, project, store)), active, lapsedNote, lapsed };
 }
@@ -109,9 +127,10 @@ export function registerKnownDataRoutes(app: FastifyInstance, deps: RouteDeps): 
   const base = '/api/v1/projects/:projectId/known-data-problems';
 
   /** The known data problems in force for the saved document. Entries that lapsed are removed now, and the answer says so. */
-  app.get<{ Params: { projectId: string } }>(base, async (req) => {
+  app.get<{ Params: { projectId: string }; Querystring: { issueDate?: string } }>(base, async (req) => {
     const project = projectOr404(req.params.projectId);
-    const { list, lapsedNote, lapsed } = knownDataProblemsInForce(store, req, project, allRecords(project.projectId));
+    const issueDate = issueDateFrom(req.query.issueDate, ApiError);
+    const { list, lapsedNote, lapsed } = knownDataProblemsInForce(store, req, project, allRecords(project.projectId), issueDate);
     return { projectId: project.projectId, modelVersion: project.modelVersion, knownDataProblems: list, lapsed: lapsed.map((k) => ({ id: k.id, blockerId: k.blockerId, recordId: k.recordId })), note: lapsedNote };
   });
 
@@ -122,29 +141,32 @@ export function registerKnownDataRoutes(app: FastifyInstance, deps: RouteDeps): 
     const blockerId = typeof b.blockerId === 'string' ? b.blockerId.trim() : '';
     const recordId = typeof b.recordId === 'string' ? b.recordId.trim() : '';
     if (!blockerId || !recordId) throw new ApiError(400, 'INVALID_REQUEST', 'Say which blocker (blockerId) and which customer (recordId).');
+    // "As issued on": the blocker is judged on the day the screen shows (ignored for a document without a date source).
+    const issueDate = issueDateFrom(b.issueDate, ApiError);
     const records = allRecords(project.projectId);
     const customer = records.find((r) => r.recordId === recordId && r.documentType === project.documentType) ?? null;
-    const refusal = knownDataProblemRefusal({ blockerId, reason: b.reason, customer, blockers: customer ? customerBlockers(project, customer) : [] });
+    const refusal = knownDataProblemRefusal({ blockerId, reason: b.reason, customer, blockers: customer ? customerBlockers(project, customer, issueDate ? { issueDate } : undefined) : [] });
     if (refusal) throw new ApiError(refusal.status, refusal.code, refusal.message);
-    const { lapsedNote, lapsed } = knownDataProblemsInForce(store, req, project, records);
+    const { lapsedNote, lapsed } = knownDataProblemsInForce(store, req, project, records, issueDate);
     const reason = String(b.reason).trim();
     const stored = store.addKnownDataProblem({ projectId: project.projectId, blockerId, recordId, reason, by: req.user ? { id: req.user.id, name: req.user.name } : null });
     if (!stored) throw new ApiError(409, 'ALREADY_KNOWN', 'This problem is already set aside for this customer.');
-    const entry = knownDataStatus(store, project, records).active.find((k) => k.id === stored.id)!;
+    const entry = knownDataStatus(store, project, records, issueDate).active.find((k) => k.id === stored.id)!;
     audit(store, req, 'known-data.add', { projectId: project.projectId, modelVersion: project.modelVersion, detail: { id: stored.id, blockerId, recordId, blocker: entry.blocker.title, reasonLength: reason.length } });
     reply.status(201);
     return { knownDataProblem: view(entry, project, store), lapsed: lapsed.map((k) => ({ id: k.id, blockerId: k.blockerId, recordId: k.recordId })), note: lapsedNote };
   });
 
   /** Removes a known data problem: the blocker stops that customer again. Approvers only. */
-  app.delete<{ Params: { projectId: string; id: string } }>(`${base}/:id`, async (req) => {
+  app.delete<{ Params: { projectId: string; id: string }; Querystring: { issueDate?: string } }>(`${base}/:id`, async (req) => {
     const project = projectOr404(req.params.projectId);
+    const issueDate = issueDateFrom(req.query.issueDate, ApiError);
     const found = store.knownDataProblem(project.projectId, req.params.id);
     if (!found) throw new ApiError(404, 'NOT_FOUND', 'There is no such known data problem for this document; it may already have been removed or have lapsed.');
     store.removeKnownDataProblem(project.projectId, found.id);
     const records = allRecords(project.projectId);
     audit(store, req, 'known-data.remove', { projectId: project.projectId, modelVersion: project.modelVersion, detail: { id: found.id, blockerId: found.blockerId, recordId: found.recordId } });
-    const { lapsedNote, lapsed } = knownDataProblemsInForce(store, req, project, records);
+    const { lapsedNote, lapsed } = knownDataProblemsInForce(store, req, project, records, issueDate);
     return { removed: found.id, lapsed: lapsed.map((k) => ({ id: k.id, blockerId: k.blockerId, recordId: k.recordId })), note: lapsedNote };
   });
 }

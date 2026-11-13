@@ -188,11 +188,11 @@ Only wording the document actually uses counts as usage (a project may carry mes
 
 **Decision: images stay inline in `template.json` and are also provided as files.**
 
-- `template.json` holds every uploaded image as a `data:` URI (PNG, JPEG or WebP), in `nodes[].image.src` and `brand.logoDataUri`. It needs nothing else to be complete and importable.
+- `template.json` holds every uploaded image as a `data:` URI (PNG, JPEG or WebP), in `nodes[].image.src`, `brand.logoDataUri` and, for a document with a page design, the page backgrounds (`presentationProfiles[].pageTemplates.<first|following|last>.background.image`; both paged profiles carry the same one). It needs nothing else to be complete and importable.
 - The same images are in `assets/`, each named `<sha256 of its bytes>.<ext>`, ready for an asset store. The link between the two is the hash: decode the data URI, hash it, and that is the file name.
 - A built-in mark is referenced from `template.json` by name (`"asset:aster-mark"`) and drawn by the engine in the issuer colour. It is provided in `assets/` as the SVG the engine draws, with `builtIn` and `referencedAs` in the index.
 
-`assets/index.json`: `{ formatVersion, convention, assets: [{ path, sha256, bytes, mime, builtIn?, referencedAs?, usedBy: [{ what: "component" | "brand logo", name }] }] }`.
+`assets/index.json`: `{ formatVersion, convention, assets: [{ path, sha256, bytes, mime, builtIn?, referencedAs?, usedBy: [{ what: "component" | "brand logo" | "page background", name }] }] }`. A page background image is listed once, with `name` the page template it is behind ("First page", "Following pages", "Last page"); a tint is not an image and is not listed. (Added with page design; an addition, so the format version is unchanged.)
 
 `assets/fonts.json`: `{ formatVersion, note, fonts: [{ use, family, stack, chosenBy: "brand kit" | "default" }], referencePdfFonts: [...] }`. `fonts` names the family to install for the printed document, the web page and email, with the fallback stack the studio uses. `referencePdfFonts` lists the fonts actually embedded in this package's reference PDFs. Font files are never included.
 

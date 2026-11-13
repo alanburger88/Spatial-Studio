@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   projectFieldIndex, projectFields, getPath, validatePredicate, validateRule, applyCommand, dayWords,
-  type ComparisonOp, type DocNode, type DocumentType, type FieldDef, type Locale, type Predicate, type Project, type Rule, type RuleAction, type RuleMode, type Scalar, type SyntheticRecord,
+  type DocNode, type DocumentType, type FieldDef, type Locale, type Predicate, type Project, type Rule, type RuleAction, type RuleMode, type Scalar, type SyntheticRecord,
 } from '@iss/model';
 import { describePredicate, resolve, type Finding, type TraceEntry } from '@iss/resolver';
 import { EDGE_CASE_PRESETS, impactOf } from '@iss/scenarios';
@@ -23,50 +23,14 @@ import { TestDataDialog } from './rules/TestData';
 import { OwnCustomers } from './rules/OwnCustomers';
 import { makeTransactions } from '../demo/defects';
 import './RulesData.css';
+import { fromVisual, toVisual, type Cond, type LeafOp } from './conditionShape';
 
 /* ------------------------------------------------------------------ helpers */
-
-type LeafOp = ComparisonOp | 'in' | 'isNull' | 'notNull';
-interface Cond { path: string; op: LeafOp; value: Scalar | Scalar[]; neg: boolean }
-interface Visual { combiner: 'and' | 'or'; conds: Cond[] }
 
 const OP_LABEL: Record<LeafOp, string> = { eq: 'is equal to', ne: 'is not equal to', gt: 'is greater than', gte: 'is at least', lt: 'is less than', lte: 'is at most', in: 'is one of', isNull: 'is empty', notNull: 'is present' };
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
 const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
-
-function leafOf(p: Predicate): Cond | null {
-  switch (p.op) {
-    case 'and': case 'or': case 'not': return null;
-    case 'isNull': case 'notNull': return { path: p.path, op: p.op, value: null, neg: false };
-    case 'in': return { path: p.path, op: 'in', value: p.value, neg: false };
-    default: return { path: p.path, op: p.op, value: p.value, neg: false };
-  }
-}
-function condOf(p: Predicate): Cond | null {
-  if (p.op === 'not') { const c = leafOf(p.arg); return c ? { ...c, neg: true } : null; }
-  return leafOf(p);
-}
-/** One level of AND/OR over leaf conditions (optionally negated). Anything deeper stays in the Advanced AST tab. */
-function toVisual(p: Predicate): Visual | null {
-  if (p.op === 'and' || p.op === 'or') {
-    const conds = p.args.map(condOf);
-    return conds.length && conds.every(Boolean) ? { combiner: p.op, conds: conds as Cond[] } : null;
-  }
-  const c = condOf(p);
-  return c ? { combiner: 'and', conds: [c] } : null;
-}
-function leafPredicate(c: Cond): Predicate {
-  let leaf: Predicate;
-  if (c.op === 'isNull' || c.op === 'notNull') leaf = { op: c.op, path: c.path };
-  else if (c.op === 'in') leaf = { op: 'in', path: c.path, value: Array.isArray(c.value) ? c.value : [] };
-  else leaf = { op: c.op, path: c.path, value: Array.isArray(c.value) ? null : c.value };
-  return c.neg ? { op: 'not', arg: leaf } : leaf;
-}
-function fromVisual(v: Visual): Predicate {
-  const leaves = v.conds.map(leafPredicate);
-  return leaves.length === 1 ? leaves[0] : { op: v.combiner, args: leaves };
-}
 
 function opsFor(f: FieldDef | undefined): LeafOp[] {
   if (!f) return ['eq', 'ne'];
@@ -83,7 +47,7 @@ function defaultValue(f: FieldDef | undefined, op: LeafOp): Scalar | Scalar[] {
   switch (f?.type) {
     case 'enum': return f.enumValues![0];
     case 'bool': return true;
-    case 'int': case 'cents': case 'points': return 0;
+    case 'int': case 'cents': case 'points': case 'number': return 0;
     case 'date': return '2026-10-31';
     default: return '';
   }
@@ -193,7 +157,7 @@ function ValueEditor({ field, op, value, onChange, label }: { field: FieldDef | 
   switch (field?.type) {
     case 'enum': return <select className="select" aria-label={label} value={String(scalar ?? '')} onChange={(e) => onChange(e.target.value)}>{field.enumValues!.map((v) => <option key={v} value={v}>{v}</option>)}</select>;
     case 'bool': return <select className="select" aria-label={label} value={String(scalar)} onChange={(e) => onChange(e.target.value === 'true')}><option value="true">true</option><option value="false">false</option></select>;
-    case 'int': case 'points': case 'cents':
+    case 'int': case 'points': case 'cents': case 'number':
       return (
         <span className="rd-valwrap">
           <NumField value={typeof scalar === 'number' ? scalar : undefined} label={label} onCommit={onChange} />
@@ -677,6 +641,7 @@ function ruleState(r: Rule, t: TraceEntry | undefined): { label: string; cls: st
 
 function VisualBuilder({ when, fields, fieldMap, onChange, onUseAst, tech }: { tech: boolean; when: Predicate; fields: FieldDef[]; fieldMap: Map<string, FieldDef>; onChange: (p: Predicate) => void; onUseAst: () => void }) {
   const visual = useMemo(() => toVisual(when), [when]);
+  const projectId = useStudio((s) => s.project?.projectId ?? '');
   if (!visual) {
     return (
       <div className="callout warning">
@@ -725,6 +690,9 @@ function VisualBuilder({ when, fields, fieldMap, onChange, onUseAst, tech }: { t
                   {pickable.map((x) => <option key={x.path} value={x.path}>{x.label}{x.derived ? ' (derived)' : ''}</option>)}
                 </select>
                 {tech && <span className="rd-path mono" title={c.path}>{c.path}</span>}
+                {c.path.startsWith('calc.') && (
+                  <Link className="rd-calc-link" data-testid={`cond-${i}-calc-link`} to={`/studio/${projectId}/calculations?calc=${encodeURIComponent(c.path.slice('calc.'.length))}`} title="Open this calculation">How it is worked out</Link>
+                )}
               </div>
               <select className="select rd-op" aria-label={`Condition ${i + 1} operator`} value={c.op} onChange={(e) => changeOp(i, e.target.value as LeafOp)} data-testid={`cond-${i}-op`}>
                 {ops.map((o) => <option key={o} value={o}>{OP_LABEL[o]}</option>)}

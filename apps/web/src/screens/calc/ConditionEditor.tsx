@@ -1,44 +1,15 @@
 import { useEffect, useState } from 'react';
-import { printCondition, type ComparisonOp, type FieldDef, type Predicate, type Scalar } from '@iss/model';
+import { printCondition, type FieldDef, type Predicate, type Scalar } from '@iss/model';
 import { Icon } from '../../ui/icons';
+import { fromVisual, toVisual, type Cond, type LeafOp } from '../conditionShape';
 
 /**
  * A condition on one level (all or any of several tests), the same shapes a rule's condition has. A condition nested
  * deeper can only be edited in the formula view, and this says so instead of showing it wrongly.
  */
 
-type LeafOp = ComparisonOp | 'in' | 'isNull' | 'notNull';
-interface Cond { path: string; op: LeafOp; value: Scalar | Scalar[]; neg: boolean }
-interface Visual { combiner: 'and' | 'or'; conds: Cond[] }
-
 const OP_LABEL: Record<LeafOp, string> = { eq: 'is', ne: 'is not', gt: 'is more than', gte: 'is at least', lt: 'is less than', lte: 'is at most', in: 'is one of', isNull: 'is empty', notNull: 'has a value' };
 const DATE_OP_LABEL: Partial<Record<LeafOp, string>> = { gt: 'is after', gte: 'is on or after', lt: 'is before', lte: 'is on or before' };
-
-function leafOf(p: Predicate): Cond | null {
-  switch (p.op) {
-    case 'and': case 'or': case 'not': return null;
-    case 'isNull': case 'notNull': return { path: p.path, op: p.op, value: null, neg: false };
-    case 'in': return { path: p.path, op: 'in', value: p.value, neg: false };
-    default: return { path: p.path, op: p.op, value: p.value, neg: false };
-  }
-}
-const condOf = (p: Predicate): Cond | null => (p.op === 'not' ? (() => { const c = leafOf(p.arg); return c ? { ...c, neg: true } : null; })() : leafOf(p));
-function toVisual(p: Predicate): Visual | null {
-  if (p.op === 'and' || p.op === 'or') {
-    const conds = p.args.map(condOf);
-    return conds.length && conds.every(Boolean) ? { combiner: p.op, conds: conds as Cond[] } : null;
-  }
-  const c = condOf(p);
-  return c ? { combiner: 'and', conds: [c] } : null;
-}
-function leafPredicate(c: Cond): Predicate {
-  let leaf: Predicate;
-  if (c.op === 'isNull' || c.op === 'notNull') leaf = { op: c.op, path: c.path };
-  else if (c.op === 'in') leaf = { op: 'in', path: c.path, value: Array.isArray(c.value) ? c.value : [] };
-  else leaf = { op: c.op, path: c.path, value: Array.isArray(c.value) ? null : c.value };
-  return c.neg ? { op: 'not', arg: leaf } : leaf;
-}
-const fromVisual = (v: Visual): Predicate => { const leaves = v.conds.map(leafPredicate); return leaves.length === 1 ? leaves[0] : { op: v.combiner, args: leaves }; };
 
 function opsFor(f: FieldDef | undefined): LeafOp[] {
   if (!f) return ['eq', 'ne'];

@@ -16,7 +16,7 @@ The studio never downloads or installs veraPDF.
 
 ## How the PDF is read
 
-`checkPdfAccessibility(pdfBytes, context)` reads the PDF with pdf.js 4.9 (`pdfjs-dist`, a workspace dependency) in
+`checkPdfAccessibility(pdfBytes, context)` reads the PDF with pdf.js 4.9 (`pdfjs-dist` 4.9.155, a dependency of `@iss/api`) in
 Node: the mark info, the document information (title, language), the viewer preferences, the structure tree of every
 page (`getStructTree`: role, alternate description, language, marked-content ids), the annotations, and the drawing
 operations of every page (`getOperatorList`: marked-content sequences, text with its font, size, colour and opacity,

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { dayWords, type Project, type SyntheticRecord } from '@iss/model';
 import { formatCents, formatDate, formatNumber, resolve, type CalculatedOutcome, type Finding } from '@iss/resolver';
+import { Link } from 'react-router-dom';
 import { dated, usePreviewDate } from '../../state/store';
 import { Tech } from '../../ui/common';
 import { Icon } from '../../ui/icons';
@@ -126,7 +127,7 @@ export function OutcomePanel({ project, saved, draft, hasProblems, jsonBroken, d
                 <ul className="list-rows dx-msgs" data-testid="dx-outcome-calculated">
                   {now.calculated.map((c) => (
                     <li key={c.key} data-testid={`dx-calc-${c.key}`} data-value={c.value ?? ''}>
-                      <span className="dx-msg-node">{c.label}</span>
+                      <Link className="dx-msg-node" to={`/studio/${project.projectId}/calculations?calc=${encodeURIComponent(c.key)}`} title="How it is worked out" data-testid={`dx-calc-link-${c.key}`}>{c.label}</Link>
                       {c.value !== null ? <strong className="dx-msg-version">{c.value}</strong> : <span className="chip warning" title={c.missing ?? undefined}>Missing</span>}
                       {c.value === null && c.missing && <span className="muted dx-calc-why">{c.missing}</span>}
                     </li>

@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  LOOKUP_TABLES_MAX, buildContext, evaluateCalculations, exprDependencies, lookupTableProblems, projectFields, validateLookupTable,
+  LOOKUP_TABLES_MAX, linkOfTable, buildContext, evaluateCalculations, exprDependencies, lookupTableProblems, projectFields, validateLookupTable,
   type CalcType, type LookupKeyColumn, type LookupRow, type LookupTable, type Project,
 } from '@iss/model';
 import { Dialog, Empty, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
-import { useCan, useRecord, useResolution, useStudio } from '../state/store';
+import { useCan, usePreviewDate, useRecord, useResolution, useStudio } from '../state/store';
 import { recordSummary } from '../shell/RecordPicker';
 import { keyFromLabel, issueDateFor } from './calc/model';
 import { Definition } from './lookup/Definition';
 import { Grid, type RowProblem } from './lookup/Grid';
 import { MATCH_NAME, TYPE_NAME, defaultKeyColumn } from './lookup/model';
 import { PasteDialog } from './lookup/PasteDialog';
+import { PreviewDateField } from './dates/PreviewDateField';
+import { LinkedNotice, NotLinkedActions, PickFromLibraryDialog } from './library/LinkUI';
 import { TryIt, type CustomerData } from './lookup/TryIt';
 import './LookupTables.css';
 
@@ -29,6 +31,7 @@ export function LookupTables() {
   const canEdit = useCan('edit');
   const [params, setParams] = useSearchParams();
   const [adding, setAdding] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [refusal, setRefusal] = useState<{ id: string; message: string } | null>(null);
   const dirtyRef = useRef(false);
   const [pending, setPending] = useState<string | null>(null);
@@ -46,15 +49,17 @@ export function LookupTables() {
 
   // The current customer, as the calculations see it (only needed when a calculation reads a table).
   const anyReader = [...readers.values()].some((l) => l.length > 0);
+  // "As issued on": the studio's shared preview date, as everywhere else.
+  const given = usePreviewDate();
   const customer: CustomerData | null = useMemo(() => {
     const rec = res?.effectiveRecord ?? record;
     if (!rec || !anyReader) return null;
     const data = buildContext(rec) as Record<string, unknown>;
-    const issue = issueDateFor(project, data, null);
+    const issue = issueDateFor(project, data, given);
     if (project.documentDate) data.document = { date: issue };
     const out = evaluateCalculations(project, data, issue);
     return { name: recordSummary(rec, personas).name, ctx: data, issue, missing: out.missing };
-  }, [project, res?.effectiveRecord, record, personas, anyReader]);
+  }, [project, res?.effectiveRecord, record, personas, anyReader, given]);
 
   const create = (table: LookupTable): string | null => {
     const r = useStudio.getState().dispatch({ type: 'UPSERT_LOOKUP_TABLE', table });
@@ -71,7 +76,10 @@ export function LookupTables() {
   return (
     <section className="screen" data-testid="lookup-tables-screen">
       <ScreenHeader id="S23" title="Lookup tables" subtitle="Small tables, such as a fee by tier, that a calculation reads."
-        actions={<button type="button" className="btn sm primary" onClick={() => setAdding(true)} disabled={!canEdit || tables.length >= LOOKUP_TABLES_MAX} data-testid="lk-add"><Icon.plus /> Add a table</button>} />
+        actions={<>
+          <button type="button" className="btn sm" onClick={() => setPicking(true)} disabled={!canEdit || tables.length >= LOOKUP_TABLES_MAX} data-testid="lk-from-library">From the library</button>
+          <button type="button" className="btn sm primary" onClick={() => setAdding(true)} disabled={!canEdit || tables.length >= LOOKUP_TABLES_MAX} data-testid="lk-add"><Icon.plus /> Add a table</button>
+        </>} />
       {tables.length === 0 ? (
         <div className="screen-body lk-body lk-solo">
           <div className="lk-empty" data-testid="lk-empty">
@@ -119,6 +127,15 @@ export function LookupTables() {
           <p>“{selected?.title}” has changes that are not saved. Choosing another table discards them.</p>
         </Dialog>
       )}
+      {picking && (
+        <PickFromLibraryDialog kind="lookup-table" title="Use a lookup table from the library" hint="The table is added to this document, linked and read-only: it receives the library's updates until you unlink it."
+          onClose={() => setPicking(false)}
+          onPick={(item, version, content) => {
+            const r = useStudio.getState().dispatch({ type: 'LINK_LIBRARY_ITEM', item: { id: item.id, kind: item.kind, title: item.title }, version, content });
+            if (r.ok) { const id = (content as LookupTable).id; go(id); }
+            return r.ok;
+          }} />
+      )}
       {adding && <AddDialog project={project} onClose={() => setAdding(false)} onCreate={(t) => { const m = create(t); if (!m) setAdding(false); return m; }} />}
     </section>
   );
@@ -128,6 +145,7 @@ function SidePanel({ draft, project, readers, customer, locale }: { draft: Looku
   return (
     <div className="panel-body lk-sidebody">
       <h3 className="section-title">Try it</h3>
+      {draft.keys.some((k) => k.match === 'date-range') && <PreviewDateField project={project} testId="lk-asof" what="The current customer’s values are worked out" />}
       <TryIt table={draft} project={project} customer={customer} locale={locale} />
       <h3 className="section-title lk-used-h">Where it is used</h3>
       {readers.length === 0 ? <p className="muted" data-testid="lk-used">No calculation reads this table yet.</p> : (
@@ -146,17 +164,21 @@ function Workspace({ table, project, locale, canEdit, customer, readers, refusal
   useEffect(() => { setDraft(table); }, [savedJson]); // eslint-disable-line react-hooks/exhaustive-deps
   const dirty = JSON.stringify(draft) !== savedJson;
   useEffect(() => { onDirty(dirty); return () => onDirty(false); }, [dirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A table linked from the shared library is read-only here (the model refuses edits): Unlink or update it instead.
+  const link = linkOfTable(project, table.id);
   return (
     <>
       <div className="panel lk-main" aria-label="Edit the table">
         <div className="panel-body">
+          {link ? <LinkedNotice link={link} what={`The table “${table.title}”`} />
+            : <NotLinkedActions kind="lookup-table" refId={table.id} defaultTitle={table.title} label="this table" />}
           {refusal && (
             <div className="callout error lk-refusal" role="alert" data-testid="lk-refusal">
               <strong>It cannot be removed yet.</strong> <span data-testid="lk-refusal-message">{refusal}</span>
               <ul className="calc-used">{readers.map((c) => <li key={c.key}><span className="chip">Calculation</span> <Link to={`/studio/${project.projectId}/calculations?calc=${encodeURIComponent(c.key)}`}>{c.label}</Link></li>)}</ul>
             </div>
           )}
-          <TableEditor table={table} draft={draft} setDraft={setDraft} savedJson={savedJson} locale={locale} canEdit={canEdit} onRemove={onRemove} />
+          <TableEditor table={table} draft={draft} setDraft={setDraft} savedJson={savedJson} locale={locale} canEdit={canEdit && !link} linked={!!link} onRemove={onRemove} />
         </div>
       </div>
       <aside className="panel lk-side" data-side="right" data-side-title="Try it" aria-label="Try the table and where it is used">
@@ -166,7 +188,7 @@ function Workspace({ table, project, locale, canEdit, customer, readers, refusal
   );
 }
 
-function TableEditor({ table, draft, setDraft, savedJson, locale, canEdit, onRemove }: { table: LookupTable; draft: LookupTable; setDraft: Dispatch<SetStateAction<LookupTable>>; savedJson: string; locale: string; canEdit: boolean; onRemove: () => void }) {
+function TableEditor({ table, draft, setDraft, savedJson, locale, canEdit, linked, onRemove }: { table: LookupTable; draft: LookupTable; setDraft: Dispatch<SetStateAction<LookupTable>>; savedJson: string; locale: string; canEdit: boolean; /** Linked from the shared library: read-only here. */ linked: boolean; onRemove: () => void }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pasteText, setPasteText] = useState<string | null>(null);
   const [focusRow, setFocusRow] = useState<{ row: number; tick: number } | null>(null);
@@ -203,7 +225,7 @@ function TableEditor({ table, draft, setDraft, savedJson, locale, canEdit, onRem
   };
 
   return (
-    <div className="lk-editor" data-testid="lk-editor" data-id={table.id}>
+    <div className="lk-editor" data-testid="lk-editor" data-id={table.id} data-readonly={!canEdit || undefined}>
       <div className="lk-ed-head">
         <div className="field"><label htmlFor="lk-title">Name</label>
           <input id="lk-title" ref={nameRef} className="input" value={draft.title} maxLength={80} disabled={!canEdit} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} data-testid="lk-title" />
@@ -249,7 +271,7 @@ function TableEditor({ table, draft, setDraft, savedJson, locale, canEdit, onRem
       <Grid table={draft} onChange={(rows) => setDraft((d) => ({ ...d, rows }))} rowProblems={rowProblems} locale={locale} disabled={!canEdit} onPaste={(t) => setPasteText(t)} focusRow={focusRow} />
 
       <div className="lk-savebar" data-testid="lk-savebar">
-        <span className="lk-savestate" role="status" data-testid="lk-save-state">{!canEdit ? 'You can look at this table but not change it.' : dirty ? 'You have changes that are not saved.' : 'Saved.'}</span>
+        <span className="lk-savestate" role="status" data-testid="lk-save-state">{linked ? 'This table comes from the shared library and is read-only here.' : !canEdit ? 'You can look at this table but not change it.' : dirty ? 'You have changes that are not saved.' : 'Saved.'}</span>
         <button type="button" className="btn" onClick={() => { setDraft(table); setSaveError(null); }} disabled={!dirty} data-testid="lk-revert">Revert</button>
         <button type="button" className="btn primary" onClick={save} disabled={!canEdit || !dirty} data-testid="lk-save">Save table</button>
       </div>

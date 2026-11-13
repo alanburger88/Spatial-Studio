@@ -1,6 +1,5 @@
-import { isIsoDay, type Project, type SyntheticRecord } from '@iss/model';
-import { resolve, type Resolution } from '@iss/resolver';
-import { ScenarioEngine, scenarioId, type Scenario } from '@iss/scenarios';
+import { addDaysToIso, dateBoundaries, isIsoDay, type Project, type SyntheticRecord } from '@iss/model';
+import { ScenarioEngine } from '@iss/scenarios';
 import type { ApiError } from './app';
 
 /**
@@ -24,21 +23,13 @@ export function issueDateFrom(v: unknown, Err: typeof ApiError): string | null {
 /** `{ issueDate }` to spread into a resolve input, or nothing. */
 export const dated = (issueDate: string | null | undefined): { issueDate?: string } => (issueDate ? { issueDate } : {});
 
-/** The scenario engine "as issued on" a day (the Cube and the Landscape follow it). The plain engine without a day. */
+/** The scenario engine "as issued on" a day (the Cube and the Landscape follow it); the plain engine without a day. */
 export function scenarioEngineFor(project: Project, records: SyntheticRecord[], issueDate: string | null): ScenarioEngine {
-  if (!issueDate) return new ScenarioEngine(project, records);
-  const engine = new ScenarioEngine(project, records);
-  const cache = new Map<string, Resolution>();
-  engine.resolveScenario = (s: Omit<Scenario, 'scenarioId'>): Resolution => {
-    const key = scenarioId(s);
-    let res = cache.get(key);
-    if (!res) {
-      const record = records.find((r) => r.recordId === s.recordId);
-      if (!record) throw new Error(`Unknown record ${s.recordId}`);
-      res = resolve({ project, record, overrides: s.overrides, journeyCursor: s.journeyCursor, profileId: s.profileId, issueDate });
-      cache.set(key, res);
-    }
-    return res;
-  };
-  return engine;
+  return new ScenarioEngine(project, records, issueDate);
+}
+
+/** The days a document whose date is given for each run is checked on before approval: each boundary and the day before the first (a fixed day when it has none). */
+export function approvalDays(project: Project): string[] {
+  const days = dateBoundaries(project).map((b) => b.date);
+  return days.length ? [addDaysToIso(days[0], -1), ...days] : ['2026-01-01'];
 }

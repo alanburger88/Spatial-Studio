@@ -78,7 +78,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     purpose: 'Lay out the document and edit what it says. Pick a component on the page to change its position, its text, its data and the rules that decide whether it shows.',
     actions: [
       'Select a component on the page or in the Layers list, then edit it in the panel on the right.',
-      'Add components from the Components list, or a building block with From the library (it stays linked and read-only until you unlink it). Open Page setup to choose the paper, margins, columns and backgrounds, and drag the edges of the flow area or the letterhead zone, or type the measurements.',
+      'Add components from the Components list, or a building block with From the library (it stays linked and read-only until you unlink it). Open Page setup to choose the paper, margins, page templates, columns and backgrounds, and whether an accessible PDF is required; drag the edges of the flow area or the letterhead zone, or type the measurements.',
       'Edit text, and add an alternative version of a message for a section that changes by customer.',
       'Open Styles & brand to change text styles and brand settings.',
       'Use Explore variants to see every alternative a selected section can show.',
@@ -90,7 +90,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     read: [
       { what: 'The page', means: 'The document as the customer in the top bar would receive it. Change the customer or the output there to see it change.' },
       { what: 'First, Following and Last', means: 'The page templates. Each has its own flow area, columns, background and fixed items. The canvas shows the first page with its content; the other templates show where content continues. Page Composition Stack shows the composed pages. A component\'s Layout tab sets keep together, a new page or column, spanning the columns and how text splits.' },
-      { what: 'The right panel tabs', means: 'Data shows which customer values a component uses. Rules shows the rules that decide it. Blockers, Comments, Impact and Accessibility show what is wrong, what people have said, what a change would affect and how it reads for assistive technology.' },
+      { what: 'The right panel tabs', means: 'Content edits the text and the alternatives of a message. Data & rules shows which customer values a component uses and the rules that decide it, and, when the document uses dates, the period a section is in effect. Layout sets the position, pages and columns. Review gathers what is wrong, what people have said, what a change would affect and how it reads for assistive technology.' },
     ],
   },
   S13: {
@@ -127,7 +127,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
       'Switch between the rule Editor, the Table of all rules and the Tests.',
       'Pin a customer and the outcome you expect as a test, and see which pass.',
       'Find coverage gaps: rules, message versions and sections that no customer reaches, with a way to generate customers who reach them.',
-      'Change a customer value as a what-if, to see the outcome change, without editing the document.',
+      'Change a customer value as a what-if, to see the outcome change, without editing the document. A condition on a calculation links to how it is worked out.',
     ],
     next: [
       { screen: 'S16', why: 'change or add the customers the rules are tested with' },
@@ -251,7 +251,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S09: {
-    purpose: 'Check the document for problems before it goes out: rules, data links, pagination, PDF and web agreement, and accessibility, including the PDF itself. The checks run on their own for the current customer and scenario.',
+    purpose: 'Check the document for problems before it goes out: rules, data links, pagination, PDF and web agreement, and accessibility, including the PDF itself. The checks run on their own for the current customer and scenario, and, when the document uses dates, as issued on the preview date.',
     actions: [
       'Read the issues for this customer, or switch to all customers.',
       'Choose an issue to see its cause, who it reaches and a suggested fix with its effect.',
@@ -328,12 +328,12 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S22: {
-    purpose: 'Calculations are named values worked out from a customer\'s data, such as the days until a payment is due or the total of this month\'s fees. A calculation can be used in rules and wording wherever a data field can.',
+    purpose: 'Calculations are named values worked out from a customer\'s data, such as the days until a payment is due or the total of this month\'s fees. A calculation can be used in rules and wording wherever a data field can. When the document uses dates, the values are worked out as issued on the studio\'s preview date, the same day as the status bar and Dates.',
     actions: [
       'Add a calculation, or start from an example made from this document\'s own fields.',
       'Build it step by step from lists, or type a formula. The builder, the formula and the plain-words reading always match.',
       'See the value of each step for the current customer, and the value for every synthetic customer, including who has no value and why.',
-      'Check which rules, wording and other calculations use it before you change or remove it.',
+      'Check which rules, wording and other calculations use it, each a link, before you change or remove it.',
       'Save the calculation. It is one step that Undo takes back.',
     ],
     next: [
@@ -342,7 +342,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S23: {
-    purpose: 'Lookup tables are small tables kept with the document, such as a fee by tier or a notice by state. A calculation reads a value from a table.',
+    purpose: 'Lookup tables are small tables kept with the document, such as a fee by tier or a notice by state. A calculation reads a value from a table. A table keyed by a range of dates is tried as issued on the studio\'s preview date.',
     actions: [
       'Add a table and say what it is looked up by (exact text, a range of numbers or a range of dates) and what values it gives.',
       'Type the rows in the grid with the keyboard, or paste them from a spreadsheet and check the preview first.',
@@ -358,8 +358,8 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     purpose: 'The document\'s own date decides which dated rules, alternatives and sections are in effect; the studio never uses today\'s date. This screen says where that date comes from, sets the day every preview and check is worked out for, and shows what changes on which day.',
     actions: [
       'Choose where the document\'s date comes from: none, a date in the customer\'s data, or a date given for each run.',
-      'Preview the whole studio "as issued on" a day you pick, or a day something changes and the day before it. The status bar says when a preview date is set, and clearing it there is one click.',
-      'Read the timeline: each day something starts or ends, in plain words, and how many synthetic customers it reaches, with their names.',
+      'Preview the whole studio "as issued on" a day you pick, or a day something changes and the day before it. Calculations and Lookup tables use the same day. The status bar says when a preview date is set, and clearing it there is one click.',
+      'Read the timeline: each day something starts or ends, in plain words, and how many synthetic customers it reaches, with their names. A dated row of a lookup table links to its table.',
       'Fix problems in time: a message with no alternative in effect on some days, or two rules that tie only during a period.',
     ],
     next: [

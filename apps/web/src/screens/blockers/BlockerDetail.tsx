@@ -7,6 +7,7 @@ import { Icon } from '../../ui/icons';
 import { ProposalCard } from '../../assist/common';
 import { recordSummary } from '../../shell/RecordPicker';
 import { whenText } from './knownData';
+import { CalcLinks } from './CalcLinks';
 import { KIND_LABEL, KIND_NEXT, plural } from './labels';
 
 /** What the detail (and the guided pass) can do with a customer's data problem. */
@@ -169,6 +170,7 @@ export function BlockerDetail({ blocker, records, personas, impactFor, readOnlyR
       <div className="row wrap">
         {!isData && <button type="button" className="btn" onClick={() => onOpen()} data-testid="bl-open"><Icon.external /> {blocker.link?.label ?? 'Open where this is fixed'}</button>}
         {isData && <button type="button" className="btn" onClick={() => data.onOpenData(firstOpen ?? blocker.recordIds[0], blocker.id)} disabled={!blocker.recordIds.length} data-testid="bl-open"><Icon.external /> Open where this is fixed</button>}
+        {project && <CalcLinks project={project} finding={blocker.finding} />}
       </div>
     </div>
   );
