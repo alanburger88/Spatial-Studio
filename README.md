@@ -73,6 +73,11 @@ Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the 
 - **Email & SMS** (Build menu): edit the subject, preview text, heading, opening and closing text and the text message, insert data fields, choose which sections the email shows and in what order, and watch the live preview with the SMS length and segment count.
 - **All customers' blockers**: Validate & Compare → **All customers** lists every blocking issue across the synthetic customers, with who is affected.
 - **Interactive HTML** is laid out as a web page (sticky summary bar, section menu, searchable and sortable tables); the studio previews it in a phone, tablet or desktop frame.
+- **Assistant** (works without an AI key unless noted; it proposes, you approve, and every applied proposal is one Undo):
+  - *Validate & Compare*: every issue has a **Suggested fix** with its effect on all synthetic customers; **Fix all safe issues** applies the low-risk ones in one step.
+  - *Rules & Data*: **Describe a rule** in a sentence, **Review my rules**, and **Find coverage gaps** (a scenario and a ready-to-pin test for anything no customer exercises).
+  - *Writing help*: reading level, **Fit in one message** for SMS, image descriptions and **Check drafts** for translations are built in; rewrites, new message versions, subject lines and meaning checks need an AI key. A per-language **Glossary** keeps terms consistent.
+  - *Import records*: columns are matched to data fields with a reason, and values that do not fit are flagged.
 - **Document Cube filters**: click a legend chip to show only intersections with that outcome (several can be on at once), or **Problems only** for those with blocking issues or warnings. The Grid and table fade the rest; the 3D view hides them. The 3D view opens on one layer (the previewed customer's) with previous/next buttons; choose **All layers** for the whole cube.
 - **Demo tools** (status bar): deliberate defects for demonstrations (rule tie, missing Spanish wording, table overflow, unconfirmed liability, no matching message) live in one panel that opens only when you click it.
 - **2D Design Studio zoom**: the page fits the panel width by default (*Width*); *Page* shows the whole sheet. On windows narrower than 1500 px the component list starts closed so the page shows near full size; open it with **Components** (your choice is remembered).
@@ -146,6 +151,8 @@ packages/validation static rule analysis, binding checks, accessibility mapping
 One model → one pure resolver → many projections. The browser and the API run the **same** resolver package; exports are composed server-side from an immutable run. See `reports/DECISIONS.md` and `reports/FINAL_IMPLEMENTATION_REPORT.md`.
 
 ## Optional live AI
+
+With a key configured, the assistant's model-backed features (rewrites, new message versions, subject lines, free-form rule sentences, translation meaning checks, AI translation drafts, image descriptions from the picture) turn on. Without one they say so, and everything computed keeps working. Only the project's own wording and synthetic data are sent; model output is checked on the server (data fields unchanged, no markup, known ids only) before it is shown.
 
 Offline mode is the default and fully functional; when it does not understand a question it says so and lists questions it can answer. To enable the server-side Claude adapter, create a local, uncommitted `.env` file in the repository root (the API reads it at start-up; real environment variables take precedence):
 

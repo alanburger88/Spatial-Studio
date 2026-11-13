@@ -112,3 +112,12 @@ Verify with `npx tsc -p tsconfig.json --noEmit`, screenshots in light + dark (`T
 - **Email/SMS wording** lives in `project.channels` (`channelConfig`, `SET_CHANNELS`); renderers read the resolved `res.channelTexts`.
 - **Top bar:** it is full. Do not add controls to it; check 1000, 1280, 1440 and 1920 px after any change.
 
+## Assistant (v0.6) — rules for every screen
+
+- **Engines are pure** and live in `packages/scenarios/src/assist/` (contracts in `types.ts`): they return proposals, flags or drafts and never apply anything. No network, clock, randomness or `Intl` in them.
+- **Showing a proposal:** use `ProposalCard`, `SuggestionCompare`, `SourceChip`, `NeedsAi` from `apps/web/src/assist/common.tsx`, so every suggestion says who produced it (Built-in or AI), how risky it is and what it will change.
+- **Applying:** only through `applyAssistCommands(commands, label, feature, source)` (one undoable step, toast, Activity record). Wording suggestions go into the field the person is editing, never straight into the model.
+- **Model-backed features** go through `/api/v1/projects/:id/assist/*` (`apps/api/src/assistAi.ts`). The server validates model output before returning it; a screen must still handle `mode: 'unavailable'` as a normal state, not an error.
+- **Never** let the assistant approve a translation, change a workflow state, export or publish.
+- **Parallel browser tests:** run them on an isolated stack (`node scripts/dev-isolated.mjs <slot>`, then `E2E_API=… E2E_WEB=…`) so runs do not reset each other's data.
+
