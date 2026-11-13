@@ -15,7 +15,8 @@ interface PanelState {
   setTab(tab: 'help' | 'chat'): void;
   setFocus(focus: PanelFocus): void;
   openPanel(focus?: PanelFocus): void;
-  close(): void;
+  /** `restoreFocus: false` when the caller is about to move focus somewhere else on purpose. */
+  close(restoreFocus?: boolean): void;
 }
 
 /** Open or closed lives for the session only (never persisted). */
@@ -33,10 +34,10 @@ export const usePanel = create<PanelState>((set, get) => ({
     const keep = get().open ? get().opener : active instanceof HTMLElement && active !== document.body ? active : null;
     set({ open: true, opener: keep, ...(focus !== undefined ? { focus, tab: 'help' as const } : {}) });
   },
-  close() {
+  close(restoreFocus = true) {
     const { opener } = get();
     set({ open: false, opener: null });
     // Return focus after the panel has unmounted its own focus target.
-    window.setTimeout(() => { if (opener && opener.isConnected) opener.focus(); }, 0);
+    if (restoreFocus) window.setTimeout(() => { if (opener && opener.isConnected) opener.focus(); }, 0);
   },
 }));

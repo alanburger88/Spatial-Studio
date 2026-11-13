@@ -6,6 +6,7 @@ import { recordSummary } from '../shell/RecordPicker';
 import { nodeTitle, ruleTitle as plainRuleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { useStudio, useScenarioEngine } from '../state/store';
+import { usePanel } from '../assist/panelStore';
 import './DocumentCube.css';
 
 const AXIS_NAMES = ['X', 'Y', 'Z'] as const;
@@ -547,6 +548,13 @@ function Inspector(props: { cell: CubeCell; cube: CubeResult; engineProject: Non
   }, [cell, engine]);
   const ruleTitle = (id: string) => { const r = engineProject.rules.find((x) => x.id === id); return r ? plainRuleTitle(engineProject, r) : ''; };
   const rec = cell.representative;
+  /** Show the representative customer in the top bar, then explain the document's main variant set for them in the assistant panel. */
+  const explainCell = () => {
+    if (!rec || !cube.primaryVariantSet) return;
+    const st = useStudio.getState();
+    st.setRecord(rec.recordId); st.setJourneyCursor(rec.journeyCursor); st.setProfile(rec.profileId);
+    usePanel.getState().openPanel({ kind: 'explain', nodeId: cube.primaryVariantSet });
+  };
   const recName = (id: string) => { const r = records.find((x) => x.recordId === id); return r ? recordSummary(r, personas) : null; };
   const repName = rec ? recName(rec.recordId) : null;
 
@@ -597,6 +605,7 @@ function Inspector(props: { cell: CubeCell; cube: CubeResult; engineProject: Non
 
       <div className="cube-actions">
         <button className="btn primary" disabled={!rec} onClick={() => onOpen(cell, 'design')} data-testid="cube-open-rep">Open representative scenario</button>
+        <button className="btn" disabled={!rec || !cube.primaryVariantSet} onClick={explainCell} data-testid="explain-node" title="Explain in plain words why the representative customer gets this, in the assistant panel"><Icon.ai width={14} height={14} /> Explain</button>
         <div className="row">
           <button className="btn" disabled={!rec || !cube.primaryVariantSet} onClick={() => onOpen(cell, 'exploded')} data-testid="cube-open-exploded">Open in Exploded</button>
           <button className="btn" disabled={!rec} onClick={() => onOpen(cell, 'outputs')} data-testid="cube-open-output">{cell.simulationOnly ? 'Open output (simulation)' : 'Open output'}</button>

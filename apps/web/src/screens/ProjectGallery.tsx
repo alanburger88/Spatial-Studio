@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { buildContext, fieldsFor, getPath, parseCsv, projectFields, type DocumentType, type FieldDef, type Project, type SyntheticRecord } from '@iss/model';
 import { resolve, type Resolution } from '@iss/resolver';
+import { matchColumns, type ColumnMatch } from '@iss/scenarios';
 import { api, ApiFailure, type ImportResult, type ProjectSummary, type TemplateInfoDto } from '../api/client';
 import { useStudio } from '../state/store';
 import { Biz, Dialog, Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
@@ -209,7 +210,23 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
   const csvRows = useMemo(() => (format === 'csv' && text.trim() ? parseCsv(text) : []), [format, text]);
   const headers = csvRows[0] ?? [];
   const [mapping, setMapping] = useState<string[]>([]);
-  useEffect(() => { setMapping(headers.map((h) => autoMatch(h.replace(/^\uFEFF/, ''), fields))); setCheck(null); }, [headers.join('\u0001'), fields]);
+  // Assistant column matching (built-in): exact and likely matches are pre-selected; a guess is only offered, never applied silently.
+  const matches: ColumnMatch[] = useMemo(() => (headers.length ? matchColumns(headers.map((h) => h.replace(/^\uFEFF/, '')), csvRows.slice(1, 26), target ?? { documentType: docType }) : []), [headers.join('\u0001'), csvRows, target, docType]);
+  useEffect(() => {
+    const usable = new Set(fields.filter((f) => f.type !== 'array').map((f) => f.path));
+    setMapping(headers.map((h, i) => {
+      const own = autoMatch(h.replace(/^\uFEFF/, ''), fields);
+      if (own !== IGNORE) return own;
+      const m = matches[i];
+      return m?.path && usable.has(m.path) && (m.confidence === 'exact' || m.confidence === 'likely') ? m.path : IGNORE;
+    }));
+    setCheck(null);
+  }, [headers.join('\u0001'), fields, matches]);
+  const downloadMapped = () => {
+    const url = URL.createObjectURL(new Blob([mappedCsv()], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'customers-renamed.csv'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const mapped = mapping.filter((m) => m !== IGNORE).length;
   const dupTargets = mapping.filter((m, i) => m && mapping.indexOf(m) !== i);
   const missingRequired = fields.filter((f) => f.required && f.type !== 'array' && !mapping.includes(f.path)).map((f) => f.label);
@@ -290,10 +307,10 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
         )}
         {format === 'csv' && headers.length > 0 && (
           <div className="imp-map" data-testid="import-mapping">
-            <div className="row"><strong>Match columns</strong><span className="muted">{mapped} of {headers.length} columns used</span></div>
+            <div className="row"><strong>Match columns</strong><span className="muted">{mapped} of {headers.length} columns used</span><span className="chip" title="Suggested by the studio from the column names and the first rows. No AI model was used.">Built-in matching</span><button type="button" className="btn sm" style={{ marginLeft: 'auto' }} onClick={downloadMapped} disabled={!mapped} data-testid="import-rename-download" title="Download this file with the column names replaced by the matched data fields; unmatched columns are left out"><Icon.download width={13} height={13} /> Rename columns and download</button></div>
             <div className="imp-map-scroll">
               <table className="table">
-                <thead><tr><th>Your column</th><th>First value</th><th>Data field</th></tr></thead>
+                <thead><tr><th>Your column</th><th>First value</th><th>Data field</th><th>Match</th></tr></thead>
                 <tbody>
                   {headers.map((h, i) => (
                     <tr key={i}>
@@ -305,6 +322,26 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
                           <option value={SOURCE_ID}>Your record ID (kept for reference)</option>
                           {fields.filter((f) => f.type !== 'array').map((f) => <option key={f.path} value={f.path}>{f.label}{f.path.startsWith('custom.') ? ' (custom)' : ''}</option>)}
                         </select>
+                      </td>
+                      <td className="imp-match" data-testid={`match-${i}`} data-confidence={matches[i]?.confidence ?? 'none'}>
+                        {(() => {
+                          const m = matches[i];
+                          const chosen = mapping[i] ?? IGNORE;
+                          const label = (path: string) => fields.find((f) => f.path === path)?.label ?? path;
+                          if (!m) return null;
+                          const agrees = !!m.path && chosen === m.path;
+                          return (
+                            <>
+                              {m.confidence === 'exact' && agrees && <span className="chip ok">Exact</span>}
+                              {m.confidence === 'likely' && agrees && <span className="chip info">Likely</span>}
+                              {m.confidence === 'guess' && <span className="chip warning">Guess</span>}
+                              {(m.confidence === 'none' || (!agrees && m.confidence !== 'guess')) && chosen === IGNORE && <span className="chip">Not matched</span>}
+                              {m.confidence === 'guess' && m.path && !agrees && <button type="button" className="btn sm ghost" onClick={() => setMapping((mm) => mm.map((x, j) => (j === i ? m.path! : x)))} data-testid={`match-use-${i}`}>Use “{label(m.path)}”</button>}
+                              <span className="faint imp-match-why">{m.reason}</span>
+                              {m.sampleProblem && agrees && <span className="imp-match-warn" data-testid={`match-problem-${i}`}>▲ {m.sampleProblem}</span>}
+                            </>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))}

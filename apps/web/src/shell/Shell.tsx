@@ -11,6 +11,7 @@ import { DemoBanner } from '../screens/GuidedDemo';
 import { CommandPalette, useShellUi } from './CommandPalette';
 import { MOD, SettingsMenu, ShortcutsSheet, Tour } from './Help';
 import { DemoToolsButton, DemoToolsPanel } from './DemoTools';
+import { AssistPanel } from '../assist/AssistPanel';
 import { HistoryPanel, useDrawers } from './History';
 import { ReviewPanel, WorkflowChip } from './Review';
 import './shell-extras.css';
@@ -334,7 +335,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
       <DemoBanner />
       <Toasts />
       <Overlays />
-      {ready && <><HistoryPanel /><ReviewPanel /><DemoToolsPanel /></>}
+      {ready && <><HistoryPanel /><ReviewPanel /><DemoToolsPanel /><AssistPanel /></>}
       <SmallScreenNotice />
     </div>
   );

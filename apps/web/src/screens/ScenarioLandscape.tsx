@@ -6,6 +6,7 @@ import { recordSummary } from '../shell/RecordPicker';
 import { Icon } from '../ui/icons';
 import { nodeTitle, ruleTitle as plainRuleTitle } from '../ui/plain';
 import { useStudio, useScenarioEngine } from '../state/store';
+import { usePanel } from '../assist/panelStore';
 import './ScenarioLandscape.css';
 
 const SEV_ICON = { ok: '✓', warning: '▲', blocking: '■' } as const;
@@ -125,6 +126,7 @@ export function ScenarioLandscape() {
   };
   const openScenario = (c: LandscapeCluster) => { adoptScenario(c); navigate(`${base}/design`); };
   const openExploded = (c: LandscapeCluster) => { adoptScenario(c); navigate(`${base}/exploded${pvs ? `/${pvs}` : ''}`); };
+  const explainCluster = (c: LandscapeCluster) => { adoptScenario(c); if (pvs) usePanel.getState().openPanel({ kind: 'explain', nodeId: pvs }); };
   const openValidate = (c: LandscapeCluster) => { adoptScenario(c); navigate(`${base}/validate`); };
 
   const diam = (c: LandscapeCluster) => Math.max(MIN_D, MAX_D * Math.sqrt(c.count / maxCount));
@@ -426,6 +428,7 @@ export function ScenarioLandscape() {
                   <div className="row">
                     <button className="btn" onClick={() => openExploded(selected)} disabled={!pvs} data-testid="landscape-open-exploded">Open exploded component</button>
                   </div>
+                  <button className="btn" onClick={() => explainCluster(selected)} disabled={!pvs} data-testid="explain-node" title="Explain in plain words why the representative customer gets this, in the assistant panel"><Icon.ai width={14} height={14} /> Explain</button>
                   <button className="btn" onClick={() => openValidate(selected)} data-testid="landscape-show-in-validate">Show defects in Validate</button>
                 </div>
               </div>

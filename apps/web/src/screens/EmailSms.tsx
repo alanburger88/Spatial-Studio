@@ -9,6 +9,9 @@ import { editBlockedReason, useRecord, useResolution, useScenarioRequest, useStu
 import { recordSummary } from '../shell/RecordPicker';
 import { Dialog, ErrorState, Loading, Named, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
+import { fitSms, smsEncoding } from '@iss/renderers';
+import { NeedsAi, useBusy } from '../assist/common';
+import { GuardedSuggestion, WritingHelp, lengthChange, recordAssist, useReadOnlyReason } from '../assist/WritingHelp';
 import './EmailSms.css';
 
 type Channel = 'email' | 'sms';
@@ -388,13 +391,18 @@ function ChannelsEditor({ project }: { project: Project }) {
                 <h2 className="section-title">Wording</h2>
                 {field('subject', {
                   label: 'Subject', testId: 'ch-email-subject', hint: 'The first line an inbox shows.',
-                  extra: subjectLen > 78 && valueOf('subject').trim() ? <div className="callout warning chx-note" role="status" data-testid="ch-subject-long">The subject for this customer is {subjectLen} characters. Many inboxes cut it off after about 78.</div> : null,
+                  extra: <>
+                    {subjectLen > 78 && valueOf('subject').trim() ? <div className="callout warning chx-note" role="status" data-testid="ch-subject-long">The subject for this customer is {subjectLen} characters. Many inboxes cut it off after about 78.</div> : null}
+                    <SubjectSuggest project={project} current={valueOf('subject')} onUse={(t) => change('subject', t)} />
+                  </>,
                 })}
                 {field('preheader', { label: 'Preview text', testId: 'ch-email-preheader', hint: 'The grey line an inbox shows after the subject. It is cut at 140 characters.' })}
                 {field('title', { label: 'Heading', testId: 'ch-email-title', hint: 'The large heading at the top of the email.' })}
-                {field('intro', { label: 'Opening text', testId: 'ch-email-intro', multiline: true, optional: true, rows: 3, hint: 'Shown after the greeting. Blank line = new paragraph; **bold** and [link text](https://…) work.' })}
+                {field('intro', { label: 'Opening text', testId: 'ch-email-intro', multiline: true, optional: true, rows: 3, hint: 'Shown after the greeting. Blank line = new paragraph; **bold** and [link text](https://…) work.',
+                  extra: <WritingHelp text={valueOf('intro')} kind="email" locale="en-US" onUse={(t) => change('intro', t)} testId="writing-help-intro" /> })}
                 {field('keyFactsHeading', { label: 'Key figures heading', testId: 'ch-email-keyfacts-heading', hint: 'The title above the list of key figures.' })}
-                {field('closing', { label: 'Closing text', testId: 'ch-email-closing', multiline: true, optional: true, rows: 3, hint: 'Shown before the required notices. Same formatting as the opening text.' })}
+                {field('closing', { label: 'Closing text', testId: 'ch-email-closing', multiline: true, optional: true, rows: 3, hint: 'Shown before the required notices. Same formatting as the opening text.',
+                  extra: <WritingHelp text={valueOf('closing')} kind="email" locale="en-US" onUse={(t) => change('closing', t)} testId="writing-help-closing" /> })}
               </div>
 
               <div className="panel chx-card" data-testid="ch-sections">
@@ -430,7 +438,7 @@ function ChannelsEditor({ project }: { project: Project }) {
               <h2 className="section-title">Text message</h2>
               {field('sms', {
                 label: 'Message', testId: 'ch-sms-text', multiline: true, rows: 4, hint: 'Plain text only. Data fields change the length, so the meter measures the message for the customer in the top bar.',
-                extra: <SmsMeter data={sms.data} busy={sms.busy} />,
+                extra: <><SmsMeter data={sms.data} busy={sms.busy} /><SmsAssist project={project} value={valueOf('sms')} composed={sms.data?.text} customer={customer?.name} onUse={(t) => change('sms', t)} /></>,
               })}
             </div>
           )}
@@ -528,5 +536,128 @@ function SmsPreview({ data }: { data: SmsDto }) {
       <ParityChips parity={data.parity} testId="ch-parity" />
       <Warnings items={data.warnings} />
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ writing assistance */
+
+/** Three alternative subject lines with their length. Needs a live model; "Use this" fills the subject field. */
+function SubjectSuggest({ project, current, onUse }: { project: Project; current: string; onUse: (text: string) => void }) {
+  const [res, setRes] = useState<{ mode: 'ai' | 'unavailable'; message: string; options: Array<{ text: string }> } | null>(null);
+  const [busy, run] = useBusy();
+  const ro = useReadOnlyReason();
+  const seq = useRef(0);
+  const ask = async () => {
+    const my = ++seq.current; setRes(null);
+    const r = await run(() => api.assistSubjectLines(project.projectId, { current, project }));
+    if (r && seq.current === my) setRes(r);
+  };
+  return (
+    <div className="wh-block" data-testid="subject-assist">
+      <div className="wh-row">
+        <button type="button" className="btn sm ghost" onClick={ask} disabled={busy} aria-busy={busy} data-testid="subject-suggest"><Icon.ai width={12} height={12} /> {busy ? 'Thinking…' : 'Suggest subject lines'}</button>
+        {res && <button type="button" className="btn sm ghost" onClick={() => { seq.current++; setRes(null); }}>Hide suggestions</button>}
+      </div>
+      <div aria-live="polite">
+        {res?.mode === 'unavailable' && <NeedsAi message={res.message} />}
+        {res?.mode === 'ai' && res.options.length === 0 && <p className="muted wh-note">{res.message || 'The assistant returned no subject lines.'}</p>}
+        {res?.mode === 'ai' && res.options.length > 0 && (
+          <ul className="wh-options" aria-label="Subject line suggestions">
+            {res.options.map((o, i) => (
+              <li key={i} className="wh-option" data-testid="subject-option">
+                <span className="wh-option-text" data-testid="subject-option-text">{o.text}</span>
+                <button type="button" className="btn sm primary" disabled={!!ro} title={ro ?? undefined} data-testid="subject-option-use" onClick={() => { onUse(o.text); recordAssist('subject', 'Used a suggested email subject line', 'ai'); setRes(null); }}>Use this</button>
+                <span className={'wh-option-meta' + (o.text.length > 70 ? ' warn' : '')} data-testid="subject-option-length">
+                  <span className="chip ai-chip info">AI suggestion</span> {o.text.length} characters{o.text.length > 70 ? ' · long: many inboxes cut a subject off after about 70' : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const escapeRe = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Fills a template's data fields with what the composed preview actually shows for the customer in the top bar.
+ * The values are read back out of the composed message by matching it against the template; when that is not
+ * possible (another language, or the preview is behind the text) the template itself is measured.
+ */
+function sampleFrom(template: string, composed: string | undefined): ((t: string) => string) | undefined {
+  if (!composed) return undefined;
+  const tokens = [...template.matchAll(TOKEN_RE)];
+  if (!tokens.length) return undefined;
+  const lit = (t: string) => escapeRe(t).replace(/\s+/g, '\\s+');
+  let re = ''; let last = 0;
+  for (const m of tokens) { re += lit(template.slice(last, m.index)) + '([\\s\\S]+?)'; last = m.index! + m[0].length; }
+  re += lit(template.slice(last));
+  const hit = new RegExp(`^\\s*${re}\\s*$`).exec(composed);
+  if (!hit) return undefined;
+  const values = new Map<string, string>();
+  tokens.forEach((m, i) => { if (!values.has(m[1])) values.set(m[1], hit[i + 1]); });
+  return (t) => t.replace(TOKEN_RE, (m, name: string) => values.get(name) ?? m);
+}
+
+const measureLine = (m: { length: number; encoding: string; segments: number }) => `${m.length} characters · ${m.encoding} · ${m.segments} segment${m.segments === 1 ? '' : 's'}`;
+
+/** "Fit in one message" (built-in, no model) and "Rewrite to fit (AI)". Accepting fills the SMS field; autosave then applies. */
+function SmsAssist({ project, value, composed, customer, onUse }: { project: Project; value: string; composed?: string; customer?: string; onUse: (text: string) => void }) {
+  const [fit, setFit] = useState<{ original: string; result: ReturnType<typeof fitSms>; measured: boolean } | null>(null);
+  const [ai, setAi] = useState<{ original: string; mode: 'ai' | 'unavailable'; message: string; options: Array<{ text: string; tokenCheck: { ok: boolean; missing: string[]; extra: string[] } }>; sample?: (t: string) => string } | null>(null);
+  const [aiBusy, run] = useBusy();
+  const [dismissedAi, setDismissedAi] = useState<Set<number>>(new Set());
+  const seq = useRef(0);
+  const sample = useMemo(() => sampleFrom(value, composed), [value, composed]);
+  const measuredFor = (measured: boolean) => (measured ? `Measured with the data fields filled in${customer ? ` for ${customer}` : ''}.` : 'Measured on the wording only: the data fields could not be filled in from the preview, so the real message may be longer.');
+  const runFit = () => { setAi(null); setFit({ original: value, result: fitSms(value, { sample }), measured: !!sample }); };
+  const runAi = async () => {
+    const my = ++seq.current; setFit(null); setAi(null); setDismissedAi(new Set());
+    const r = await run(() => api.assistRewrite(project.projectId, { text: value, style: 'one-sms', kind: 'sms', locale: 'en-US', project }));
+    if (r && seq.current === my) setAi({ original: value, mode: r.mode, message: r.message, options: r.options ?? [], sample });
+  };
+  const f = fit?.result;
+  const changed = !!f && f.text !== fit!.original;
+  return (
+    <div className="wh-block" data-testid="sms-assist">
+      <div className="wh-row">
+        <button type="button" className="btn sm" onClick={runFit} disabled={!value.trim()} data-testid="sms-fit"><Icon.ai width={12} height={12} /> Fit in one message</button>
+        <button type="button" className="btn sm ghost" onClick={runAi} disabled={aiBusy || !value.trim()} aria-busy={aiBusy} data-testid="sms-fit-ai">{aiBusy ? <><span className="spinner" aria-hidden="true" /> Rewriting…</> : 'Rewrite to fit (AI)'}</button>
+        {(fit || ai) && <button type="button" className="btn sm ghost" onClick={() => { seq.current++; setFit(null); setAi(null); }}>Close</button>}
+      </div>
+      <div aria-live="polite" className="wh-block">
+        {f && !changed && (
+          <p className="callout accent wh-note" role="status" data-testid="sms-fit-nochange" style={{ margin: 0 }}>
+            {f.fits ? <>This message already fits in one message ({measureLine(f.before)}). {measuredFor(fit!.measured)}</> : <span data-testid="sms-fit-notfit">Could not fit one message without rewording. It is {measureLine(f.before)}. {measuredFor(fit!.measured)} Try “Rewrite to fit (AI)” or shorten the wording yourself.</span>}
+          </p>
+        )}
+        {f && changed && (
+          <GuardedSuggestion original={fit!.original} suggestion={f.text} source="builtin"
+            note={<div data-testid="sms-fit-detail">
+              <ul className="wh-changes" data-testid="sms-fit-changes">{f.changes.map((c, i) => <li key={i}>{c}</li>)}</ul>
+              <div className="wh-measure"><span>Before: <strong data-testid="sms-fit-before">{measureLine(f.before)}</strong></span><span aria-hidden="true">→</span><span>After: <strong data-testid="sms-fit-after">{measureLine(f.after)}</strong></span></div>
+              <div className="muted">{measuredFor(fit!.measured)} Data fields, links and capital-letter safety sentences are kept as they are.</div>
+              {!f.fits && <p className="wh-stillnot" data-testid="sms-fit-notfit">Could not fit one message without rewording. This is the closest the built-in fix gets.</p>}
+            </div>}
+            onAccept={() => { onUse(f.text); recordAssist('sms-fit', 'Fitted the text message to fewer characters', 'builtin'); setFit(null); }}
+            onDiscard={() => setFit(null)} />
+        )}
+        {ai?.mode === 'unavailable' && <NeedsAi message={ai.message} />}
+        {ai?.mode === 'ai' && ai.options.length === 0 && <p className="muted wh-note">{ai.message || 'The assistant returned no usable message.'}</p>}
+        {ai?.mode === 'ai' && ai.options.map((o, i) => {
+          if (dismissedAi.has(i)) return null;
+          const m = smsEncoding(ai.sample ? ai.sample(o.text) : o.text);
+          return (
+            <GuardedSuggestion key={i} original={ai.original} suggestion={o.text} source="ai"
+              blockedReason={o.tokenCheck.ok ? null : 'This suggestion changes the data fields in the text, so it cannot be used.'}
+              note={<span data-testid="sms-fit-ai-detail">{lengthChange(ai.original, o.text)} · {measureLine({ length: m.length, encoding: m.encoding, segments: m.segments })}{!ai.sample && ' (wording only)'}{m.encoding !== 'GSM-7' || m.segments > 1 ? ' · still more than one message' : ' · fits one message'}</span>}
+              onAccept={() => { onUse(o.text); recordAssist('sms-fit', 'Used an AI rewrite to fit the text message', 'ai'); setAi(null); }}
+              onDiscard={() => setDismissedAi((d) => new Set(d).add(i))} />
+          );
+        })}
+      </div>
+    </div>
   );
 }

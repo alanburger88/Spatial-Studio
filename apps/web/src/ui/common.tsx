@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStudio } from '../state/store';
 import { Icon } from './icons';
+import { usePanel } from '../assist/panelStore';
 
 /**
  * Compact one-line screen header: title, an "About this view" disclosure (the long description) and actions.
@@ -20,8 +21,22 @@ export function ScreenHeader(props: { id: string; title: string; subtitle: strin
         {props.badge}
         {props.actions}
         <SideToggles />
+        <AskAiButton screenId={props.id} />
       </div>
     </header>
+  );
+}
+
+/** Opens the assistant side panel. Only inside the studio shell with a project open (the panel marks itself available), and never on the assistant screen itself. */
+function AskAiButton({ screenId }: { screenId: string }) {
+  const hasProject = useStudio((s) => !!s.project);
+  const available = usePanel((s) => s.available);
+  const open = usePanel((s) => s.open);
+  if (!hasProject || !available || screenId === 'S12' || screenId === 'S01') return null;
+  return (
+    <button type="button" className="btn sm" data-testid="assist-open" aria-expanded={open} aria-controls="assist-panel" title="Ask the assistant about this screen" onClick={() => (open ? usePanel.getState().close() : usePanel.getState().openPanel())}>
+      <Icon.ai width={14} height={14} /> Ask AI
+    </button>
   );
 }
 

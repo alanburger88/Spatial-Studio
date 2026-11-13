@@ -9,6 +9,7 @@ import { languageName } from '@iss/model';
 import { Icon } from '../ui/icons';
 import { fieldLabel, nodeTitle, predicateSentence, ruleSentence, ruleTitle } from '../ui/plain';
 import { PagePreview } from '../doc/PagePreview';
+import { usePanel } from '../assist/panelStore';
 import './ExplodedDocument.css';
 
 /**
@@ -402,7 +403,7 @@ export function ExplodedDocument() {
             {unresolved && <div className="callout error" role="alert"><strong>Unresolved.</strong> {res.findings.find((f) => f.nodeId === node.id && f.severity === 'blocking')?.message}</div>}
             {!rnode.visible && <div className="callout warning">Not rendered in this scenario: {rnode.hiddenReason}</div>}
 
-            <div className="section-title">Why this outcome</div>
+            <div className="section-title ex-why-h">Why this outcome <button type="button" className="btn sm" onClick={() => usePanel.getState().openPanel({ kind: 'explain', nodeId: node.id })} data-testid="explain-node" title="Explain in plain words why this customer gets this, in the assistant panel"><Icon.ai width={13} height={13} /> Explain</button></div>
             <div className="ex-explain-wrap" data-testid="exploded-explanation">
               <div className="callout accent ex-explain">{tech ? explanation.summary : plainExplanation(project, res, rnode)}</div>
               {active && <>

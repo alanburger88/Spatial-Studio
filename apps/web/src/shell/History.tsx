@@ -6,6 +6,7 @@ import { editBlockedReason, useIsDirty, useStudio } from '../state/store';
 import { Proof, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { actionSentence, nodeTitle, predicateSentence, ruleSentence } from '../ui/plain';
+import { ChangeSummaryCard } from '../assist/ChangeSummaryCard';
 import { useModal } from './CommandPalette';
 import './collab.css';
 
@@ -203,6 +204,7 @@ function HistoryPanelInner() {
   const [diffErr, setDiffErr] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
   const pid = project.projectId;
   const readOnly = editBlockedReason(session);
 
@@ -324,6 +326,20 @@ function HistoryPanelInner() {
                     </select>
                   </label>
                 </div>
+                {pair && (
+                  <div className="hist-sumbar">
+                    <button type="button" className="btn sm" onClick={() => setShowSummary((x) => !x)} aria-expanded={showSummary} aria-controls="hist-summary" data-testid="summary-open"><Icon.ai width={14} height={14} /> {showSummary ? 'Hide summary' : 'Summarise changes'}</button>
+                    <span className="muted" style={{ fontSize: 12 }}>A plain-language summary of this comparison, worked out by the studio.</span>
+                  </div>
+                )}
+                {pair && showSummary && (
+                  <div id="hist-summary" style={{ marginBottom: 12 }}>
+                    <ChangeSummaryCard pid={pid} from={pair[0]} to={pair[1]}
+                      fromLabel={`v${pair[0]}${versions.find((v) => v.modelVersion === pair[0])?.workflow.some((w) => w.to === 'approved' || w.to === 'published') ? ' (approved)' : ''}`}
+                      toLabel={`v${pair[1]}${current && pair[1] === current.modelVersion ? ' (current)' : ''}`}
+                      note={dirty && current && pair[1] === current.modelVersion ? 'Your unsaved changes are not included.' : undefined} />
+                  </div>
+                )}
                 {diffErr && <div className="callout error" role="alert" style={{ marginTop: 10 }}>{diffErr}</div>}
                 {pair && !diff && !diffErr && <p className="muted"><span className="spinner" /> Comparing…</p>}
                 {diff && (

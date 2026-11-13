@@ -5,8 +5,10 @@ import { resolve } from '@iss/resolver';
 import { ScreenHeader, Loading, Empty, Tech, Dialog } from '../ui/common';
 import { fieldLabel, localeLabel } from '../ui/plain';
 import { Icon } from '../ui/icons';
-import { useStudio, setPreviewLanguage } from '../state/store';
+import { editBlockedReason, useStudio, setPreviewLanguage } from '../state/store';
 import { api } from '../api/client';
+import { checkTranslations, type TranslationFlag } from '@iss/scenarios';
+import { SourceChip } from '../assist/common';
 import './Translations.css';
 
 type StatusFilter = 'all' | 'missing' | 'draft' | 'approved';
@@ -32,6 +34,53 @@ type TranslateResponse = Awaited<ReturnType<typeof api.translate>>;
 interface AiResult extends TranslateResponse { applied: number; forLocale: string }
 
 const tok = (t: string) => `{{${t}}}`;
+
+/** A flag from the built-in check or from the model's meaning check. A flag only points at something; it never changes or blocks anything. */
+interface CheckFlag { textId: string; kind: TranslationFlag['kind']; severity: 'warning' | 'info'; message: string; source: 'builtin' | 'ai' }
+interface CheckResult { locale: string; at: number; checked: number; flags: Record<string, CheckFlag[]>; snapshot: Record<string, string>; meaning: { mode: 'ai' | 'unavailable'; message: string; checked: number } | null }
+const KIND_LABEL: Record<TranslationFlag['kind'], string> = { length: 'Length', glossary: 'Glossary', 'inconsistent-term': 'Inconsistent term', untranslated: 'Untranslated', 'number-mismatch': 'Numbers differ', 'sms-encoding': 'SMS characters', punctuation: 'Punctuation', meaning: 'Meaning' };
+const KIND_COUNT: Record<TranslationFlag['kind'], [string, string]> = { length: ['length', 'length'], glossary: ['glossary', 'glossary'], 'inconsistent-term': ['inconsistent term', 'inconsistent terms'], untranslated: ['untranslated', 'untranslated'], 'number-mismatch': ['number difference', 'number differences'], 'sms-encoding': ['SMS character', 'SMS characters'], punctuation: ['punctuation', 'punctuation'], meaning: ['meaning', 'meaning'] };
+
+/** Per-language list of preferred terms. AI drafts and "Check drafts" follow it. Saved as one undoable step. */
+function GlossaryDialog({ locale, langName, entries, onClose, onSaved }: { locale: string; langName: string; entries: Array<{ source: string; target: string; note?: string }>; onClose: () => void; onSaved: () => void }) {
+  const [rows, setRows] = useState<Array<{ source: string; target: string; note: string }>>(() => entries.map((e) => ({ source: e.source, target: e.target, note: e.note ?? '' })));
+  const [error, setError] = useState<string | null>(null);
+  const blocked = editBlockedReason(useStudio((x) => x.session));
+  const set = (i: number, k: 'source' | 'target' | 'note', v: string) => { setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x))); setError(null); };
+  const save = () => {
+    const items = rows.filter((r) => r.source.trim() || r.target.trim() || r.note.trim()).map((r) => ({ source: r.source, target: r.target, ...(r.note.trim() ? { note: r.note } : {}) }));
+    const res = useStudio.getState().dispatch({ type: 'SET_GLOSSARY', locale, entries: items });
+    if (!res.ok) { setError(res.message); return; }
+    onSaved(); onClose();
+  };
+  return (
+    <Dialog title={`${langName} glossary`} onClose={onClose} labelledBy="tr-glossary-title"
+      footer={<><button className="btn" onClick={onClose} data-testid="tr-glossary-cancel">Cancel</button><button className="btn primary" onClick={save} disabled={!!blocked} title={blocked ?? undefined} data-testid="tr-glossary-save">Save glossary</button></>}>
+      <div className="tr-glossary" data-testid="tr-glossary">
+        <p className="muted tr-glossary-lead">Preferred translations of terms in {langName}. AI drafts use these terms, and “Check drafts” flags a text that does not. Up to 200 terms, 80 characters each.</p>
+        {blocked && <div className="callout warning" role="status">{blocked}. The glossary is shown but cannot be changed.</div>}
+        {rows.length === 0 && <p className="muted" data-testid="tr-glossary-empty">No terms yet. Add the words you always want translated the same way, such as “statement”.</p>}
+        {rows.length > 0 && (
+          <table className="table tr-glossary-table">
+            <thead><tr><th scope="col">English term</th><th scope="col">Preferred in {langName}</th><th scope="col">Note (optional)</th><th scope="col"><span className="sr-only">Remove</span></th></tr></thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} data-testid="tr-glossary-row">
+                  <td><input className="input" value={r.source} maxLength={80} onChange={(e) => set(i, 'source', e.target.value)} aria-label={`English term ${i + 1}`} data-testid="tr-glossary-source" disabled={!!blocked} /></td>
+                  <td><input className="input" lang={locale} value={r.target} maxLength={80} onChange={(e) => set(i, 'target', e.target.value)} aria-label={`${langName} term ${i + 1}`} data-testid="tr-glossary-target" disabled={!!blocked} /></td>
+                  <td><input className="input" value={r.note} maxLength={200} onChange={(e) => set(i, 'note', e.target.value)} aria-label={`Note for term ${i + 1}`} data-testid="tr-glossary-note" disabled={!!blocked} /></td>
+                  <td><button className="btn sm ghost icon" onClick={() => { setRows((x) => x.filter((_, j) => j !== i)); setError(null); }} aria-label={`Remove term ${i + 1}`} data-testid="tr-glossary-remove" disabled={!!blocked}><Icon.trash width={14} height={14} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div><button className="btn sm" onClick={() => { setRows((r) => [...r, { source: '', target: '', note: '' }]); setError(null); }} disabled={rows.length >= 200 || !!blocked} data-testid="tr-glossary-add"><Icon.plus width={14} height={14} /> Add term</button></div>
+        {error && <div className="callout error" role="alert" data-testid="tr-glossary-error">{error}</div>}
+      </div>
+    </Dialog>
+  );
+}
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** English source with data tokens shown as small chips: the field's label in Business view, the path in Technical view / tooltip. */
@@ -97,7 +146,11 @@ export function Translations() {
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [aiStatus, setAiStatus] = useState<{ mode: 'external' | 'offline'; label: string; model?: string } | null>(null);
   const [lastProvider, setLastProvider] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<null | 'add' | 'remove' | 'approve'>(null);
+  const [dialog, setDialog] = useState<null | 'add' | 'remove' | 'approve' | 'glossary'>(null);
+  const [check, setCheck] = useState<CheckResult | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const checkSeq = useRef(0);
   const [langError, setLangError] = useState<string | null>(null);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const fileRef = useRef<HTMLInputElement>(null);
@@ -107,6 +160,7 @@ export function Translations() {
   useEffect(() => {
     Object.values(timers.current).forEach(clearTimeout); timers.current = {};
     setEdits({}); setErrors({}); setSaved({}); setAiResult(null); setFocusId(null); setLangError(null);
+    checkSeq.current++; setCheck(null); setChecking(false); setFlaggedOnly(false);
   }, [LOCALE]);
 
   // What the real resolver shows each synthetic record. Drafts and approvals never change selection, so only structure invalidates this.
@@ -182,12 +236,21 @@ export function Translations() {
   const valueOf = (r: TranslationRow) => edits[r.partId] ?? r.status.draftText ?? r.status.approvedText ?? '';
   const dirty = (r: TranslationRow) => edits[r.partId] !== undefined && edits[r.partId] !== (r.status.draftText ?? r.status.approvedText ?? '');
   const needle = q.trim().toLowerCase();
+  /** The text the checker looks at: the draft when there is one, otherwise the approved text. */
+  const checkedTextOf = (r: TranslationRow) => (r.status.draftText?.trim() ? r.status.draftText : r.status.approvedText?.trim() ? r.status.approvedText : null);
+  /** Flags of a text, only while the text is still exactly what was checked (editing a text removes its flags until the next check). */
+  const flagsFor = (r: TranslationRow): CheckFlag[] => (check && check.locale === LOCALE && check.snapshot[r.partId] !== undefined && check.snapshot[r.partId] === valueOf(r) ? check.flags[r.partId] ?? [] : []);
+  const liveFlagged = check && check.locale === LOCALE ? st.rows.filter((r) => flagsFor(r).length > 0) : [];
+  const staleChecked = check && check.locale === LOCALE ? st.rows.filter((r) => check.snapshot[r.partId] !== undefined && check.snapshot[r.partId] !== valueOf(r)).length : 0;
+  const kindCounts = new Map<TranslationFlag['kind'], number>();
+  for (const r of liveFlagged) for (const f of flagsFor(r)) kindCounts.set(f.kind, (kindCounts.get(f.kind) ?? 0) + 1);
   const groupCount = (g: GroupKey) => st.rows.filter((r) => groupOf(r) === g).length;
   const rank = (r: TranslationRow) => GROUPS.findIndex((g) => g.key === groupOf(r));
   const rows = st.rows.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i).map((x) => x.r).filter((r) => {
     if (group !== 'all' && groupOf(r) !== group) return false;
     if (status !== 'all' && r.status.status !== status) return false;
     if (mandatoryOnly && !r.status.mandatory) return false;
+    if (flaggedOnly && flagsFor(r).length === 0) return false;
     if (needle && !`${r.title} ${r.partId} ${r.sourceText} ${r.status.draftText ?? ''} ${r.status.approvedText ?? ''}`.toLowerCase().includes(needle)) return false;
     return true;
   });
@@ -251,6 +314,28 @@ export function Translations() {
     } finally { setAiBusy(null); }
   };
 
+  /** Built-in check (instant) and, in parallel, the model's meaning check. Flags only: nothing is changed or approved. */
+  const runCheck = async () => {
+    if (checking) return;
+    const forLocale = LOCALE; const my = ++checkSeq.current;
+    setChecking(true);
+    const snapshot: Record<string, string> = {};
+    for (const r of st.rows) { const t = checkedTextOf(r); if (t !== null) snapshot[r.partId] = valueOf(r); }
+    const flags: Record<string, CheckFlag[]> = {};
+    for (const f of checkTranslations(project, forLocale)) (flags[f.textId] ??= []).push({ textId: f.textId, kind: f.kind, severity: f.severity, message: f.message, source: 'builtin' });
+    let meaning: CheckResult['meaning'] = null;
+    try {
+      const r = await api.assistTranslationMeaning(project.projectId, { locale: forLocale, project });
+      meaning = { mode: r.mode, message: r.message, checked: r.checked ?? 0 };
+      if (r.mode === 'ai') for (const f of r.flags ?? []) if (snapshot[f.textId] !== undefined) (flags[f.textId] ??= []).push({ textId: f.textId, kind: 'meaning', severity: 'warning', message: f.message, source: 'ai' });
+    } catch (e: any) {
+      meaning = { mode: 'unavailable', message: e?.message ?? 'The meaning check could not be reached.', checked: 0 };
+    }
+    if (checkSeq.current !== my) return;
+    setCheck({ locale: forLocale, at: Date.now(), checked: Object.keys(snapshot).length, flags, snapshot, meaning });
+    setChecking(false);
+  };
+
   const exportCsv = () => {
     const csv = toTranslationCsv(project, LOCALE, usage);
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
@@ -308,6 +393,7 @@ export function Translations() {
 
   const req = technical ? 'mandatory' : 'required';
   const Req = technical ? 'Mandatory' : 'Required';
+  const glossaryCount = project.glossary?.[LOCALE]?.length ?? 0;
   const pct = s.total ? Math.round((s.approved / s.total) * 100) : 0;
   const missingNow = st.rows.filter((r) => r.status.status === 'missing').length;
   const liveOn = aiStatus ? aiStatus.mode === 'external' : lastProvider ? /live|external|ready|ok/i.test(lastProvider) && !/no |not |off|unavail/i.test(lastProvider) : null;
@@ -347,6 +433,10 @@ export function Translations() {
             </button>
             <button className="btn" onClick={() => setDialog('approve')} disabled={approvable.length === 0 && blockedDrafts === 0} data-testid="tr-approve-all">Approve reviewed drafts…</button>
             <button className="btn" onClick={previewInLanguage} data-testid="tr-preview-language">Preview in {langShort}</button>
+            <button className="btn" onClick={runCheck} disabled={checking} aria-busy={checking} data-testid="tr-check" title="Looks for texts that deserve a second look. It never changes or approves anything.">
+              {checking ? <><span className="spinner" aria-hidden="true" /> Checking…</> : <><Icon.validate width={14} height={14} /> Check drafts</>}
+            </button>
+            <button className="btn" onClick={() => setDialog('glossary')} data-testid="tr-glossary-open">Glossary <span className="chip count" data-testid="tr-glossary-count" aria-label={`${glossaryCount} ${glossaryCount === 1 ? 'term' : 'terms'}`}>{glossaryCount}</span></button>
             <span className="muted tr-ai-status" data-testid="tr-ai-status" data-live={liveOn === null ? 'unknown' : liveOn ? 'on' : 'off'} title={lastProvider ?? undefined}>
               {liveOn === null ? 'Checking whether live AI is on…' : liveOn ? `Live AI is on${aiStatus?.model ? ` (${aiStatus.model})` : ''}.` : 'Live AI is off: no AI key is set. The two sample projects can load labelled sample drafts for Spanish.'}
             </span>
@@ -366,6 +456,20 @@ export function Translations() {
             </div>
           )}
         </div>
+
+        {check && check.locale === LOCALE && (
+          <div className="callout tr-check-result" role="status" data-testid="tr-check-result" data-flagged={liveFlagged.length} data-checked={check.checked}>
+            <div className="tr-import-head">
+              <strong>{plural(liveFlagged.length, 'text')} flagged of {check.checked} checked{kindCounts.size > 0 && <span className="tr-check-kinds"> · {[...kindCounts].map(([k, n]) => `${n} ${KIND_COUNT[k][n === 1 ? 0 : 1]}`).join(', ')}</span>}</strong>
+              <button className="btn sm ghost" onClick={() => { setCheck(null); setFlaggedOnly(false); }} aria-label="Dismiss check result"><Icon.close width={12} height={12} /></button>
+            </div>
+            <p className="tr-check-line">Flags never block approval and never change a text. They point out what deserves a second look; you decide.{liveFlagged.length === 0 && check.checked > 0 && ' Nothing needs attention.'}</p>
+            {check.meaning?.mode === 'unavailable'
+              ? <p className="tr-check-line muted" data-testid="tr-check-meaning-note">Meaning check needs an AI key; the built-in checks below still ran.</p>
+              : check.meaning && <p className="tr-check-line muted" data-testid="tr-check-meaning-note">Meaning check ran on {plural(check.meaning.checked, 'text')} (AI suggestion).</p>}
+            {staleChecked > 0 && <p className="tr-check-line muted">{plural(staleChecked, 'text')} edited since the check: their flags are hidden until you check again.</p>}
+          </div>
+        )}
 
         {importMsg && (
           <div className={`callout ${importMsg.errors.length ? 'warning' : 'accent'} tr-import-result`} data-testid="tr-import-result" role="status">
@@ -390,6 +494,7 @@ export function Translations() {
               <button key={k} aria-pressed={status === k} onClick={() => setStatus(k)} data-testid={`tr-filter-${k}`}>{k === 'all' ? `All ${s.total}` : `${STATUS_LABEL[k]} ${k === 'missing' ? s.missing : k === 'draft' ? s.drafts : s.approved}`}</button>
             ))}
           </span>
+          <button type="button" className="btn sm tr-flagged-chip" aria-pressed={flaggedOnly} onClick={() => setFlaggedOnly((f) => !f)} disabled={!check || check.locale !== LOCALE} title={check && check.locale === LOCALE ? 'Show only texts the check flagged' : 'Run “Check drafts” first'} data-testid="tr-filter-flagged">Flagged {check && check.locale === LOCALE ? liveFlagged.length : ''}</button>
           <label className="tr-check"><input type="checkbox" checked={mandatoryOnly} onChange={(e) => setMandatoryOnly(e.target.checked)} data-testid="tr-filter-mandatory" /> {Req} only</label>
           <label className="tr-search"><span className="sr-only">Search texts</span><input className="input" type="search" placeholder="Search texts" value={q} onChange={(e) => setQ(e.target.value)} data-testid="tr-search" /></label>
           <span className="tr-io">
@@ -400,7 +505,7 @@ export function Translations() {
         </div>
 
         <div className="panel tr-table-panel">
-          {rows.length === 0 ? <Empty title="No matching text" message="Change the filters to see more texts." /> : (
+          {rows.length === 0 ? <Empty title={flaggedOnly ? 'No flagged text' : 'No matching text'} message={flaggedOnly ? 'Nothing is flagged right now. Turn off the Flagged filter to see every text.' : 'Change the filters to see more texts.'} /> : (
             <table className="table tr-table" data-testid="tr-table">
               <caption className="sr-only">Texts with English source, {langLabel(LOCALE)} translation editor and status</caption>
               <thead><tr><th scope="col">English (source, read-only)</th><th scope="col">{langLabel(LOCALE)}{technical ? ` (${LOCALE})` : ''}</th><th scope="col">Status</th></tr></thead>
@@ -456,6 +561,16 @@ export function Translations() {
                               {tc.missing.length > 0 && <button className="btn sm" onClick={() => insertTokens(r, tc.missing)} data-testid="tr-insert-tokens">Insert missing tokens</button>}
                             </div>
                           )}
+                          {flagsFor(r).length > 0 && (
+                            <ul className="tr-flags" aria-label="Things to look at in this translation">
+                              {flagsFor(r).map((f, k) => (
+                                <li key={k} className={`tr-flag ${f.severity}`} data-testid="tr-flag" data-kind={f.kind} data-source={f.source} data-severity={f.severity}>
+                                  <span className="tr-flag-head"><span className="chip tr-flag-kind" aria-label={`${f.severity === 'warning' ? 'Check' : 'Note'}: ${KIND_LABEL[f.kind]}`}><span aria-hidden="true">{f.severity === 'warning' ? '▲' : '●'}</span> {KIND_LABEL[f.kind]}</span><SourceChip source={f.source} /></span>
+                                  <span className="tr-flag-msg">{f.message}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                           {err && <div className="tr-error" role="alert" data-testid="tr-error">■ {err}</div>}
                         </td>
                         <td className="tr-status-td">
@@ -484,6 +599,7 @@ export function Translations() {
         </div>
       </div>
       {dialogs}
+      {dialog === 'glossary' && <GlossaryDialog locale={LOCALE} langName={langLabel(LOCALE)} entries={project.glossary?.[LOCALE] ?? []} onClose={() => setDialog(null)} onSaved={() => { checkSeq.current++; setCheck(null); setChecking(false); setFlaggedOnly(false); }} />}
       {dialog === 'approve' && (
         <Dialog title="Approve reviewed drafts" onClose={() => setDialog(null)} labelledBy="tr-approve-all-title"
           footer={<><button className="btn" onClick={() => setDialog(null)} data-testid="tr-approve-all-cancel">Cancel</button><button className="btn primary" onClick={approveAll} disabled={approvable.length === 0} data-testid="tr-approve-all-apply">Approve {plural(approvable.length, 'draft')}</button></>}>

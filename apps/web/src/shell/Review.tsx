@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { create } from 'zustand';
 import { ACTION_LABEL, WORKFLOW_LABEL, WORKFLOW_STATES, type WorkflowAction, type WorkflowState } from '@iss/model';
-import { api, ApiFailure, type BlockingGroup, type CommentDto, type WorkflowDto } from '../api/client';
+import { api, ApiFailure, type BlockingGroup, type CommentDto, type VersionDto, type WorkflowDto } from '../api/client';
+import { ChangeSummaryCard, lastApprovedVersion } from '../assist/ChangeSummaryCard';
 import { useIsDirty, useStudio } from '../state/store';
 import { Biz, Proof, Tech } from '../ui/common';
 import { nodeTitle } from '../ui/plain';
@@ -155,6 +156,8 @@ function ReviewPanelInner() {
               {dirty && <div className="callout warning" style={{ marginTop: 10 }}>You have unsaved changes. Review and approval apply to the <strong>saved</strong> version (v{serverVersion}); save first to include your changes.</div>}
             </section>
 
+            {current.state === 'in_review' && <ReviewSummary pid={pid} version={current.modelVersion} />}
+
             <section className="drawer-section" aria-labelledby="wf-act-h">
               <h3 id="wf-act-h">Next step</h3>
               <div className="wf-actions">
@@ -278,5 +281,30 @@ function ReviewPanelInner() {
         )}
       </div>
     </Drawer>
+  );
+}
+
+/** What changed in the saved version under review: against the last approved version, else against the version before it. Computed by the studio. */
+function ReviewSummary({ pid, version }: { pid: string; version: number }) {
+  const serverVersion = useStudio((s) => s.serverVersion);
+  const [versions, setVersions] = useState<VersionDto[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.versions(pid).then((r) => live && setVersions(r.versions)).catch((e) => live && setError(e.message));
+    return () => { live = false; };
+  }, [pid, serverVersion]);
+  const approved = versions ? lastApprovedVersion(versions, version) : null;
+  const previous = versions ? versions.filter((v) => v.modelVersion < version).sort((a, b) => b.modelVersion - a.modelVersion)[0] ?? null : null;
+  const base = approved ?? previous;
+  return (
+    <section className="drawer-section" aria-labelledby="wf-sum-h" data-testid="review-summary">
+      <h3 id="wf-sum-h">What changed</h3>
+      {error ? <p className="muted">The version history could not be loaded, so there is no summary: {error}</p>
+        : !versions ? <p className="muted"><span className="spinner" /> Looking up the version to compare with…</p>
+          : <ChangeSummaryCard pid={pid} from={base?.modelVersion ?? null} to={version}
+              fromLabel={base ? `v${base.modelVersion}${approved ? ' (last approved)' : ''}` : undefined} toLabel={`v${version} (under review)`}
+              note={base && !approved ? 'No version has been approved yet, so this compares with the version saved before it.' : undefined} />}
+    </section>
   );
 }

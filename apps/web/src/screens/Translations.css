@@ -69,3 +69,23 @@ details.tr-skipped ul { margin: 4px 0 0; padding-left: 18px; }
 .tr-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 .tr-ctx { display: inline-flex; margin-top: 4px; margin-right: 8px; padding-left: 0; white-space: nowrap; }
 .tr-status-td .tr-saved { margin-top: 2px; }
+
+/* Check drafts and glossary */
+.tr-check-result { display: flex; flex-direction: column; gap: 4px; }
+.tr-check-result .tr-import-head strong { font-variant-numeric: tabular-nums; }
+.tr-check-kinds { font-weight: 500; color: var(--iss-text-muted); }
+.tr-check-line { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.tr-flagged-chip { font-variant-numeric: tabular-nums; }
+.tr-flags { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tr-flag { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 8px; background: var(--iss-warning-soft); border: 1px solid var(--iss-warning-line); font-size: 12px; line-height: 1.45; }
+.tr-flag.info { background: var(--iss-info-soft); border-color: var(--iss-info-line); }
+.tr-flag-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tr-flag-kind { font-weight: 700; }
+.tr-flag-msg { color: var(--iss-text); overflow-wrap: anywhere; }
+.tr-glossary { display: flex; flex-direction: column; gap: 10px; min-width: min(640px, 80vw); }
+.tr-glossary-lead { margin: 0; font-size: 12.5px; }
+.tr-glossary-table { table-layout: fixed; width: 100%; }
+.tr-glossary-table th:nth-child(1), .tr-glossary-table th:nth-child(2) { width: 32%; }
+.tr-glossary-table th:nth-child(4) { width: 44px; }
+.tr-glossary-table td { padding: 4px 6px; vertical-align: middle; }
+.tr-glossary-table .input { width: 100%; }
