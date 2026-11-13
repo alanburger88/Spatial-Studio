@@ -19,6 +19,7 @@ const CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'testdata.', label: 'Test customers' },
   { id: 'workflow.', label: 'Review & approval' },
   { id: 'release.', label: 'Releases' },
+  { id: 'proof.', label: 'Proof records' },
   { id: 'comment.', label: 'Comments' },
   { id: 'records.', label: 'Imported records' },
   { id: 'asset.', label: 'Images' },
@@ -101,6 +102,10 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
         default: return `Worked on ${what}`;
       }
     }
+    case 'proof.produce': return `Produced ${d.all ? `for ${plural(Number(d.customers ?? 0), 'test customer')}` : `for test customer ${d.customerRef ?? ''}`.trim()} from release ${d.number} of “${d.title}” (${(d.outputs ?? []).map((o: string) => (o === 'html' ? 'web page' : o === 'sms' ? 'SMS' : o === 'pdf' ? 'PDF' : o)).join(', ')})${Number(d.stopped) ? `; ${d.stopped} stopped by a blocking issue` : ''}: a proof record for each, without customer data`;
+    case 'proof.import': return `Added ${plural(Number(d.added ?? 0), 'proof record')} from a file${Number(d.known) ? ` (${d.known} already known)` : ''}${Number(d.refused) ? `, ${d.refused} refused` : ''}${Number(d.unknownRelease) ? `, ${d.unknownRelease} for a release not known here` : ''}`;
+    case 'proof.verify': return `Checked proof record ${d.proofId} against release ${d.number} with ${d.dataFrom === 'supplied' ? 'data supplied for the check (not stored)' : 'a test customer'}: ${d.same ? 'same data, same release, same result' : `not the same (${(d.differences ?? []).join(', ') || 'differences found'})`}`;
+    case 'proof.reset': return `Removed ${plural(Number(d.removed ?? 0), 'proof record')} (test reset)`;
     case 'auth.login': return 'Signed in';
     case 'auth.logout': return 'Signed out';
     case 'auth.login_failed': return `Failed sign-in for ${d.email ?? 'an unknown account'}`;
@@ -109,7 +114,7 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
 }
 
 
-const ACTION_WORDS: Record<string, string> = { 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs', 'release.create': 'New releases', 'release.promote': 'Moves to Production', 'release.withdraw': 'Withdrawn releases', 'release.handover': 'Handover entries', 'release.package': 'Release packages' };
+const ACTION_WORDS: Record<string, string> = { 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs', 'release.create': 'New releases', 'release.promote': 'Moves to Production', 'release.withdraw': 'Withdrawn releases', 'release.handover': 'Handover entries', 'release.package': 'Release packages', 'proof.produce': 'Documents produced from a release', 'proof.import': 'Proof records added', 'proof.verify': 'Proof checks' };
 const actionLabel = (a: string): string => ACTION_WORDS[a] ?? CATEGORIES.find((c) => c.id === a)?.label ?? a;
 
 /* ------------------------------------------------------------------ grouping */
