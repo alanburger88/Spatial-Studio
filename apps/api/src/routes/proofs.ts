@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { parseReleaseId, roleCan, type Project, type SyntheticRecord } from '@iss/model';
+import { isIsoDay, parseReleaseId, roleCan, type Project, type SyntheticRecord } from '@iss/model';
 import { verifyProof, type ProofChannel, type ProofRecord } from '@iss/resolver';
 import { audit } from '../auth';
 import type { StoredRelease } from '../db';
@@ -48,6 +48,13 @@ export function registerProofRoutes(app: FastifyInstance, deps: RouteDeps, opts:
   const releaseSummary = (r: StoredRelease | null) => (r ? { id: r.id, number: r.number, title: r.title, documentId: r.documentId, standing: r.stages.production?.status === 'current' ? 'production' : r.stages.test.status === 'current' ? 'test' : (r.stages.production?.status === 'withdrawn' || r.stages.test.status === 'withdrawn') ? 'withdrawn' : 'superseded', documentRemoved: !!r.documentRemovedAt } : null);
   const listItem = (x: { proof: ProofRecord; meta: unknown }) => { const st = releaseStatusOf(store, x.proof); return { proof: x.proof, meta: x.meta, release: { status: st.status, message: st.message, info: releaseSummary(st.release) } }; };
 
+  /** The document's date given for a run ("as issued on"): an ISO day, or nothing. */
+  const issueDateOf = (v: unknown): string | null => {
+    if (v === undefined || v === null || v === '') return null;
+    if (!isIsoDay(v)) throw new ApiError(400, 'INVALID_ISSUE_DATE', 'The “as issued on” date must be a date written as YYYY-MM-DD.');
+    return v;
+  };
+
   /* ------------------------------------------------------------ produce from a release (the studio as producer) */
 
   let producing = false;
@@ -60,6 +67,7 @@ export function registerProofRoutes(app: FastifyInstance, deps: RouteDeps, opts:
     try { channels = channelsOf(req.body?.outputs); } catch (e: any) { throw new ApiError(400, 'INVALID_OUTPUTS', e.message); }
     const all = req.body?.all === true;
     const recordId = typeof req.body?.recordId === 'string' ? req.body.recordId : null;
+    const issueDate = issueDateOf(req.body?.issueDate);
     if (all === !!recordId) throw new ApiError(400, 'CUSTOMERS_REQUIRED', 'Say which test customer to produce for (recordId), or ask for all of them (all: true).');
     const customers = testCustomers(r.documentId, r.documentType);
     const chosen = all ? customers : customers.filter((c) => c.recordId === recordId);
@@ -74,7 +82,7 @@ export function registerProofRoutes(app: FastifyInstance, deps: RouteDeps, opts:
       const made: ProofRecord[] = [];
       for (const record of chosen) {
         let produced: Produced;
-        try { produced = await produceOne(template, record, channels, opts.composer); }
+        try { produced = await produceOne(template, record, channels, opts.composer, issueDate); }
         catch { throw new ApiError(502, 'PRODUCE_FAILED', `Producing for test customer ${record.recordId} failed, so nothing was recorded. Try again; if it keeps failing, leave the PDF out.`); }
         made.push(proofFor(r, produced, record, producedAt));
         await tick();
@@ -181,9 +189,11 @@ export function registerProofRoutes(app: FastifyInstance, deps: RouteDeps, opts:
       record = b.record as SyntheticRecord;
     }
     const channels = proof.outputs.map((o) => o.channel);
+    // Re-created on the same date as the record (a date given in the request is used instead, to check another date).
+    const issueDate = b.issueDate !== undefined && b.issueDate !== null ? issueDateOf(b.issueDate) : proof.issueDate ?? null;
     let again: Produced;
     // Fixed words only: an error raised while reading the data could quote it, and this answer is the only place the data goes.
-    try { again = await produceOne(template, record, channels, opts.composer); }
+    try { again = await produceOne(template, record, channels, opts.composer, issueDate); }
     catch { throw new ApiError(422, 'CANNOT_RECREATE', 'The document could not be re-created from the data supplied. Nothing was stored.'); }
     const diffs = verifyProof(proof, { release: { id: r.id, contentDigest: r.contentDigest }, resolution: again.res, record, outputs: again.outputs });
     const same = diffs.length === 0;

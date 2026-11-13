@@ -1,5 +1,5 @@
 import {
-  applyCommand, applyJourney, buildContext, deepClone, getPath, projectFieldIndex,
+  applyCommand, applyJourney, buildContext, deepClone, getPath, inEffect, notInEffectWords, projectFieldIndex,
   type DocNode, type FieldDef, type Predicate, type Project, type Rule, type Scalar, type SyntheticRecord, type TestCase,
 } from '@iss/model';
 import { formatCents, formatDate, resolve, type Finding, type RNode, type Resolution } from '@iss/resolver';
@@ -576,8 +576,25 @@ export function coverageGaps(project: Project, records: SyntheticRecord[], opts?
       if (t.core && env.combos([t.core]).length) return { ...base, scenario: null, reason: 'Whenever its own condition holds, another rule or an earlier condition takes precedence, so it can never be chosen.' };
       return { ...base, scenario: null, reason: why ? `${why} No customer can ever match.` : 'The conditions can never all be true for this document, so no customer can match.' };
     }
-    return { ...base, scenario: null, reason: limitNote(strong.tried + (weak?.tried ?? 0)) };
+    return { ...base, scenario: null, reason: notInEffect(t) ?? limitNote(strong.tried + (weak?.tried ?? 0)) };
   });
+
+  /** For a document checked "as issued on" a day: a rule, message or section that is not in effect that day. */
+  function notInEffect(t: { kind: string; id: string; targetId: string }): string | null {
+    if (!project.documentDate || !issueDate) return null;
+    if (t.kind === 'rule') { const r = project.rules.find((x) => x.id === t.targetId); return r?.effective && !inEffect(r.effective, issueDate) ? notInEffectWords(r.effective, issueDate) : null; }
+    if (t.kind === 'variant') {
+      const nodeId = t.id.slice('variant:'.length, t.id.lastIndexOf('/'));
+      const node = project.nodes.find((n) => n.id === nodeId);
+      const p = node?.variantPeriods?.[t.targetId];
+      if (p && !inEffect(p, issueDate)) return notInEffectWords(p, issueDate);
+      const selectors = selectorsOf(nodeId, t.targetId);
+      if (selectors.length && selectors.every((r) => r.effective && !inEffect(r.effective, issueDate))) return `Every rule that chooses it is out of effect on that day. ${notInEffectWords(selectors[0].effective!, issueDate)}`;
+      return null;
+    }
+    const node = project.nodes.find((n) => n.id === t.targetId);
+    return node?.effective && !inEffect(node.effective, issueDate) ? notInEffectWords(node.effective, issueDate) : null;
+  }
 }
 
 /* ------------------------------------------------------------------ shared with the test-data engine */

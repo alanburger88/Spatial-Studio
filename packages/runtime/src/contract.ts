@@ -1,4 +1,4 @@
-import { customFieldDefs, validateRecordShape, type DocumentType, type FieldDef, type Project, type SyntheticRecord } from '@iss/model';
+import { customFieldDefs, isIsoDay, validateRecordShape, type DocumentType, type FieldDef, type Project, type SyntheticRecord } from '@iss/model';
 
 /**
  * The data contract of a runnable package: what one input line must look like, and the check every line goes through
@@ -28,6 +28,7 @@ const SCALAR_SCHEMA: Record<string, Record<string, unknown>> = {
   bool: { type: 'boolean' },
   date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'ISO 8601 date, YYYY-MM-DD.' },
   enum: { type: 'string' },
+  number: { type: 'number' },
 };
 
 type Schema = Record<string, any>;
@@ -115,7 +116,11 @@ export function withoutValues(message: string): string {
     .replace(/\.\.$/, '.');
 }
 
-export interface ParsedLine { ok: true; customerRef: string; record: SyntheticRecord }
+export interface ParsedLine {
+  ok: true; customerRef: string; record: SyntheticRecord;
+  /** The document's date given with this customer (`"issueDate"` next to `"data"`), or null. */
+  issueDate: string | null;
+}
 export interface RejectedLine { ok: false; customerRef: string | null; problems: string[] }
 
 /**
@@ -128,10 +133,15 @@ export function parseInput(value: unknown, project: Pick<Project, 'documentType'
   const enveloped = 'data' in v && !('customer' in v);
   const data = enveloped ? v.data : v;
   let customerRef: string | null = null;
+  let issueDate: string | null = null;
   const problems: string[] = [];
   if (enveloped) {
-    const extraKeys = Object.keys(v).filter((k) => k !== 'data' && k !== 'customerRef');
-    if (extraKeys.length) problems.push(`Unknown keys next to "data": ${extraKeys.slice(0, 5).join(', ')}. Only "customerRef" and "data" are allowed.`);
+    const extraKeys = Object.keys(v).filter((k) => k !== 'data' && k !== 'customerRef' && k !== 'issueDate');
+    if (extraKeys.length) problems.push(`Unknown keys next to "data": ${extraKeys.slice(0, 5).join(', ')}. Only "customerRef", "issueDate" and "data" are allowed.`);
+    if (v.issueDate !== undefined && v.issueDate !== null) {
+      if (!isIsoDay(v.issueDate)) problems.push('issueDate must be a date written as YYYY-MM-DD.');
+      else issueDate = v.issueDate;
+    }
     if (v.customerRef !== undefined) {
       if (typeof v.customerRef !== 'string' || !v.customerRef.trim()) problems.push('customerRef must be non-empty text.');
       else if (v.customerRef.length > MAX_REF_LENGTH) problems.push(`customerRef is longer than ${MAX_REF_LENGTH} characters.`);
@@ -144,7 +154,7 @@ export function parseInput(value: unknown, project: Pick<Project, 'documentType'
   if (problems.length) return { ok: false, customerRef, problems };
   const record = { ...(data as Record<string, unknown>), documentType: project.documentType } as unknown as SyntheticRecord;
   if (project.documentType === 'credit-statement' && record.card && !Array.isArray(record.card.transactions)) record.card = { ...record.card, transactions: [] };
-  return { ok: true, customerRef: customerRef!, record };
+  return { ok: true, customerRef: customerRef!, record, issueDate };
 }
 
 /** Parses one text line of a JSON Lines file. Never echoes the text. */
