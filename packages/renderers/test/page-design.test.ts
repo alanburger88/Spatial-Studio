@@ -63,7 +63,7 @@ describe('existing documents compose exactly as before', () => {
       const html = renderPagedDocument(res, p);
       expect(html).toContain(PAGINATOR_JS);
       expect(html).not.toContain(PAGINATOR_JS_V2);
-      expect(html).toContain('data-renderer="iss-paged-renderer/1.0.0"');
+      expect(html).toContain('data-renderer="iss-paged-renderer/1.0.1"'); // 1.0.1: PDF accessibility tags only (docs/design/PDF_ACCESSIBILITY.md)
       expect(html).toContain('@page{size:8.5in 11in;margin:0}');
       expect(html).toContain('.page{width:612pt;height:792pt;');
       expect(html).toContain('"firstPageTopPt":184,"otherPagesTopPt":84,"bottomPt":738,"leftPt":40,"widthPt":532');

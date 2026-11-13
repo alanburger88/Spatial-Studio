@@ -38,10 +38,15 @@ const KIND_BY_CODE: Record<string, BlockerKind> = {
   CALCULATION_MISSING: 'customer-data', DOCUMENT_DATE_MISSING: 'customer-data', ISSUE_DATE_INVALID: 'customer-data',
 };
 
+/** Codes of the studio's PDF accessibility checks (`apps/api/src/pdfAccessibility.ts`): all of kind layout and pages. */
+export const PDF_A11Y_PREFIX = 'PDF_A11Y_';
+
 /** Which kind of fix a finding needs. A code this list does not know is placed by where it came from. */
 export function blockerKindOf(finding: Pick<Finding, 'code' | 'source'>): BlockerKind {
   const known = KIND_BY_CODE[finding.code];
   if (known) return known;
+  // The studio's PDF accessibility checks (wave 2): blocking only when the document requires an accessible PDF.
+  if (finding.code.startsWith(PDF_A11Y_PREFIX)) return 'layout';
   switch (finding.source) {
     case 'composer': case 'parity': return 'layout';
     case 'binding': return 'data-fields';
@@ -125,6 +130,11 @@ function wordsFor(project: Project, f: Finding, about: BlockerAbout, n: number):
   const lang = about.language?.name ?? 'the other language';
   const ruleNames = (about.rules ?? []).map((r) => q(r.name));
   const who = n === 0 ? 'No sample customer reaches this today, but any customer who does will be stopped.' : n === 1 ? 'It stops 1 customer.' : `It stops ${n} customers.`;
+  if (f.code.startsWith(PDF_A11Y_PREFIX)) {
+    // The PDF checks word their own title; a blocker only because the document requires an accessible PDF.
+    const title = typeof f.details?.title === 'string' && f.details.title ? f.details.title : 'The PDF is not accessible';
+    return { title, explanation: `${f.message} This document requires an accessible PDF, so it cannot be issued until this is fixed. ${who}` };
+  }
   switch (f.code) {
     case 'REQUIRED_TRANSLATION_MISSING':
       return { title: `No approved ${lang} text for ${q(where)}`, explanation: `${q(where)} must appear in every document, but it has no approved ${lang} version. Text is never translated at send time, so customers who read ${lang} cannot be issued the document until a person approves the ${lang} text. ${who}` };
@@ -215,7 +225,7 @@ function linkOf(kind: BlockerKind, fixes: FixProposal[], f: Finding, about: Bloc
   switch (kind) {
     case 'wording': return { view: 'content', ...(f.locale ? { locale: f.locale } : {}), ...(f.nodeId ? { textId: f.nodeId } : {}), label: 'Open Content & Translations' };
     case 'rules': return { view: 'rules-data', ...(about.rules?.[0] ? { ruleId: about.rules[0].id } : {}), ...(node ? { nodeId: node } : {}), label: 'Open Rules & Data' };
-    case 'layout': return f.code === 'PARITY_MISMATCH' ? { view: 'validate', label: 'Open Validate & Compare' } : { view: 'design', ...(node ? { nodeId: node } : {}), label: 'Open in Design' };
+    case 'layout': return f.code === 'PARITY_MISMATCH' || (f.code.startsWith(PDF_A11Y_PREFIX) && !node) ? { view: 'validate', label: 'Open Validate & Compare' } : { view: 'design', ...(node ? { nodeId: node } : {}), label: 'Open in Design' };
     case 'data-fields': return { view: 'design', ...(node ? { nodeId: node } : {}), label: 'Open in Design' };
     default: return null;
   }
@@ -274,6 +284,7 @@ export function documentBlockers(project: Project, records: SyntheticRecord[], o
 export function blockerKindOfId(id: string): BlockerKind | null {
   const problem = String(id ?? '').split('~')[0];
   if (problem === 'priority-tie' || problem === 'no-fallback') return 'rules';
+  if (problem.startsWith('pdf-a11y-')) return 'layout';
   return KIND_BY_CODE[problem.toUpperCase().replace(/-/g, '_')] ?? null;
 }
 

@@ -1,11 +1,16 @@
 import { chromium, type Browser } from 'playwright';
 import { EXTRACTOR_JS, type ExtractedManifest, type PageMetrics } from '@iss/renderers';
+import { PDF_PARTS_JS, type ComposedDecoration, type ComposedPartText } from './pdfAccessibility';
 
 export interface PagedComposition {
   metrics: PageMetrics & { engine: string; durationMs: number; pdfPageCount?: number };
   extracted: ExtractedManifest;
   pdf?: Buffer;
   snapshot?: { css: string; pages: string[] };
+  /** With `parts`: the text of every top-level component on every composed page (for the PDF accessibility checks). */
+  parts?: ComposedPartText[];
+  /** With `parts`: where each page draws decoration (pictures without a description, things hidden from assistive technology). */
+  decoration?: ComposedDecoration[];
 }
 
 /** Counts page objects in PDF bytes (independent of the composer's own page tree). */
@@ -32,7 +37,7 @@ export class Composer {
     return p;
   }
 
-  composePaged(html: string, opts: { pdf?: boolean; snapshot?: boolean } = {}): Promise<PagedComposition> {
+  composePaged(html: string, opts: { pdf?: boolean; snapshot?: boolean; parts?: boolean } = {}): Promise<PagedComposition> {
     return this.run(async () => {
       const browser = await this.getBrowser();
       const context = await browser.newContext({ viewport: { width: 900, height: 1200 }, javaScriptEnabled: true, offline: true });
@@ -45,13 +50,14 @@ export class Composer {
         const extracted = (await page.evaluate(EXTRACTOR_JS)) as ExtractedManifest;
         let snapshot: PagedComposition['snapshot'];
         if (opts.snapshot) snapshot = await page.evaluate(() => ({ css: Array.from(document.querySelectorAll('style')).map((s) => s.textContent).join('\n'), pages: Array.from(document.querySelectorAll('.page')).map((p) => p.outerHTML) }));
+        const read = opts.parts ? (await page.evaluate(PDF_PARTS_JS)) as { parts: ComposedPartText[]; decoration: ComposedDecoration[] } : undefined;
         let pdf: Buffer | undefined;
         if (opts.pdf) {
           await page.emulateMedia({ media: 'print' });
           pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true, tagged: true, outline: false });
           metrics.pdfPageCount = countPdfPages(pdf);
         }
-        return { metrics, extracted, pdf, snapshot };
+        return { metrics, extracted, pdf, snapshot, ...(read ? { parts: read.parts, decoration: read.decoration } : {}) };
       } finally {
         await context.close();
       }

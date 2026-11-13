@@ -6,9 +6,32 @@ import { PAGINATOR_JS } from './paginator-source';
 import { PAGINATOR_JS_V2 } from './paginator-design-source';
 import { imageSrc } from './html-common';
 
-export const PAGED_RENDERER_VERSION = 'iss-paged-renderer/1.0.0';
-/** The page-design renderer (wave 2): used only by documents that use page design (see `usesPageDesign`). */
-export const PAGED_DESIGN_RENDERER_VERSION = 'iss-paged-renderer/1.1.0';
+/**
+ * 1.0.1 (accessible PDF): the same pages, drawn the same way, with better PDF tags: heading levels that start at 1 and
+ * never skip, table titles as headings, figures that carry their description, decorative pictures left out of the tags,
+ * and page footers read after the page's content. See docs/design/PDF_ACCESSIBILITY.md.
+ */
+export const PAGED_RENDERER_VERSION = 'iss-paged-renderer/1.0.1';
+/** The page-design renderer (wave 2): used only by documents that use page design (see `usesPageDesign`). 1.1.1: as 1.0.1. */
+export const PAGED_DESIGN_RENDERER_VERSION = 'iss-paged-renderer/1.1.1';
+
+/**
+ * Heading levels for the PDF tags, set in the order the PDF is read (fixed items above the flow area, the flowing
+ * content, then fixed items below it): the first heading becomes level 1 and no heading is more than one level below
+ * the one before it. Only `aria-level` is written, never a different element, so nothing changes on the page.
+ * `parts` are the page-source strings of the components in that reading order; they are rewritten in place.
+ */
+export function levelHeadings(parts: string[]): string[] {
+  let prev = 0;
+  const HEADING = /<h([1-6])((?:\s[^>]*)?)>|role="heading" aria-level="(\d)"/g;
+  return parts.map((html) => html.replace(HEADING, (m: string, tagLevel: string | undefined, attrs: string | undefined, roleLevel: string | undefined) => {
+    const own = Number(tagLevel ?? roleLevel);
+    const level = prev === 0 ? 1 : Math.min(own, prev + 1);
+    prev = level;
+    if (tagLevel !== undefined) return level === own ? m : `<h${tagLevel} aria-level="${level}"${attrs ?? ''}>`;
+    return `role="heading" aria-level="${level}"`;
+  }));
+}
 
 export function documentCss(accent: string, project?: Project): string {
   return `
@@ -177,12 +200,17 @@ export function renderPagedDocument(res: Resolution, project: Project, opts: Pag
 
   const fixedParts: string[] = [];
   const flowParts: string[] = [];
+  /** Where each fixed item is read: on the first page above the flow area, below it, or on later pages only. */
+  const firstFlowBottomPt = design ? design.first.flow.yPt + design.first.flow.hPt : flow.bottomPt;
+  const fixedRead: Array<'before' | 'after' | 'later'> = [];
   for (const n of res.root.children) {
     if (!n.visible) continue;
     const pl = n.layout?.paged ?? { mode: 'flow' as const };
     const inner = nodeInnerHtml(n, mode, renderNested);
     if (pl.mode === 'fixed') {
       const chrome = n.type === 'header-footer' && n.headerFooter?.role !== 'document-header' ? ' data-chrome="1"' : '';
+      const pages = pl.pages ?? 'first';
+      fixedRead.push(pages === 'following' || pages === 'last' ? 'later' : (pl.yPt ?? 0) >= firstFlowBottomPt ? 'after' : 'before');
       fixedParts.push(`<div class="iss-fixed" ${nodeDataAttrs(n)} data-pages="${pl.pages ?? 'first'}"${chrome} data-x="${pl.xPt ?? 0}" data-y="${pl.yPt ?? 0}" data-w="${pl.wPt ?? 100}" data-h="${pl.hPt ?? 20}" style="left:${pl.xPt ?? 0}pt;top:${pl.yPt ?? 0}pt;width:${pl.wPt ?? 100}pt;height:${pl.hPt ?? 20}pt">${inner}</div>`);
     } else {
       const w = pl.widthPct ?? 100;
@@ -196,6 +224,13 @@ export function renderPagedDocument(res: Resolution, project: Project, opts: Pag
       ].filter(Boolean).join(' ');
       flowParts.push(`<div class="iss-block" ${nodeDataAttrs(n)} ${attrs} style="width:${w}%;margin-left:${ml}%">${inner}</div>`);
     }
+  }
+  {
+    // Heading levels in reading order (see `levelHeadings`); the page source keeps its order (fixed items, then flow).
+    const at = (k: 'before' | 'after' | 'later') => fixedRead.map((r, i) => (r === k ? i : -1)).filter((i) => i >= 0);
+    const order: Array<['fixed' | 'flow', number]> = [...at('before').map((i) => ['fixed', i] as ['fixed', number]), ...flowParts.map((_, i) => ['flow', i] as ['flow', number]), ...at('after').map((i) => ['fixed', i] as ['fixed', number]), ...at('later').map((i) => ['fixed', i] as ['fixed', number])];
+    const leveled = levelHeadings(order.map(([k, i]) => (k === 'fixed' ? fixedParts[i] : flowParts[i])));
+    order.forEach(([k, i], j) => { if (k === 'fixed') fixedParts[i] = leveled[j]; else flowParts[i] = leveled[j]; });
   }
   const strings = { pageOf: sysText(res.systemStrings, 'pageOf'), tableContinued: sysText(res.systemStrings, 'tableContinued') };
   const title = opts.title ?? `${project.issuer?.name ?? project.title} — ${res.recordId} (synthetic)`;

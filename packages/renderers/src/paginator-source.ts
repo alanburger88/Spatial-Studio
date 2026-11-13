@@ -60,6 +60,9 @@ export const PAGINATOR_JS = String.raw`
       flow.style.width = cfg.widthPt + 'pt';
       flow.style.height = (bottom - top) + 'pt';
       el.appendChild(flow);
+      // Reading order of the PDF tags: fixed items below the flow area (the page footer) come after the page's content.
+      // They are positioned absolutely, so where they are drawn does not change.
+      Array.prototype.slice.call(el.querySelectorAll(':scope > .iss-fixed')).forEach(function (c) { if (parseFloat(c.getAttribute('data-y')) >= bottom - 0.01) el.appendChild(c); });
       if (cfg.watermark) { var wm = document.createElement('div'); wm.className = 'iss-watermark'; wm.textContent = cfg.watermark; el.appendChild(wm); }
       pagesEl.appendChild(el);
       page = { index: index, el: el, flow: flow, limitPx: (bottom - top) * PX, topPt: top, bottomPt: bottom, nodeIds: [], tables: {}, fixedNodeIds: fixedIds };

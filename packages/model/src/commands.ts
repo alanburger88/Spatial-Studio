@@ -73,6 +73,8 @@ export type Command =
   | { type: 'BATCH'; label: string; commands: Command[] }
   /** Paper, orientation, margins and page templates of the paged outputs (PDF and the AFP simulation together). */
   | { type: 'SET_PAGE_DESIGN'; patch: PageDesignPatch }
+  /** "Accessible PDF is required" for this document (failed PDF accessibility checks become blockers). Off removes the setting. */
+  | { type: 'SET_ACCESSIBLE_PDF_REQUIRED'; required: boolean }
   | { type: 'RESTORE_SNAPSHOT'; project: Project; label: string };
 
 export type CommandResult =
@@ -651,6 +653,11 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
         for (const p of next) { const i = d.presentationProfiles.findIndex((x) => x.id === p.id); d.presentationProfiles[i] = p; }
         for (const m of moved) { const n = d.nodes.find((x) => x.id === m.nodeId)!; n.layout = { ...n.layout, paged: { ...n.layout!.paged!, ...m.layout } }; }
       }) };
+    }
+    case 'SET_ACCESSIBLE_PDF_REQUIRED': {
+      if (typeof cmd.required !== 'boolean') return reject('INVALID', 'Say whether an accessible PDF is required (true or false).');
+      if (!!project.accessiblePdfRequired === cmd.required) return reject('NO_CHANGE', cmd.required ? 'An accessible PDF is already required.' : 'An accessible PDF is already not required.');
+      return { ok: true, label: cmd.required ? 'Require an accessible PDF' : 'Stop requiring an accessible PDF', project: bump(project, (d) => { if (cmd.required) d.accessiblePdfRequired = true; else delete d.accessiblePdfRequired; }) };
     }
     case 'RESTORE_SNAPSHOT': {
       return { ok: true, label: cmd.label, project: { ...cmd.project, modelVersion: project.modelVersion + 1 } };

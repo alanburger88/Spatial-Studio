@@ -428,6 +428,11 @@ export interface Project {
   lookupTables?: LookupTable[];
   /** Where the document's date comes from. Absent = the document does not use dates (no periods, no ISSUE_DATE()). */
   documentDate?: DocumentDateSource;
+  /**
+   * "Accessible PDF is required" (wave 2): when true, a failed check of the studio's PDF accessibility checks is a
+   * blocker (layout and pages) found by the full check; when absent or false, it is a warning. Absent = off.
+   */
+  accessiblePdfRequired?: boolean;
 }
 
 /** One preferred term: the English `source` should be rendered as `target` in that language. */

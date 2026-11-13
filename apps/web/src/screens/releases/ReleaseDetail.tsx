@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RELEASE_NOTE_MAX, RELEASE_STAGE_LABEL, RELEASE_STAGE_STATUS_LABEL, cleanReleaseNote, promoteProblem, releaseRoleProblem, supersededByPromotion, withdrawProblem, type ReleaseEvent, type ReleaseInfo, type ReleaseStage, type Role } from '@iss/model';
-import { ApiFailure, api, type ReleaseDetailDto } from '../../api/client';
+import { ApiFailure, api, type ReleaseDetailDto, type ReleasePdfRecordDto } from '../../api/client';
 import { useStudio } from '../../state/store';
 import { Dialog, Tech } from '../../ui/common';
 import { localeLabel } from '../../ui/plain';
@@ -39,6 +39,7 @@ export function ReleaseDetail({ detail, releases, role, onChanged }: DetailProps
       <PackageSection release={r} onChanged={onChanged} />
       <RuntimeSection release={r} onChanged={onChanged} />
       <ProduceSection release={r} role={role} />
+      <PdfAccessibilitySection releaseId={r.id} />
       <HandoverSection release={r} entries={detail.handover} role={role} onChanged={onChanged} />
     </div>
   );
@@ -220,5 +221,46 @@ function WithdrawDialog({ r, stages, onClose, onDone }: { r: ReleaseInfo; stages
         {error && <p className="callout error" role="alert">{error}</p>}
       </div>
     </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ accessible PDF (wave 2) */
+
+/**
+ * The level of PDF accessibility proof this release has reached, and when: made on demand (composing and checking a PDF
+ * takes a moment), never claimed when it has not been run. "Checked by the studio" is not validation against PDF/UA.
+ */
+function PdfAccessibilitySection({ releaseId }: { releaseId: string }) {
+  const [rec, setRec] = useState<ReleasePdfRecordDto | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    setRec(undefined); setError(null);
+    api.releasePdfAccessibility(releaseId).then((o) => { if (live) setRec(o.record); }, (e) => { if (live) { setRec(null); setError(failMessage(e)); } });
+    return () => { live = false; };
+  }, [releaseId]);
+  const check = async () => {
+    setBusy(true); setError(null);
+    try { setRec((await api.checkReleasePdfAccessibility(releaseId)).record); } catch (e) { setError(failMessage(e)); } finally { setBusy(false); }
+  };
+  const v = rec?.verapdf;
+  return (
+    <section className="rel-section" aria-labelledby="rel-pdfa11y-h" data-testid="rel-pdf-a11y">
+      <h3 className="section-title" id="rel-pdfa11y-h">PDF accessibility</h3>
+      {rec === undefined ? <p className="muted">Loading…</p> : rec === null ? (
+        <p className="muted" data-testid="rel-pdf-a11y-none">Not checked for this release yet. Checking composes the release’s PDF for a sample customer and records the level reached.</p>
+      ) : (
+        <div data-testid="rel-pdf-a11y-record" data-level={rec.level}>
+          <p><strong data-testid="rel-pdf-a11y-level">{rec.levelLabel}</strong> <span className="muted"><When iso={rec.at} />{rec.by ? ` by ${rec.by}` : ''} · customer {rec.recordId}</span></p>
+          <ul className="rel-pdf-a11y-list">
+            <li>Checked by the studio: {rec.studio.summary.passed} of {rec.studio.checks.length} checks passed, {rec.studio.summary.failed} failed{rec.studio.summary.notChecked ? `, ${rec.studio.summary.notChecked} not checked` : ''}.</li>
+            <li data-testid="rel-pdf-a11y-verapdf">veraPDF: {v?.status === 'ran' ? `${v.compliant ? 'meets' : 'does not meet'} the PDF/UA-1 profile${v.failedRules?.length ? ` (${v.failedRules.length} rule${v.failedRules.length === 1 ? '' : 's'} failed)` : ''}${v.version ? `, veraPDF ${v.version}` : ''}.` : v?.status === 'not-installed' ? 'not run, because veraPDF is not installed on this machine.' : `not run${v?.message ? ` (${v.message})` : ''}.`}</li>
+          </ul>
+        </div>
+      )}
+      {error && <p className="callout warning" role="alert">{error}</p>}
+      <button type="button" className="btn sm" onClick={() => void check()} disabled={busy} aria-busy={busy} data-testid="rel-pdf-a11y-check">{busy ? 'Checking the PDF…' : rec ? 'Check the PDF again' : 'Check the PDF'}</button>
+    </section>
   );
 }

@@ -55,6 +55,16 @@ export function Summary({ data, current, full, modelChanged, kind, onKind, onRun
             {fromFull > 0 && !running && <span className="chip count" title="Blockers that came from the full check">{plural(fromFull, 'blocker')}</span>}
           </span>
         </li>
+        {lastRun && !running && full.pdf && (
+          <li data-testid="bl-speed-pdf">
+            <span className={`bl-dot ${modelChanged ? 'old' : 'full'}`} aria-hidden="true" />
+            <span><strong>PDF accessibility, checked by the studio:</strong>{' '}
+              {full.pdf.failed
+                ? <>the PDFs of {plural(full.pdf.failed, 'customer')} failed a check ({Object.entries(full.pdf.failedChecks).map(([k, n]) => `${k.toLowerCase()}: ${n}`).join('; ')}). {full.pdf.required ? 'An accessible PDF is required, so these are blockers.' : 'An accessible PDF is not required for this document, so these are warnings; turn the setting on in Design, Page setup to make them blockers.'}</>
+                : <>the PDFs of {plural(full.pdf.checked, 'customer')} passed every check that could be done{full.pdf.notChecked ? `; some checks could not be done for ${plural(full.pdf.notChecked, 'customer')}` : ''}. This is not validation against PDF/UA.</>}
+            </span>
+          </li>
+        )}
       </ul>
 
       {lastRun && modelChanged && !running && (
@@ -65,7 +75,7 @@ export function Summary({ data, current, full, modelChanged, kind, onKind, onRun
       <div className="bl-actions">
         {running
           ? <button type="button" className="btn" onClick={onCancelFull} data-testid="bl-cancel-full">Stop the full check</button>
-          : <button type="button" className="btn primary" onClick={onRunFull} data-testid="bl-run-full" title="Composes the pages of every customer, so it takes a while. Accessibility findings never stop a document, so they are not part of it."><Icon.validate /> {lastRun ? 'Run full check again' : 'Run full check'}</button>}
+          : <button type="button" className="btn primary" onClick={onRunFull} data-testid="bl-run-full" title="Composes the pages and the PDF of every customer, so it takes a while. PDF accessibility failures stop a document only when it requires an accessible PDF."><Icon.validate /> {lastRun ? 'Run full check again' : 'Run full check'}</button>}
         {fixAll}
         {children}
       </div>

@@ -112,3 +112,19 @@
 
 .vc-resolve { padding: 0 2px; font-size: 12px; }
 .vc-item > .vc-resolve { margin-top: 2px; }
+
+/* PDF accessibility (wave 2) */
+.vc-pdf-body { display: flex; flex-direction: column; gap: 10px; }
+.vc-pdf-req { font-size: 12px; font-weight: 400; }
+.vc-pdf-levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; margin: 0; }
+.vc-pdf-levels > div { border: 1px solid var(--iss-border); border-radius: 8px; padding: 8px 10px; background: var(--iss-overlay-1); }
+.vc-pdf-levels dt { font-weight: 700; font-size: 13px; color: var(--iss-text); }
+.vc-pdf-levels dd { margin: 2px 0 0; font-size: 12px; color: var(--iss-text-muted); }
+.vc-pdf-checks { font-size: 12px; }
+.vc-pdf-checks th[scope="row"] { font-weight: 600; min-width: 160px; }
+.vc-pdf-found { margin: 4px 0 0; padding-left: 16px; }
+.vc-pdf-found li { margin: 2px 0; }
+.vc-pdf-acts { display: inline-flex; gap: 4px; margin-left: 6px; flex-wrap: wrap; }
+.vc-pdf-cap { text-align: left; font-weight: 700; padding: 4px 0; color: var(--iss-text); }
+.vc-pdf-limits { font-size: 12px; color: var(--iss-text-muted); border-top: 1px solid var(--iss-border); padding-top: 8px; }
+.vc-pdf-limits ul { margin: 4px 0 0; padding-left: 18px; }

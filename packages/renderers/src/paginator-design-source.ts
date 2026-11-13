@@ -92,6 +92,9 @@ export const PAGINATOR_JS_V2 = String.raw`
       flow.style.width = t.w + 'pt';
       flow.style.height = (bottom - top) + 'pt';
       el.appendChild(flow);
+      // Reading order of the PDF tags: fixed items below the flow area (page footer, payment slip) come after the page's
+      // content. They are positioned absolutely, so where they are drawn does not change.
+      Array.prototype.slice.call(el.querySelectorAll(':scope > .iss-fixed')).forEach(function (c) { if (parseFloat(c.getAttribute('data-y')) >= bottom - 0.01) el.appendChild(c); });
       if (cfg.watermark) { var wm = document.createElement('div'); wm.className = 'iss-watermark'; wm.textContent = cfg.watermark; el.appendChild(wm); }
       pagesEl.appendChild(el);
       var cols = Math.max(1, t.columns || 1);

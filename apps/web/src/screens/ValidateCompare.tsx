@@ -9,7 +9,7 @@ import { nodeTitle, ruleTitle, localeLabel } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { useStudio, useResolution, useScenarioRequest, useRecord, useScenarioEngine, editBlockedReason } from '../state/store';
 import { recordSummary } from '../shell/RecordPicker';
-import { api, ApiFailure } from '../api/client';
+import { api, ApiFailure, type PdfAccessibilityDto } from '../api/client';
 import { abridge } from './RulesData';
 import { ParityRow, blockWord } from './PreviewExport';
 import { ResolveInBlockers } from './blockers/link';
@@ -25,7 +25,7 @@ const SUITES: Array<{ id: Suite; label: string; what: string }> = [
   { id: 'bindings', label: 'Bindings', what: 'Typed field paths and null policies' },
   { id: 'pagination', label: 'Pagination', what: 'Real composer page metrics and table continuation' },
   { id: 'parity', label: 'PDF / HTML parity', what: 'Semantic facts emitted by each output' },
-  { id: 'accessibility', label: 'Accessibility', what: 'Model checks plus automated axe on the HTML output' },
+  { id: 'accessibility', label: 'Accessibility', what: 'Model checks, automated axe on the HTML output, and the PDF accessibility checks (plus veraPDF when it is installed)' },
 ];
 const SEVS: Sev[] = ['blocking', 'error', 'warning', 'info'];
 
@@ -39,6 +39,8 @@ interface Report {
   runId: string; modelVersion: number; contentDigest: string; issues: Issue[]; counts: Record<Sev, number>; pageCount: number | null; note?: string;
   suites: Record<Suite, { status: 'clean' | 'warnings' | 'errors' | 'not-run'; count: number; durationMs: number }>;
   parity: { ok: boolean; checks: ParityCheck[]; allowedDifferences: string[] } | null;
+  /** The accessibility suite's PDF part (absent when that suite did not run). */
+  pdfAccessibility?: PdfAccessibilityDto | null;
   // client-side metadata
   recordId: string; overrideCount: number; ranAt: string; ranAtMs: number; elapsedMs: number; suitesRequested: Suite[];
 }
@@ -54,7 +56,11 @@ function relAgo(ms: number): string {
 }
 
 /** Plain-language headline for a check code (readable words; the code itself stays beside it as a chip). */
-const BLOCK_TITLE = (code: string): string => { const w = blockWord(code); return w.charAt(0).toUpperCase() + w.slice(1); };
+const BLOCK_TITLE = (code: string, details?: Record<string, unknown>): string => {
+  // The PDF accessibility checks word their own titles.
+  if (code.startsWith('PDF_A11Y_') && typeof details?.title === 'string') return `PDF: ${details.title}`;
+  const w = blockWord(code); return w.charAt(0).toUpperCase() + w.slice(1);
+};
 
 const RESOLVER_SOURCES: Finding['source'][] = ['resolver', 'domain', 'binding', 'composer', 'parity', 'accessibility', 'rules-static', 'translation'];
 const SUITE_SOURCE: Record<Suite, Finding['source']> = { rules: 'resolver', bindings: 'binding', pagination: 'composer', parity: 'parity', accessibility: 'accessibility' };
@@ -151,7 +157,8 @@ export function ValidateCompare() {
     setStatus('running'); setError(null); setElapsed(0);
     const t0 = performance.now();
     try {
-      const out = await api.validate({ ...req, suites });
+      // With the accessibility suite, veraPDF runs as well when it is installed on the studio's machine (never downloaded).
+      const out = await api.validateChecks({ ...req, suites, ...(suites.includes('accessibility') ? { verapdf: true } : {}) });
       if (my !== seq.current) return;
       inflightKey.current = null;
       const rep: Report = {
@@ -262,6 +269,13 @@ export function ValidateCompare() {
     const rid = link.ruleId;
     navigate(`${base}/${link.view}${link.view === 'rules-data' && rid ? `?rule=${encodeURIComponent(rid)}` : ''}`);
   };
+  /** From the PDF accessibility panel: the matching issue of the list, selected and shown in the detail panel. */
+  const showPdfIssue = (code: string, nodeId: string | undefined, page: number | undefined) => {
+    const g = groups.find((x) => x.members.some((m) => m.code === code && m.nodeId === nodeId && m.page === page)) ?? groups.find((x) => x.members.some((m) => m.code === code && m.nodeId === nodeId));
+    if (!g) return;
+    setSevFilter([...SEVS]); setSuiteFilter('all');
+    choose(g.primary.issueId, true);
+  };
   const blockerIssue = (g: BGroup): Issue => ({ issueId: g.key, code: g.code, severity: g.severity, suite: g.suite, message: g.message, nodeId: g.nodeId, ruleIds: g.ruleIds, locale: g.locale, suggestion: g.suggestion });
   const sourceLabel = (i: Issue) => (idsOf(i).length ? `Rule ${idsOf(i)[0]} in Rules & Data` : i.suite === 'rules' ? 'Rules & Data' : i.suite === 'pagination' ? 'Page Composition Stack' : i.suite === 'parity' && !i.nodeId ? 'Preview & Export' : `${i.nodeId ?? 'node'} in Design Studio`);
 
@@ -340,7 +354,7 @@ export function ValidateCompare() {
                         const i = g.primary;
                         const multi = g.members.length > 1;
                         const sel = selected === i.issueId;
-                        const plain = BLOCK_TITLE(i.code);
+                        const plain = BLOCK_TITLE(i.code, i.details);
                         return (
                           <li key={g.key} className={`vc-item ${sel ? 'selected' : ''}`}>
                             <button type="button" data-issue={i.issueId} data-testid={`issue-${i.code}`} className={`vc-issue ${g.severity}`} aria-current={sel} onClick={() => choose(i.issueId)}
@@ -376,10 +390,11 @@ export function ValidateCompare() {
                 </div>
               </section>
               {report && <ParityPanel report={report} />}
+              {report && <PdfAccessibilityPanel report={report} onShow={showPdfIssue} onOpen={(nodeId) => goTo({ issueId: 'pdf', code: 'PDF', severity: 'warning', suite: 'accessibility', message: '', nodeId })} />}
             </>
           )}
           </>}
-          <p className="hint vc-note" data-testid="certification-note">Automated checks are not WCAG or regulatory certification. They are necessary but not sufficient; PDF accessibility (tagging/PDF-UA) is not evaluated.</p>
+          <p className="hint vc-note" data-testid="certification-note">Automated checks are not WCAG or regulatory certification. They are necessary but not sufficient. “Checked by the studio” means the studio’s own PDF checks, not validation against PDF/UA; only a veraPDF run validates the PDF against the PDF/UA-1 profile.</p>
         </div>
 
         <aside className="panel vc-inspector" data-side="right" data-side-title="Issue detail" data-testid="validation-inspector" aria-label="Validation detail" tabIndex={-1} ref={inspectorRef}>
@@ -504,7 +519,7 @@ function BlockersAll({ state, shown, selected, onSelect, onlyBlocking, onToggle 
                 <li key={g.key} className={`vc-item ${sel ? 'selected' : ''}`}>
                   <button type="button" className={`vc-issue ${g.severity}`} data-testid="blocker-group" data-group={g.key} data-code={g.code} data-node={g.nodeId} data-severity={g.severity} aria-current={sel} onClick={() => onSelect(g.key)}>
                     <span className="vc-issue-top"><SeverityLabel severity={g.severity} />
-                      <strong className="vc-title">{BLOCK_TITLE(g.code)}</strong>
+                      <strong className="vc-title">{BLOCK_TITLE(g.code, g.details)}</strong>
                       <Tech><span className="chip code">{g.code}</span></Tech>
                       {g.nodeId && <Named name={nodeTitle(project, g.nodeId)} code={g.nodeId} />}
                       {g.ruleIds.map((r) => <span key={r} className="chip code">{r}</span>)}
@@ -554,7 +569,7 @@ function BlockerDetail({ group: g, data, loading, onlyBlocking, onPreview, onGo,
     <>
       <div className="panel-head"><span id="vc-detail-title">Issue detail</span><div className="right"><SeverityLabel severity={g.severity} /></div></div>
       <div className="panel-body vc-detail" aria-labelledby="vc-detail-title" data-testid="blocker-detail" data-code={g.code}>
-        <h2 className="vc-detail-code">{BLOCK_TITLE(g.code)} <Tech><span className="chip code">{g.code}</span></Tech></h2>
+        <h2 className="vc-detail-code">{BLOCK_TITLE(g.code, g.details)} <Tech><span className="chip code">{g.code}</span></Tech></h2>
         <p className="vc-detail-msg">{g.message}</p>
         {g.suggestion && <><h3 className="section-title">Suggested correction</h3><div className="callout accent" data-testid="issue-suggestion">{g.suggestion}</div></>}
         <h3 className="section-title">Suggested fix</h3>
@@ -653,7 +668,7 @@ function Inspector({ issue: i, members, onGo, onOpenLink, sourceLabel, stale }: 
   const project = useStudio((s) => s.project)!;
   const rep = i.reproduction;
   const finding = useMemo(() => toFinding(i), [i]);
-  const plain = BLOCK_TITLE(i.code);
+  const plain = BLOCK_TITLE(i.code, i.details);
   const suiteLabel = SUITES.find((x) => x.id === i.suite)?.label ?? i.suite;
   const reproduce = () => {
     if (!rep) return;
@@ -878,7 +893,7 @@ export function FixAllDialog({ plan, onClose }: { plan: Plan; onClose: () => voi
           {plan.items.map((it) => (
             <li key={it.group.key + it.proposal.id} className="vc-fixall-item" data-testid="fix-all-item">
               <div className="vc-fixall-top"><strong>{it.proposal.title}</strong><span className="chip">Built-in</span><span className="chip ok">Low risk</span></div>
-              <div className="muted vc-fixall-sub">{BLOCK_TITLE(it.group.finding.code)}{where(it.group.finding.nodeId) ? ` · ${where(it.group.finding.nodeId)}` : ''}</div>
+              <div className="muted vc-fixall-sub">{BLOCK_TITLE(it.group.finding.code, it.group.finding.details)}{where(it.group.finding.nodeId) ? ` · ${where(it.group.finding.nodeId)}` : ''}</div>
               <ImpactLine impact={it.impact} />
             </li>
           ))}
@@ -892,7 +907,7 @@ export function FixAllDialog({ plan, onClose }: { plan: Plan; onClose: () => voi
             <ul className="list-rows">
               {plan.skipped.map((s) => (
                 <li key={s.group.key} className="vc-fixall-item">
-                  <div className="vc-fixall-top"><strong>{BLOCK_TITLE(s.group.finding.code)}</strong>{where(s.group.finding.nodeId) && <span className="muted">{where(s.group.finding.nodeId)}</span>}</div>
+                  <div className="vc-fixall-top"><strong>{BLOCK_TITLE(s.group.finding.code, s.group.finding.details)}</strong>{where(s.group.finding.nodeId) && <span className="muted">{where(s.group.finding.nodeId)}</span>}</div>
                   <div className="muted vc-fixall-sub">{s.reason}</div>
                 </li>
               ))}
@@ -901,6 +916,91 @@ export function FixAllDialog({ plan, onClose }: { plan: Plan; onClose: () => voi
         )}
       </div>
     </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ PDF accessibility (wave 2) */
+
+const PDF_STATUS: Record<string, { icon: string; label: string; cls: string }> = {
+  passed: { icon: '✔', label: 'Passed', cls: 'ok' }, failed: { icon: '■', label: 'Failed', cls: 'error' }, 'not-checked': { icon: '–', label: 'Not checked', cls: '' },
+};
+const whenOf = (iso: string): string => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : d.toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
+
+/**
+ * The PDF part of the accessibility suite: the two levels of proof, always labelled as what they are ("Checked by the
+ * studio", "Validated by veraPDF"), the checks with passed / failed / not checked, each failure linking to the part of
+ * the document, and what the composing browser cannot write.
+ */
+function PdfAccessibilityPanel({ report, onShow, onOpen }: { report: Report; onShow: (code: string, nodeId: string | undefined, page: number | undefined) => void; onOpen: (nodeId: string) => void }) {
+  const project = useStudio((s) => s.project);
+  const r = report.pdfAccessibility;
+  if (!r) return <section className="panel" data-testid="pdf-a11y-panel" aria-label="PDF accessibility"><div className="panel-head">PDF accessibility</div><div className="empty">The accessibility suite was not run for this report, so the PDF was not checked.</div></section>;
+  const s = r.studio;
+  const v = r.verapdf;
+  return (
+    <section className="panel vc-pdf" data-testid="pdf-a11y-panel" aria-label="PDF accessibility">
+      <div className="panel-head">PDF accessibility
+        <span className={`chip ${s.summary.failed ? (s.required ? 'error' : 'warning') : s.summary.notChecked ? 'info' : 'accent'}`} data-testid="pdf-a11y-summary">{s.summary.failed ? `${s.summary.failed} of ${s.checks.length} checks failed` : `${s.summary.passed} of ${s.checks.length} checks passed`}</span>
+        <span className="chip count">{s.pageCount} page{s.pageCount === 1 ? '' : 's'}</span>
+        {s.required ? <span className="chip info" title="Set in Design, Page setup">Accessible PDF is required</span> : <span className="muted vc-pdf-req">An accessible PDF is not required for this document, so failures are warnings.</span>}
+      </div>
+      <div className="panel-body vc-pdf-body">
+        <dl className="vc-pdf-levels">
+          <div data-testid="pdf-a11y-level-studio"><dt>Checked by the studio</dt>
+            <dd>{whenOf(r.checkedAt)} · {s.summary.passed} passed, {s.summary.failed} failed{s.summary.notChecked ? `, ${s.summary.notChecked} not checked` : ''}. The studio read the PDF it composed; this is not validation against PDF/UA.</dd></div>
+          <div data-testid="pdf-a11y-level-verapdf"><dt>Validated by veraPDF</dt>
+            <dd>{v.status === 'ran' ? <>{whenOf(v.ranAt)}{v.version ? ` · veraPDF ${v.version}` : ''} · {v.compliant ? 'veraPDF found that the PDF meets the PDF/UA-1 profile.' : `veraPDF found that the PDF does not meet the PDF/UA-1 profile: ${v.failedRules.length} rule${v.failedRules.length === 1 ? '' : 's'} failed.`}</>
+              : v.status === 'not-installed' ? 'veraPDF is not installed on this machine, so the PDF was not validated against PDF/UA.'
+              : v.status === 'not-run' ? 'Not run for this check.'
+              : `veraPDF gave no verdict: ${v.message}`}</dd></div>
+        </dl>
+        <table className="table vc-pdf-checks" data-testid="pdf-a11y-checks">
+          <caption className="rd-sr">The studio’s PDF accessibility checks and their results</caption>
+          <thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col">What was found</th></tr></thead>
+          <tbody>
+            {s.checks.map((c) => {
+              const view = PDF_STATUS[c.status] ?? PDF_STATUS['not-checked'];
+              const found = s.findings.filter((f) => f.details.check === c.id);
+              return (
+                <tr key={c.id} data-testid={`pdf-a11y-check-${c.id}`} data-status={c.status}>
+                  <th scope="row">{c.label}</th>
+                  <td><span className={`sev ${view.cls}`}><span aria-hidden="true">{view.icon}</span> {view.label}</span></td>
+                  <td>
+                    <span className="muted">{c.detail}</span>
+                    {found.length > 0 && (
+                      <ul className="vc-pdf-found">
+                        {found.slice(0, 6).map((f, k) => (
+                          <li key={k}>
+                            <span>{f.details.title}{f.nodeId ? <> in <Named name={project ? nodeTitle(project, f.nodeId) : f.nodeId} code={f.nodeId} /></> : null}{f.page ? ` (page ${f.page})` : ''}. {f.details.fix}</span>
+                            <span className="vc-pdf-acts">
+                              <button type="button" className="btn sm ghost" onClick={() => onShow(f.code, f.nodeId, f.page)} data-testid="pdf-a11y-show">Show the issue</button>
+                              {f.nodeId && project?.nodes.some((n) => n.id === f.nodeId) && <button type="button" className="btn sm ghost" onClick={() => onOpen(f.nodeId!)} data-testid="pdf-a11y-open">Open in Design</button>}
+                            </span>
+                          </li>
+                        ))}
+                        {found.length > 6 && <li className="muted">and {found.length - 6} more in the issue list</li>}
+                      </ul>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {v.status === 'ran' && v.failedRules.length > 0 && (
+          <table className="table vc-pdf-checks" data-testid="pdf-a11y-verapdf-rules">
+            <caption className="vc-pdf-cap">Rules veraPDF reported as failed</caption>
+            <thead><tr><th scope="col">Rule</th><th scope="col">What it says</th><th scope="col" className="num">Times</th></tr></thead>
+            <tbody>{v.failedRules.map((x) => <tr key={x.id}><td><span className="chip code">{x.id}</span></td><td>{x.description}{x.knownLimit ? <div className="muted">Expected: {x.knownLimit}</div> : null}</td><td className="num">{x.count}</td></tr>)}</tbody>
+          </table>
+        )}
+        <div className="vc-pdf-limits" data-testid="pdf-a11y-limits">
+          <strong>What the composing browser cannot write</strong>
+          <ul>{s.knownLimits.map((k) => <li key={k.id}>{k.text}</li>)}</ul>
+        </div>
+        <Proof label="How it was checked"><span className="muted">{s.checker} · read with {s.reader} · customer {r.recordId}{s.title ? ` · title “${s.title}”` : ''}{s.language ? ` · language ${s.language}` : ''}</span></Proof>
+      </div>
+    </section>
   );
 }
 
