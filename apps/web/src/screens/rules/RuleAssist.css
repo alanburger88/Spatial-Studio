@@ -1,0 +1,37 @@
+/* Rules & Data assistant dialogs: describe a rule, review my rules, coverage gaps. */
+.dialog:has(.ra-wide) { width: min(820px, calc(100vw - 32px)); }
+.ra-wide { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ra-count { display: block; margin-top: 2px; }
+.ra-examples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.ra-chipbtn { cursor: pointer; font: inherit; font-size: 12px; text-align: left; max-width: 100%; white-space: normal; }
+.ra-chipbtn:hover { background: var(--iss-row-hover); }
+.ra-chipbtn:focus-visible { outline: none; box-shadow: var(--iss-focus); }
+.ra-submitrow { align-items: center; gap: 10px; }
+.ra-result { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--iss-row-border); padding-top: 10px; }
+.ra-read { padding: 10px 12px; border-radius: 10px; background: var(--iss-accent-soft); border: 1px solid var(--iss-accent-line); }
+.ra-read-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.ra-restate { margin: 6px 0 0; font-size: 15px; font-weight: 600; line-height: 1.45; color: var(--iss-text); }
+.ra-aiwarn { margin: 6px 0 0; font-size: 12.5px; color: var(--iss-text-muted); }
+.ra-uncertain ul, .ra-reasons ul { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; }
+.ra-reasons { font-size: 12.5px; }
+.ra-actions { align-items: center; gap: 8px 12px; font-size: 12.5px; }
+.ra-summary { margin: 0; font-size: 13.5px; font-weight: 600; }
+.ra-summary .muted { font-weight: 400; }
+.ra-covbar { align-items: center; gap: 8px; }
+.ra-group + .ra-group { margin-top: 4px; }
+.ra-list { border-top: 1px solid var(--iss-row-border); }
+.ra-item { display: flex; flex-direction: column; gap: 6px; }
+.ra-item-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13.5px; }
+.ra-item-detail { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--iss-text); overflow-wrap: anywhere; }
+.ra-rules { align-items: center; gap: 6px; font-size: 12px; }
+.ra-scenario { display: flex; flex-direction: column; gap: 4px; }
+.ra-kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin: 0; font-size: 12.5px; }
+.ra-kv dt { color: var(--iss-text-muted); }
+.ra-kv dd { margin: 0; display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.ra-change { white-space: nowrap; }
+.ra-reason { margin: 0; font-size: 12.5px; color: var(--iss-text-muted); line-height: 1.5; }
+.ra-applied { margin: 0; }
+.ra-assist { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--iss-row-border); }
+.ra-assist .btn { flex: 1 1 auto; justify-content: center; }
+.rd-scenario-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border-radius: 10px; font-size: 12.5px; flex: none; }
+.ra-scenario .hint, .ra-actions .hint, .ra-covbar .hint, .ra-wide .hint { margin: 0; font-size: 12px; }

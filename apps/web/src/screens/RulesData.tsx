@@ -11,10 +11,13 @@ import { ruleTitle, ruleSentence, predicateSentence, fieldLabel, nodeTitle } fro
 import { Icon } from '../ui/icons';
 import { ImpactPreview } from '../ui/ImpactPreview';
 import { DataFieldsDialog } from './data/DataFields';
-import { useStudio, useResolution, useRecord } from '../state/store';
+import { useStudio, useResolution, useRecord, editBlockedReason } from '../state/store';
+import type { CoverageGap } from '@iss/scenarios';
 import { api } from '../api/client';
 import { DecisionTable } from './rules/DecisionTable';
 import { DraftTestImpact, TestsPanel, TestsSummary } from './rules/TestCases';
+import { DescribeRuleDialog, ReviewRulesDialog } from './rules/RuleAssist';
+import { CoverageDialog, stepLabelOf } from './rules/Coverage';
 import { makeTransactions } from '../demo/defects';
 import './RulesData.css';
 
@@ -236,6 +239,9 @@ export function RulesData() {
   const [view, setView] = useState<'editor' | 'table' | 'tests'>('editor');
   const [toggleNote, setToggleNote] = useState<{ before: Project; after: Project; ruleId: string; verb: string } | null>(null);
   const dockRef = useRef<HTMLDivElement>(null);
+  const [assist, setAssist] = useState<'describe' | 'review' | 'coverage' | null>(null);
+  const [previewed, setPreviewed] = useState<{ title: string; recordId: string; overrides: string; cursor: number | null } | null>(null);
+  const blockedReason = useStudio((s) => editBlockedReason(s.session));
   const openDock = (t: DockTab) => { setDock(t); setTimeout(() => dockRef.current?.scrollIntoView({ block: 'nearest', behavior: useStudio.getState().reducedMotion ? 'auto' : 'smooth' }), 30); };
 
   useEffect(() => {
@@ -275,6 +281,30 @@ export function RulesData() {
     setTab('visual');
     setTestResult(null);
     setEnableMsg(null);
+  };
+  /** Load a rule drafted by the assistant as a NEW unsaved draft (nothing is written to the model). */
+  const openDraft = (rule: Rule) => {
+    if (!project || blockedReason || !confirmDiscard()) return;
+    setAssist(null);
+    setView('editor');
+    setIsNew(true);
+    baseRef.current = '';
+    setDraft(clone(rule));
+    setAstText(pretty(rule.when));
+    setAstErrors([]);
+    setTab('visual');
+    setTestResult(null);
+    setEnableMsg(null);
+    setTimeout(() => document.querySelector('[data-testid="rule-impact"]')?.scrollIntoView({ block: 'nearest', behavior: useStudio.getState().reducedMotion ? 'auto' : 'smooth' }), 120);
+  };
+  const previewGap = (gap: CoverageGap, sc: NonNullable<CoverageGap['scenario']>) => {
+    const st = useStudio.getState();
+    st.setRecord(sc.recordId);
+    st.setOverrides(sc.overrides);
+    st.setJourneyCursor(sc.journeyCursor);
+    setPreviewed({ title: gap.title, recordId: sc.recordId, overrides: JSON.stringify(sc.overrides), cursor: sc.journeyCursor });
+    setAssist(null);
+    if (gap.kind === 'rule') selectRule(gap.targetId);
   };
   const cancelDraft = () => {
     setIsNew(false); baseRef.current = ''; setDraft(null); setTestResult(null);
@@ -388,8 +418,15 @@ export function RulesData() {
       <div className="screen-body rd-body">
         {view === 'table' && <DecisionTable project={project} records={records} onOpenRule={(id) => { if (selectRule(id)) setView('editor'); }} />}
         {view === 'tests' && <TestsPanel project={project} />}
+        {previewed && ctx.recordId === previewed.recordId && JSON.stringify(ctx.overrides) === previewed.overrides && (ctx.journeyCursor ?? null) === previewed.cursor && (
+          <div className="callout accent rd-scenario-note" role="status" data-testid="coverage-preview-note">
+            <span>The top bar now shows a coverage scenario for “{previewed.title}”{previewed.cursor !== null ? ` at the journey step “${stepLabelOf(project, previewed.cursor)}”` : ''}. The decision trace below uses it.</span>
+            <button className="btn sm" onClick={() => { useStudio.getState().setRecord(ctx.recordId); setPreviewed(null); }} data-testid="coverage-preview-reset">Reset scenario</button>
+            <span className="muted">Reset clears the what-if changes and journey step.</span>
+          </div>
+        )}
         <div className="rd-row rd-row1" hidden={view !== 'editor'}>
-          <RuleTree project={project} ruleTrace={ruleTrace} selectedId={isNew ? draft?.id ?? '' : ruleId} newId={isNew ? draft?.id : undefined} onSelect={selectRule} />
+          <RuleTree assist={<div className="ra-assist" data-testid="rules-assist"><button className="btn sm" onClick={() => setAssist('describe')} data-testid="rule-describe-button"><Icon.plus /> Describe a rule</button><button className="btn sm" onClick={() => setAssist('review')} data-testid="rules-review"><Icon.target /> Review my rules</button><button className="btn sm" onClick={() => setAssist('coverage')} data-testid="coverage-open"><Icon.list /> Find coverage gaps</button></div>} project={project} ruleTrace={ruleTrace} selectedId={isNew ? draft?.id ?? '' : ruleId} newId={isNew ? draft?.id : undefined} onSelect={selectRule} />
 
           <div className="panel rd-editor-panel" data-testid="rule-editor" aria-label="Rule editor">
             {!draft ? (
@@ -512,6 +549,9 @@ export function RulesData() {
         </div>
       </div>
       {showFields && <DataFieldsDialog onClose={() => setShowFields(false)} />}
+      {assist === 'describe' && <DescribeRuleDialog project={project} blockedReason={blockedReason} onClose={() => setAssist(null)} onOpenDraft={openDraft} />}
+      {assist === 'review' && <ReviewRulesDialog project={project} onClose={() => setAssist(null)} onSelectRule={(id) => { setView('editor'); return selectRule(id); }} />}
+      {assist === 'coverage' && <CoverageDialog project={project} onClose={() => setAssist(null)} onPreview={previewGap} />}
     </section>
   );
 }
@@ -524,7 +564,7 @@ function modeOptions(op: RuleAction['op']): RuleMode[] {
 
 /* ------------------------------------------------------------------ left: tree */
 
-function RuleTree({ project, ruleTrace, selectedId, newId, onSelect }: { project: Project; ruleTrace: Map<string, TraceEntry>; selectedId: string; newId?: string; onSelect: (id: string) => void }) {
+function RuleTree({ assist, project, ruleTrace, selectedId, newId, onSelect }: { assist: React.ReactNode; project: Project; ruleTrace: Map<string, TraceEntry>; selectedId: string; newId?: string; onSelect: (id: string) => void }) {
   const nodes = useMemo(() => new Map(project.nodes.map((n) => [n.id, n])), [project.nodes]);
   const exclusive = project.rules.filter((r) => r.mode === 'exclusive');
   const groups = [...new Set(exclusive.map((r) => r.exclusiveGroup ?? ''))];
@@ -557,6 +597,7 @@ function RuleTree({ project, ruleTrace, selectedId, newId, onSelect }: { project
   return (
     <aside className="panel" aria-label="Rule tree" data-testid="rule-tree" data-side="left" data-side-title="Rules">
       <div className="panel-head"><Icon.rules /> Rules <span className="sub">{project.rules.length} rules</span></div>
+      {assist}
       <div className="panel-body rd-tree" ref={listRef} onKeyDown={onKey}>
         {newId && <div className="rd-newrow"><span className="mono">{newId}</span> <span className="chip warning">draft</span></div>}
         <h3 className="section-title">Choose one message (exclusive)</h3>

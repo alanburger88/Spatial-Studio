@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { CATALOG_BY_TYPE, projectFields, getPath, nodeMap, requiredNodeIds, applyCommand, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
@@ -11,6 +11,10 @@ import { ImpactPreview, ReachLine } from '../../ui/ImpactPreview';
 import { AssetLibraryDialog, type PickedAsset } from './AssetLibrary';
 import { StylesBrandDialog } from './StylesBrand';
 import { CommentsTab, useOpenCommentCount } from './Comments';
+import { suggestAltText } from '@iss/scenarios';
+import { api } from '../../api/client';
+import { NeedsAi, useBusy } from '../../assist/common';
+import { GuardedSuggestion, WritingHelp, recordAssist, useReadOnlyReason } from '../../assist/WritingHelp';
 
 /** Single-condition editor with a live before-you-save impact preview. */
 function ConditionEditor({ project, initial, command, onDone, label }: { project: Project; initial: Predicate | null | undefined; command: (when: Predicate | null) => Command; onDone: () => void; label: string }) {
@@ -70,11 +74,13 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
 }
 
 /** Text input that commits one command on blur/Enter (one undo step per edit, not per keystroke). */
-function CommitInput({ value, onCommit, type = 'text', ariaLabel, testId }: { value: string | number | undefined; onCommit: (v: string) => void; type?: string; ariaLabel?: string; testId?: string }) {
+function CommitInput({ value, onCommit, type = 'text', ariaLabel, testId, inject }: { value: string | number | undefined; onCommit: (v: string) => void; type?: string; ariaLabel?: string; testId?: string; /** Text a person accepted from a suggestion: it goes into the field as an edit, committed on blur or Enter like typing. */ inject?: { text: string; n: number } }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const el = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (inject && inject.n > 0) { setDraft(inject.text); el.current?.focus(); } }, [inject?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown = draft ?? String(value ?? '');
   return (
-    <input className="input" type={type} value={shown} aria-label={ariaLabel} data-testid={testId}
+    <input ref={el} className="input" type={type} value={shown} aria-label={ariaLabel} data-testid={testId}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => { if (draft !== null && draft !== String(value ?? '')) onCommit(draft); setDraft(null); }}
       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setDraft(null); (e.target as HTMLInputElement).blur(); } }} />
@@ -318,10 +324,22 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
   const [editing, setEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [editCond, setEditCond] = useState<string | null>(null);
+  const [addedAi, setAddedAi] = useState<string | null>(null);
   const fields = projectFields(project).filter((f) => f.type !== 'array' && f.type !== 'string' && f.type !== 'date');
   const parseVal = (path: string, v: string) => { const f = fields.find((x) => x.path === path); if (!f) return v; if (f.type === 'bool') return v === 'true'; if (['int', 'cents', 'points'].includes(f.type)) return Number(v); return v; };
+  const slugId = (title: string) => (node.id + '-' + title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')).slice(0, 60);
+  /** The suggested version of the assistant goes through the same ADD_VARIANT command as "Add variant", with an id that is free. */
+  const addSuggested = (title: string, text: string): boolean => {
+    const base = slugId(title);
+    const taken = (x: string) => !!node.variantIds?.includes(x) || project.contentParts.some((c) => c.id === x);
+    let id = base; for (let n = 2; taken(id); n++) id = `${base.slice(0, 56)}-${n}`;
+    const r = dispatch({ type: 'ADD_VARIANT', nodeId: node.id, variantId: id, title, text });
+    if (!r.ok) return false;
+    setEditing(id); setEditText(text); setAddedAi(title);
+    return true;
+  };
   const add = () => {
-    const id = (node.id + '-' + newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')).slice(0, 60);
+    const id = slugId(newTitle);
     let when: Predicate | undefined;
     if (node.type === 'conditional-region' && cond.value !== '') when = { op: cond.op as any, path: cond.path, value: parseVal(cond.path, cond.value) as any };
     const r = dispatch({ type: 'ADD_VARIANT', nodeId: node.id, variantId: id, title: newTitle, text: newText, when });
@@ -344,7 +362,8 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
               <Biz><div className="variant-when muted">{variantWhen(project, node, vid, rv?.candidateRuleIds ?? [])}</div></Biz>
               {editing === vid ? (
                 <div style={{ marginTop: 6 }}>
-                  <textarea className="textarea" value={editText} onChange={(e) => setEditText(e.target.value)} aria-label={`Text for ${vid}`} />
+                  <textarea className="textarea" value={editText} onChange={(e) => setEditText(e.target.value)} aria-label={`Text for ${vid}`} data-testid="variant-edit-text" />
+                  <WritingHelp text={editText} kind="message" locale="en-US" onUse={setEditText} />
                   <ReachLine nodeId={node.id} variantId={vid} />
                   <div className="row" style={{ marginTop: 6 }}>
                     <button className="btn sm primary" onClick={() => { if (p) { const r = dispatch({ type: 'UPSERT_CONTENT_PART', part: { ...p, approvedLocales: { ...p.approvedLocales, 'en-US': editText } } }); if (r.ok) setEditing(null); } }}>Save text (new version)</button>
@@ -376,7 +395,113 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
           <Field label="Value"><input className="input" value={cond.value} onChange={(e) => setCond({ ...cond, value: e.target.value })} style={{ width: 110 }} data-testid="new-variant-cond-value" /></Field>
         </div>
       )}
-      <button className="btn primary" disabled={!newTitle.trim() || !newText.trim()} onClick={add} data-testid="add-variant"><Icon.plus /> Add variant</button>
+      <div className="wh-row">
+        <button className="btn primary" disabled={!newTitle.trim() || !newText.trim()} onClick={add} data-testid="add-variant"><Icon.plus /> Add variant</button>
+        <NewVersionAi node={node} project={project} onAdd={addSuggested} />
+      </div>
+      {addedAi && (
+        <div className="callout warning" role="status" data-testid="new-version-reminder">
+          <strong>“{addedAi}” was added and is open for editing above.</strong> Nobody receives it yet: {node.type === 'variant-set' ? 'a rule must say who gets it' : 'set its condition (or a rule) to say who gets it'}. Use the Data &amp; rules tab.
+          <button type="button" className="btn sm ghost" onClick={() => setAddedAi(null)} aria-label="Dismiss reminder">Dismiss</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "Draft a new version with AI": a one-line brief; the model answers in the style of the existing versions. Needs a live model. */
+function NewVersionAi({ node, project, onAdd }: { node: DocNode; project: Project; onAdd: (title: string, text: string) => boolean }) {
+  const [open, setOpen] = useState(false);
+  const [brief, setBrief] = useState('');
+  const [res, setRes] = useState<{ mode: 'ai' | 'unavailable'; message: string; title?: string; text?: string } | null>(null);
+  const [busy, run] = useBusy();
+  const btn = useRef<HTMLButtonElement>(null);
+  const ro = useReadOnlyReason();
+  const close = () => { setOpen(false); setRes(null); btn.current?.focus(); };
+  const ask = async () => {
+    if (!brief.trim()) return;
+    setRes(null);
+    const r = await run(() => api.assistNewVersion(project.projectId, { nodeId: node.id, brief: brief.trim(), project }));
+    if (r) setRes(r);
+  };
+  const usable = res?.mode === 'ai' && !!res.text?.trim();
+  return (
+    <>
+      <button type="button" className="btn" ref={btn} aria-expanded={open} onClick={() => (open ? close() : setOpen(true))} data-testid="new-version-ai"><Icon.ai width={14} height={14} /> Draft a new version with AI</button>
+      {open && (
+        <div className="wh-form wh-block" style={{ flexBasis: '100%' }} role="group" aria-label="Draft a new version with AI" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } }}>
+          <label>What should this version say? (one line)
+            <input className="input" value={brief} maxLength={300} onChange={(e) => setBrief(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void ask(); } }} placeholder="e.g. For customers who have just made a late payment" data-testid="new-version-brief" autoFocus />
+          </label>
+          <span className="wh-count">{brief.length} / 300</span>
+          <div className="row wrap" style={{ gap: 6 }}>
+            <button type="button" className="btn sm primary" onClick={ask} disabled={busy || !brief.trim()} aria-busy={busy} data-testid="new-version-draft">{busy ? <><span className="spinner" aria-hidden="true" /> Drafting…</> : 'Draft it'}</button>
+            <button type="button" className="btn sm ghost" onClick={close}>Close</button>
+          </div>
+          <div aria-live="polite">
+            {res?.mode === 'unavailable' && <NeedsAi message={res.message} />}
+            {res?.mode === 'ai' && !usable && <p className="muted" data-testid="new-version-empty">{res.message || 'The assistant did not return a usable version.'}</p>}
+            {usable && (
+              <div className="as-compare" data-testid="new-version-suggestion" style={{ gridTemplateColumns: '1fr' }}>
+                <div className="as-compare-col new">
+                  <span className="as-compare-lbl">Suggested version <span className="chip info as-source" data-source="ai" title="Suggested by an AI model. Read it before accepting.">AI suggestion</span></span>
+                  <p><strong data-testid="new-version-title">{res!.title?.trim() || 'New version'}</strong></p>
+                  <p data-testid="new-version-text">{res!.text}</p>
+                </div>
+                <div className="as-compare-note">It is added as a new version and opened for editing. It reaches nobody until a rule or condition says who gets it.{ro && <span className="wh-reason">{ro}</span>}</div>
+                <div className="row wrap as-card-actions">
+                  <button type="button" className="btn primary sm" disabled={!!ro} title={ro ?? undefined} data-testid="new-version-accept" onClick={() => {
+                    if (onAdd(res!.title?.trim() || 'New version', res!.text!.trim())) { recordAssist('new-version', `Added an AI-drafted version “${res!.title?.trim() || 'New version'}”`, 'ai'); setRes(null); setBrief(''); setOpen(false); }
+                  }}>Add as a new version</button>
+                  <button type="button" className="btn ghost sm" onClick={() => setRes(null)} data-testid="new-version-discard">Discard</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** "Suggest a description" for an image with the text-alternative field: built-in first, from the picture with a model on request. */
+function AltSuggest({ node, project, onUse }: { node: DocNode; project: Project; onUse: (text: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [ai, setAi] = useState<{ mode: 'ai' | 'unavailable'; message: string; text?: string } | null>(null);
+  const [dismissed, setDismissed] = useState({ builtin: false, ai: false });
+  const [busy, run] = useBusy();
+  const btn = useRef<HTMLButtonElement>(null);
+  const built = useMemo(() => suggestAltText(project, node.id), [project, node.id]);
+  const now = node.image?.alt ?? '';
+  const close = () => { setOpen(false); setAi(null); setDismissed({ builtin: false, ai: false }); btn.current?.focus(); };
+  const use = (feature: 'builtin' | 'ai', text: string) => { onUse(text); recordAssist('alt-text', 'Used a suggested image description', feature); close(); };
+  return (
+    <div className="wh-block">
+      <div>
+        <button type="button" className="btn sm" ref={btn} aria-expanded={open} onClick={() => (open ? close() : setOpen(true))} data-testid="alt-suggest"><Icon.ai width={12} height={12} /> Suggest a description</button>
+      </div>
+      {open && (
+        <div className="wh-block" role="group" aria-label="Suggested image descriptions" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } }}>
+          {built && !dismissed.builtin && (
+            <GuardedSuggestion original={now} suggestion={built.text} source="builtin" note={<span data-testid="alt-suggest-basis">Based on: {built.basis}.</span>}
+              onAccept={() => use('builtin', built.text)} onDiscard={() => setDismissed((d) => ({ ...d, builtin: true }))} />
+          )}
+          {!built && <p className="muted" data-testid="alt-suggest-none">No built-in suggestion: {node.decorative ? 'the image is marked decorative, so it needs no description.' : 'the component has no name or label to describe it from.'}</p>}
+          <div className="row wrap" style={{ gap: 6 }}>
+            <button type="button" className="btn sm" disabled={busy} aria-busy={busy} onClick={async () => { setDismissed((d) => ({ ...d, ai: false })); setAi(null); const r = await run(() => api.assistImageDescription(project.projectId, { nodeId: node.id, project })); if (r) setAi(r); }} data-testid="alt-suggest-ai">
+              {busy ? <><span className="spinner" aria-hidden="true" /> Looking…</> : 'Describe from the picture (AI)'}
+            </button>
+          </div>
+          <div aria-live="polite">
+            {ai?.mode === 'unavailable' && <NeedsAi message={ai.message} />}
+            {ai?.mode === 'ai' && !ai.text?.trim() && <p className="muted">{ai.message || 'The assistant did not return a description.'}</p>}
+            {ai?.mode === 'ai' && ai.text?.trim() && !dismissed.ai && (
+              <GuardedSuggestion original={now} suggestion={ai.text.trim()} source="ai" note="Written by a model from the picture itself. Check it matches what the picture shows."
+                onAccept={() => use('ai', ai.text!.trim())} onDiscard={() => setDismissed((d) => ({ ...d, ai: true }))} />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -570,9 +695,12 @@ function LayoutTab({ node, project }: { node: DocNode; project: Project }) {
 function A11yTab({ node, res }: { node: DocNode; res: Resolution }) {
   const dispatch = useStudio((s) => s.dispatch);
   const findings = res.findings.filter((f) => f.nodeId === node.id && f.source === 'accessibility');
+  const project = useStudio((s) => s.project);
+  const [inject, setInject] = useState({ text: '', n: 0 });
   return (
     <div>
-      {node.type === 'image' && node.image && <Field label="Alternative text"><CommitInput value={node.image.alt} onCommit={(v) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: { image: { ...node.image!, alt: v } } })} /></Field>}
+      {node.type === 'image' && node.image && <Field label="Alternative text"><CommitInput value={node.image.alt} inject={inject} testId="alt-text-input" onCommit={(v) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: { image: { ...node.image!, alt: v } } })} /></Field>}
+      {node.type === 'image' && node.image && project && <AltSuggest node={node} project={project} onUse={(text) => setInject((i) => ({ text, n: i.n + 1 }))} />}
       <Field label="Accessible label override"><CommitInput value={node.a11y?.label} onCommit={(v) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: { a11y: { ...(node.a11y ?? {}), label: v } } })} /></Field>
       <label className="row" style={{ gap: 6, fontSize: 12.5 }}><input type="checkbox" checked={!!node.decorative} onChange={(e) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: { decorative: e.target.checked } })} /> Decorative (excluded from semantic parity and screen readers)</label>
       {findings.map((f, i) => <div key={i} className="callout warning" style={{ marginTop: 8 }}>{f.message}</div>)}

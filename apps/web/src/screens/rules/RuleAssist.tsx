@@ -51,7 +51,8 @@ export function DescribeRuleDialog({ project, blockedReason, onClose, onOpenDraf
     const r = applyCommand(project, { type: 'UPSERT_RULE', rule });
     return r.ok ? r.project : null;
   }, [rule, project]);
-  const needsAi = !!reply && !rule && /\b(AI|model|key)\b/i.test(reply.message);
+  const ambiguous = !!reply && !rule && reply.draft.uncertain.some((u) => /could mean/i.test(u));
+  const needsAi = !!reply && !rule && !ambiguous && /\b(AI|model|key)\b/i.test(reply.message);
   return (
     <Dialog title="Describe a rule" onClose={onClose} labelledBy="rule-describe-title">
       <div className="ra-wide ra-describe" data-testid="rule-describe">
@@ -99,7 +100,7 @@ export function DescribeRuleDialog({ project, blockedReason, onClose, onOpenDraf
               <>
                 {needsAi
                   ? <NeedsAi message={reply.message}><span>What works without an AI key: a plain sentence such as “{examples[0] ?? 'When the new balance is over $500, show the payment reminder'}”.</span></NeedsAi>
-                  : <div className="callout warning" role="status"><strong>I could not turn that into a rule.</strong> {reply.message}</div>}
+                  : <div className="callout warning" role="status"><strong>{ambiguous ? 'I need you to choose between meanings.' : 'I could not turn that into a rule.'}</strong> {ambiguous ? 'Part of the sentence could mean more than one thing. Say which one you mean and try again.' : reply.message}</div>}
                 {reply.draft.uncertain.length > 0 && (
                   <div className="ra-reasons" data-testid="rule-describe-reasons">
                     <strong>What was unclear</strong>
