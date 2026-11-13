@@ -15,11 +15,11 @@ export function DocChanges({ before, after, records }: { before: SideData; after
     setState(null);
     if (!open) return;
     const t = window.setTimeout(() => {
-      try { setState({ summary: summarizeChanges(before.project, after.project, records) }); }
+      try { setState({ summary: summarizeChanges(before.project, after.project, records, { issueDate: after.issueDate ?? before.issueDate ?? null }) }); }
       catch (e) { setState({ error: e instanceof Error ? e.message : String(e) }); }
     }, 30);
     return () => window.clearTimeout(t);
-  }, [open, before.project, after.project, records]);
+  }, [open, before.project, after.project, before.issueDate, after.issueDate, records]);
 
   return (
     <details className="cmp-doc" data-testid="cmp-doc-changes" onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>

@@ -228,7 +228,7 @@ export function JourneySimulator() {
   const cursor = ctx.journeyCursor;
   const base = `/studio/${project.projectId}`;
 
-  const snaps: JourneySnapshot[] = useMemo(() => (record && record.documentType === project.documentType ? replayJourney(project, record, ctx.overrides, ctx.profileId) : []), [project, record, ctx.overrides, ctx.profileId]);
+  const snaps: JourneySnapshot[] = useMemo(() => (record && record.documentType === project.documentType ? replayJourney(project, record, ctx.overrides, ctx.profileId, issueDate) : []), [project, record, ctx.overrides, ctx.profileId, issueDate]);
   const idx = cursor === null ? 0 : Math.min(cursor + 1, snaps.length - 1);
   const sel = snaps[idx];
   const prior = idx > 0 ? snaps[idx - 1] : undefined;

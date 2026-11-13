@@ -49,8 +49,8 @@ function summarise(res: Resolution): Summary {
   return { variants, visible, locale: res.locale, blocking };
 }
 
-function summariseAll(project: Project, records: SyntheticRecord[]): Summary[] {
-  return records.map((record) => summarise(resolve({ project, record, overrides: {}, journeyCursor: null })));
+function summariseAll(project: Project, records: SyntheticRecord[], issueDate: string | null): Summary[] {
+  return records.map((record) => summarise(resolve({ project, record, overrides: {}, journeyCursor: null, ...(issueDate ? { issueDate } : {}) })));
 }
 
 const recordsIds = new WeakMap<SyntheticRecord[], number>();
@@ -76,9 +76,10 @@ const impactCache = new Map<string, Impact>();
 const LIMIT = 12;
 const remember = <V,>(m: Map<string, V>, k: string, v: V) => { m.set(k, v); if (m.size > LIMIT) m.delete(m.keys().next().value as string); return v; };
 
-export function impactOf(before: Project, after: Project, allRecords: SyntheticRecord[]): Impact {
+/** `issueDate`: both versions "as issued on" that day (ignored by documents without a date source). */
+export function impactOf(before: Project, after: Project, allRecords: SyntheticRecord[], issueDate: string | null = null): Impact {
   const records = filterRecords(after, allRecords);
-  const rk = recordsKey(records);
+  const rk = issueDate ? `${recordsKey(records)}@${issueDate}` : recordsKey(records);
   const bd = digestOf(before);
   const ad = digestOf(after);
   const key = `${bd}|${ad}|${rk}`;
@@ -87,8 +88,8 @@ export function impactOf(before: Project, after: Project, allRecords: SyntheticR
   if (bd === ad) return remember(impactCache, key, { evaluated: records.length, changed: [], newBlocking: 0, resolvedBlocking: 0 });
 
   const bKey = `${bd}|${rk}`;
-  const bs = beforeCache.get(bKey) ?? remember(beforeCache, bKey, summariseAll(before, records));
-  const as = summariseAll(after, records);
+  const bs = beforeCache.get(bKey) ?? remember(beforeCache, bKey, summariseAll(before, records, issueDate));
+  const as = summariseAll(after, records, issueDate);
 
   const changed: ImpactRecord[] = [];
   let newBlocking = 0, resolvedBlocking = 0;

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { create } from 'zustand';
 import type { KnownDataProblem } from '@iss/scenarios';
 import { api, type KnownDataAnswer, type KnownDataProblemDto } from '../../api/client';
-import { useStudio } from '../../state/store';
+import { currentPreviewDate, dated, usePreviewDate, useStudio } from '../../state/store';
 
 /**
  * Known data problems as the server holds them, per document, for this browser session. Every answer of the server
@@ -31,7 +31,7 @@ export const useKnownData = create<Store>((set, get) => {
     async load(projectId) {
       const running = pending.get(projectId);
       if (running) return running;
-      const p = api.knownDataProblems(projectId)
+      const p = api.knownDataProblems(projectId, currentPreviewDate())
         .then((r) => { put(projectId, { list: r.knownDataProblems, loaded: true, error: null }); noted(projectId, r); })
         .catch((e) => { put(projectId, { loaded: true, error: e instanceof Error ? e.message : String(e) }); })
         .finally(() => pending.delete(projectId));
@@ -39,13 +39,13 @@ export const useKnownData = create<Store>((set, get) => {
       return p;
     },
     async add(projectId, body) {
-      const r = await api.addKnownDataProblem(projectId, body);
+      const r = await api.addKnownDataProblem(projectId, { ...body, ...dated(currentPreviewDate()) });
       noted(projectId, r);
       await get().load(projectId);
       return r.knownDataProblem;
     },
     async remove(projectId, id) {
-      const r = await api.removeKnownDataProblem(projectId, id);
+      const r = await api.removeKnownDataProblem(projectId, id, currentPreviewDate());
       noted(projectId, r);
       await get().load(projectId);
     },
@@ -59,8 +59,10 @@ export function useKnownDataProblems(): { list: KnownDataProblemDto[]; loaded: b
   const projectId = useStudio((s) => s.project?.projectId ?? '');
   const serverVersion = useStudio((s) => s.serverVersion);
   const records = useStudio((s) => s.records);
+  // Judged on the day the screen shows ("As issued on"), so reload when it changes.
+  const issueDate = usePreviewDate();
   const entry = useKnownData((s) => s.byProject[projectId]);
-  useEffect(() => { if (projectId) void useKnownData.getState().load(projectId); }, [projectId, serverVersion, records]);
+  useEffect(() => { if (projectId) void useKnownData.getState().load(projectId); }, [projectId, serverVersion, records, issueDate]);
   return { list: entry?.list ?? NONE, loaded: !!entry?.loaded, note: entry?.note ?? null, error: entry?.error ?? null };
 }
 

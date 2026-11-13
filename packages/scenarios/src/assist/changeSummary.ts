@@ -39,7 +39,7 @@ function collapse(list: string[], noun: string, max = LIST_MAX): string[] {
 const CHANNEL_TOKEN_WORDS: Record<string, string> = { 'issuer.name': 'the issuer’s name', 'issuer.product': 'the product name', keyFacts: 'the key figures', link: 'the link' };
 const FORMAT_WORDS: Record<string, string> = { 'usd-cents': 'an amount in dollars', date: 'a date', text: 'plain text', int: 'a whole number', percent: 'a percentage', points: 'points' };
 const BRAND_WORDS: Record<string, string> = { primary: 'main brand colour', accent: 'accent colour', text: 'text colour', fontFamily: 'document font', logoDataUri: 'brand logo', logoAlt: 'logo description' };
-const OTHER_WORDS: Record<string, string> = { issuer: 'issuer details', rootNodeId: 'document structure', documentType: 'kind of document', schemaVersion: 'file format version' };
+const OTHER_WORDS: Record<string, string> = { issuer: 'issuer details', rootNodeId: 'document structure', documentType: 'kind of document', schemaVersion: 'file format version', accessiblePdfRequired: 'whether an accessible PDF is required' };
 
 /** Blocking finding in plain words. `where` is the component or text the finding is about. */
 function blockingWords(code: string, where: string): string {
@@ -70,7 +70,12 @@ function nodeText(n: DocNode | undefined): string {
   ].filter(Boolean).join(' ');
 }
 
-export function summarizeChanges(before: Project, after: Project, records: SyntheticRecord[]): ChangeSummary {
+/**
+ * `opts.issueDate` is "as issued on": the customer impact (who changes, who becomes blocked) is worked out on that day,
+ * the same day the screen previews. Without it, or for a document without a date source, nothing changes.
+ */
+export function summarizeChanges(before: Project, after: Project, records: SyntheticRecord[], opts: { issueDate?: string | null } = {}): ChangeSummary {
+  const issueDate = opts.issueDate ?? null;
   const d = diffProjects(before, after);
   const mine = records.filter((r) => r.documentType === after.documentType);
 
@@ -426,9 +431,9 @@ export function summarizeChanges(before: Project, after: Project, records: Synth
   }
 
   /* ------------------------------------------------------------------ what it does to customers */
-  const impact = impactOf(before, after, records);
+  const impact = impactOf(before, after, records, issueDate);
   const byId = new Map(mine.map((r) => [r.recordId, r]));
-  const blocked = (p: Project, r: SyntheticRecord): boolean => resolve({ project: p, record: r, overrides: {}, journeyCursor: null }).findings.some((f) => f.severity === 'blocking');
+  const blocked = (p: Project, r: SyntheticRecord): boolean => resolve({ project: p, record: r, overrides: {}, journeyCursor: null, ...(issueDate ? { issueDate } : {}) }).findings.some((f) => f.severity === 'blocking');
   const newlyBlockedNames: string[] = [], unblockedNames: string[] = [];
   for (const c of impact.changed) {
     if (!c.changes.some((x) => x.kind === 'blocking')) continue;

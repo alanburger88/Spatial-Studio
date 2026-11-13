@@ -89,7 +89,11 @@ export function dimensionValue(dim: DimensionId, s: Scenario, res: Resolution, p
 
 export class ScenarioEngine {
   private cache = new Map<string, Resolution>();
-  constructor(public project: Project, public records: SyntheticRecord[]) {}
+  /**
+   * `issueDate` is "as issued on": every scenario resolves with that day, so the Cube and the Landscape follow it. The
+   * resolver ignores it for a document without a date source; without it the engine works exactly as before.
+   */
+  constructor(public project: Project, public records: SyntheticRecord[], readonly issueDate: string | null = null) {}
 
   get universeRecords(): SyntheticRecord[] {
     return this.records.filter((r) => r.documentType === this.project.documentType);
@@ -101,7 +105,7 @@ export class ScenarioEngine {
     if (!res) {
       const record = this.records.find((r) => r.recordId === s.recordId);
       if (!record) throw new Error(`Unknown record ${s.recordId}`);
-      res = resolve({ project: this.project, record, overrides: s.overrides, journeyCursor: s.journeyCursor, profileId: s.profileId });
+      res = resolve({ project: this.project, record, overrides: s.overrides, journeyCursor: s.journeyCursor, profileId: s.profileId, ...(this.issueDate ? { issueDate: this.issueDate } : {}) });
       this.cache.set(key, res);
     }
     return res;
@@ -422,14 +426,14 @@ export interface JourneySnapshot {
 const STATE_PATHS = ['card.paymentStatus', 'card.missedPayments', 'card.assistanceRequested', 'card.arrangementStatus', 'claim.status', 'claim.liabilityConfirmed'];
 
 /** Deterministic replay: one resolution per event position. Issued snapshots are the positions whose event emits an immutable snapshot. */
-export function replayJourney(project: Project, record: SyntheticRecord, overrides: Overrides = {}, profileId: ProfileId = 'paged-pdf'): JourneySnapshot[] {
+export function replayJourney(project: Project, record: SyntheticRecord, overrides: Overrides = {}, profileId: ProfileId = 'paged-pdf', issueDate: string | null = null): JourneySnapshot[] {
   const out: JourneySnapshot[] = [];
   const states = journeyStates(project);
   // The values worth showing at each step: the card and claim state for the built-in kinds; for a document with its
   // own data, whatever its journey events change.
   const statePaths = project.documentType === 'custom' ? [...new Set(project.journey.events.flatMap((e) => e.effects.map((x) => x.path)))] : STATE_PATHS;
   for (const st of states) {
-    const res = resolve({ project, record, overrides, journeyCursor: st.cursor, profileId });
+    const res = resolve({ project, record, overrides, journeyCursor: st.cursor, profileId, ...(issueDate ? { issueDate } : {}) });
     const ctx: any = { ...res.effectiveRecord, claim: (res.effectiveRecord as any).claims?.[0] };
     const event = st.cursor === null ? null : project.journey.events[st.cursor];
     const step = st.cursor === null ? null : res.journeySteps[st.cursor];

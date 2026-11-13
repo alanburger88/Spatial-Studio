@@ -79,6 +79,8 @@ describe('the document’s date ("as issued on") through every route that resolv
   it('journey replay and the cube and landscape follow the date', async () => {
     const replay = await json('POST', '/api/v1/journeys/replay', { projectId: id, recordId: basic.recordId, issueDate: ON });
     expect(replay.snapshots.length).toBeGreaterThan(0);
+    // every snapshot is worked out on the day, like the browser's replay (`replayJourney(…, issueDate)`)
+    expect(replay.snapshots[0].runId).toBe(pure(basic, ON).runId);
     await refused('POST', '/api/v1/journeys/replay', { projectId: id, recordId: basic.recordId, issueDate: BAD });
     const mine = customers.filter((r) => r.documentType === 'custom');
     const count = (issueDate?: string) => mine.filter((r) => pure(r, issueDate).result.selectedVariants['renewal-note'] === 'note-newyear').length;

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { useMemo } from 'react';
 import { applyCommand, isIsoDay, projectContentDigest, roleCan, ROLE_LABEL, type Command, type Permission, type Persona, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
 import { resolve, type Resolution } from '@iss/resolver';
-import { ScenarioEngine, scenarioId, type DimensionId, type Scenario } from '@iss/scenarios';
+import { ScenarioEngine, type DimensionId } from '@iss/scenarios';
 import { staticRuleAnalysis, bindingAnalysis } from '@iss/validation';
 import { api, ApiFailure, type ProjectSummary, type SessionInfo } from '../api/client';
 
@@ -427,26 +427,6 @@ export function dated(issueDate: string | null | undefined): { issueDate?: strin
   return issueDate ? { issueDate } : {};
 }
 
-/**
- * The scenario engine "as issued on" a day: every scenario resolves with the preview date, so the Cube and the
- * Landscape follow it. Same API as `ScenarioEngine` (its own cache, keyed with the day).
- */
-export class DatedScenarioEngine extends ScenarioEngine {
-  private datedCache = new Map<string, Resolution>();
-  constructor(project: Project, records: SyntheticRecord[], readonly issueDate: string) { super(project, records); }
-  override resolveScenario(s: Omit<Scenario, 'scenarioId'>): Resolution {
-    const key = scenarioId(s);
-    let res = this.datedCache.get(key);
-    if (!res) {
-      const record = this.records.find((r) => r.recordId === s.recordId);
-      if (!record) throw new Error(`Unknown record ${s.recordId}`);
-      res = resolve({ project: this.project, record, overrides: s.overrides, journeyCursor: s.journeyCursor, profileId: s.profileId, issueDate: this.issueDate });
-      this.datedCache.set(key, res);
-    }
-    return res;
-  }
-}
-
 /** The language the previewed document is switched to, or null when it follows the customer's own preference. */
 export function usePreviewLanguage(): string | null {
   return useStudio((s) => ((s.ctx.overrides as { customer?: { locale?: string } }).customer?.locale ?? null));
@@ -487,7 +467,7 @@ export function useScenarioEngine(): ScenarioEngine | null {
   const project = useStudio((s) => s.project);
   const records = useStudio((s) => s.records);
   const issueDate = usePreviewDate();
-  return useMemo(() => (project && records.length ? (issueDate ? new DatedScenarioEngine(project, records, issueDate) : new ScenarioEngine(project, records)) : null), [project, records, issueDate]);
+  return useMemo(() => (project && records.length ? new ScenarioEngine(project, records, issueDate) : null), [project, records, issueDate]);
 }
 
 /** Request body for API calls that must reflect the current (possibly unsaved) model. */
