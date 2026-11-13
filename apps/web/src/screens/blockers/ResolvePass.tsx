@@ -139,7 +139,9 @@ export function ResolvePass({ data, current, full, modelChanged, readOnlyReason,
 
   const apply = (fix: FixProposal) => {
     if (!step || !fix.commands?.length) return;
-    if (applyAssistCommands(fix.commands, fix.title, 'fix', fix.source)) patch({ awaiting: { blockerId: step.id, title: step.title, recordIds: step.recordIds, project: useStudio.getState().project!, speed: step.speed } });
+    // The model as it was before the fix: once the engine has worked out a different one, the fix has been taken into account.
+    const before = data.project;
+    if (applyAssistCommands(fix.commands, fix.title, 'fix', fix.source)) patch({ awaiting: { blockerId: step.id, title: step.title, recordIds: step.recordIds, project: before, speed: step.speed } });
   };
   const skip = () => { if (step) patch((p) => ({ skipped: [...p.skipped, step.id], awaiting: null })); };
 
@@ -162,8 +164,9 @@ export function ResolvePass({ data, current, full, modelChanged, readOnlyReason,
             {result.setAside > 0 && <span className="muted"> · {result.setAside} set aside as known data problems</span>}
             {!current && <span className="muted"> · checking again after your change…</span>}
           </div>
-          <div className="bl-progress-bar" role="progressbar" aria-label="Customers still stopped" aria-valuemin={0} aria-valuemax={Math.max(start, 1)} aria-valuenow={result.stopped} aria-valuetext={`${result.stopped} of ${start} customers still stopped`}>
-            <span style={{ width: `${start ? (result.stopped / start) * 100 : 0}%` }} />
+          {/* Filled: customers no longer stopped since the pass started; the rest of the bar: customers still stopped. */}
+          <div className="bl-progress-bar" role="progressbar" aria-label="Customers no longer stopped" aria-valuemin={0} aria-valuemax={Math.max(start, 1)} aria-valuenow={start - result.stopped} aria-valuetext={`${result.stopped} of ${start} customers still stopped`}>
+            <span style={{ width: `${start ? ((start - result.stopped) / start) * 100 : 100}%` }} />
           </div>
           <p className="hint bl-pass-speeds" data-testid="bl-pass-speeds">
             Rules, wording and data: {current ? `checked just now for all ${result.checked} synthetic customers` : 'updating…'}. Pages and PDF/web differences: {full.ranAtMs !== null ? `from the full check at ${clockTime(full.ranAtMs)}${modelChanged ? ', made before your last change' : ''}` : 'not checked yet'}.

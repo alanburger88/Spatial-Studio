@@ -46,7 +46,7 @@ export function KnownDialog({ blockerId, blockerTitle, recordId, customerName, o
         <p><strong>{blockerTitle}</strong> for <strong>{customerName}</strong>.</p>
         <ul className="bl-known-rules">
           <li>It applies to this customer and this problem only. Other customers it stops stay stopped.</li>
-          <li>The customer is no longer counted as stopped, and the problem no longer blocks approval.</li>
+          <li>The problem no longer blocks approval, and the customer is no longer counted as stopped by it (a blocker in the document still stops them).</li>
           <li>It is listed, with your reason, on the approval screen and in every release from now on.</li>
           <li>It is undone automatically when the customer’s data or the document changes so that the problem no longer exists.</li>
         </ul>

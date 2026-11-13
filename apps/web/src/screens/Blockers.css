@@ -113,8 +113,8 @@
 .bl-progress { display: flex; flex-direction: column; gap: 6px; }
 .bl-progress-text { font-size: 13px; }
 .bl-progress-text strong { font-size: 16px; font-variant-numeric: tabular-nums; }
-.bl-progress-bar { height: 8px; border-radius: 999px; background: var(--iss-accent-soft); overflow: hidden; border: 1px solid var(--iss-border); }
-.bl-progress-bar span { display: block; height: 100%; background: var(--iss-error); transition: width var(--iss-motion-2, 200ms) var(--iss-ease, ease); }
+.bl-progress-bar { height: 8px; border-radius: 999px; background: var(--iss-error-soft); overflow: hidden; border: 1px solid var(--iss-border); }
+.bl-progress-bar span { display: block; height: 100%; background: var(--iss-accent); transition: width var(--iss-motion-mid) var(--iss-ease); }
 .bl-pass-speeds { margin: 0; font-size: 12px; }
 .bl-pass-step { display: flex; flex-direction: column; gap: 6px; }
 .bl-pass-step .section-title { margin: 8px 0 2px; }
