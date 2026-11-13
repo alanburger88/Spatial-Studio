@@ -1,10 +1,11 @@
 import {
   applyJourney, buildContext, deepPatch, digestOf, projectFieldIndex, getPath, inlineFromMarkup, isSafeUrl, projectContentDigest, richToPlain, shortDigest,
   languageShortName, localizeProject, projectLanguages, SOURCE_LANGUAGE, sysText,
-  type ContentPart, type DocNode, type FieldDef, type Predicate, type Project, type RichBlock, type RichDoc, type RichInline, type Rule,
+  CALC_PREFIX, DOCUMENT_DATE_PATH, documentDateUse, evaluateCalculations, exprDependencies, inEffect, isIsoDay, notInEffectWords, predicateLeafPaths, predicateTri,
+  type CalcResults, type ContentPart, type DocNode, type FieldDef, type Missing, type Predicate, type Project, type RichBlock, type RichDoc, type RichInline, type Rule,
 } from '@iss/model';
 import { formatCents, formatValue } from './format';
-import type { ChannelTexts, CoreDiagnostic, CoreResult, Finding, RBlock, RInline, RNode, RTableRow, RVariant, Resolution, ResolveInput, SemanticManifest, TraceEntry } from './types';
+import type { CalculatedOutcome, ChannelTexts, CoreDiagnostic, CoreResult, Finding, RBlock, RInline, RNode, RTableRow, RVariant, Resolution, ResolveInput, SemanticManifest, TraceEntry } from './types';
 
 export const ENGINE_VERSION = 'iss-resolver/1.0.0';
 const DEBT_LANGUAGE = /\b(you owe|owed|amount due|balance due|pay this amount|amount you owe|payment due now)\b/i;
@@ -81,6 +82,8 @@ interface Ctx {
   findings: Finding[];
   parts: Map<string, ContentPart>;
   liabilityConfirmed: boolean;
+  /** Set when the document has calculated fields or a date: reports a missing calculated value (or date) shown at `nodeId`. */
+  missingValue?: (path: string, nodeId: string) => void;
 }
 
 function valueFor(c: Ctx, path: string, nodeId: string, lineage: string[]): { value: unknown; known: boolean } {
@@ -106,8 +109,8 @@ function tokenInline(c: Ctx, path: string, nodeId: string, lineage: string[], ma
   const { value, known } = valueFor(c, path, nodeId, lineage);
   if (!known) return { kind: 'token', text: `{{${path}}}`, path, missing: true, ...marks };
   const f = c.fields.get(path)!;
-  const fmt = f.type === 'cents' ? 'usd-cents' : f.type === 'date' ? 'date' : f.type === 'points' ? 'int' : f.type === 'int' ? 'int' : 'text';
-  if (value === null || value === '') return { kind: 'token', text: '—', path, missing: true, ...marks };
+  const fmt = f.type === 'cents' ? 'usd-cents' : f.type === 'date' ? 'date' : f.type === 'points' ? 'int' : f.type === 'int' ? 'int' : f.type === 'number' ? 'number' : 'text';
+  if (value === null || value === '') { c.missingValue?.(path, nodeId); return { kind: 'token', text: '—', path, missing: true, ...marks }; }
   // Domain guard: never render unconfirmed member liability as an amount.
   if (path === 'claim.patientResponsibilityCents' && !c.liabilityConfirmed) return { kind: 'token', text: sysText(c.sys, 'guardNotYetDetermined'), path, ...marks };
   const out: RInline = { kind: 'token', text: typeof value === 'boolean' ? sysText(c.sys, value ? 'valueYes' : 'valueNo') : formatValue(value, fmt, c.locale), path, ...marks };
@@ -187,6 +190,50 @@ export function resolve(input: ResolveInput): Resolution {
   // 3. Derived fields (versioned pure registry).
   const ctx = buildContext(effective, claimIndex);
   let nodes = new Map(project.nodes.map((n) => [n.id, n]));
+
+  // 3b. The document's date and the calculated fields (only for a document that has them; others are untouched).
+  const dateSource = project.documentDate;
+  let issueDate: string | null = null;
+  let issueGiven = false;
+  if (dateSource) {
+    if (input.issueDate !== undefined && input.issueDate !== null) {
+      if (isIsoDay(input.issueDate)) { issueDate = input.issueDate; issueGiven = true; }
+      else findings.push({ code: 'ISSUE_DATE_INVALID', severity: 'blocking', source: 'resolver', message: 'The date given for this run is not a date. Write it as YYYY-MM-DD, for example 2027-01-31.', suggestion: 'Correct the “as issued on” date.' });
+    } else if (dateSource.source === 'field') {
+      const v = getPath(ctx, dateSource.path);
+      if (isIsoDay(v)) issueDate = v;
+    }
+    (ctx as Record<string, unknown>).document = { date: issueDate };
+  }
+  const calcs: CalcResults | null = project.calculatedFields?.length ? evaluateCalculations(project, ctx, issueDate) : null;
+  const depth = !!dateSource || !!calcs;
+  const NO_DATE: Missing = { code: 'no-date', message: 'The document has no date for this customer.' };
+  const askedFor = new WeakMap<Missing, string>();
+  /** Whether a path is a calculated value (or the document's date) that is missing for this customer. */
+  const missingAt = (path: string): Missing | null => {
+    let m: Missing | null = null;
+    if (calcs && path.startsWith(CALC_PREFIX)) { const k = path.slice(CALC_PREFIX.length); if (k in calcs.values && calcs.values[k] === null) m = calcs.missing[k] ?? null; }
+    else if (dateSource && path === DOCUMENT_DATE_PATH && !issueDate) m = NO_DATE;
+    if (!m) return null;
+    const copy = { ...m };
+    askedFor.set(copy, path);
+    return copy;
+  };
+  const depthPaths = (p: Predicate | undefined) => predicateLeafPaths(p).some((x) => x.startsWith(CALC_PREFIX) || x === DOCUMENT_DATE_PATH);
+  /** A condition: true, false, or the missing value it could not be decided without. */
+  const test = (p: Predicate, inputs: Record<string, unknown>): boolean | Missing => (depth && depthPaths(p) ? predicateTri(p, ctx, missingAt, inputs) : evaluatePredicate(p, ctx, inputs));
+  /** Where each missing calculated value (or the date) is needed, and how badly. */
+  const needs = new Map<string, { severity: 'blocking' | 'warning'; where: Set<string>; missing: Missing }>();
+  const need = (m: Missing, severity: 'blocking' | 'warning', where: string) => {
+    const path = askedFor.get(m) ?? DOCUMENT_DATE_PATH;
+    const n = needs.get(path) ?? { severity, where: new Set<string>(), missing: m };
+    if (severity === 'blocking') n.severity = 'blocking';
+    n.where.add(where);
+    needs.set(path, n);
+  };
+  const undecided = (m: Missing) => ({ path: askedFor.get(m) ?? DOCUMENT_DATE_PATH, reason: m.message });
+  /** Conditional sections that are not in effect on the document's date. */
+  const offNodes = new Set(dateSource ? project.nodes.filter((n) => n.effective && n.type === 'conditional-region' && !inEffect(n.effective, issueDate)).map((n) => n.id) : []);
   let parts = new Map(project.contentParts.map((p) => [p.id, p]));
 
   // 4. Evaluate every rule against the snapshot.
@@ -207,9 +254,23 @@ export function resolve(input: ResolveInput): Resolution {
       trace.push({ ruleId: rule.id, kind: 'rule', version: rule.version, mode: rule.mode, priority: rule.priority, enabled: false, matched: false, predicateInputs: inputs, expression: rule.when, action: rule.then, outcome: 'disabled', note: 'Rule disabled in the editor; not evaluated as a match.' });
       continue;
     }
-    const isMatch = evaluatePredicate(rule.when, ctx, inputs);
+    if (dateSource && (rule.effective || ('targetNodeId' in rule.then && offNodes.has(rule.then.targetNodeId)))) {
+      const off = rule.effective && !inEffect(rule.effective, issueDate);
+      if (off || ('targetNodeId' in rule.then && offNodes.has(rule.then.targetNodeId))) {
+        evaluatePredicate(rule.when, ctx, inputs);
+        const target = 'targetNodeId' in rule.then ? rule.then.targetNodeId : undefined;
+        const targetNode = target ? nodes.get(target) : undefined;
+        const note = off ? notInEffectWords(rule.effective!, issueDate) : `The section “${targetNode?.name ?? target}” it shows is not in effect. ${notInEffectWords(targetNode!.effective!, issueDate)}`;
+        trace.push({ ruleId: rule.id, kind: 'rule', version: rule.version, mode: rule.mode, priority: rule.priority, enabled: true, matched: false, predicateInputs: inputs, expression: rule.when, action: rule.then, ...(target ? { targetNodeId: target } : {}), outcome: 'out-of-scope', note, period: { period: off ? rule.effective! : targetNode!.effective!, issueDate } });
+        continue;
+      }
+    }
+    const tested = test(rule.when, inputs);
+    const isMatch = tested === true;
     const entry: TraceEntry = { ruleId: rule.id, kind: 'rule', version: rule.version, mode: rule.mode, priority: rule.priority, enabled: true, matched: isMatch, predicateInputs: inputs, expression: rule.when, action: rule.then, outcome: isMatch ? 'applied' : 'not-matched' };
     if ('targetNodeId' in rule.then) entry.targetNodeId = rule.then.targetNodeId;
+    if (typeof tested !== 'boolean') { entry.undecided = undecided(tested); entry.note = `Could not be decided: ${tested.message}`; need(tested, 'blocking', `rule ${rule.id}`); }
+    if (rule.effective) entry.period = { period: rule.effective, issueDate };
     trace.push(entry);
     if (!isMatch) continue;
     matched.push(rule.id);
@@ -236,7 +297,21 @@ export function resolve(input: ResolveInput): Resolution {
   const traceById = new Map(trace.map((t) => [t.ruleId, t]));
   for (const node of project.nodes) {
     if (node.type !== 'variant-set' && node.type !== 'conditional-region') continue;
-    const hits = [...(exclusive.get(node.id) ?? [])].sort((a, b) => b.priority - a.priority);
+    if (offNodes.has(node.id)) { regionSelections.set(node.id, { ids: [], source: null, ruleIds: [], unresolved: false }); continue; }
+    let hits = [...(exclusive.get(node.id) ?? [])].sort((a, b) => b.priority - a.priority);
+    // An alternative outside its period cannot be chosen; neither can a fallback outside its period.
+    const variantOff = (vid: string | undefined) => !!vid && !!dateSource && !!node.variantPeriods?.[vid] && !inEffect(node.variantPeriods[vid], issueDate);
+    if (dateSource && node.variantPeriods) {
+      hits = hits.filter((r) => {
+        const vid = (r.then as { variantId?: string }).variantId;
+        if (!variantOff(vid)) return true;
+        const t = traceById.get(r.id);
+        if (t) { t.outcome = 'out-of-scope'; t.matched = false; t.note = `The alternative “${parts.get(vid!)?.title ?? vid}” it chooses is not in effect. ${notInEffectWords(node.variantPeriods![vid!], issueDate)}`; t.period = { period: node.variantPeriods![vid!], issueDate }; }
+        const mi = matched.indexOf(r.id); if (mi >= 0) matched.splice(mi, 1);
+        return false;
+      });
+    }
+    const fallbackId = variantOff(node.fallbackVariantId) ? undefined : node.fallbackVariantId;
     let ids: string[] = [];
     let source: RVariant['source'] = null;
     let ruleIds: string[] = [];
@@ -262,17 +337,25 @@ export function resolve(input: ResolveInput): Resolution {
         const cond = node.variantConditions[vid];
         if (!cond) continue;
         const inputs: Record<string, unknown> = {};
-        const ok = evaluatePredicate(cond, ctx, inputs);
-        trace.push({ ruleId: `${node.id}:${vid}`, kind: 'inline-condition', mode: 'inline', enabled: true, matched: ok, predicateInputs: inputs, expression: cond, targetNodeId: node.id, outcome: ok && (node.policy === 'additive' || !ids.length) ? 'selected' : ok ? 'outranked' : 'not-matched' });
+        if (variantOff(vid)) {
+          evaluatePredicate(cond, ctx, inputs);
+          trace.push({ ruleId: `${node.id}:${vid}`, kind: 'inline-condition', mode: 'inline', enabled: true, matched: false, predicateInputs: inputs, expression: cond, targetNodeId: node.id, outcome: 'out-of-scope', note: notInEffectWords(node.variantPeriods![vid], issueDate), period: { period: node.variantPeriods![vid], issueDate } });
+          continue;
+        }
+        const tested = test(cond, inputs);
+        const ok = tested === true;
+        if (typeof tested !== 'boolean') need(tested, 'blocking', node.name ?? node.id);
+        trace.push({ ruleId: `${node.id}:${vid}`, kind: 'inline-condition', mode: 'inline', enabled: true, matched: ok, predicateInputs: inputs, expression: cond, targetNodeId: node.id, outcome: ok && (node.policy === 'additive' || !ids.length) ? 'selected' : ok ? 'outranked' : 'not-matched', ...(typeof tested !== 'boolean' ? { undecided: undecided(tested), note: `Could not be decided: ${tested.message}` } : {}) });
         if (ok && (node.policy === 'additive' || !ids.length)) { ids.push(vid); source = 'inline'; ruleIds.push(`${node.id}:${vid}`); }
       }
-      if (!ids.length && node.fallbackVariantId) { ids = [node.fallbackVariantId]; source = 'fallback'; }
-    } else if (node.fallbackVariantId) {
-      ids = [node.fallbackVariantId]; source = 'fallback';
-      findings.push({ code: 'FALLBACK_SELECTED', severity: 'info', nodeId: node.id, source: 'resolver', message: `No exclusive rule matched ${node.id}; the named fallback ${node.fallbackVariantId} was selected and recorded.` });
+      if (!ids.length && fallbackId) { ids = [fallbackId]; source = 'fallback'; }
+    } else if (fallbackId) {
+      ids = [fallbackId]; source = 'fallback';
+      findings.push({ code: 'FALLBACK_SELECTED', severity: 'info', nodeId: node.id, source: 'resolver', message: `No exclusive rule matched ${node.id}; the named fallback ${fallbackId} was selected and recorded.` });
     } else if (node.type === 'variant-set') {
       unresolved = true;
-      findings.push({ code: 'NO_VARIANT_MATCH', severity: 'blocking', nodeId: node.id, source: 'resolver', message: `No exclusive rule matched ${node.id} and it has no fallback variant.`, suggestion: 'Add a fallback variant or a matching rule.' });
+      const fallbackOff = !!node.fallbackVariantId && fallbackId === undefined;
+      findings.push({ code: 'NO_VARIANT_MATCH', severity: 'blocking', nodeId: node.id, source: 'resolver', message: fallbackOff ? `No exclusive rule matched ${node.id}, and its fallback “${parts.get(node.fallbackVariantId!)?.title ?? node.fallbackVariantId}” is not in effect: ${notInEffectWords(node.variantPeriods![node.fallbackVariantId!], issueDate)}` : `No exclusive rule matched ${node.id} and it has no fallback variant.`, suggestion: fallbackOff ? 'Give the message an alternative that is in effect on this date, or change the fallback’s period.' : 'Add a fallback variant or a matching rule.' });
     }
     if (node.type === 'variant-set') selected[node.id] = unresolved ? null : ids[0] ?? null;
     regionSelections.set(node.id, { ids, source, ruleIds, unresolved });
@@ -317,9 +400,10 @@ export function resolve(input: ResolveInput): Resolution {
     if (localized.missing.length) findings.push({ code: 'TRANSLATION_MISSING_TEXT', severity: 'warning', locale: approvedLocale, source: 'translation', message: `${localized.missing.length} label${localized.missing.length === 1 ? '' : 's'} or other text${localized.missing.length === 1 ? ' has' : 's have'} no approved ${lang} translation; the English text is shown.`, suggestion: `Open Content & Translations and translate the remaining ${lang} texts.`, details: { ids: localized.missing } });
   }
 
-  const c: Ctx = { project: localized.project, ctx, locale: approvedLocale ?? (effective.customer?.locale as string) ?? 'en-US', approvedLocale, fields: projectFieldIndex(project), sys: localized.system, findings, parts, liabilityConfirmed };
   const requiredSet = new Set(mandatory);
   for (const n of project.nodes) if (n.required) requiredSet.add(n.id);
+  const c: Ctx = { project: localized.project, ctx, locale: approvedLocale ?? (effective.customer?.locale as string) ?? 'en-US', approvedLocale, fields: projectFieldIndex(project), sys: localized.system, findings, parts, liabilityConfirmed };
+  if (depth) c.missingValue = (path, nodeId) => { const m = missingAt(path); if (m) need(m, requiredSet.has(nodeId) ? 'blocking' : 'warning', nodeId.startsWith('@email/') ? 'the email' : nodeId.startsWith('@sms/') ? 'the text message (SMS)' : nodes.get(nodeId)?.name ?? nodeId); };
 
   // Email and SMS wording, resolved with the same field formatting and guards as document text. `{{keyFacts}}` and
   // `{{link}}` stay in place for the channel renderers, which know the document's key figures and action links.
@@ -349,10 +433,17 @@ export function resolve(input: ResolveInput): Resolution {
       reasons.push(by.length ? `Mandatory: required by ${by.join(', ')}` : 'Mandatory component');
       r.ruleIds.push(...by);
     }
+    if (dateSource && node.effective && visible && !requiredSet.has(node.id) && !inEffect(node.effective, issueDate)) {
+      visible = false;
+      hiddenReason = notInEffectWords(node.effective, issueDate);
+      trace.push({ ruleId: `${node.id}:period`, kind: 'inline-condition', mode: 'inline', enabled: true, matched: false, predicateInputs: {}, expression: { op: 'and', args: [] }, targetNodeId: node.id, outcome: 'out-of-scope', note: hiddenReason, period: { period: node.effective, issueDate } });
+    }
     if (node.visibleWhen && visible) {
       const inputs: Record<string, unknown> = {};
-      const ok = evaluatePredicate(node.visibleWhen, ctx, inputs);
-      trace.push({ ruleId: `${node.id}:visibleWhen`, kind: 'inline-condition', mode: 'inline', enabled: true, matched: ok, predicateInputs: inputs, expression: node.visibleWhen, targetNodeId: node.id, outcome: ok ? 'applied' : 'not-matched' });
+      const tested = test(node.visibleWhen, inputs);
+      const ok = tested === true;
+      if (typeof tested !== 'boolean' && !requiredSet.has(node.id)) need(tested, 'blocking', node.name ?? node.id);
+      trace.push({ ruleId: `${node.id}:visibleWhen`, kind: 'inline-condition', mode: 'inline', enabled: true, matched: ok, predicateInputs: inputs, expression: node.visibleWhen, targetNodeId: node.id, outcome: ok ? 'applied' : 'not-matched', ...(typeof tested !== 'boolean' ? { undecided: undecided(tested), note: `Could not be decided: ${tested.message}` } : {}) });
       lineage.push(...predicatePaths(node.visibleWhen));
       if (!ok && !requiredSet.has(node.id)) { visible = false; hiddenReason = `Condition not met: ${describePredicate(node.visibleWhen)}`; }
       else reasons.push(`Condition met: ${describePredicate(node.visibleWhen)}`);
@@ -367,11 +458,12 @@ export function resolve(input: ResolveInput): Resolution {
         const path = node.binding ?? '';
         const { value, known } = valueFor(c, path, node.id, lineage);
         const f = c.fields.get(path);
-        const formatter = node.formatter ?? (f?.type === 'cents' ? 'usd-cents' : f?.type === 'date' ? 'date' : 'text');
+        const formatter = node.formatter ?? (f?.type === 'cents' ? 'usd-cents' : f?.type === 'date' ? 'date' : f?.type === 'number' ? 'number' : 'text');
         // Yes/no values use the document language's own words where they have been translated (as tokens in text do).
         const yesNo = typeof value === 'boolean' && formatter === 'text' ? c.sys[value ? 'valueYes' : 'valueNo'] : undefined;
         let display = known ? yesNo ?? formatValue(value, formatter, c.locale) : `{{${path}}}`;
         const missing = !known || value === null || value === '';
+        if (missing && known) c.missingValue?.(path, node.id);
         let guarded = false;
         if (missing && known) {
           const policy = node.nullPolicy ?? 'fallback';
@@ -413,6 +505,12 @@ export function resolve(input: ResolveInput): Resolution {
           if (amountKey && typeof item?.[amountKey] === 'number') { total += item[amountKey]; hasMoney = true; }
           rows.push({ id: String(item?.id ?? item?.claimId ?? `${node.id}-row-${i + 1}`), cells });
         });
+        if (node.totalFrom) {
+          // The footer shows a chosen amount (a calculated or data field) instead of the column sum.
+          const t = valueFor(c, node.totalFrom, node.id, lineage);
+          if (t.known && typeof t.value === 'number' && Number.isSafeInteger(t.value)) { total = t.value; hasMoney = true; }
+          else { hasMoney = false; if (t.known) c.missingValue?.(node.totalFrom, node.id); }
+        }
         const hinted = hints.includes('repeating-table-headings-and-continuation');
         const repeatHeader = node.repeatHeader === 'always' || (node.repeatHeader !== 'never' && hinted);
         if (hinted) reasons.push('R10 hint: repeat headings and continuation enabled');
@@ -428,6 +526,7 @@ export function resolve(input: ResolveInput): Resolution {
         if (ch.series?.length) {
           for (const s of ch.series) {
             const { value, known } = valueFor(c, s.path, node.id, lineage);
+            if (known && value === null) c.missingValue?.(s.path, node.id);
             if (!known || typeof value !== 'number' || value <= 0) continue;
             if (s.path === 'claim.patientResponsibilityCents' && !liabilityConfirmed) continue;
             data.push({ label: s.label, value, display: shown(value, c.fields.get(s.path)?.type) });
@@ -558,6 +657,38 @@ export function resolve(input: ResolveInput): Resolution {
     walk(root);
   }
 
+  // 6b. Missing calculated values and a missing date, where the document needs them.
+  if (dateSource && !issueDate && !findings.some((f) => f.code === 'ISSUE_DATE_INVALID')) {
+    const use = documentDateUse(project);
+    const dateNeeds = [...needs.entries()].filter(([, n]) => n.missing.code === 'no-date');
+    const blocking = use.periods > 0 || dateNeeds.some(([, n]) => n.severity === 'blocking');
+    if (blocking || dateNeeds.length) {
+      const field = dateSource.source === 'field' ? projectFieldIndex(project).get(dateSource.path) : undefined;
+      findings.push({
+        code: 'DOCUMENT_DATE_MISSING', severity: blocking ? 'blocking' : 'warning', source: 'binding',
+        message: `This document’s ${use.periods ? 'content' : 'wording'} depends on its date, and this customer has none.`,
+        suggestion: dateSource.source === 'field' ? `Fill in “${field?.label ?? dateSource.path}” for this customer, or give a date for the run.` : 'Give the date for the run (“as issued on”).',
+        details: { path: DOCUMENT_DATE_PATH, ...(dateSource.source === 'field' ? { input: dateSource.path } : {}), usedBy: [...new Set(dateNeeds.flatMap(([, n]) => [...n.where]))].sort() },
+      });
+    }
+  }
+  for (const [path, n] of needs) {
+    if (n.missing.code === 'no-date') continue;
+    const key = path.startsWith(CALC_PREFIX) ? path.slice(CALC_PREFIX.length) : path;
+    const label = project.calculatedFields?.find((x) => x.key === key)?.label ?? key;
+    const lookup = n.missing.code === 'no-lookup-row' || n.missing.code === 'no-lookup-value';
+    const usedBy = [...n.where].sort();
+    findings.push({
+      code: lookup ? 'LOOKUP_NO_MATCH' : 'CALCULATION_MISSING', severity: n.severity, source: 'binding',
+      message: `“${label}” could not be worked out for this customer: ${n.missing.message} It is used by ${usedBy.slice(0, 3).join(', ')}${usedBy.length > 3 ? ` and ${usedBy.length - 3} more` : ''}.`,
+      suggestion: n.missing.code === 'input-missing' ? `Fill in the missing value in this customer’s data, or change “${label}” so it copes without it (for example with IF … IS EMPTY).`
+        : n.missing.code === 'division-by-zero' ? `Change “${label}” so it never divides by zero (for example with IF), or correct this customer’s data.`
+        : lookup ? 'Add a row that covers this customer to the lookup table, or give the table a default row.'
+        : `Check the calculation “${label}”.`,
+      details: { path, reason: n.missing.code, ...(n.missing.path ? { input: n.missing.path } : {}), ...(n.missing.via?.length ? { via: n.missing.via } : {}), usedBy },
+    });
+  }
+
   // 7. Facts and semantic manifest.
   // A document with its own data has no facts the engine knows by name: everything it shows is in the tree and the manifest.
   const documentFacts: Record<string, unknown> = docType === 'custom' ? {} : docType === 'credit-statement'
@@ -580,7 +711,7 @@ export function resolve(input: ResolveInput): Resolution {
   const manifest = buildResolverManifest(project, effective, root, result, c.locale);
   const projectDigest = projectContentDigest(project);
   const rulesDigest = digestOf(project.rules);
-  const runId = 'run-' + shortDigest({ projectDigest, recordId: effective.recordId, overrides: input.overrides ?? {}, journeyCursor, claimIndex, profileId, engine: ENGINE_VERSION, ...(localized.draftsShown.length ? { includeDrafts: true } : {}) }, 16);
+  const runId = 'run-' + shortDigest({ projectDigest, recordId: effective.recordId, overrides: input.overrides ?? {}, journeyCursor, claimIndex, profileId, engine: ENGINE_VERSION, ...(localized.draftsShown.length ? { includeDrafts: true } : {}), ...(issueGiven ? { issueDate } : {}) }, 16);
   // Content digest is content-addressed: excludes producer and the model version counter.
   const { producer: _p, modelVersion: _mv, ...manifestCore } = manifest;
 
@@ -589,7 +720,29 @@ export function resolve(input: ResolveInput): Resolution {
     rulesDigest, engineVersion: ENGINE_VERSION, locale: c.locale, hints, result, trace, findings, root, semanticManifest: manifest,
     contentDigest: digestOf(manifestCore), journeySteps: steps, effectiveRecord: effective,
     channelTexts, systemStrings: localized.system, translation: { locale: c.locale, draftsShown: localized.draftsShown, missing: localized.missing },
+    ...(dateSource ? { documentDate: { date: issueDate, source: dateSource.source, given: issueGiven } } : {}),
+    ...(calcs ? { calculated: calculatedOutcomes(project, calcs) } : {}),
   };
+}
+
+/** Each calculated field's value or why it is missing, with what it reads. */
+function calculatedOutcomes(project: Project, calcs: CalcResults): Record<string, CalculatedOutcome> {
+  const out: Record<string, CalculatedOutcome> = {};
+  const byKey = new Map((project.calculatedFields ?? []).map((x) => [x.key, x]));
+  const fields = projectFieldIndex(project);
+  for (const key of calcs.order) {
+    const def = byKey.get(key);
+    if (!def) continue;
+    const d = exprDependencies(def.expr);
+    const inputs = [...d.fields, ...d.lists, ...d.calcs.map((k) => `${CALC_PREFIX}${k}`), ...(d.usesIssueDate ? [DOCUMENT_DATE_PATH] : [])];
+    out[key] = {
+      label: def.label, type: def.type, value: calcs.values[key] ?? null,
+      ...(calcs.missing[key] ? { missing: calcs.missing[key] } : {}),
+      inputs,
+      inputNames: inputs.map((x) => (x === DOCUMENT_DATE_PATH ? 'the document’s date' : x.startsWith(CALC_PREFIX) ? byKey.get(x.slice(CALC_PREFIX.length))?.label ?? x : fields.get(x)?.label ?? x)),
+    };
+  }
+  return out;
 }
 
 /** The resolver's expected semantic facts — what every output adapter must preserve. */

@@ -1,4 +1,4 @@
-import { digestOf, shortDigest, type SyntheticRecord } from '@iss/model';
+import { dayWords, digestOf, isIsoDay, shortDigest, type SyntheticRecord } from '@iss/model';
 import type { Resolution } from './types';
 
 /**
@@ -56,6 +56,12 @@ export interface ProofRecord {
   /** SHA-256 of the customer's data in canonical form. The data itself is not kept. */
   dataFingerprint: string;
   runId: string;
+  /**
+   * The document's date when it was GIVEN for the run (ISO day), for a document that uses dates. Absent when the date
+   * came from the customer's data (it is then part of the data fingerprint) and on every record of a document without
+   * dates. Re-creating the document uses the same date. An optional addition: records without it stay valid.
+   */
+  issueDate?: string;
   locale: string;
   profileId: string;
   /** False when a blocking issue stopped the document; then `outputs` is empty and `blockedBy` lists the issue codes. */
@@ -108,7 +114,7 @@ export function buildProofRecord(input: ProofInput): ProofRecord {
     proofId: 'proof-' + shortDigest({ release: release.id, customerRef, dataFingerprint, runId: res.runId, producedAt: input.producedAt }, 20),
     releaseId: release.id, documentId: release.documentId, releaseNumber: release.number, releaseDigest: release.contentDigest,
     engineVersion: res.engineVersion, producer: input.producer, producedAt: input.producedAt,
-    customerRef, dataFingerprint, runId: res.runId, locale: res.locale, profileId: res.profileId,
+    customerRef, dataFingerprint, runId: res.runId, ...(givenDate(res) ? { issueDate: givenDate(res)! } : {}), locale: res.locale, profileId: res.profileId,
     produced, blockedBy,
     decisions: proofDecisions(res),
     contentDigest: res.contentDigest,
@@ -116,7 +122,10 @@ export function buildProofRecord(input: ProofInput): ProofRecord {
   };
 }
 
-export type ProofDifferenceKind = 'release' | 'engine' | 'data' | 'decision' | 'content' | 'output' | 'blocked';
+/** The document's date when it was given for the run (what a proof record keeps as `issueDate`). */
+export const givenDate = (res: Pick<Resolution, 'documentDate'>): string | null => (res.documentDate?.given && res.documentDate.date ? res.documentDate.date : null);
+
+export type ProofDifferenceKind = 'release' | 'engine' | 'data' | 'date' | 'decision' | 'content' | 'output' | 'blocked';
 export interface ProofDifference { kind: ProofDifferenceKind; message: string; nodeId?: string; channel?: ProofChannel }
 
 /**
@@ -129,6 +138,8 @@ export function verifyProof(proof: ProofRecord, again: { release: { id: string; 
   if (again.release.id !== proof.releaseId || again.release.contentDigest !== proof.releaseDigest) out.push({ kind: 'release', message: `This is not the release the document was produced from (${proof.releaseId}).` });
   if (again.resolution.engineVersion !== proof.engineVersion) out.push({ kind: 'engine', message: `The engine version differs: produced with ${proof.engineVersion}, checked with ${again.resolution.engineVersion}.` });
   if (dataFingerprintOf(again.record) !== proof.dataFingerprint) out.push({ kind: 'data', message: 'The data supplied is not the data the document was produced from.' });
+  const dateNow = givenDate(again.resolution);
+  if ((proof.issueDate ?? null) !== dateNow) out.push({ kind: 'date', message: proof.issueDate ? (dateNow ? `The document was produced as issued on ${dayWords(proof.issueDate)}; it is checked as issued on ${dayWords(dateNow)}.` : `The document was produced as issued on ${dayWords(proof.issueDate)}; it is checked without that date. Give the same date to check it.`) : `The document was produced without a date given for the run; it is checked as issued on ${dayWords(dateNow!)}.` });
   const blockedBy = [...new Set(again.resolution.findings.filter((f) => f.severity === 'blocking').map((f) => f.code))].sort();
   if ((blockedBy.length === 0) !== proof.produced) out.push({ kind: 'blocked', message: proof.produced ? 'The document was produced then, but is stopped by a blocking issue now.' : 'The document was stopped then, but would be produced now.' });
   const now = new Map(proofDecisions(again.resolution).map((d) => [d.nodeId, d]));
@@ -164,6 +175,7 @@ export function proofRecordProblems(raw: unknown): string[] {
   if (typeof r.producedAt === 'string' && Number.isNaN(Date.parse(r.producedAt))) p.push('“producedAt” is not a date and time.');
   for (const k of ['dataFingerprint', 'releaseDigest', 'contentDigest']) if (typeof r[k] === 'string' && !/^[0-9a-f]{64}$/.test(r[k] as string)) p.push(`“${k}” is not a SHA-256 fingerprint.`);
   if (!Array.isArray(r.blockedBy) || r.blockedBy.some((c) => typeof c !== 'string')) p.push('“blockedBy” must be a list of issue codes.');
+  if (r.issueDate !== undefined && !isIsoDay(r.issueDate)) p.push('“issueDate” must be a date written as YYYY-MM-DD.');
   if (!Array.isArray(r.decisions) || r.decisions.length > 2000 || r.decisions.some((d) => !d || typeof d !== 'object' || typeof (d as ProofDecision).nodeId !== 'string' || !((d as ProofDecision).variantId === null || typeof (d as ProofDecision).variantId === 'string') || !Array.isArray((d as ProofDecision).ruleIds) || (d as ProofDecision).ruleIds.some((x) => typeof x !== 'string'))) p.push('“decisions” is not a list of decisions.');
   if (!Array.isArray(r.outputs) || r.outputs.length > 8 || r.outputs.some((o) => !o || typeof o !== 'object' || !PROOF_CHANNELS.includes((o as ProofOutput).channel) || !['bytes', 'content'].includes((o as ProofOutput).kind) || !/^[0-9a-f]{64}$/.test(String((o as ProofOutput).sha256)))) p.push('“outputs” is not a list of output fingerprints.');
   const extraKeys = (list: unknown, keys: string[]): string[] => (Array.isArray(list) ? [...new Set(list.flatMap((x) => (x && typeof x === 'object' ? Object.keys(x).filter((k) => !keys.includes(k)) : [])))] : []);
@@ -171,7 +183,7 @@ export function proofRecordProblems(raw: unknown): string[] {
   if (inDecisions.length) p.push(`A decision carries unexpected fields: ${inDecisions.slice(0, 5).join(', ')}.`);
   const inOutputs = extraKeys(r.outputs, ['channel', 'kind', 'sha256', 'size', 'pages']);
   if (inOutputs.length) p.push(`An output fingerprint carries unexpected fields: ${inOutputs.slice(0, 5).join(', ')}.`);
-  const allowed = new Set(['schema', 'proofId', 'releaseId', 'documentId', 'releaseNumber', 'releaseDigest', 'engineVersion', 'producer', 'producedAt', 'customerRef', 'dataFingerprint', 'runId', 'locale', 'profileId', 'produced', 'blockedBy', 'decisions', 'contentDigest', 'outputs']);
+  const allowed = new Set(['schema', 'proofId', 'releaseId', 'documentId', 'releaseNumber', 'releaseDigest', 'engineVersion', 'producer', 'producedAt', 'customerRef', 'dataFingerprint', 'runId', 'issueDate', 'locale', 'profileId', 'produced', 'blockedBy', 'decisions', 'contentDigest', 'outputs']);
   const extra = Object.keys(r).filter((k) => !allowed.has(k));
   if (extra.length) p.push(`Unexpected fields: ${extra.slice(0, 5).join(', ')}. A proof record must not carry anything else (it holds no customer data).`);
   return p;

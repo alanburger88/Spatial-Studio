@@ -30,6 +30,14 @@ export function formatInt(n: number | null | undefined): string {
   return (n < 0 ? '−' : '') + group3(Math.abs(Math.trunc(n)).toString());
 }
 
+/** A number that may have decimals, with the document language's separators (a calculated number). */
+export function formatNumber(n: number | null | undefined, locale = 'en-US'): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '';
+  const l = languageData(locale);
+  const [int, frac] = String(Math.abs(n)).includes('e') ? [Math.abs(n).toFixed(0), ''] : String(Math.abs(n)).split('.');
+  return `${n < 0 ? '−' : ''}${group3(int, l.group)}${frac ? `${l.decimal}${frac}` : ''}`;
+}
+
 export function formatValue(value: unknown, formatter: string | undefined, locale = 'en-US'): string {
   if (value === null || value === undefined) return '';
   switch (formatter) {
@@ -38,6 +46,7 @@ export function formatValue(value: unknown, formatter: string | undefined, local
     case 'int': return typeof value === 'number' ? formatInt(value) : String(value);
     case 'points': return typeof value === 'number' ? `${formatInt(value)} pts` : String(value);
     case 'percent': return typeof value === 'number' ? `${value}%` : String(value);
+    case 'number': return typeof value === 'number' ? formatNumber(value, locale) : String(value);
     default:
       if (typeof value === 'boolean') return value ? (locale === 'es-US' ? 'Sí' : 'Yes') : 'No';
       return String(value);

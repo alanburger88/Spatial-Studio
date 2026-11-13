@@ -527,6 +527,9 @@ const DATA_PROBLEM: Record<string, string> = {
   UNCONFIRMED_MEMBER_LIABILITY: 'The claim is denied pending review and the member’s liability is not confirmed, yet the data supplies an amount for the member to pay. The document will not present that amount as owed.',
   CLAIM_RECONCILIATION_FAILED: 'The claim amounts do not add up: billed must equal the adjustment plus the allowed amount, and allowed must equal what the plan paid plus the member’s share.',
   NULL_BINDING: 'A value this document must show is empty for this customer.',
+  CALCULATION_MISSING: 'A calculated value this document needs cannot be worked out from this customer’s data.',
+  DOCUMENT_DATE_MISSING: 'This document depends on its date, and this customer has none.',
+  ISSUE_DATE_INVALID: 'The date given for this run is not a date.',
 };
 
 function scenarioFixes(project: Project, f: Finding, ctx: FixCtx): Draft[] {
@@ -542,6 +545,8 @@ function scenarioFixes(project: Project, f: Finding, ctx: FixCtx): Draft[] {
   else if (record && step && has(undefined, cursor)) { title = `Review the journey step ${q(step.label ?? humanise(step.eventType))}`; origin = `It appears at the journey step ${q(step.label ?? humanise(step.eventType))}: the step leaves the data in this state. Correct the step or the data it starts from.`; }
   else if (record && hasOverrides) { title = 'Adjust the what-if values'; origin = 'It is caused by the what-if values in this preview: change or clear them.'; }
   const drafts: Draft[] = [{ kind: 'scenario', title, explanation: `${DATA_PROBLEM[f.code] ?? 'The data being previewed is not consistent.'} ${origin} The document itself is not at fault, so no document change is proposed.`, risk: 'review' }];
+  if (f.code === 'CALCULATION_MISSING') drafts.push(linkDraft('Make the calculation cope without the value', `${f.message} If this customer’s data is right, change the calculation in Rules & data so it gives a value anyway (for example with IF … IS EMPTY).`, { view: 'rules-data', label: 'Open the calculations' }));
+  if (f.code === 'DOCUMENT_DATE_MISSING') drafts.push(linkDraft('Check where the document’s date comes from', 'The document’s date comes from a date field of the customer’s data or is given for the run. Check that choice in Rules & data, or give an “as issued on” date.', { view: 'rules-data', label: 'Open Rules & data' }));
   if (f.code === 'NULL_BINDING') drafts.push(linkDraft(`Decide what ${q(nodeName(project, f.nodeId))} shows when the value is empty`, `${q(nodeName(project, f.nodeId))} is set to stop the document when its value is empty. If an empty value is acceptable, choose a fallback text or hide the field in the Design view.`, designLink(project, f.nodeId)));
   return drafts;
 }
@@ -643,7 +648,11 @@ function draftsFor(project: Project, f: Finding, ctx: FixCtx): Draft[] {
     case 'BALANCE_RECONCILIATION_FAILED':
     case 'UNCONFIRMED_MEMBER_LIABILITY':
     case 'CLAIM_RECONCILIATION_FAILED':
-    case 'NULL_BINDING': return scenarioFixes(project, f, ctx);
+    case 'NULL_BINDING':
+    case 'CALCULATION_MISSING':
+    case 'DOCUMENT_DATE_MISSING':
+    case 'ISSUE_DATE_INVALID': return scenarioFixes(project, f, ctx);
+    case 'LOOKUP_NO_MATCH': return [linkDraft('Add a row that covers this customer', `${f.message} Add a row to the lookup table, or give the table a default row, in Rules & data.`, { view: 'rules-data', label: 'Open the lookup tables' })];
     case 'FALLBACK_SELECTED': return [];
     default: return personFixes(project, f);
   }
