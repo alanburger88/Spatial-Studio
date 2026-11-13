@@ -3,7 +3,7 @@ import {
   SOURCE_LANGUAGE, validateRecordShape,
   type DocNode, type FieldDef, type Predicate, type Project, type Rule, type Scalar, type SyntheticRecord,
 } from '@iss/model';
-import { evaluatePredicate, predicatePaths, resolve, type Resolution } from '@iss/resolver';
+import { predicatePaths, resolve, type Resolution } from '@iss/resolver';
 import { coverageKit, type CoverageConj, type CoverageEnv } from './coverage';
 import type { GeneratedCustomer, TestDataOptions, TestDataPlan, TestDataTarget } from './types';
 
@@ -83,8 +83,9 @@ function sampleRows(f: FieldDef, fields: Map<string, FieldDef>): Array<Record<st
 }
 
 /**
- * Makes a record complete for the project's data contract. With `everything` it fills every field (a starting record for
- * a document that has no samples yet); otherwise only what the contract requires and the record lacks.
+ * A starting record that is complete for the project's data contract. Without a source record every field is filled (a
+ * document that has no samples yet); with one, only what the contract requires and the record lacks. The preferred
+ * language is English unless it is one of the project's languages.
  */
 function completed(project: Project, source: SyntheticRecord | null, locales: string[]): SyntheticRecord {
   const defs = projectFields(project);
@@ -210,11 +211,11 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
   const env: CoverageEnv = new Env(issued, bases, SEARCH_WIDTH);
   let journeyEnv: CoverageEnv | null = null;
 
-  /** First problem the customer import would report for this record, or null. */
+  /** Why this record cannot be a customer (the first problem the customer import would report, or a language the project does not have), or null. */
   const invalid = (record: SyntheticRecord): string | null => {
     const errors = validateRecordShape(deepClone(record), docType, extra);
-    if (errors.length) return withoutPaths(errors[0]);
-    return locales.includes(record.customer.locale) ? null : `${languageName(record.customer.locale)} is not a language of this project.`;
+    if (errors.length) return `The customer data contract does not accept it: ${withoutPaths(errors[0])}`;
+    return locales.includes(record.customer.locale) ? null : `${languageName(record.customer.locale)} is not a language of this project, so no customer is given it as preferred language.`;
   };
   const resolutions = new Map<string, Resolution>();
   const resolved = (record: SyntheticRecord): Resolution => {
@@ -231,8 +232,6 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
 
   const kit = targetsOf(project, { matched: new Set(), selected: new Set(), shown: new Set() });
   const { rules, nodeTitle, partTitle, ruleTitle } = kit;
-  const nodes = new Map(project.nodes.map((n) => [n.id, n]));
-  const label = (path: string): string => plain(fields.get(path)?.label ?? path);
 
   /* --- reasons */
   const calculated = (preds: Predicate[]): string | null => {
@@ -311,7 +310,7 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
         const allowed = (fields.get('customer.locale')?.enumValues ?? []).map(languageName);
         return `A customer record can only name ${listOf(allowed)} as the preferred language, and no rule switches a document to ${languageName(g.target.targetId)}.`;
       }
-      return `The only customers that reach it have a value the customer data contract does not accept. ${strong.rejected ?? weak?.rejected}`;
+      return `No valid customer record reaches it. ${strong.rejected ?? weak?.rejected}`;
     }
     if (!strong.satisfiable && !weak?.satisfiable) {
       if (g.target.kind === 'section-hidden') return 'Nothing hides this section: every customer gets it.';
@@ -549,7 +548,7 @@ export function planTestData(project: Project, baseRecords: SyntheticRecord[], o
       }
       if (fallback) return fallback;
     }
-    return { reason: rejected ? `The customer data contract does not accept a record with this value. ${rejected}` : calculated(e.readers.map((r) => r.owner.pred)) ?? 'No starting customer could be given this value.' };
+    return { reason: rejected ? `No valid customer record can have this value. ${rejected}` : calculated(e.readers.map((r) => r.owner.pred)) ?? 'No starting customer could be given this value.' };
   };
 
   const edgeReasons = new Map<Edge, string>();
