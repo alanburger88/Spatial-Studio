@@ -56,15 +56,21 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 - Screens are separate downloads: first download 1,258 kB → 483 kB (387 kB → 157 kB compressed), measured from the production build.
 - Export history keeps one PDF per distinct document (a rebuild replaces the earlier entry).
 
+### v0.4 decisions (D49–D52)
+
+- Design Studio: the component list starts closed on windows under 1500 px, so the page shows at 100% at 1440×900 (was about 69%).
+- 3D Cube: a crowded X axis shows full persona names, slanted; a wireframe plane no longer hides labels.
+- Export history: a rebuilt PDF hides the earlier entry but its file and link keep working.
+- Logo: the brand guidance available to the build has no logo files, so the wordmark slot stays.
+
 ## Not verified / open
 
 - **Live AI provider:** not exercised; no credentials were used.
 - **Firefox/Safari:** smoke test not run.
 - **Assistive technology:** screen-reader manual pass not run.
 - **Deployment:** none; not authorised.
-- **Brand logo:** official artwork to be supplied by InfoSlips (slot ready).
+- **Brand logo:** not bundled. The InfoSlips brand guidance available to the build has no logo files and forbids redrawing; official PNG artwork is still needed (slot ready).
 - **Load time:** the size reduction is measured from the build output; no timing was taken on a slow network or a hosted server.
-- **Design Studio page size:** at a 1440 px window the page is still about 69% because the panel width limits it; it reaches about 100% only with the component list collapsed.
 - **UX pass:** checked in Chromium at 1440×900, 1280×720 and 1000×700, light and dark; not every screen was inspected by eye in every theme/size/view combination, and no usability test with real users has been run.
 - **Windows:** scripts made cross-platform but not executed on Windows here; Docker image built and smoke-tested on Linux.
 - **Live AI:** still unverified (needs your API key in a local `.env`).

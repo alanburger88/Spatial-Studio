@@ -80,6 +80,9 @@ test('U06 detail panels open with something selected: Cube, Landscape and Page S
   await open(page, 'aster-card-demo', 'cube');
   await expect(page.getByTestId('cube-inspector')).not.toContainText('Select a cell');
   await expect(page.getByTestId('cube-inspector')).toContainText('Jordan Mercer');
+  // 3D view: a crowded axis shows every persona's full name (slanted), not a code
+  await page.getByTestId('cube-view-3d').click();
+  await expect(page.locator('.cube-tick.tx span')).toHaveText([/^P01 Everyday$/, /^P02 Premier$/, /^P03 First Missed Payment$/, /^P04 Financial Assistance$/, /^P05 Spanish Preferred$/]);
   await open(page, 'aster-card-demo', 'landscape');
   await expect(page.getByTestId('landscape-inspector')).not.toContainText('Select a cluster');
   await expect(page.getByTestId('landscape-inspector')).toContainText('Blocking');
@@ -98,13 +101,21 @@ test('U07 Design inspector has four tabs on one row; Business view shows names, 
   await expect(page.getByTestId('dock-selected')).toHaveText('Payment guidance');
   await setView(page, 'technical');
   await expect(page.getByTestId('dock-selected')).toContainText('payment-guidance');
-  // the component list collapses to give the page more room, and remembers it
-  await page.getByTestId('toggle-palette').click();
+  // on a laptop-sized window the component list starts closed so the page shows near full size; the choice is remembered
   await expect(page.getByTestId('component-palette')).toHaveCount(0);
+  expect(parseInt(await page.getByTestId('zoom-value').innerText(), 10)).toBeGreaterThanOrEqual(95);
+  await page.getByTestId('toggle-palette').click();
+  await expect(page.getByTestId('component-palette')).toBeVisible();
   await page.reload();
   await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
-  await expect(page.getByTestId('component-palette')).toHaveCount(0);
+  await expect(page.getByTestId('component-palette')).toBeVisible();
   await page.getByTestId('toggle-palette').click();
+  await expect(page.getByTestId('component-palette')).toHaveCount(0);
+  // a large window with no stored choice starts with the list open
+  await page.evaluate(() => localStorage.removeItem('iss.paletteCollapsed'));
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.reload();
+  await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
   await expect(page.getByTestId('component-palette')).toBeVisible();
 });
 

@@ -69,7 +69,7 @@ Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the 
 - **Checks run by themselves**: Validate & Compare and Preview & Export build their results when opened and again when the document or customer changes, and say whether what you see is up to date. Automatic previews reuse an existing export instead of adding to the export history.
 - **Detail panels are never empty**: the Cube, Landscape, Page Stack, Validate and the Design inspector open with the most relevant item already selected.
 - **Demo tools** (status bar): deliberate defects for demonstrations (rule tie, missing Spanish wording, table overflow, unconfirmed liability, no matching message) live in one panel that opens only when you click it.
-- **2D Design Studio zoom**: the page fits the panel width by default (*Width*); *Page* shows the whole sheet. Collapse the component list (chevron on its header) to give the page more room.
+- **2D Design Studio zoom**: the page fits the panel width by default (*Width*); *Page* shows the whole sheet. On windows narrower than 1500 px the component list starts closed so the page shows near full size; open it with **Components** (your choice is remembered).
 - **Export history** keeps one PDF per distinct document: rebuilding the same document replaces the earlier entry.
 - **Narrow windows**: between 900 and 1100 px side panels become slide-out drawers (buttons appear in the screen header); below 900 px the studio asks for a wider window.
 

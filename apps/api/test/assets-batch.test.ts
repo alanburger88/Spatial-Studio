@@ -104,6 +104,10 @@ describe('export history', () => {
     // the entry kept is the latest build and still downloads
     expect(pdfs[0].artifactId).toBe(second.headers['x-artifact-id']);
     expect((await inj('GET', `/api/v1/artifacts/${pdfs[0].artifactId}`)).rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
+    // the earlier build is out of the history, but a link to it that was already copied still downloads
+    const earlier = String(first.headers['x-artifact-id']);
+    expect(earlier).not.toBe(pdfs[0].artifactId);
+    expect((await inj('GET', `/api/v1/artifacts/${earlier}`)).rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
     // a different customer is a different document: its export is kept alongside
     const other = await inj('POST', '/api/v1/compose/pdf', { projectId: 'harborcare-demo', recordId: 'EOB-0003' });
     expect(other.statusCode).toBe(200);

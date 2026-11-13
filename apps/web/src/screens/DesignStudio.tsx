@@ -65,7 +65,8 @@ export function DesignStudio() {
   const [snap, setSnap] = useState(true);
   const [device, setDevice] = useState<1200 | 768 | 390>(1200);
   const [showHidden, setShowHidden] = useState(() => lsGet(LS_HIDDEN) === '1');
-  const [paletteCollapsed, setPaletteCollapsed] = useState(() => lsGet(LS_PALETTE) === '1');
+  // The component list starts closed on laptop-sized windows (under 1500px) so the page shows near full size; an explicit choice is remembered and wins.
+  const [paletteCollapsed, setPaletteCollapsed] = useState(() => { const v = lsGet(LS_PALETTE); return v === '1' || (v !== '0' && typeof window !== 'undefined' && window.innerWidth < 1500); });
   const [hintSeen, setHintSeen] = useState(() => lsGet(LS_HINT) === '1');
   const scrollRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 700, h: 600 });

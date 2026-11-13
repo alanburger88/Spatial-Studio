@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
@@ -269,17 +269,19 @@ export class Store {
     if (!existsSync(file)) writeFileSync(file, bytes);
     // PDF bytes are not reproducible (embedded timestamps), so the content hash cannot dedupe a rebuild of the same
     // document. The run ID identifies the resolved document exactly, so a rebuild for the same run, draft state and
-    // renderer replaces the earlier export instead of adding another history entry.
+    // renderer supersedes the earlier export: the history lists only the latest, while the earlier file stays on disk
+    // so a link that was already copied keeps downloading.
     if (kind === 'pdf') {
       const same = (this.db.prepare("SELECT artifact_id, meta_json FROM artifacts WHERE run_id=? AND kind='pdf' AND artifact_id<>?").all(runId, artifactId) as any[])
-        .filter((r) => { const m = JSON.parse(r.meta_json); return !!m.draft === !!meta.draft && m.renderer === meta.renderer; });
-      for (const r of same) {
-        this.db.prepare('DELETE FROM artifacts WHERE artifact_id=?').run(r.artifact_id);
-        try { unlinkSync(path.join(this.artifactDir, r.artifact_id)); } catch { /* already gone */ }
-      }
+        .map((r) => ({ id: r.artifact_id as string, m: JSON.parse(r.meta_json) as Record<string, unknown> }))
+        .filter((r) => !r.m.supersededBy && !!r.m.draft === !!meta.draft && r.m.renderer === meta.renderer);
+      for (const r of same) this.db.prepare('UPDATE artifacts SET meta_json=? WHERE artifact_id=?').run(JSON.stringify({ ...r.m, supersededBy: artifactId }), r.id);
     }
-    this.db.prepare('INSERT OR IGNORE INTO artifacts(artifact_id,run_id,kind,filename,sha256,size,page_count,meta_json,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
-      .run(artifactId, runId, kind, filename, sha, bytes.length, pageCount ?? null, JSON.stringify(meta), new Date().toISOString());
+    const now = new Date().toISOString();
+    const done = this.db.prepare('INSERT OR IGNORE INTO artifacts(artifact_id,run_id,kind,filename,sha256,size,page_count,meta_json,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run(artifactId, runId, kind, filename, sha, bytes.length, pageCount ?? null, JSON.stringify(meta), now);
+    // Byte-identical to an export that was superseded earlier: it is the latest again.
+    if (kind === 'pdf' && !done.changes) this.db.prepare('UPDATE artifacts SET meta_json=?, created_at=? WHERE artifact_id=? AND run_id=?').run(JSON.stringify(meta), now, artifactId, runId);
     return { artifactId, sha256: sha, size: bytes.length, filename };
   }
 
@@ -296,7 +298,7 @@ export class Store {
       : filter.projectId
         ? this.db.prepare('SELECT a.*, r.project_id, r.record_id FROM artifacts a JOIN runs r ON r.run_id=a.run_id WHERE r.project_id=? ORDER BY a.created_at DESC LIMIT ?').all(filter.projectId, filter.limit ?? 30)
         : this.db.prepare('SELECT a.*, r.project_id, r.record_id FROM artifacts a JOIN runs r ON r.run_id=a.run_id ORDER BY a.created_at DESC LIMIT ?').all(filter.limit ?? 30)) as any[];
-    return rows.map((r) => ({ artifactId: r.artifact_id, runId: r.run_id, projectId: r.project_id, recordId: r.record_id, kind: r.kind, filename: r.filename, sha256: r.sha256, size: r.size, pageCount: r.page_count, createdAt: r.created_at, meta: JSON.parse(r.meta_json) }));
+    return rows.map((r) => ({ ...r, meta: JSON.parse(r.meta_json) })).filter((r) => !r.meta.supersededBy).map((r) => ({ artifactId: r.artifact_id, runId: r.run_id, projectId: r.project_id, recordId: r.record_id, kind: r.kind, filename: r.filename, sha256: r.sha256, size: r.size, pageCount: r.page_count, createdAt: r.created_at, meta: r.meta }));
   }
 
   /** Issued snapshots are write-once: a second issue for the same key returns the original, never overwrites. */

@@ -70,7 +70,8 @@
 .cube-matrix { min-width: min-content; }
 .cube-mx-cell .cube-badge { width: 15px; height: 15px; font-size: 10px; }
 .cube-mx-cell .cube-mark.sm { width: 14px; height: 14px; font-size: 9.5px; }
-.cube-viewport { position: absolute; inset: 12px 0 12px 0; transform-style: preserve-3d; }
+/* Flat on purpose: the wireframe and the data layer are two separate 3D scenes, so a frame plane can never hide a label or a cell. */
+.cube-viewport { position: absolute; inset: 12px 0 12px 0; transform-style: flat; }
 .cube-world { position: absolute; left: 50%; top: 46%; margin-top: -30px; width: 0; height: 0; transform-style: preserve-3d; transition: transform var(--iss-motion-depth) var(--iss-ease); }
 .cube-world > * { transform-style: preserve-3d; }
 .cube-world .cube-cell, .cube-world .cube-cell *, .cube-tick *, .cube-axis-title { transform-style: flat; }
@@ -170,3 +171,10 @@
 .cube-tick.tx span { width: 96px; margin-left: -48px; }
 .cube-tick.ty span { width: 96px; margin-left: -96px; }
 .cube-tick.tz span { width: 96px; }
+
+/* Crowded X axis (more than three columns): full names, slanted and anchored at their end so neighbours never collide. */
+.cube-tick.tx.slant span { width: max-content; max-width: 190px; margin: 0; right: 0; top: 0; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; text-align: right; transform-origin: 100% 0; transform: rotate(-35deg); }
+/* Slanted names need room below the cube: a taller stage with the cube set higher in it. */
+.cube-stage:has(.cube-tick.slant) { height: 390px; }
+@media (max-height: 800px) { .cube-stage:has(.cube-tick.slant) { height: 360px; } }
+.cube-viewport:has(.cube-tick.slant) .cube-world { top: 38%; }

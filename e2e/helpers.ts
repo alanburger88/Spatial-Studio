@@ -40,6 +40,8 @@ export async function pdfText(bytes: Buffer): Promise<{ pages: string[] }> {
 }
 
 export async function dragAfter(page: Page, sourceTestId: string, targetTestId: string, where: 'after' | 'center' = 'after') {
+  // The component list starts closed on windows under 1500px: open it before dragging from it.
+  if (sourceTestId.startsWith('palette-') && !(await page.getByTestId('component-palette').count())) await page.getByTestId('toggle-palette').click();
   const target = page.getByTestId(targetTestId).first();
   const box = (await target.boundingBox())!;
   await page.getByTestId(sourceTestId).dragTo(target, { targetPosition: { x: Math.min(40, box.width / 2), y: where === 'after' ? box.height - 2 : box.height / 2 } });
