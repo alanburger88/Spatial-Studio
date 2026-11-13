@@ -23,6 +23,10 @@ export function DataExplorer() {
   const [busy, setBusy] = useState(false);
 
   const wanted = params.get('customer');
+  // Opened from a blocker: `blocker=<id>&highlight=<path,path>` (kept for the customer it was opened on, and its editable copy).
+  const blockerId = params.get('blocker');
+  const highlightParam = params.get('highlight') ?? '';
+  const highlight = useMemo(() => highlightParam.split(',').map((x) => x.trim()).filter(Boolean), [highlightParam]);
   const selectedId = records.some((r) => r.recordId === wanted) ? wanted! : records.some((r) => r.recordId === ctxRecord) ? ctxRecord : records[0]?.recordId ?? '';
   const saved = records.find((r) => r.recordId === selectedId);
 
@@ -50,16 +54,17 @@ export function DataExplorer() {
   }, [navigate]);
 
   const toastError = (title: string, e: unknown) => useStudio.getState().toast({ kind: 'error', title, message: e instanceof Error ? e.message : undefined });
-  const add = async (body: { record?: unknown; copyOf?: string }, done: string) => {
+  const add = async (body: { record?: unknown; copyOf?: string }, done: string, keepBlocker = false) => {
     setBusy(true);
     try {
       const r = await api.addRecord(project.projectId, body);
       await useStudio.getState().refreshRecords();
-      show(r.record.recordId);
+      if (keepBlocker && blockerId) setParams({ customer: r.record.recordId, blocker: blockerId, ...(highlightParam ? { highlight: highlightParam } : {}) }, { replace: true });
+      else show(r.record.recordId);
       useStudio.getState().toast({ kind: 'success', title: done, message: recordName(r.record) });
     } catch (e) { toastError('The customer was not added', e); } finally { setBusy(false); }
   };
-  const makeCopy = (id: string) => void add({ copyOf: id }, 'Editable copy made');
+  const makeCopy = (id: string) => void add({ copyOf: id }, 'Editable copy made', true);
   const newBlank = () => guard(() => void add({ record: blankRecord(project) }, 'New customer added'));
   const newCopy = () => guard(() => void add({ copyOf: selectedId }, 'Copy added'));
   const deleted = async (id: string) => {
@@ -82,7 +87,8 @@ export function DataExplorer() {
             <CustomerList records={records} personas={personas} selectedId={selectedId} onSelect={(id) => { if (id !== selectedId) guard(() => show(id)); }} broken={broken}
               canEdit={canEdit && !busy} disabledReason={blockedReason} onNewBlank={newBlank} onNewCopy={newCopy} />
             <Workspace key={`${project.projectId}:${saved.recordId}`} project={project} saved={saved} canEdit={canEdit} blockedReason={blockedReason}
-              onDirty={onDirty} onMakeCopy={makeCopy} onDeleted={(id) => void deleted(id)} onPreview={preview} />
+              onDirty={onDirty} onMakeCopy={makeCopy} onDeleted={(id) => void deleted(id)} onPreview={preview}
+              highlight={blockerId && saved.recordId === wanted ? highlight : undefined} blockerId={saved.recordId === wanted ? blockerId : null} />
           </>
         )}
       </div>

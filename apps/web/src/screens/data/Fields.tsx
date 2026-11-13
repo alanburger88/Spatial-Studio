@@ -17,6 +17,8 @@ export interface EditorCtx {
   set: (segs: Array<string | number>, value: unknown) => void;
   /** A request to open and focus a field: `n` changes on every request. */
   jump: { path: string; n: number } | null;
+  /** Values a blocker is about (opened from the Blockers screen): shown highlighted. */
+  highlight: string[];
 }
 export const EditorContext = createContext<EditorCtx | null>(null);
 export const useEditor = () => { const c = useContext(EditorContext); if (!c) throw new Error('EditorContext missing'); return c; };
@@ -131,7 +133,7 @@ export function FieldRow({ path, label, type, required, enumValues, value, deriv
     );
   }
   return (
-    <div className={`dx-field${probs.length ? ' bad' : ''}`}>
+    <div className={`dx-field${probs.length ? ' bad' : ''}${ed.highlight.includes(problemPath ?? path) ? ' highlight' : ''}`} data-dx-field={problemPath ?? path} data-highlight={ed.highlight.includes(problemPath ?? path) ? 'yes' : undefined}>
       <label className="dx-label" htmlFor={id}>{label}{required && <RequiredMark />}<Tech><span className="chip code">{path}</span></Tech></label>
       <div className="dx-control">
         <ScalarInput type={type} value={value} onChange={onChange} label={label} path={problemPath ?? path} testId={testId ?? `dx-f-${path}`} enumValues={enumValues} required={required}

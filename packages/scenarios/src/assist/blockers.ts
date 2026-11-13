@@ -1,5 +1,6 @@
-import { languageShortName, type ProfileId, type Project, type SyntheticRecord } from '@iss/model';
-import type { Finding } from '@iss/resolver';
+import { languageShortName, type ProfileId, type Project, type SyntheticRecord, type TestCase } from '@iss/model';
+import { resolve, type Finding } from '@iss/resolver';
+import { captureExpectation, nextTestId } from '../testCases';
 import { groupFindings, proposeFixes } from './fixes';
 import type { Blocker, BlockerAbout, BlockerKind, BlockerLink, DocumentBlockers, FixProposal } from './types';
 
@@ -233,4 +234,193 @@ export function documentBlockers(project: Project, records: SyntheticRecord[], o
   const order = (k: BlockerKind): number => BLOCKER_KIND_ORDER.indexOf(k);
   blockers.sort((x, y) => y.customerCount - x.customerCount || order(x.kind) - order(y.kind) || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
   return { checked: ofType.length, issuable: ofType.length - stopped.size, stopped: stopped.size, blockers };
+}
+
+/* ------------------------------------------------------------------ phase 2: one customer's blockers, and the offending fields */
+
+/** The kind of a blocker from its id alone (the first part names the kind of problem). Null for an id this engine never makes. */
+export function blockerKindOfId(id: string): BlockerKind | null {
+  const problem = String(id ?? '').split('~')[0];
+  if (problem === 'priority-tie' || problem === 'no-fallback') return 'rules';
+  return KIND_BY_CODE[problem.toUpperCase().replace(/-/g, '_')] ?? null;
+}
+
+/** One blocker as it stops ONE customer: plain words and the customer's values that are wrong (as Data Explorer paths). */
+export interface CustomerBlocker {
+  id: string;
+  kind: BlockerKind;
+  code: string;
+  title: string;
+  explanation: string;
+  /** For a customer-data blocker: the customer's fields that disagree (`card.missedPayments`, `claims[1].billedCents`). Empty otherwise. */
+  fields: string[];
+}
+
+const CARD_BALANCE = ['card.previousBalanceCents', 'card.purchasesCents', 'card.paymentsCreditsCents', 'card.interestFeesCents', 'card.newBalanceCents'];
+const CLAIM_FIELDS: Record<string, string[]> = {
+  UNCONFIRMED_MEMBER_LIABILITY: ['status', 'liabilityConfirmed', 'patientResponsibilityCents'],
+  CLAIM_RECONCILIATION_FAILED: ['billedCents', 'contractualAdjustmentCents', 'allowedCents', 'planPaidCents', 'patientResponsibilityCents'],
+};
+
+/** The customer's own values a customer-data finding is about, read from the finding and the record (the checks stay in the resolver). */
+function offendingFields(f: Finding, record: SyntheticRecord): string[] {
+  switch (f.code) {
+    case 'INCONSISTENT_PAYMENT_STATE': return ['card.paymentStatus', 'card.missedPayments'];
+    case 'BALANCE_RECONCILIATION_FAILED': return CARD_BALANCE;
+    case 'UNCONFIRMED_MEMBER_LIABILITY':
+    case 'CLAIM_RECONCILIATION_FAILED': {
+      const claimId = /^Claim (\S+) /.exec(f.message ?? '')?.[1];
+      const claims = (record as { claims?: Array<{ claimId?: string }> }).claims ?? [];
+      const i = claims.findIndex((c) => c.claimId === claimId);
+      return i < 0 ? [] : CLAIM_FIELDS[f.code].map((k) => `claims[${i}].${k}`);
+    }
+    case 'NULL_BINDING': {
+      const path = /^([A-Za-z0-9_.]+) is empty/.exec(f.message ?? '')?.[1];
+      // The resolver reads one claim as `claim.*`; Data Explorer shows it as the first row of the claims list.
+      return path ? [path.startsWith('claim.') ? `claims[0].${path.slice(6)}` : path] : [];
+    }
+    default: return [];
+  }
+}
+
+/**
+ * Every blocker that stops ONE customer, with the same ids as `documentBlockers`, without working out fixes (one
+ * resolution, so it is cheap). Data Explorer uses it to open a customer on the right fields; the server uses it to check
+ * and lapse known data problems. Static rule checks and composed-page checks are not included.
+ */
+export function customerBlockers(project: Project, record: SyntheticRecord, opts?: { profileId?: ProfileId; journeyCursor?: number | null }): CustomerBlocker[] {
+  if (record.documentType !== project.documentType) return [];
+  const res = resolve({ project, record, profileId: opts?.profileId, journeyCursor: opts?.journeyCursor ?? null });
+  const by = new Map<string, CustomerBlocker>();
+  for (const f of res.findings) {
+    if (f.severity !== 'blocking') continue;
+    const id = blockerIdOf(f);
+    const kind = blockerKindOf(f);
+    let b = by.get(id);
+    if (!b) { b = { id, kind, code: f.code, ...wordsFor(project, f, aboutOf(project, f), 1), fields: [] }; by.set(id, b); }
+    if (kind === 'customer-data') for (const p of offendingFields(f, record)) if (!b.fields.includes(p)) b.fields.push(p);
+  }
+  return [...by.values()].sort((a, b) => BLOCKER_KIND_ORDER.indexOf(a.kind) - BLOCKER_KIND_ORDER.indexOf(b.kind) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/* ------------------------------------------------------------------ phase 2: known data problems */
+
+/** The longest reason a person may give for setting a customer's data problem aside. */
+export const KNOWN_REASON_MAX = 500;
+
+/** A customer-data blocker an approver has set aside for ONE customer, with the reason. Stored by the server. */
+export interface KnownDataProblem {
+  /** The server's id of the entry (absent before it is stored). */
+  id?: string;
+  blockerId: string;
+  recordId: string;
+  reason: string;
+  markedBy: { id: string | null; name: string } | null;
+  markedAt: string;
+}
+
+/**
+ * Splits stored known data problems into those in force and those that have LAPSED: the blocker no longer stops that
+ * customer (the customer's data or the document changed, or the customer is gone), or the entry is not about a
+ * customer's own data. `stops(recordId, blockerId)` says whether that blocker stops that customer now.
+ */
+export function splitKnownDataProblems(known: readonly KnownDataProblem[], stops: (recordId: string, blockerId: string) => boolean): { active: KnownDataProblem[]; lapsed: KnownDataProblem[] } {
+  const active: KnownDataProblem[] = [];
+  const lapsed: KnownDataProblem[] = [];
+  const seen = new Set<string>();
+  for (const k of known) {
+    const key = `${k.blockerId}|${k.recordId}`;
+    if (blockerKindOfId(k.blockerId) === 'customer-data' && !seen.has(key) && stops(k.recordId, k.blockerId)) { active.push(k); seen.add(key); }
+    else lapsed.push(k);
+  }
+  return { active, lapsed };
+}
+
+export type KnownRefusalCode = 'REASON_REQUIRED' | 'REASON_TOO_LONG' | 'NOT_A_DATA_PROBLEM' | 'UNKNOWN_CUSTOMER' | 'NOT_STOPPING_THIS_CUSTOMER';
+
+/**
+ * Why a known data problem cannot be recorded, in plain words, or null when it can. The server enforces it and the
+ * screens use it to explain before asking. Who may record one (an approver) is checked by the server's permissions.
+ */
+export function knownDataProblemRefusal(a: { blockerId: string; reason: unknown; customer: SyntheticRecord | null; blockers: CustomerBlocker[] }): { code: KnownRefusalCode; status: number; message: string } | null {
+  const reason = typeof a.reason === 'string' ? a.reason.trim() : '';
+  if (!reason) return { code: 'REASON_REQUIRED', status: 400, message: 'Say why this customer’s data problem can be set aside.' };
+  if (reason.length > KNOWN_REASON_MAX) return { code: 'REASON_TOO_LONG', status: 400, message: `Keep the reason to ${KNOWN_REASON_MAX} characters at most.` };
+  const kind = a.blockers.find((b) => b.id === a.blockerId)?.kind ?? blockerKindOfId(a.blockerId);
+  if (kind !== 'customer-data') return { code: 'NOT_A_DATA_PROBLEM', status: 422, message: 'Only a problem in one customer’s own data can be set aside. A blocker in the document itself (wording, rules, layout or data fields) must always be fixed.' };
+  if (!a.customer) return { code: 'UNKNOWN_CUSTOMER', status: 404, message: 'This document has no such customer.' };
+  if (!a.blockers.some((b) => b.id === a.blockerId)) return { code: 'NOT_STOPPING_THIS_CUSTOMER', status: 409, message: 'This problem does not stop this customer (any more), so there is nothing to set aside.' };
+  return null;
+}
+
+/** A blocker with what the known data problems do to it. */
+export interface BlockerWithStatus extends Blocker {
+  /** `known-data-problem` when every customer it stops has it set aside; otherwise `open`. */
+  status: 'open' | 'known-data-problem';
+  /** The known data problems in force for this blocker (one per customer). */
+  known: KnownDataProblem[];
+  /** The customers it stops that are NOT set aside. */
+  openRecordIds: string[];
+}
+
+export interface DocumentBlockersWithStatus extends DocumentBlockers {
+  blockers: BlockerWithStatus[];
+  /** Customers whose only blockers are known data problems: not stopped by an open blocker, and not issuable either. */
+  setAside: number;
+  setAsideRecordIds: string[];
+  /** Known data problems in force. */
+  known: KnownDataProblem[];
+  /** Stored known data problems that no longer apply: not counted (the server removes them). */
+  lapsed: KnownDataProblem[];
+}
+
+/**
+ * The status of every blocker and customer once known data problems are taken into account. Pure; the Blockers screen
+ * and the server use the same function. `stopped` counts customers stopped by at least one OPEN blocker; customers whose
+ * only blockers are known data problems are `setAside`; `issuable + stopped + setAside = checked`. Ids never change.
+ */
+export function withKnownDataProblems(result: DocumentBlockers, known: readonly KnownDataProblem[]): DocumentBlockersWithStatus {
+  const byId = new Map(result.blockers.map((b) => [b.id, b]));
+  const { active, lapsed } = splitKnownDataProblems(known, (recordId, blockerId) => !!byId.get(blockerId)?.recordIds.includes(recordId));
+  const excused = new Set(active.map((k) => `${k.blockerId}|${k.recordId}`));
+  const open = new Set<string>();
+  const any = new Set<string>();
+  const blockers: BlockerWithStatus[] = result.blockers.map((b) => {
+    const openRecordIds = b.recordIds.filter((r) => !excused.has(`${b.id}|${r}`));
+    openRecordIds.forEach((r) => open.add(r));
+    b.recordIds.forEach((r) => any.add(r));
+    return { ...b, status: b.customerCount > 0 && openRecordIds.length === 0 ? 'known-data-problem' : 'open', known: active.filter((k) => k.blockerId === b.id), openRecordIds };
+  });
+  const setAsideRecordIds = [...any].filter((r) => !open.has(r)).sort();
+  return { ...result, blockers, stopped: open.size, issuable: result.checked - open.size - setAsideRecordIds.length, setAside: setAsideRecordIds.length, setAsideRecordIds, known: active, lapsed };
+}
+
+/** `documentBlockers` with the known data problems applied: the one call the screen makes. */
+export function documentBlockerStatus(project: Project, records: SyntheticRecord[], opts?: { profileId?: ProfileId; journeyCursor?: number | null; extraFindings?: ExtraFinding[]; known?: readonly KnownDataProblem[] }): DocumentBlockersWithStatus {
+  return withKnownDataProblems(documentBlockers(project, records, opts), opts?.known ?? []);
+}
+
+/* ------------------------------------------------------------------ phase 3: resolving one by one, and pinning a test when fixed */
+
+/** The open blockers in the order the guided pass takes them: most customers still stopped first, then kind order, then id. */
+export function resolveOrder(result: DocumentBlockersWithStatus): BlockerWithStatus[] {
+  const order = (k: BlockerKind): number => BLOCKER_KIND_ORDER.indexOf(k);
+  return result.blockers.filter((b) => b.status === 'open')
+    .sort((x, y) => y.openRecordIds.length - x.openRecordIds.length || order(x.kind) - order(y.kind) || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+}
+
+/**
+ * Ready-to-pin tests (for UPSERT_TEST_CASE) for blockers that were fixed: one affected customer each, expecting the
+ * outcome the document gives that customer NOW, so the problem cannot come back unnoticed. Nothing is pinned here. A
+ * customer not among `records` is skipped. Test names hold the blocker in plain words, never a customer's name.
+ */
+export function testsForFixedBlockers(project: Project, records: SyntheticRecord[], fixed: ReadonlyArray<{ blockerId: string; title: string; recordId: string }>, opts?: { journeyCursor?: number | null }): TestCase[] {
+  const out: TestCase[] = [];
+  const cursor = opts?.journeyCursor ?? null;
+  for (const f of fixed) {
+    const record = records.find((r) => r.recordId === f.recordId && r.documentType === project.documentType);
+    if (!record) continue;
+    out.push({ id: nextTestId([...(project.testCases ?? []), ...out]), name: `Stays fixed: ${f.title}`.slice(0, 160), recordId: record.recordId, overrides: {}, journeyCursor: cursor, expect: captureExpectation(project, record, {}, cursor) });
+  }
+  return out;
 }

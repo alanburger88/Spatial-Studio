@@ -1,6 +1,7 @@
 import { useRef } from 'react';
-import type { Blocker, BlockerKind, FixImpact } from '@iss/scenarios';
+import type { Blocker, BlockerKind, BlockerWithStatus, FixImpact } from '@iss/scenarios';
 import { Tech } from '../../ui/common';
+import { CountChips } from './BlockerDetail';
 import { KINDS, KIND_LABEL, KIND_NEXT, plural } from './labels';
 
 /** What a fix would do, in a few words, for the list. */
@@ -21,7 +22,7 @@ function bestFixLine(b: Blocker, impact: FixImpact | null): { text: string; effe
 }
 
 export function BlockerList({ blockers, selectedId, onSelect, impactFor, totalChecked }: {
-  blockers: Blocker[]; selectedId: string | null; onSelect: (id: string) => void; impactFor: (blockerId: string, fixId: string) => FixImpact | null; totalChecked: number;
+  blockers: BlockerWithStatus[]; selectedId: string | null; onSelect: (id: string) => void; impactFor: (blockerId: string, fixId: string) => FixImpact | null; totalChecked: number;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const onKey = (e: React.KeyboardEvent) => {
@@ -35,7 +36,7 @@ export function BlockerList({ blockers, selectedId, onSelect, impactFor, totalCh
     onSelect(btns[n].dataset.blocker!);
   };
   // The kind that stops the most customers comes first; ties keep the usual order of kinds.
-  const top = (k: BlockerKind): number => Math.max(...blockers.filter((b) => b.kind === k).map((b) => b.customerCount));
+  const top = (k: BlockerKind): number => Math.max(...blockers.filter((b) => b.kind === k).map((b) => b.openRecordIds.length));
   const kinds = KINDS.filter((k) => blockers.some((b) => b.kind === k)).sort((a, b) => top(b) - top(a) || KINDS.indexOf(a) - KINDS.indexOf(b));
   return (
     <div className="bl-list" data-testid="bl-list" ref={root} onKeyDown={onKey}>
@@ -54,12 +55,11 @@ export function BlockerList({ blockers, selectedId, onSelect, impactFor, totalCh
                 const best = bestFixLine(b, b.fixes[0]?.kind === 'change' ? impactFor(b.id, b.fixes[0].id) : null);
                 return (
                   <li key={b.id} className={`bl-row-item${sel ? ' selected' : ''}`}>
-                    <button type="button" className="bl-row" data-testid={`bl-row-${b.id}`} data-blocker={b.id} data-kind={b.kind} data-speed={b.speed} data-count={b.customerCount} aria-current={sel ? 'true' : undefined} onClick={() => onSelect(b.id)}>
+                    <button type="button" className="bl-row" data-testid={`bl-row-${b.id}`} data-blocker={b.id} data-kind={b.kind} data-speed={b.speed} data-count={b.customerCount} data-status={b.status} aria-current={sel ? 'true' : undefined} onClick={() => onSelect(b.id)}>
                       <span className="bl-row-top">
                         <strong className="bl-row-title">{b.title}</strong>
-                        <span className={`chip bl-count${b.customerCount ? ' error' : ''}`} data-testid="bl-count" data-n={b.customerCount}>
-                          {b.customerCount ? `${plural(b.customerCount, 'customer')} stopped` : 'no customer stopped yet'}
-                        </span>
+                        <CountChips blocker={b} />
+                        {b.status === 'known-data-problem' && <span className="chip warning" data-testid="bl-status">Known data problem</span>}
                         {b.speed === 'full-check' && <span className="chip info" data-testid="bl-from-full" title="Found by the last full check, which composes the pages. It can be out of date until the check is run again.">from the full check</span>}
                         <Tech><span className="chip code">{b.code}</span></Tech>
                       </span>

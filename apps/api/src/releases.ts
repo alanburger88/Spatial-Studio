@@ -12,6 +12,7 @@ import { EMAIL_RENDERER_VERSION, HTML_RENDERER_VERSION, PAGED_RENDERER_VERSION, 
 import type { PinnedCustomerRef, Store, StoredRelease } from './db';
 import { PACKAGE_FORMAT_VERSION, buildReleasePackage, customerDigest, type PackageComposer, type PackageFile } from './releasePackage';
 import { zipEntries, zipRead } from './zip';
+import { releaseKnownDataProblems } from './routes/knownData';
 
 /**
  * Releases on the server: creating one from an approved version, moving it between stages, and building and keeping
@@ -72,6 +73,8 @@ export function createRelease(store: Store, project: Project, o: { approvedBy: W
     modelVersion: project.modelVersion, contentDigest: digest, languages: [SOURCE_LANGUAGE, ...projectLanguages(project)], versions: releaseVersions(project), pinned: pinnedCustomerRefs(store, project),
     origin: o.origin, approvedBy: actor(o.approvedBy), approvedAt: o.approvedAt, createdBy: actor(o.createdBy), createdAt: now,
     stages: { test: { status: 'current', since: now, by: actor(o.createdBy) }, production: null }, documentRemovedAt: null,
+    // What was set aside when it was approved, frozen with it (ids of synthetic customers only; see releaseKnownDataProblems).
+    knownDataProblems: releaseKnownDataProblems(store, project),
   };
   store.insertRelease(release, project);
   store.addReleaseEvent(release.id, { kind: 'created', stage: 'test', note: o.origin === 'approval' ? `Created when version ${project.modelVersion} was approved.` : `Created from the approved version ${project.modelVersion}.`, by: actor(o.createdBy), at: now });
@@ -116,6 +119,7 @@ export function releaseInfo(r: StoredRelease, pkg: ReleasePackageStatus, handove
     languages: r.languages, approvedBy: r.approvedBy, approvedAt: r.approvedAt, origin: r.origin, createdBy: r.createdBy, createdAt: r.createdAt, versions: r.versions,
     stages: r.stages, standing: releaseStanding(r), documentRemoved: !!r.documentRemovedAt, documentRemovedAt: r.documentRemovedAt,
     package: pkg, handover: { received: (handover?.received ?? 0) > 0, live: (handover?.live ?? 0) > 0, entries: (handover?.received ?? 0) + (handover?.live ?? 0) },
+    ...(r.knownDataProblems ? { knownDataProblems: r.knownDataProblems } : {}),
   };
 }
 

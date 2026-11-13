@@ -74,6 +74,12 @@ Not verified: repeatability across different machines, browser versions or Node.
   "languages": { "source": "en-US", "targets": [{ "locale": "es-US", "name": "Spanish (United States)", "texts": 121, "approved": 5, "missing": ["<text id>", "…"] }] },
   "tests":     { "cap": 24, "scenarios": 11, "pinnedTests": 3, "generated": 8, "omittedByCap": [], "pinnedTestsExcluded": [{ "test": "<test name>", "reason": "…" }], "outcomes": { "total": 25, "reached": 25 } },
   "reference": { "cap": 8, "scenarios": ["s01-…", "s04-…"], "outcomesShown": 30, "outcomesSeen": 33, "files": ["document.pdf", "document.html", "email.html", "email.txt", "sms.txt", "facts.json"] },
+  "knownDataProblems": [          // an addition to format 1 (see below); absent on releases made before it existed
+    { "blockerId": "inconsistent-payment-state~payment-guidance", "blocker": "The account is “up to date” but lists missed payments",
+      "customer": { "kind": "sample", "id": "CARD-0003" }, "reason": "…", "markedBy": "Ada Approver", "markedAt": "2026-11-13T14:51:40.002Z" },
+    { "blockerId": "inconsistent-payment-state~payment-guidance", "blocker": "The account is “up to date” but lists missed payments",
+      "customer": { "kind": "imported" }, "reason": "the customer's file is corrected upstream", "markedBy": "Ada Approver", "markedAt": "…" }
+  ],
   "syntheticOnly": true,
   "notIncluded": ["customer data", "…"],
   "contents": [{ "path": "README.html", "sha256": "…", "bytes": 7472, "role": "readme" }]
@@ -86,6 +92,7 @@ Not verified: repeatability across different machines, browser versions or Node.
 - `languages.targets[].missing` is the list of text ids with no approved translation in that language.
 - `versions.pdfProducer` is read from the reference PDFs (null when there are none).
 - The stage (Test or Production) is not here on purpose.
+- `knownDataProblems` (added after format 1 was published; an addition, so `formatVersion` stays 1 and a reader that does not know it ignores it): the customers' data problems an approver set aside when the release was made, each for one customer and one problem in that customer's own data, with the reason (see `docs/api/KNOWN_DATA_PROBLEMS.md`). **No customer data:** a built-in sample customer or one the engine generated is named by `id` (`kind` `sample` or `generated`); any other customer (`kind` `imported` or `supplied`, which includes an edited generated customer) has no id and no name, only that one such customer was set aside, and that customer's name and id are replaced by “the customer” in the reason. The list is frozen with the release, so `markedAt` (when it was set aside) is one of the release's own moments, like `approvedAt`. An empty list means none were set aside; the field is absent on releases made before it was recorded. When the list is not empty, `README.html` has a "Known data problems" section with the same rows.
 
 `role` values: `readme`, `template`, `wording-source`, `wording`, `data-dictionary`, `asset`, `asset-index`, `fonts`, `tests`, `reference-pdf`, `reference-html`, `reference-email-html`, `reference-email-text`, `reference-sms`, `reference-facts`.
 

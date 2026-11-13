@@ -56,8 +56,8 @@ Existing links that jump straight to where a fix is made (a rule, a message, a f
 ## Phases
 
 1. **The Blockers screen:** root-cause list across all customers, kinds, the two speeds of checking, detail with existing suggested fixes shown as alternatives, links to where each is fixed; the status bar opens it.
-2. **Data problems:** open in Data Explorer with the fields highlighted; known data problem (approver, reason), its effect on approval, the Review panel and the release manifest.
-3. **Resolve one by one**, and **pin a test when fixed**.
+2. **Data problems:** open in Data Explorer with the fields highlighted; known data problem (approver, reason), its effect on approval, the Review panel and the release manifest. **Built** (see "As built: phases 2 and 3").
+3. **Resolve one by one**, and **pin a test when fixed**. **Built** (see "As built: phases 2 and 3").
 4. **Owner, status and notes.**
 5. **AI drafts for wording blockers** (missing translation; wording that reads as a demand for money).
 6. **Warn before saving.**
@@ -70,3 +70,33 @@ Each phase ends with tests, documentation and a demo path, and is verified befor
 - Layout blockers can be stale between full checks. The screen must never present the fast result as a full check.
 - Owners need people: with sign-in switched off there is one local admin, so assignment only becomes useful with sign-in on.
 - AI drafts need the AI key; without it the screen says so and everything else works.
+
+## As built: phases 2 and 3
+
+Built on 2026-11-13. Engine: `packages/scenarios/src/assist/blockers.ts` (tests `assist-blockers-known.test.ts`); server: `apps/api/src/routes/knownData.ts` (tests `apps/api/test/known-data.test.ts`, and the package scan in `releases.test.ts`); screens: `screens/blockers/*` (`KnownDialog`, `ResolvePass`, `knownData.ts`), `screens/data/BlockerBanner.tsx`, the Review panel; browser tests `e2e/blockers-data.spec.ts` and `e2e/blockers-resolve.spec.ts`. API: `docs/api/KNOWN_DATA_PROBLEMS.md`.
+
+### Phase 2: data problems
+
+- **Open in Data Explorer** from a "the customer's data is wrong" blocker (the detail, each affected customer, and the guided pass) opens `data?customer=<id>&blocker=<id>&highlight=<path>,<path>`. The fields come from the engine (`customerBlockers`: for each kind of data problem, the customer's values that disagree, down to the claim row). They are highlighted, marked "to check" in words, and the first is scrolled into view. A banner, which stays in view, says what is wrong, lists the highlighted values by name, links back to the blocker, and offers the choices: for a sample or imported customer (read-only) **Make an editable copy** (the copy opens with the same highlight and banner) or **Mark as a known data problem**; for the document's own customer, correct and save (the banner says when the unsaved changes correct it, and when the problem has gone).
+- **Known data problem**: one customer, one `customer-data` blocker, a reason (required, trimmed, at most 500 characters) and the `approve` permission. Stored by the server with who and when; listed, added and removed under `/api/v1/projects/:projectId/known-data-problems`; refused by the server for a blocker in the document itself, a missing or long reason, an unknown customer, a problem that does not stop that customer, and a role that may not approve. Each write is audited and shown in Activity.
+- **Lapsing**: an entry whose blocker no longer stops that customer (data corrected, document changed, customer removed) is not counted, and the server removes it on the next read or write, audits it, and says so; the Blockers screen shows that sentence.
+- **Effect**: one pure function (`withKnownDataProblems`) gives every blocker its status and every customer its place, for the screen and the server. A customer whose only blockers are set aside is **set aside**: not stopped, not issuable either (a tile says how many). A blocker whose every customer is set aside has the status **Known data problem**. The detail lists each entry with the reason, who, when and **Remove**. The approval check leaves those customers out of the blocking issues, and the Review panel lists every known data problem with its reason before approving. Every release records them, and its package manifest lists them (an addition; format 1 kept) with no customer data: a sample or generated customer by id, any other customer only as one such customer.
+
+### Phase 3: resolve one by one, and pin a test
+
+- **Resolve one by one** (Summary button, later "Resume one by one (N left)") replaces the list with a guided pass over the open blockers, most customers still stopped first. Each step: what is wrong and why, who is affected, the fixes side by side with the effect of each (the same cards as the detail), **Apply** (through `applyAssistCommands`, one undoable step) or **Skip**. The progress bar and the "N of M synthetic customers still stopped" count are the engine's numbers after each step. The step for a data problem offers Data Explorer and a known data problem instead of a fix; a layout blocker from the last full check says so and offers to run the full check. The pass keeps its place per document for the browser session, so it can be left and resumed; every applied fix is already an ordinary edit.
+- **Pin a test**: at the end of the pass, and in the "no longer a blocker" note when a single blocker is fixed in the detail, the studio offers one test per fixed blocker on one affected customer, ticked, which the person can untick. Pinning is one undoable step (`UPSERT_TEST_CASE`), named "Stays fixed: <the blocker in plain words>" and expecting what the document gives that customer now (messages, sections, language, and "no blocking issue" when there is none). Nothing is pinned until the person chooses it.
+- The pass, like the screen, says how many customers were checked and which speed each result comes from.
+
+### What differs from the design, and why
+
+- **The URL keeps Data Explorer's existing `customer=` parameter** (not `record=`), so existing links keep working.
+- **Setting a problem aside is not undone with the top-bar Undo.** It is a decision stored on the server (with who and when, like an approval), not an edit of the document; **Remove** takes it back.
+- **The server judges lapsing against the saved document**; the screen applies the same rule to the open, possibly unsaved model, and the server removes the entry once the change is saved.
+- **Restoring a sample to its approved state removes its known data problems**, so a restored sample starts clean.
+- **The reason is cleaned for a customer who is not synthetic**: their name and id are replaced by "the customer" in what a release records. The studio itself keeps the reason as typed.
+- **A release is not made again only because the known data problems changed**: a release is made for new content, so re-approving unchanged content keeps the existing release and what it recorded.
+- **`markedAt` is a moment in the package**, beside the approval and creation times, because the list is frozen with the release.
+- **A fix applied in the pass to a blocker from the full check** is listed as "waiting for the full check to confirm" and is not offered a pinned test, because the studio cannot yet tell that it worked.
+- **The status "Known data problem" belongs to a blocker only when every customer it stops is set aside**; otherwise each customer shows its own mark. Owners, the other statuses and notes are phase 4.
+- **None of the shipped sample customers has a data problem today**, so the read-only path is shown in the tests with an imported customer (shared and read-only in the same way); a sample customer named by id in a release is tested with a document change that leaves a value every sample lacks.

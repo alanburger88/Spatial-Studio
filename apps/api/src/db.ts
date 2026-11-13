@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 // Loaded via require so test bundlers that do not know the newer node:sqlite builtin leave it alone.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
-import { DEMOTE_ON_SAVE, WORKFLOW_LABEL, projectContentDigest, sha256Hex, type DocumentType, type HandoverEntry, type HandoverKind, type Project, type ReleaseActor, type ReleaseEvent, type ReleaseEventKind, type ReleaseInfo, type ReleasePackageCheck, type ReleasePackageSummary, type ReleaseStage, type ReleaseVersions, type Role, type SyntheticRecord, type TemplateInfo, type TemplateVersionInfo, type WorkflowState } from '@iss/model';
+import { DEMOTE_ON_SAVE, WORKFLOW_LABEL, projectContentDigest, sha256Hex, type DocumentType, type HandoverEntry, type HandoverKind, type Project, type ReleaseActor, type ReleaseEvent, type ReleaseEventKind, type ReleaseInfo, type ReleasePackageCheck, type ReleaseKnownDataProblem, type ReleasePackageSummary, type ReleaseStage, type ReleaseVersions, type Role, type SyntheticRecord, type TemplateInfo, type TemplateVersionInfo, type WorkflowState } from '@iss/model';
 import { seedProjects } from '@iss/model/fixtures';
 
 export interface StoredUser { id: string; email: string; name: string; role: Role; disabled: boolean; createdAt: string; updatedAt: string }
@@ -22,7 +22,11 @@ export interface StoredRelease {
   languages: string[]; versions: ReleaseVersions; pinned: PinnedCustomerRef[]; origin: 'approval' | 'manual';
   approvedBy: ReleaseActor | null; approvedAt: string; createdBy: ReleaseActor | null; createdAt: string;
   stages: ReleaseInfo['stages']; documentRemovedAt: string | null;
+  /** The known data problems in force when the release was made (no customer data). Absent on releases made before they existed. */
+  knownDataProblems?: ReleaseKnownDataProblem[];
 }
+/** A known data problem as stored by the studio: one customer, one customer-data blocker, an approver's reason. */
+export interface StoredKnownDataProblem { id: string; projectId: string; blockerId: string; recordId: string; reason: string; markedBy: { id: string | null; name: string } | null; markedAt: string }
 /** The last finished build of a release package (a build in progress lives in memory only). */
 export interface StoredReleasePackage { status: 'ready' | 'failed'; file: string | null; sha256: string | null; bytes: number | null; files: number | null; summary: ReleasePackageSummary | null; error: string | null; builtAt: string; verified: ReleasePackageCheck | null }
 
@@ -72,7 +76,11 @@ export class Store {
       CREATE TABLE IF NOT EXISTS release_handover(id INTEGER PRIMARY KEY AUTOINCREMENT, release_id TEXT NOT NULL, kind TEXT NOT NULL, stage TEXT, note TEXT, package_sha256 TEXT, user_id TEXT, user_name TEXT, at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS release_handover_by_release ON release_handover(release_id, id);
       CREATE TABLE IF NOT EXISTS release_packages(release_id TEXT PRIMARY KEY, status TEXT NOT NULL, file TEXT, sha256 TEXT, bytes INTEGER, files INTEGER, summary TEXT, error TEXT, built_at TEXT NOT NULL, verified TEXT);
+      CREATE TABLE IF NOT EXISTS known_data_problems(id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT NOT NULL, blocker_id TEXT NOT NULL, record_id TEXT NOT NULL, reason TEXT NOT NULL, by_id TEXT, by_name TEXT, at TEXT NOT NULL, UNIQUE(project_id, blocker_id, record_id));
     `);
+    // Releases made before known data problems existed have no such column; NULL means "not recorded" (older releases).
+    if (!(this.db.prepare('PRAGMA table_info(releases)').all() as any[]).some((c) => c.name === 'known_data_problems')) this.db.exec('ALTER TABLE releases ADD COLUMN known_data_problems TEXT');
+    this.db.exec(`CREATE TRIGGER IF NOT EXISTS releases_known_data_problems_frozen BEFORE UPDATE OF known_data_problems ON releases BEGIN SELECT RAISE(ABORT, 'A release is frozen: only its stage and whether its document still exists can change.'); END;`);
     this.ensureSeeds();
     this.backfillVersions();
   }
@@ -229,12 +237,35 @@ export class Store {
 
   /** Deletes a document and everything that belongs to it, except its releases: those are kept and marked "document removed". */
   deleteProject(projectId: string, by: { id: string; name: string } | null = null) {
-    for (const t of ['projects', 'snapshots', 'project_versions', 'workflow', 'workflow_events', 'comments', 'project_records', 'project_test_data']) this.db.prepare(`DELETE FROM ${t} WHERE project_id=?`).run(projectId);
+    for (const t of ['projects', 'snapshots', 'project_versions', 'workflow', 'workflow_events', 'comments', 'project_records', 'project_test_data', 'known_data_problems']) this.db.prepare(`DELETE FROM ${t} WHERE project_id=?`).run(projectId);
     const now = new Date().toISOString();
     for (const r of this.releases(projectId).filter((x) => !x.documentRemovedAt)) {
       this.db.prepare('UPDATE releases SET document_removed_at=? WHERE release_id=?').run(now, r.id);
       this.addReleaseEvent(r.id, { kind: 'document-removed', stage: null, note: 'The document was deleted. This release is kept.', by, at: now });
     }
+  }
+
+  /* ---------------------------------------------------------- known data problems (one customer, one customer-data blocker; the rules are in @iss/scenarios blockers.ts) */
+
+  private mapKnown = (r: any): StoredKnownDataProblem => ({ id: String(r.id), projectId: r.project_id, blockerId: r.blocker_id, recordId: r.record_id, reason: r.reason, markedBy: r.by_name ? { id: r.by_id ?? null, name: r.by_name } : null, markedAt: r.at });
+  /** A document's known data problems, oldest first. */
+  knownDataProblems(projectId: string): StoredKnownDataProblem[] {
+    return (this.db.prepare('SELECT * FROM known_data_problems WHERE project_id=? ORDER BY id').all(projectId) as any[]).map(this.mapKnown);
+  }
+  knownDataProblem(projectId: string, id: string): StoredKnownDataProblem | undefined {
+    const r = this.db.prepare('SELECT * FROM known_data_problems WHERE project_id=? AND id=?').get(projectId, Number(id)) as any;
+    return r ? this.mapKnown(r) : undefined;
+  }
+  /** Adds one; returns undefined when that customer already has that blocker set aside. */
+  addKnownDataProblem(e: { projectId: string; blockerId: string; recordId: string; reason: string; by: { id: string | null; name: string } | null }): StoredKnownDataProblem | undefined {
+    const done = this.db.prepare('INSERT OR IGNORE INTO known_data_problems(project_id,blocker_id,record_id,reason,by_id,by_name,at) VALUES (?,?,?,?,?,?,?)').run(e.projectId, e.blockerId, e.recordId, e.reason, e.by?.id ?? null, e.by?.name ?? null, new Date().toISOString());
+    return Number(done.changes) ? this.knownDataProblem(e.projectId, String(done.lastInsertRowid)) : undefined;
+  }
+  removeKnownDataProblem(projectId: string, id: string): boolean {
+    return Number(this.db.prepare('DELETE FROM known_data_problems WHERE project_id=? AND id=?').run(projectId, Number(id)).changes) > 0;
+  }
+  clearKnownDataProblems(projectId: string): number {
+    return Number(this.db.prepare('DELETE FROM known_data_problems WHERE project_id=?').run(projectId).changes);
   }
 
   /* ---------------------------------------------------------- releases (frozen and numbered; the rules are in @iss/model releases.ts) */
@@ -245,13 +276,14 @@ export class Store {
     try { const out = fn(); this.db.exec('COMMIT'); return out; }
     catch (e) { this.db.exec('ROLLBACK'); throw e; }
   }
-  private static readonly RELEASE_COLUMNS = 'release_id, project_id, number, title, document_type, model_version, content_digest, languages, versions, pinned, origin, approved_by_id, approved_by_name, approved_at, created_by_id, created_by_name, created_at, stages, document_removed_at';
+  private static readonly RELEASE_COLUMNS = 'release_id, project_id, number, title, document_type, model_version, content_digest, languages, versions, pinned, origin, approved_by_id, approved_by_name, approved_at, created_by_id, created_by_name, created_at, stages, document_removed_at, known_data_problems';
   private mapRelease = (r: any): StoredRelease => ({
     id: r.release_id, documentId: r.project_id, number: r.number, title: r.title, documentType: r.document_type, modelVersion: r.model_version, contentDigest: r.content_digest,
     languages: JSON.parse(r.languages), versions: JSON.parse(r.versions), pinned: JSON.parse(r.pinned), origin: r.origin,
     approvedBy: r.approved_by_name ? { id: r.approved_by_id ?? null, name: r.approved_by_name } : null, approvedAt: r.approved_at,
     createdBy: r.created_by_name ? { id: r.created_by_id ?? null, name: r.created_by_name } : null, createdAt: r.created_at,
     stages: JSON.parse(r.stages), documentRemovedAt: r.document_removed_at ?? null,
+    ...(r.known_data_problems ? { knownDataProblems: JSON.parse(r.known_data_problems) } : {}),
   });
   /** Releases, oldest first within a document. With a document id: that document's only. The frozen content is not loaded. */
   releases(documentId?: string): StoredRelease[] {
@@ -273,8 +305,8 @@ export class Store {
   }
   /** Adds a release. No method changes one afterwards, and the table itself refuses it (the `releases_are_frozen` trigger). */
   insertRelease(r: StoredRelease, frozen: Project) {
-    this.db.prepare('INSERT INTO releases(release_id,project_id,number,title,document_type,model_version,content_digest,json,languages,versions,pinned,origin,approved_by_id,approved_by_name,approved_at,created_by_id,created_by_name,created_at,stages,document_removed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run(r.id, r.documentId, r.number, r.title, r.documentType, r.modelVersion, r.contentDigest, JSON.stringify(frozen), JSON.stringify(r.languages), JSON.stringify(r.versions), JSON.stringify(r.pinned), r.origin, r.approvedBy?.id ?? null, r.approvedBy?.name ?? null, r.approvedAt, r.createdBy?.id ?? null, r.createdBy?.name ?? null, r.createdAt, JSON.stringify(r.stages), null);
+    this.db.prepare('INSERT INTO releases(release_id,project_id,number,title,document_type,model_version,content_digest,json,languages,versions,pinned,origin,approved_by_id,approved_by_name,approved_at,created_by_id,created_by_name,created_at,stages,document_removed_at,known_data_problems) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(r.id, r.documentId, r.number, r.title, r.documentType, r.modelVersion, r.contentDigest, JSON.stringify(frozen), JSON.stringify(r.languages), JSON.stringify(r.versions), JSON.stringify(r.pinned), r.origin, r.approvedBy?.id ?? null, r.approvedBy?.name ?? null, r.approvedAt, r.createdBy?.id ?? null, r.createdBy?.name ?? null, r.createdAt, JSON.stringify(r.stages), null, r.knownDataProblems ? JSON.stringify(r.knownDataProblems) : null);
   }
   setReleaseStages(releaseId: string, stages: ReleaseInfo['stages']) { this.db.prepare('UPDATE releases SET stages=? WHERE release_id=?').run(JSON.stringify(stages), releaseId); }
   addReleaseEvent(releaseId: string, e: { kind: ReleaseEventKind; stage: ReleaseStage | null; note: string | null; by: { id: string | null; name: string } | null; at: string }) {

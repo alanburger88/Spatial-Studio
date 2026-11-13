@@ -2,7 +2,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Project, SyntheticRecord } from '@iss/model';
 import type { Finding } from '@iss/resolver';
-import { blockerIdOf, documentBlockers } from '@iss/scenarios';
+import { blockerIdOf, customerBlockers, documentBlockers } from '@iss/scenarios';
 import { useStudio } from '../../state/store';
 
 /**
@@ -56,6 +56,21 @@ export function ResolveInBlockers({ finding, children, className = 'linkbtn', te
 
 /** The blockers that stop one customer (a blocked batch result, a generated customer): the screen lists just those. */
 export const blockersOfCustomerPath = (projectId: string, recordId: string): string => `${blockersBase(projectId)}?customer=${encodeURIComponent(recordId)}`;
+
+/**
+ * Data Explorer on one customer, with the values a blocker is about highlighted and a banner linking back:
+ * `/studio/<p>/data?customer=<id>&blocker=<id>&highlight=<path,path>`. The fields are worked out from the open model.
+ */
+export function dataExplorerPath(project: Project, records: SyntheticRecord[], recordId: string, blockerId?: string | null): string {
+  const q = new URLSearchParams({ customer: recordId });
+  if (blockerId) {
+    q.set('blocker', blockerId);
+    const record = records.find((r) => r.recordId === recordId);
+    const fields = record ? customerBlockers(project, record).find((b) => b.id === blockerId)?.fields ?? [] : [];
+    if (fields.length) q.set('highlight', fields.join(','));
+  }
+  return `/studio/${project.projectId}/data?${q.toString()}`;
+}
 
 export function ResolveCustomerInBlockers({ recordId, children, className = 'linkbtn', testId = 'resolve-in-blockers' }: { recordId: string; children?: ReactNode; className?: string; testId?: string }) {
   const projectId = useStudio((s) => s.project?.projectId);

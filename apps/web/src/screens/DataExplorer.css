@@ -164,3 +164,13 @@
   .dx-other-row { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { .dx-chev, .dx-knob { transition: none; } }
+
+/* Opened from a blocker: the values it is about, and the banner that says why */
+.dx-field.highlight { background: var(--iss-warning-soft); border-radius: 8px; box-shadow: inset 3px 0 0 var(--iss-warning); }
+.dx-field.highlight .dx-label::after { content: " · to check"; color: var(--iss-warning-fg); font-weight: 600; font-size: 11.5px; }
+.dx-cell.highlight { background: var(--iss-warning-soft); box-shadow: inset 0 -2px 0 var(--iss-warning); }
+/* stays in view while the highlighted values are scrolled to; opaque so the form does not show through */
+.dx-scroll .callout.dx-blocker { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; position: sticky; top: 0; z-index: 2; background: linear-gradient(var(--iss-warning-soft), var(--iss-warning-soft)), var(--iss-surface); box-shadow: var(--iss-shadow-pop); }
+.dx-scroll .callout.dx-blocker[data-state="gone"] { background: linear-gradient(var(--iss-accent-soft), var(--iss-accent-soft)), var(--iss-surface); }
+.dx-blocker p { margin: 0; }
+.dx-blocker-actions { gap: 8px; align-items: center; margin-top: 4px; }

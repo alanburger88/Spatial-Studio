@@ -86,3 +86,49 @@
 .bl-customer-filter { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .bl-customer-filter .btn { margin-left: auto; }
 .bl-none-shown { padding: 8px 14px; margin: 0; }
+
+/* phase 2: known data problems */
+.bl-tile.aside { background: var(--iss-warning-soft); }
+.bl-customer.known { background: var(--iss-overlay-1); }
+.bl-customer-actions { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.bl-known-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.bl-known-entry { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 10px; border-radius: 8px; background: var(--iss-warning-soft); font-size: 12.5px; }
+.bl-known-reason { flex: 1 1 100%; color: var(--iss-text); overflow-wrap: anywhere; }
+.bl-known-who { flex: 1 1 auto; }
+.bl-known-entry .btn { margin-left: auto; }
+.bl-known-lapsed { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bl-known-lapsed .btn { margin-left: auto; }
+.bl-known-dialog p { margin: 0 0 8px; }
+.bl-known-rules { margin: 0 0 10px; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+.bl-known-dialog .textarea { min-height: 84px; width: 100%; }
+
+/* phase 3: resolve one by one */
+.bl-body.bl-passmode { grid-template-columns: minmax(0, 1fr); }
+.bl-passmode .bl-main { max-width: 1180px; width: 100%; margin: 0 auto; }
+.bl-pass { display: flex; flex-direction: column; }
+.bl-pass-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bl-pass-head h2 { margin: 0; font-size: 14px; }
+.bl-pass-head .btn { margin-left: auto; }
+.bl-pass-body { display: flex; flex-direction: column; gap: 14px; }
+.bl-progress { display: flex; flex-direction: column; gap: 6px; }
+.bl-progress-text { font-size: 13px; }
+.bl-progress-text strong { font-size: 16px; font-variant-numeric: tabular-nums; }
+.bl-progress-bar { height: 8px; border-radius: 999px; background: var(--iss-error-soft); overflow: hidden; border: 1px solid var(--iss-border); }
+.bl-progress-bar span { display: block; height: 100%; background: var(--iss-accent); transition: width var(--iss-motion-mid) var(--iss-ease); }
+.bl-pass-speeds { margin: 0; font-size: 12px; }
+.bl-pass-step { display: flex; flex-direction: column; gap: 6px; }
+.bl-pass-step .section-title { margin: 8px 0 2px; }
+.bl-pass-n { font-size: 12px; }
+.bl-pass-fullnote { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bl-pass-fullnote .btn { margin-left: auto; }
+.bl-pass-actions { margin-top: 6px; }
+.bl-pass-later { margin: 6px 0 0; font-size: 12px; }
+.bl-pass-end { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.bl-pass-end p { margin: 0; font-size: 13px; }
+.bl-pass .bl-customers { max-height: 160px; }
+.bl-pin { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--iss-overlay-1); border: 1px solid var(--iss-border); width: 100%; box-sizing: border-box; }
+.bl-pin.compact { padding: 8px 10px; flex-basis: 100%; }
+.bl-pin-lead { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.bl-pin-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.bl-pin-item { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; cursor: pointer; }
+.bl-pin-item input { flex: none; }

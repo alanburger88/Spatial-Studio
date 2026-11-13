@@ -113,7 +113,7 @@ function ListBlock({ node }: { node: ListNode }) {
                       <RowGroup key={i}>
                         <tr data-testid={`dx-trow-${path}-${i}`} className={isOpen ? 'open' : ''}>
                           <td className="dx-n">{i + 1}</td>
-                          {node.columns.map((c) => <td key={c.key} className={`dx-cell t-${c.type}`}>{cell(c, i, true)}</td>)}
+                          {node.columns.map((c) => { const hl = ed.highlight.includes(`${path}[${i}].${c.key}`); return <td key={c.key} className={`dx-cell t-${c.type}${hl ? ' highlight' : ''}`} data-highlight={hl ? 'yes' : undefined}>{cell(c, i, true)}</td>; })}
                           <td className="dx-actions">
                             {extra && <button type="button" className="btn ghost sm icon" data-testid="dx-row-expand" aria-expanded={isOpen} aria-label={`${isOpen ? 'Hide' : 'Show'} all fields of row ${i + 1}`} title="All fields of this row" onClick={() => toggleRow(i)}><Icon.chevron className="dx-chev" width={14} height={14} /></button>}
                             <button type="button" className="btn ghost sm icon" data-testid="dx-row-up" disabled={ed.readOnly || i === 0} aria-label={`Move row ${i + 1} up`} title="Move up" onClick={() => move(i, -1)}>↑</button>

@@ -23,6 +23,7 @@ export function Summary({ data, current, full, modelChanged, kind, onKind, onRun
         <div className="bl-tile"><strong data-testid="bl-checked">{result.checked}</strong><span>synthetic customers checked</span></div>
         <div className={`bl-tile${result.stopped === 0 ? ' good' : ''}`}><strong data-testid="bl-issuable">{result.issuable}</strong><span>can be issued the document</span></div>
         <div className={`bl-tile${result.stopped ? ' bad' : ''}`}><strong data-testid="bl-stopped">{result.stopped}</strong><span>{result.stopped === 1 ? 'is stopped' : 'are stopped'}</span></div>
+        {result.setAside > 0 && <div className="bl-tile aside" title="Customers whose only blockers are known data problems an approver set aside: not counted as stopped, but not issued the document either"><strong data-testid="bl-set-aside">{result.setAside}</strong><span>set aside (known data problems)</span></div>}
         <div className="bl-tile" title="Each blocker is one cause, however many customers it stops"><strong data-testid="bl-blockers">{result.blockers.length}</strong><span>{result.blockers.length === 1 ? 'blocker' : 'blockers'}</span></div>
       </div>
 

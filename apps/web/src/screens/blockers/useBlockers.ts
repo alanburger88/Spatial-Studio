@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project, SyntheticRecord } from '@iss/model';
 import type { Finding } from '@iss/resolver';
-import { documentBlockers, fixImpact, type Blocker, type DocumentBlockers, type ExtraFinding, type FixImpact, type FixProposal } from '@iss/scenarios';
+import { documentBlockers, fixImpact, withKnownDataProblems, type Blocker, type DocumentBlockers, type DocumentBlockersWithStatus, type ExtraFinding, type FixImpact, type FixProposal } from '@iss/scenarios';
 import { bindingAnalysis, staticRuleAnalysis } from '@iss/validation';
 import { useStudio } from '../../state/store';
 import { fullCheckOf, useFullCheck, type FullCheckResult } from './fullCheck';
+import { toKnown, useKnownDataProblems } from './knownData';
 
 /**
  * Every blocker of the open (possibly unsaved) model, for every customer, worked out in the browser. It is recomputed,
@@ -13,7 +14,8 @@ import { fullCheckOf, useFullCheck, type FullCheckResult } from './fullCheck';
  */
 
 export interface BlockerData {
-  result: DocumentBlockers;
+  /** Every blocker with its status once the known data problems are taken into account. */
+  result: DocumentBlockersWithStatus;
   project: Project;
   records: SyntheticRecord[];
   full: FullCheckResult;
@@ -27,8 +29,9 @@ export function useDocumentBlockers(): { data: BlockerData | null; current: bool
   const profileId = useStudio((s) => s.ctx.profileId);
   const journeyCursor = useStudio((s) => s.ctx.journeyCursor);
   const full = useFullCheck((s) => (project ? fullCheckOf(s, project.projectId) : fullCheckOf(s, '')));
-  const [data, setData] = useState<BlockerData | null>(null);
+  const [raw, setData] = useState<(Omit<BlockerData, 'result'> & { result: DocumentBlockers }) | null>(null);
   const first = useRef(true);
+  const known = useKnownDataProblems();
   useEffect(() => {
     if (!project) return;
     const h = setTimeout(() => {
@@ -42,6 +45,8 @@ export function useDocumentBlockers(): { data: BlockerData | null; current: bool
     }, first.current ? 0 : 150);
     return () => clearTimeout(h);
   }, [project, records, full.findings, profileId, journeyCursor]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Known data problems only change the status of what the engine found, so they are applied without checking again.
+  const data = useMemo<BlockerData | null>(() => (raw ? { ...raw, result: withKnownDataProblems(raw.result, toKnown(known.list)) } : null), [raw, known.list]);
   const current = !!data && data.project === project && data.records === records && data.full.findings === full.findings;
   return { data, current, full };
 }
