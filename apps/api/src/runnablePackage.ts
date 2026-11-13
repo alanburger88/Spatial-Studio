@@ -142,7 +142,7 @@ ${code('node verify')}
 
 <h2>Produce documents from a file</h2>
 ${code('node run --data customers.jsonl --outputs pdf,html,email,sms --out out')}
-<p><code>customers.jsonl</code> has one customer per line, each line one JSON object: the customer record described in <code>contract/input.schema.json</code>, or <code>{"customerRef": "your reference", "data": { …the record… }}</code>. The reference is how you find the customer again in the results; it defaults to the record's <code>recordId</code>. <code>contract/sample-input.json</code> is one such line. <code>--outputs</code> defaults to <code>html,email,sms</code>. <code>--parallel</code> sets how many PDF pages are composed at the same time.</p>
+<p><code>customers.jsonl</code> has one customer per line, each line one JSON object: the customer record described in <code>contract/input.schema.json</code>, or <code>{"customerRef": "your reference", "data": { …the record… }}</code>. The reference is how you find the customer again in the results; it defaults to the record's <code>recordId</code>. <code>contract/sample-input.json</code> is one such line. <code>--outputs</code> defaults to <code>html,email,sms</code>. <code>--parallel</code> sets how many PDF pages are composed at the same time. A <code>.json</code> file holding one customer or a list of customers, such as <code>contract/sample-input.json</code>, is accepted too.</p>
 <p>It writes, in the <code>out</code> folder (which must not hold an earlier run):</p>
 <table>
 <tr><th>File</th><th>What it holds</th></tr>

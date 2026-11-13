@@ -8,7 +8,8 @@ export default defineConfig({
   testDir: '.',
   testMatch: ['e2e/**/*.spec.ts', 'tests/e2e/**/*.spec.ts'],
   // Temporary working copies used by parallel builders hold a second copy of every spec; never run those.
-  testIgnore: ['**/.claude/**', '**/node_modules/**'],
+  // Agent worktrees live under .claude/: ignore them from the main checkout, but let a worktree run its own specs.
+  testIgnore: process.cwd().includes('/.claude/') ? ['**/node_modules/**'] : ['**/.claude/**', '**/node_modules/**'],
   timeout: 120_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,

@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync, openSync, writeSync, closeSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync, openSync, writeSync, closeSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { availableParallelism } from 'node:os';
 import path from 'node:path';
@@ -166,7 +166,8 @@ const RUN_HELP = `Produces documents from a file of customers, one JSON object p
 
   node run --data customers.jsonl --outputs pdf,html,email,sms --out <folder>
 
-  --data       the input file (JSON Lines). Each line is a customer record as described in contract/input.schema.json,
+  --data       the input file: JSON Lines (one customer per line), or a .json file holding one customer or a list of
+               customers, such as contract/sample-input.json. Each is a customer record as described in contract/input.schema.json,
                or { "customerRef": "<your reference>", "data": <record> }. The reference defaults to the record id.
   --outputs    any of pdf, html, email, sms (default: html,email,sms). PDF needs a headless browser.
   --out        the folder to write to. It must not hold the results of an earlier run.
@@ -235,7 +236,14 @@ export async function cmdRun(argv: string[]): Promise<number> {
     }
   };
 
-  const rl = createInterface({ input: createReadStream(dataFile, { encoding: 'utf8' }), crlfDelay: Infinity });
+  // A .json file holds ONE customer or a list of customers (like contract/sample-input.json); anything else is JSON Lines.
+  // Each customer of a .json file is handled exactly as one line would be, and is numbered in order.
+  const wholeDocument = (): string[] | null => {
+    if (!/\.json$/i.test(dataFile) || statSync(dataFile).size > 64 * 1024 * 1024) return null;
+    try { const v: unknown = JSON.parse(readFileSync(dataFile, 'utf8')); return (Array.isArray(v) ? v : [v]).map((x) => JSON.stringify(x)); } catch { return null; }
+  };
+  const whole = wholeDocument();
+  const rl: AsyncIterable<string> | Iterable<string> = whole ?? createInterface({ input: createReadStream(dataFile, { encoding: 'utf8' }), crlfDelay: Infinity });
   let line = 0;
   const depth = pdf ? parallel * 2 : 1;
   try {

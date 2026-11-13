@@ -456,6 +456,23 @@ describe('the runnable package (composition replaced by a stub)', () => {
     expect(node(pkgDir, ['run', '--data', path.join(work, 'customers.jsonl'), '--out', path.join(work, 'out')]).code).toBe(2);
   });
 
+  it('runs the package’s own sample (a .json file with one customer) and a .json list, not only JSON Lines', () => {
+    const one = node(pkgDir, ['run', '--data', 'contract/sample-input.json', '--out', path.join(work, 'out-sample')]);
+    expect(one.code, one.err).toBe(0);
+    const r1 = readJsonl(path.join(work, 'out-sample', 'results.jsonl'));
+    expect(r1.length).toBe(1);
+    expect(r1[0].status).toBe('produced');
+    expect(readJsonl(path.join(work, 'out-sample', 'proof.jsonl')).length).toBe(1);
+    const sample = JSON.parse(readFileSync(path.join(pkgDir, 'contract/sample-input.json'), 'utf8'));
+    writeFileSync(path.join(work, 'list.json'), JSON.stringify([sample, { ...sample, customerRef: 'second' }], null, 2));
+    const two = node(pkgDir, ['run', '--data', path.join(work, 'list.json'), '--out', path.join(work, 'out-list')]);
+    expect(two.code, two.err).toBe(0);
+    const r2 = readJsonl(path.join(work, 'out-list', 'results.jsonl'));
+    expect(r2.map((x) => x.status)).toEqual(['produced', 'produced']);
+    expect(r2[1].customerRef).toBe('second');
+    expect(r2[0].runId).toBe(r1[0].runId);
+  });
+
   it('generates synthetic customers with the engine, which then run', () => {
     const g = node(pkgDir, ['engine/iss-engine.mjs', 'generate', '--count', '40', '--out', path.join(work, 'gen.jsonl')]);
     expect(g.code, g.err).toBe(0);
