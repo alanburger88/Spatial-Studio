@@ -21,6 +21,7 @@ const CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'release.', label: 'Releases' },
   { id: 'comment.', label: 'Comments' },
   { id: 'records.', label: 'Imported records' },
+  { id: 'known-data.', label: 'Known data problems' },
   { id: 'asset.', label: 'Images' },
   { id: 'batch.', label: 'Batch runs' },
   { id: 'assist.', label: 'Assistant-assisted changes' },
@@ -57,6 +58,9 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
     case 'records.add': return d.copyOf ? `Made an editable copy of a customer (${d.name})` : `Added the customer ${d.name}`;
     case 'records.edit': return `Edited the customer ${d.name}${d.wasGenerated ? ' (a generated customer, now kept as this document’s own)' : ''}`;
     case 'records.delete': return `Removed the customer ${d.name}`;
+    case 'known-data.add': return `Set aside a known data problem for ${d.name ?? 'a customer'}: ${d.blocker ?? 'a problem in the customer’s data'}`;
+    case 'known-data.remove': return `Removed the known data problem for ${d.name ?? 'a customer'}, who counts as stopped again`;
+    case 'known-data.lapse': return d.why === 'customer-gone' ? 'A known data problem was removed because its customer no longer exists' : `A known data problem for ${d.name ?? 'a customer'} no longer applied and was removed (the problem no longer stops them)`;
     case 'testdata.generate': return `Generated ${plural(Number(d.customers ?? 0), 'test customer')} for this document${d.replaced ? ` (replacing ${d.replaced})` : ''}${d.unreachable ? `; ${plural(Number(d.unreachable), 'outcome')} could not be reached` : ''}`;
     case 'testdata.clear': return `Removed ${plural(Number(d.removed ?? 0), 'generated test customer')}`;
     case 'template.save': return d.newTemplate ? `Saved a new template “${d.title}” (v${d.version})` : `Saved version ${d.version} of the template “${d.title}”`;
@@ -109,7 +113,7 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
 }
 
 
-const ACTION_WORDS: Record<string, string> = { 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs', 'release.create': 'New releases', 'release.promote': 'Moves to Production', 'release.withdraw': 'Withdrawn releases', 'release.handover': 'Handover entries', 'release.package': 'Release packages' };
+const ACTION_WORDS: Record<string, string> = { 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs', 'release.create': 'New releases', 'release.promote': 'Moves to Production', 'release.withdraw': 'Withdrawn releases', 'release.handover': 'Handover entries', 'release.package': 'Release packages', 'known-data.add': 'Known data problems set aside', 'known-data.remove': 'Known data problems removed', 'known-data.lapse': 'Known data problems that lapsed' };
 const actionLabel = (a: string): string => ACTION_WORDS[a] ?? CATEGORIES.find((c) => c.id === a)?.label ?? a;
 
 /* ------------------------------------------------------------------ grouping */

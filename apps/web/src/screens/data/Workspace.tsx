@@ -9,16 +9,20 @@ import { JsonEditor } from './JsonEditor';
 import { OutcomePanel } from './Outcome';
 import { GroupView, OtherValues } from './Tree';
 import { EditorContext, type EditorCtx } from './Fields';
+import { BlockerBanner } from './BlockerBanner';
 import { bookkeepingOf, buildSections, editablePart, isOwn, ORIGIN_LABEL, originOf, otherValues, problemsFor, plainProblem, recordName, setIn, stableStringify, type Problem, type Rec } from './explorerModel';
 
 type Mode = 'form' | 'json';
+const NO_HIGHLIGHT: string[] = [];
 
 const format = (r: Rec) => JSON.stringify(editablePart(r), null, 2);
 
 /** The centre (the customer as a nested tree or JSON) and the right panel (what this customer gets) for ONE customer. Remounted per customer. */
-export function Workspace({ project, saved, canEdit, blockedReason, onDirty, onMakeCopy, onDeleted, onPreview }: {
+export function Workspace({ project, saved, canEdit, blockedReason, onDirty, onMakeCopy, onDeleted, onPreview, highlight = NO_HIGHLIGHT, blockerId = null }: {
   project: Project; saved: SyntheticRecord; canEdit: boolean; blockedReason: string | null;
   onDirty: (dirty: boolean) => void; onMakeCopy: (id: string) => void; onDeleted: (id: string) => void; onPreview: (id: string) => void;
+  /** Opened from a blocker: the values it is about (highlighted and scrolled to) and the blocker (banner with a link back). */
+  highlight?: string[]; blockerId?: string | null;
 }) {
   const refreshRecords = useStudio((s) => s.refreshRecords);
   const technical = useStudio((s) => s.viewMode) === 'technical';
@@ -33,7 +37,8 @@ export function Workspace({ project, saved, canEdit, blockedReason, onDirty, onM
   const [serverProblems, setServerProblems] = useState<RecordProblem[]>([]);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [jump, setJump] = useState<{ path: string; n: number } | null>(null);
+  // Opened from a blocker: open and scroll to the first value it is about.
+  const [jump, setJump] = useState<{ path: string; n: number } | null>(() => (highlight.length ? { path: highlight[0], n: 1 } : null));
   const [allProblems, setAllProblems] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -66,7 +71,7 @@ export function Workspace({ project, saved, canEdit, blockedReason, onDirty, onM
   const sections = useMemo(() => buildSections(project), [project]);
   const values = useMemo(() => { try { return buildContext(draft as SyntheticRecord); } catch { return draft; } }, [draft]);
   const others = useMemo(() => otherValues(draft, project), [draft, project]);
-  const ctx: EditorCtx = useMemo(() => ({ project, record: draft, values, readOnly, problems, set, jump }), [project, draft, values, readOnly, problems, set, jump]);
+  const ctx: EditorCtx = useMemo(() => ({ project, record: draft, values, readOnly, problems, set, jump, highlight }), [project, draft, values, readOnly, problems, set, jump, highlight]);
 
   const jumpTo = (path: string | null) => {
     if (!path) return;
@@ -138,6 +143,7 @@ export function Workspace({ project, saved, canEdit, blockedReason, onDirty, onM
         </div>
 
         <div className="dx-scroll">
+          {blockerId && <BlockerBanner project={project} saved={saved} draft={deferred as SyntheticRecord} blockerId={blockerId} own={own} canEdit={canEdit} onMakeCopy={() => onMakeCopy(saved.recordId)} />}
           {(!canEdit || origin !== 'yours') && <div className={`callout dx-banner ${!canEdit ? 'warning' : origin === 'generated' ? 'accent' : ''}`} data-testid="dx-banner">
             {!canEdit ? (
               <>

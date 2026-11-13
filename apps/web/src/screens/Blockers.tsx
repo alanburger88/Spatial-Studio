@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { projectContentDigest } from '@iss/model';
-import type { Blocker, BlockerKind, BlockerLink, FixProposal } from '@iss/scenarios';
+import type { BlockerKind, BlockerLink, BlockerWithStatus, FixProposal, KnownDataProblem } from '@iss/scenarios';
 import { Loading, ScreenHeader } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { applyAssistCommands } from '../assist/common';
 import { useStudio, editBlockedReason } from '../state/store';
 import { FixAllButton, FixAllDialog, useSafePlan } from './ValidateCompare';
-import { BlockerDetail } from './blockers/BlockerDetail';
+import { BlockerDetail, type DataActions } from './blockers/BlockerDetail';
+import { KnownDialog, useKnownBlockedReason } from './blockers/KnownDialog';
+import { useKnownData, useKnownDataProblems } from './blockers/knownData';
+import { dataExplorerPath } from './blockers/link';
+import { PinOffer, ResolvePass, openPass, passOf, passRemaining, useResolvePass, type FixedBlocker } from './blockers/ResolvePass';
 import { BlockerList } from './blockers/BlockerList';
 import { Summary } from './blockers/Summary';
 import { useFullCheck } from './blockers/fullCheck';
@@ -40,7 +44,12 @@ export function Blockers() {
 
   const [applied, setApplied] = useState<{ blockerId: string; fixId: string } | null>(null);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
-  const [note, setNote] = useState<{ title: string | null; applied: boolean; next: string | null } | null>(null);
+  const [note, setNote] = useState<{ title: string | null; applied: boolean; next: string | null; fixed: FixedBlocker | null } | null>(null);
+  const [pinnedNote, setPinnedNote] = useState(false);
+  const [marking, setMarking] = useState<{ blocker: BlockerWithStatus; recordId: string } | null>(null);
+  const known = useKnownDataProblems();
+  const knownBlockedReason = useKnownBlockedReason();
+  const pass = useResolvePass((st) => passOf(st, project.projectId));
   const [fixAllOpen, setFixAllOpen] = useState(false);
   const asideBody = useRef<HTMLDivElement>(null);
 
@@ -48,7 +57,7 @@ export function Blockers() {
   const ofCustomer = customerId ? blockers.filter((b) => b.recordIds.includes(customerId)) : blockers;
   const shown = kind ? ofCustomer.filter((b) => b.kind === kind) : ofCustomer;
   const customerName = (() => { const r = customerId ? records.find((x) => x.recordId === customerId) : undefined; return r ? `${r.customer.givenName} ${r.customer.familyName}` : customerId; })();
-  const selected: Blocker | null = blockers.find((b) => b.id === wantedId) ?? shown[0] ?? null;
+  const selected: BlockerWithStatus | null = blockers.find((b) => b.id === wantedId) ?? shown[0] ?? null;
   useEffect(() => { asideBody.current?.scrollTo?.({ top: 0 }); }, [selected?.id]);
 
   const setParam = (patch: Record<string, string | null>, replace = true) => setParams((p) => {
@@ -56,11 +65,11 @@ export function Blockers() {
     for (const [k, v] of Object.entries(patch)) { if (v) n.set(k, v); else n.delete(k); }
     return n;
   }, { replace });
-  const select = (id: string) => { setNote(null); setApplied(null); setParam({ blocker: id }); };
+  const select = (id: string) => { setNote(null); setPinnedNote(false); setApplied(null); setParam({ blocker: id }); };
   const setKind = (k: BlockerKind | null) => setParam({ kind: k });
 
   /* When the selected blocker disappears (a fix was applied, or the model changed), say so and move to the next one. */
-  const prev = useRef<{ ids: string[]; titles: Map<string, string>; selected: string | null } | null>(null);
+  const prev = useRef<{ ids: string[]; titles: Map<string, string>; who: Map<string, string[]>; selected: string | null } | null>(null);
   useEffect(() => {
     if (!data || !current) return;
     const ids = blockers.map((b) => b.id);
@@ -70,11 +79,14 @@ export function Blockers() {
       let next: string | null = null;
       const i = was ? was.ids.indexOf(gone) : -1;
       if (was && i >= 0) next = was.ids.slice(i + 1).find((x) => ids.includes(x)) ?? [...was.ids.slice(0, i)].reverse().find((x) => ids.includes(x)) ?? null;
-      setNote({ title: was?.titles.get(gone) ?? null, applied: !!applied && applied.blockerId === gone, next });
+      const wasApplied = !!applied && applied.blockerId === gone;
+      // A blocker fixed here (outside the guided pass) is offered a pinned test, like the ones fixed in the pass.
+      setNote({ title: was?.titles.get(gone) ?? null, applied: wasApplied, next, fixed: wasApplied && was ? { blockerId: gone, title: was.titles.get(gone) ?? gone, recordIds: was.who.get(gone) ?? [] } : null });
+      setPinnedNote(false);
       setApplied(null);
       setParam({ blocker: next });
     }
-    prev.current = { ids, titles: new Map(blockers.map((b) => [b.id, b.title])), selected: gone ? null : selected?.id ?? null };
+    prev.current = { ids, titles: new Map(blockers.map((b) => [b.id, b.title])), who: new Map(blockers.map((b) => [b.id, b.recordIds])), selected: gone ? null : selected?.id ?? null };
   }, [data, current]); // eslint-disable-line react-hooks/exhaustive-deps
   /* A kind with nothing left in it is not a filter any more. */
   useEffect(() => { if (data && current && kind && !blockers.some((b) => b.kind === kind)) setKind(null); }, [data, current, kind]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -103,7 +115,20 @@ export function Blockers() {
     if (l.view === 'data') navigate(`${base}/data${l.recordId ? `?customer=${encodeURIComponent(l.recordId)}` : ''}`);
     else navigate(`${base}/${l.view}${l.view === 'rules-data' && l.ruleId ? `?rule=${encodeURIComponent(l.ruleId)}` : ''}`);
   };
-  const openData = (recordId: string) => navigate(`${base}/data?customer=${encodeURIComponent(recordId)}`);
+  const openData = (recordId: string, blockerId?: string) => navigate(dataExplorerPath(project, records, recordId, blockerId));
+  const dataActions: DataActions = {
+    onOpenData: openData,
+    onMarkKnown: (blocker, recordId) => setMarking({ blocker, recordId }),
+    onRemoveKnown: (entry: KnownDataProblem) => {
+      if (!entry.id) return;
+      useKnownData.getState().remove(project.projectId, entry.id)
+        .then(() => useStudio.getState().toast({ kind: 'success', title: 'No longer set aside', message: 'The customer counts as stopped by this problem again.' }))
+        .catch((e) => useStudio.getState().toast({ kind: 'error', title: 'Not removed', message: e instanceof Error ? e.message : String(e) }));
+    },
+    knownBlockedReason,
+  };
+  const runFull = () => void useFullCheck.getState().run(project, records);
+  const markingName = (() => { if (!marking) return ''; const r = records.find((x) => x.recordId === marking.recordId); return r ? `${r.customer.givenName} ${r.customer.familyName}` : marking.recordId; })();
   const previewCustomer = (recordId: string) => { useStudio.getState().setRecord(recordId); navigate(`${base}/outputs`); };
   const generate = () => {
     navigate(`${base}/rules-data`);
@@ -135,20 +160,39 @@ export function Blockers() {
     <section className="screen" data-testid="blockers-screen">
       <ScreenHeader id="S17" title="Blockers"
         subtitle="Everything that stops this document being issued, one entry for each cause, across every synthetic customer. Rules, wording and data are checked again after every change; pages and PDF/web differences come from the last full check, with its time." />
-      <div className="screen-body bl-body">
+      <div className={`screen-body bl-body${pass.open ? ' bl-passmode' : ''}`}>
         <div className="bl-main" aria-busy={!current}>
           <Summary data={data} current={current} full={full} modelChanged={modelChanged} kind={kind} onKind={setKind}
-            onRunFull={() => void useFullCheck.getState().run(project, records)} onCancelFull={() => useFullCheck.getState().cancel(project.projectId)}
-            fixAll={<FixAllButton plan={plan} onOpen={() => setFixAllOpen(true)} testId="bl-fix-all-safe" />} />
+            onRunFull={runFull} onCancelFull={() => useFullCheck.getState().cancel(project.projectId)}
+            fixAll={<FixAllButton plan={plan} onOpen={() => setFixAllOpen(true)} testId="bl-fix-all-safe" />}>
+            {!empty && !pass.open && (() => {
+              const left = passRemaining(data, pass).length;
+              const resuming = pass.startStopped > 0 || pass.skipped.length > 0 || pass.fixed.length > 0;
+              return <button type="button" className="btn" onClick={() => openPass(project.projectId, result.stopped)} disabled={!left && !resuming} data-testid="bl-resolve-start"
+                title="A guided pass over the open blockers, most customers first">{resuming ? `Resume one by one (${plural(left, 'blocker')} left)` : 'Resolve one by one'}</button>;
+            })()}
+          </Summary>
 
-          {customerId && !empty && (
+          {known.note && (
+            <div className="callout accent bl-known-lapsed" role="status" data-testid="bl-known-lapsed">
+              <span>{known.note}</span>
+              <button type="button" className="btn ghost sm" onClick={() => useKnownData.getState().dismissNote(project.projectId)}>Dismiss</button>
+            </div>
+          )}
+
+          {pass.open && (
+            <ResolvePass data={data} current={current} full={full} modelChanged={modelChanged} readOnlyReason={readOnly} dataActions={dataActions}
+              onOpen={openLink} onPreview={previewCustomer} onRunFull={runFull} onClose={() => useResolvePass.getState().patch(project.projectId, { open: false })} />
+          )}
+
+          {!pass.open && customerId && !empty && (
             <div className="callout accent bl-customer-filter" role="status" data-testid="bl-customer-filter">
               <span>{ofCustomer.length ? <>Showing the {plural(ofCustomer.length, 'blocker')} that stop <strong>{customerName}</strong>.</> : <>No blocker stops <strong>{customerName}</strong> any more.</>}</span>
               <button type="button" className="btn ghost sm" onClick={() => setParam({ customer: null })} data-testid="bl-customer-clear">Show all blockers</button>
             </div>
           )}
 
-          {empty ? (
+          {pass.open ? null : empty ? (
             <section className="panel bl-empty" data-testid="bl-empty" role="status" aria-label="No blockers">
               <span className="bl-empty-mark" aria-hidden="true">✔</span>
               <h2>Nothing stops this document being issued to any of the {result.checked} synthetic customers checked.</h2>
@@ -167,7 +211,7 @@ export function Blockers() {
           )}
         </div>
 
-        <aside className="panel bl-aside" data-side="right" data-side-title="Blocker" data-testid="bl-aside" aria-label="Blocker detail">
+        {!pass.open && <aside className="panel bl-aside" data-side="right" data-side-title="Blocker" data-testid="bl-aside" aria-label="Blocker detail">
           <div className="panel-head">Blocker detail</div>
           <div className="panel-body bl-aside-body" ref={asideBody}>
             {note && (
@@ -176,21 +220,24 @@ export function Blockers() {
                 <span>{note.title ? <><strong>{note.title}</strong> is no longer a blocker.</> : <>That blocker is no longer listed; it may already be fixed.</>}{' '}
                   {note.next ? 'Showing the next one.' : result.blockers.length ? 'Showing the first one.' : 'Nothing else stops this document.'}</span>
                 <button type="button" className="btn ghost sm" onClick={() => setNote(null)} aria-label="Dismiss">Dismiss</button>
+                {note.fixed && !pinnedNote && <PinOffer fixed={[note.fixed]} records={records} personas={personas} project={project} compact onPinned={() => setPinnedNote(true)} />}
+                {pinnedNote && <p className="hint" data-testid="bl-pinned">Test pinned. It is in Rules &amp; Data → Tests; undo is in the top bar.</p>}
               </div>
             )}
 
             {selected ? (
               <BlockerDetail blocker={selected} records={records} personas={personas} impactFor={impactFor} readOnlyReason={readOnly}
                 appliedFixId={applied && applied.blockerId === selected.id ? applied.fixId : null}
-                onApply={apply} onOpen={openLink} onOpenData={openData} onPreview={previewCustomer} stale={modelChanged}>
+                onApply={apply} onOpen={openLink} data={dataActions} onPreview={previewCustomer} stale={modelChanged}>
                 {unconfirmed && <p className="bl-note warn" role="status" data-testid="bl-unconfirmed">A fix was applied. This blocker comes from the full check, so run the full check again to confirm that it is gone.</p>}
               </BlockerDetail>
             ) : (
               <p className="muted" data-testid="bl-detail-empty">{empty ? `Nothing to resolve. All ${result.checked} synthetic customers can be issued the document.` : 'Choose a blocker to see what is wrong and how to fix it.'}</p>
             )}
           </div>
-        </aside>
+        </aside>}
       </div>
+      {marking && <KnownDialog blockerId={marking.blocker.id} blockerTitle={marking.blocker.title} recordId={marking.recordId} customerName={markingName} onClose={() => setMarking(null)} />}
       {fixAllOpen && plan.ready && plan.plan?.batch && <FixAllDialog plan={plan.plan} onClose={() => setFixAllOpen(false)} />}
     </section>
   );

@@ -155,7 +155,14 @@ export interface WorkflowStep { action: string; from: WorkflowState; to: Workflo
 export interface VersionDto { modelVersion: number; contentDigest: string; savedAt: string; savedBy: string | null; label: string | null; bytes: number; current: boolean; workflow: WorkflowStep[] }
 export interface VersionMeta { modelVersion: number; contentDigest: string; savedAt: string; savedBy: string | null; label: string | null; title: string }
 export interface BlockingGroup { code: string; severity: string; nodeId: string | null; locale: string | null; message: string; source: string; recordIds: string[] }
-export interface Readiness { ready: boolean; modelVersion: number; recordsChecked: number; blocking: BlockingGroup[]; tests: TestResult[]; testsRun: number; testsFailed: number }
+/** A customer-data blocker an approver set aside for one customer (docs/api/KNOWN_DATA_PROBLEMS.md). */
+export interface KnownDataProblemDto {
+  id: string; blockerId: string; recordId: string; reason: string; markedBy: { id: string | null; name: string } | null; markedAt: string;
+  blocker: { title: string; kind: string; fields: string[] }; customer: { name: string; origin: 'sample' | 'generated' | 'supplied' | 'imported' };
+}
+/** `note` says, in plain words, when entries lapsed (the problem no longer stops that customer) and were removed by this request. */
+export interface KnownDataAnswer { lapsed: Array<{ id: string; blockerId: string; recordId: string }>; note: string | null }
+export interface Readiness { ready: boolean; modelVersion: number; recordsChecked: number; blocking: BlockingGroup[]; tests: TestResult[]; testsRun: number; testsFailed: number; knownDataProblems?: KnownDataProblemDto[]; knownDataNote?: string | null }
 export interface WorkflowEventDto { id: number; action: string; from: WorkflowState; to: WorkflowState; comment: string | null; user: string | null; userId: string | null; at: string; modelVersion: number }
 export interface WorkflowDto {
   projectId: string; modelVersion: number; state: WorkflowState; label: string; stateVersion: number | null; updatedAt: string | null; updatedBy: string | null;
@@ -198,6 +205,11 @@ export const api = {
   checkRecord: (projectId: string, record: unknown) => json<{ problems: RecordProblem[]; outcome: RecordOutcome | null }>(`/api/v1/projects/${projectId}/records/check`, { method: 'POST', body: JSON.stringify({ record }) }),
   /** Adds a customer that belongs to this document: from data, or as an editable copy of any customer the document can see (`copyOf`). A 422 carries `body.error.problems`. */
   addRecord: (projectId: string, body: { record?: unknown; copyOf?: string }) => json<{ record: SyntheticRecord; origin: 'supplied'; copiedFrom: string | null; outcome: RecordOutcome }>(`/api/v1/projects/${projectId}/records`, { method: 'POST', body: JSON.stringify(body) }),
+  /** Known data problems in force for the saved document (lapsed ones are removed by the server, and `note` says so). */
+  knownDataProblems: (projectId: string) => json<KnownDataAnswer & { projectId: string; modelVersion: number; knownDataProblems: KnownDataProblemDto[] }>(`/api/v1/projects/${projectId}/known-data-problems`),
+  /** Sets one customer-data blocker aside for one customer (approvers only). */
+  addKnownDataProblem: (projectId: string, body: { blockerId: string; recordId: string; reason: string }) => json<KnownDataAnswer & { knownDataProblem: KnownDataProblemDto }>(`/api/v1/projects/${projectId}/known-data-problems`, { method: 'POST', body: JSON.stringify(body) }),
+  removeKnownDataProblem: (projectId: string, id: string) => json<KnownDataAnswer & { removed: string }>(`/api/v1/projects/${projectId}/known-data-problems/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   /** Saves one of the document's own customers. 409 RECORD_SHARED for sample and imported customers (copy them first). An edited generated customer becomes the document's own. */
   saveRecord: (projectId: string, recordId: string, record: unknown) => json<{ record: SyntheticRecord; origin: 'supplied'; wasGenerated: boolean; outcome: RecordOutcome }>(`/api/v1/projects/${projectId}/records/${recordId}`, { method: 'PUT', body: JSON.stringify({ record }) }),
   deleteRecord: (projectId: string, recordId: string) => json<{ removed: string }>(`/api/v1/projects/${projectId}/records/${recordId}`, { method: 'DELETE' }),

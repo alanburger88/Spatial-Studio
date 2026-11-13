@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { create } from 'zustand';
 import { ACTION_LABEL, WORKFLOW_LABEL, WORKFLOW_STATES, type WorkflowAction, type WorkflowState } from '@iss/model';
 import { api, ApiFailure, type BlockingGroup, type CommentDto, type VersionDto, type WorkflowDto } from '../api/client';
@@ -223,6 +223,26 @@ function ReviewPanelInner() {
                         </li>
                       ))}
                 </ul>
+                {(r.knownDataProblems?.length ?? 0) > 0 && (
+                  <div className="ready-known" data-testid="readiness-known">
+                    <h4 className="ready-known-h" style={{ margin: "12px 0 4px", fontSize: 13 }}>Known data problems set aside ({r.knownDataProblems!.length})</h4>
+                    <p className="muted ready-known-lead" style={{ margin: "0 0 6px", fontSize: 12.5 }}>An approver set these customers’ data problems aside, each for one customer and with a reason. They do not block approval, and approving records them in the release.</p>
+                    <ul className="ready-list">
+                      {r.knownDataProblems!.map((k) => (
+                        <li key={k.id} className="ready-item" data-testid="readiness-known-item" data-record={k.recordId} data-blocker={k.blockerId}>
+                          <span className="glyph" aria-hidden="true">!</span>
+                          <span>
+                            <strong>{k.blocker.title}</strong> for {k.customer.name}. <span className="muted">Reason:</span> {k.reason}
+                            <span className="muted"> Set aside by {k.markedBy?.name ?? 'someone'}, <When iso={k.markedAt} />.</span>
+                            <Tech><span className="tech mono" style={{ display: 'block', fontSize: 11 }}>{k.blockerId} · {k.recordId}</span></Tech>
+                            <span className="links"><Link className="linkbtn" to={`/studio/${pid}/blockers?blocker=${encodeURIComponent(k.blockerId)}`} onClick={close} data-testid="readiness-known-open">Open in Blockers</Link></span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {r.knownDataNote && <p className="muted" data-testid="readiness-known-note">{r.knownDataNote}</p>}
                 </>
               )}
             </section>
