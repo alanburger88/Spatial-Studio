@@ -115,7 +115,7 @@ function IssuedOnPanel({ project }: { project: Project }) {
           <ul className="dt-picks" aria-label="Quick picks: each day something changes and the day before it">
             {picks.map((p) => (
               <li key={`${p.side}-${p.boundary}`}>
-                <button type="button" className={`btn sm ${issueDate === p.day ? 'primary' : ''}`} aria-pressed={issueDate === p.day} onClick={() => setIssueDate(p.day)} data-testid={p.side === 'on' ? `dates-pick-${p.day}` : `dates-pick-before-${p.boundary}`}>
+                <button type="button" className="btn sm" aria-pressed={issueDate === p.day} onClick={() => setIssueDate(p.day)} data-testid={p.side === 'on' ? `dates-pick-${p.day}` : `dates-pick-before-${p.boundary}`}>
                   {p.side === 'on' ? dayWords(p.day) : `${dayWords(p.day)} (day before)`}
                 </button>
               </li>

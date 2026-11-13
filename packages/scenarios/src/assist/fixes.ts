@@ -541,6 +541,13 @@ function scenarioFixes(project: Project, f: Finding, ctx: FixCtx): Draft[] {
   let title = 'Correct the customer data';
   let origin = 'Correct the source data, or the what-if values if you changed any.';
   if (f.code === 'RECORD_TYPE_MISMATCH') { title = 'Choose a customer of this document type'; origin = 'Pick a customer record that belongs to this document.'; }
+  // A date given for each run is not part of any customer's data: the fix is to give the date, not to correct a record.
+  else if (f.code === 'DOCUMENT_DATE_MISSING' && project.documentDate?.source === 'run') {
+    return [
+      { kind: 'scenario', title: 'Give the date for this run', explanation: 'This document’s date is given for each run, and none has been given for this preview. Choose an “As issued on” date; when documents are produced, the run supplies the date. The customer’s data is not at fault and no document change is proposed.', risk: 'review' },
+      linkDraft('Choose an “As issued on” date', 'Open Dates in Rules & data to choose the day this preview is worked out for, or to change where the document’s date comes from.', { view: 'rules-data', label: 'Open Rules & data' }),
+    ];
+  }
   else if (record && has(undefined, null)) origin = 'It comes from the sample record itself, so the source data must be corrected.';
   else if (record && step && has(undefined, cursor)) { title = `Review the journey step ${q(step.label ?? humanise(step.eventType))}`; origin = `It appears at the journey step ${q(step.label ?? humanise(step.eventType))}: the step leaves the data in this state. Correct the step or the data it starts from.`; }
   else if (record && hasOverrides) { title = 'Adjust the what-if values'; origin = 'It is caused by the what-if values in this preview: change or clear them.'; }
