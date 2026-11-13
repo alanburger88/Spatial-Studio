@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 // Loaded via require so test bundlers that do not know the newer node:sqlite builtin leave it alone.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
-import { DEMOTE_ON_SAVE, WORKFLOW_LABEL, projectContentDigest, sha256Hex, type Project, type Role, type SyntheticRecord, type WorkflowState } from '@iss/model';
+import { DEMOTE_ON_SAVE, WORKFLOW_LABEL, projectContentDigest, sha256Hex, type Project, type Role, type SyntheticRecord, type TemplateInfo, type TemplateVersionInfo, type WorkflowState } from '@iss/model';
 import { seedProjects } from '@iss/model/fixtures';
 
 export interface StoredUser { id: string; email: string; name: string; role: Role; disabled: boolean; createdAt: string; updatedAt: string }
@@ -41,6 +41,8 @@ export class Store {
       CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, user TEXT, user_name TEXT, action TEXT NOT NULL, project_id TEXT, model_version INTEGER, detail TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS audit_by_project ON audit(project_id, id);
+      CREATE TABLE IF NOT EXISTS templates(template_id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL, document_type TEXT NOT NULL, retired INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS template_versions(template_id TEXT NOT NULL, version INTEGER NOT NULL, json TEXT NOT NULL, meta TEXT NOT NULL, saved_at TEXT NOT NULL, PRIMARY KEY(template_id, version));
     `);
     this.ensureSeeds();
     this.backfillVersions();
@@ -102,6 +104,45 @@ export class Store {
     return { ...this.getAsset(id)!, duplicate: false };
   }
   deleteAsset(assetId: string) { return Number(this.db.prepare('DELETE FROM assets WHERE asset_id=?').run(assetId).changes) > 0; }
+
+  /* ---------------------------------------------------------- saved templates (frozen, numbered versions) */
+
+  /** Saved templates with their version lists (newest first). Template content is not loaded. */
+  listSavedTemplates(): TemplateInfo[] {
+    const versions = this.db.prepare('SELECT template_id, version, meta, saved_at FROM template_versions ORDER BY version DESC').all() as any[];
+    return (this.db.prepare('SELECT * FROM templates ORDER BY created_at').all() as any[]).map((t) => {
+      const vs: TemplateVersionInfo[] = versions.filter((v) => v.template_id === t.template_id).map((v) => ({ version: v.version, savedAt: v.saved_at, ...JSON.parse(v.meta) }));
+      return { id: t.template_id, title: t.title, description: t.description, documentType: t.document_type, source: 'saved' as const, version: vs[0]?.version ?? 0, versions: vs, retired: !!t.retired };
+    });
+  }
+  getSavedTemplate(templateId: string): TemplateInfo | undefined { return this.listSavedTemplates().find((t) => t.id === templateId); }
+  /** The frozen content of one version (latest when no version is given). */
+  savedTemplateContent(templateId: string, version?: number): { version: number; content: Project } | undefined {
+    const r = (version === undefined
+      ? this.db.prepare('SELECT version, json FROM template_versions WHERE template_id=? ORDER BY version DESC LIMIT 1').get(templateId)
+      : this.db.prepare('SELECT version, json FROM template_versions WHERE template_id=? AND version=?').get(templateId, version)) as any;
+    return r ? { version: r.version, content: JSON.parse(r.json) } : undefined;
+  }
+  /** Adds a version (creating the template on its first save). Earlier versions are never changed. */
+  addTemplateVersion(t: { id: string; title: string; description: string; documentType: string }, content: Project, meta: Omit<TemplateVersionInfo, 'version' | 'savedAt'>): TemplateInfo {
+    const now = new Date().toISOString();
+    const exists = this.db.prepare('SELECT template_id FROM templates WHERE template_id=?').get(t.id);
+    if (!exists) this.db.prepare('INSERT INTO templates(template_id,title,description,document_type,retired,created_at) VALUES (?,?,?,?,0,?)').run(t.id, t.title, t.description, t.documentType, now);
+    else this.db.prepare('UPDATE templates SET title=?, description=?, retired=0 WHERE template_id=?').run(t.title, t.description, t.id);
+    const next = Number((this.db.prepare('SELECT COALESCE(MAX(version),0) AS v FROM template_versions WHERE template_id=?').get(t.id) as any).v) + 1;
+    this.db.prepare('INSERT INTO template_versions(template_id,version,json,meta,saved_at) VALUES (?,?,?,?,?)').run(t.id, next, JSON.stringify(content), JSON.stringify(meta), now);
+    return this.getSavedTemplate(t.id)!;
+  }
+  setTemplateRetired(templateId: string, retired: boolean): TemplateInfo | undefined {
+    this.db.prepare('UPDATE templates SET retired=? WHERE template_id=?').run(retired ? 1 : 0, templateId);
+    return this.getSavedTemplate(templateId);
+  }
+  /** Test and demo reset only: removes every saved template. */
+  clearSavedTemplates(): number {
+    const n = Number(this.db.prepare('DELETE FROM templates').run().changes);
+    this.db.prepare('DELETE FROM template_versions').run();
+    return n;
+  }
 
   /* ---------------------------------------------------------- projects (user copies) */
 

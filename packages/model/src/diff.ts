@@ -209,7 +209,7 @@ function diffBrand(a: BrandKit | undefined, b: BrandKit | undefined): ValueChang
     : { field: k, from: scalarText((a as any)?.[k]), to: scalarText((b as any)?.[k]) });
 }
 
-const KNOWN = new Set(['schemaVersion', 'projectId', 'title', 'modelVersion', 'lastSavedAt', 'nodes', 'rules', 'contentParts', 'customFields', 'styles', 'brand', 'testCases', 'journey', 'presentationProfiles', 'derivedFrom']);
+const KNOWN = new Set(['schemaVersion', 'projectId', 'title', 'modelVersion', 'lastSavedAt', 'nodes', 'rules', 'contentParts', 'customFields', 'styles', 'brand', 'testCases', 'journey', 'presentationProfiles', 'derivedFrom', 'fromTemplate', 'importedFrom']);
 
 /** Structural diff from `a` (older) to `b` (newer). Ignores modelVersion and save timestamps. */
 export function diffProjects(a: Project, b: Project): ProjectDiff {

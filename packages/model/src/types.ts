@@ -299,6 +299,10 @@ export interface Project {
   channels?: ChannelConfig;
   /** Preferred translations of recurring terms, per target language. AI drafts and the translation check follow them. */
   glossary?: Record<Locale, GlossaryEntry[]>;
+  /** The saved template version this project was started from (absent for built-in starters and older projects). */
+  fromTemplate?: { templateId: string; version: number; title: string };
+  /** Set when the project was brought in from a studio project file: what the file said it was. */
+  importedFrom?: { projectId: string; title: string; modelVersion: number; importedAt: string };
 }
 
 /** One preferred term: the English `source` should be rendered as `target` in that language. */

@@ -30,7 +30,10 @@ export interface ProjectSummary {
   sample: boolean; derivedFrom: { projectId: string; modelVersion: number } | null;
 }
 
-export interface TemplateInfoDto { id: string; title: string; documentType: 'credit-statement' | 'eob'; description: string }
+export interface TemplateVersionDto { version: number; savedAt: string; savedBy: { id: string; name: string } | null; note: string; from: { projectId: string; title: string; modelVersion: number }; counts: { components: number; rules: number; messages: number; languages: number; tests: number } }
+/** `source: 'saved'` templates were published from a document; they have numbered, frozen versions (newest first). */
+export interface TemplateInfoDto { id: string; title: string; documentType: 'credit-statement' | 'eob'; description: string; source?: 'builtin' | 'saved'; version?: number; versions?: TemplateVersionDto[]; retired?: boolean }
+export interface ProjectImportReport { from: { projectId: string; title: string; modelVersion: number }; counts: TemplateVersionDto['counts']; warnings: string[]; notImported: string[] }
 
 export interface ImportResult {
   documentType: 'credit-statement' | 'eob'; dryRun: boolean; total: number;
@@ -139,9 +142,15 @@ export const api = {
   resetProject: (id: string) => json<{ project: Project; reset: boolean; seedDigest: string }>(`/api/v1/projects/${id}/reset`, { method: 'POST', body: JSON.stringify({ confirm: true }) }),
   duplicateProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}/duplicate`, { method: 'POST', body: JSON.stringify({ title }) }),
   renameProject: (id: string, title: string) => json<{ project: Project }>(`/api/v1/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) }),
-  templates: () => json<{ templates: TemplateInfoDto[] }>('/api/v1/templates'),
-  templateProject: (templateId: string, documentType?: string) => json<{ template: TemplateInfoDto; project: Project }>(`/api/v1/templates/${templateId}/project${documentType ? `?documentType=${documentType}` : ''}`),
-  createProject: (body: { templateId: string; title: string; documentType?: string }) => json<{ project: Project; createdFrom: string }>('/api/v1/projects', { method: 'POST', body: JSON.stringify(body) }),
+  /** Built-in starters, then saved templates. `canSave` = this user may save a document as a template (approvers and admins). */
+  templates: (includeRetired = false) => json<{ templates: TemplateInfoDto[]; canSave: boolean }>(`/api/v1/templates${includeRetired ? '?includeRetired=true' : ''}`),
+  /** Saves the document's LAST SAVED version as a template. With `templateId` it adds the next version to that saved template. Errors: 403, 409 TEMPLATE_NAME_TAKEN, 400 DOCUMENT_TYPE_MISMATCH. */
+  saveTemplate: (body: { projectId: string; title?: string; description?: string; note?: string; templateId?: string }) => json<{ template: TemplateInfoDto; version: number; created: boolean }>('/api/v1/templates', { method: 'POST', body: JSON.stringify(body) }),
+  setTemplateRetired: (templateId: string, retired: boolean) => json<{ template: TemplateInfoDto }>(`/api/v1/templates/${templateId}`, { method: 'PATCH', body: JSON.stringify({ retired }) }),
+  /** Checks a studio project file and (unless `dryRun`) stores it as a NEW draft document. A 422 failure is an `ApiFailure` whose `body.error.problems` is `[{ code, message }]`. */
+  importProject: (file: unknown, opts: { title?: string; dryRun?: boolean } = {}) => json<{ project?: Project; dryRun?: boolean; wouldCreate?: { projectId: string; title: string }; report: ProjectImportReport }>('/api/v1/projects/import', { method: 'POST', body: JSON.stringify({ file, ...opts }) }),
+  templateProject: (templateId: string, documentType?: string, version?: number) => json<{ template: TemplateInfoDto; project: Project; version?: number }>(`/api/v1/templates/${templateId}/project?${new URLSearchParams({ ...(documentType ? { documentType } : {}), ...(version ? { version: String(version) } : {}) })}`),
+  createProject: (body: { templateId: string; title: string; documentType?: string; templateVersion?: number }) => json<{ project: Project; createdFrom: string; templateVersion: number | null }>('/api/v1/projects', { method: 'POST', body: JSON.stringify(body) }),
   deleteProject: (id: string) => json<{ deleted: boolean }>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
   importRecords: (body: { documentType: string; format: 'json' | 'csv'; data: string; dryRun?: boolean; projectId?: string }) => json<ImportResult>('/api/v1/records/import', { method: 'POST', body: JSON.stringify(body) }),
   clearImportedRecords: (documentType?: string) => json<{ removed: number }>(`/api/v1/records/imported${documentType ? `?documentType=${documentType}` : ''}`, { method: 'DELETE' }),

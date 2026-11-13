@@ -72,6 +72,12 @@ const ROUTES: Record<string, Need> = {
   'DELETE /api/v1/projects/:projectId': 'edit',
   'POST /api/v1/projects/:projectId/reset': 'edit',
   'POST /api/v1/projects/:projectId/duplicate': 'edit',
+  'POST /api/v1/projects': 'edit',
+  'POST /api/v1/projects/import': 'edit',
+  // Publishing a starter for everyone is an approver's decision, like approving a document.
+  'POST /api/v1/templates': 'approve',
+  'PATCH /api/v1/templates/:templateId': 'approve',
+  'POST /api/v1/templates/reset': 'manage_users',
   'POST /api/v1/projects/:projectId/versions/:version/restore': 'edit',
   'POST /api/v1/projects/:projectId/workflow': 'any',
   'POST /api/v1/projects/:projectId/comments': 'comment',

@@ -15,6 +15,7 @@ import './Activity.css';
 const CATEGORIES: Array<{ id: string; label: string }> = [
   { id: '', label: 'Everything' },
   { id: 'project.', label: 'Saves & versions' },
+  { id: 'template.', label: 'Templates' },
   { id: 'workflow.', label: 'Review & approval' },
   { id: 'comment.', label: 'Comments' },
   { id: 'records.', label: 'Imported records' },
@@ -49,6 +50,12 @@ export function auditSentence(e: AuditEventDto, project: Project | null): string
     case 'project.save': return `Saved ${v} (${changeSummary(d.changes)})${d.workflow ? ` — moved back to draft from ${String(d.workflow.from).replace('_', ' ')}` : ''}`;
     case 'project.restore': return `Restored v${d.restoredVersion} as ${v}`;
     case 'project.reset': return `Restored the approved sample as ${v}`;
+    case 'project.create': return `Created “${d.title ?? e.projectId}” from the template “${d.templateTitle ?? d.templateId}”${d.templateVersion ? ` v${d.templateVersion}` : ''}`;
+    case 'project.import': return `Imported “${d.title ?? e.projectId}” from a project file (“${d.fromTitle}” v${d.fromVersion})`;
+    case 'template.save': return d.newTemplate ? `Saved a new template “${d.title}” (v${d.version})` : `Saved version ${d.version} of the template “${d.title}”`;
+    case 'template.retire': return `Retired the template “${d.title}”`;
+    case 'template.unretire': return `Brought back the template “${d.title}”`;
+    case 'template.reset': return `Removed ${plural(Number(d.removed ?? 0), 'saved template')}`;
     case 'project.duplicate': return `Created “${d.title ?? e.projectId}” as a copy of ${d.from} v${d.fromVersion}`;
     case 'project.rename': return `Renamed “${d.from}” to “${d.to}”`;
     case 'project.delete': return `Deleted project “${d.title}”`;
