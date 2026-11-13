@@ -89,6 +89,17 @@ The screen, the release and the release package say which level was reached and 
 
 **Finding duplicates** across documents to fill the library is wave 3.
 
+### As built (shared library)
+
+Routes, shapes and roles: [`docs/api/LIBRARY.md`](../api/LIBRARY.md). Model: `packages/model/src/library.ts` and the three link commands in `commands.ts`.
+
+- **Store.** `library_items` and `library_versions` on the server; one draft at a time with the next number; approving freezes it (the table refuses to change or delete an approved version; a test reset opens a gate with `LIBRARY_RESET=allow`). Every kind has a validator used by the server, the link commands and the project-file checks.
+- **Linking.** A document holds `libraryLinks` and a copy of the content. Linked content is read-only: `applyCommand` compares a digest of each link's content before and after any other command and refuses the change, naming the item. The block's place in the document and its top component's layout stay the document's (it can be moved and re-laid-out); rules that point into a block are the document's too.
+- **Ids.** A block inserted from the library gets ids `<linkId>-<library id>`; a block linked in place of the component it was made from keeps its ids (so nothing that points at it breaks). A new version taken from a document that had inserted the block and then unlinked it has the link prefix taken off again, so the library's ids stay the same.
+- **Updates** are a dry run on the server (`compareVersions` over the document's synthetic customers, and the change in plain words), then one undoable `UPDATE_LIBRARY_LINK` in the document, which then goes through its own review. Nothing changes a document when a version is approved.
+- **Where.** The Library tab (S25) beside Projects; "Add to library" and "From the library" on a component and its messages (inspector), in Styles & brand and in Content & Translations (glossary); "From the library…" under the Design Studio component list; one line on Overview; "From the library" on the release detail; the manifest's `library` list and a README table in the release package.
+- **Differences from this section.** House wording rules are a kind whose content is a validated list (`WordingRule`), placed in the document as `houseWordingRules`; the checker and its screens are section 4. Lookup tables have the hook `lookupTableLibraryContent` for the Lookup tables screen, which wires its own button. A new version of a block or a lookup table is taken from a saved document (wording, brand, glossary and wording rules can also be typed in the Library). "Not in this library" is worked out when a link is shown (the link names an item the studio does not have); nothing is written into the project.
+
 ## 4. Wording rules and checker
 
 **House rules** are a library item of kind "Wording rules": a list of rules, each set by an admin to **must** (breaking it is a blocker) or **should** (a warning). A document that links to the house rules follows them and can add its own.

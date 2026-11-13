@@ -56,7 +56,7 @@ Changes from the sketch, each for a reason given in `RELEASE_PACKAGE.md`: the **
 1. **Save as template and project import/export.** Publish a document as a starter template; import a studio project file (validated, as a new draft). Small, useful on its own, and the base for everything else.
 2. **Releases and the package.** Frozen numbered releases on approval, stages, the Releases page, the package format with manifest, XLIFF, tests and reference outputs, and the read-only API.
 3. **Data dictionary and mappings.** Dictionary per template, mapping per target CCM, the "every required field is mapped" gate, validation of sample files.
-4. **Shared library.** Library items, linking, pinned versions, impact list on update.
+4. **Shared library.** Library items, linking, pinned versions, impact list on update. *Built (wave 2): see section 3 "As built" of [`WAVE2B_PAGES_LIBRARY_WORDING.md`](WAVE2B_PAGES_LIBRARY_WORDING.md) and [`docs/api/LIBRARY.md`](../api/LIBRARY.md). A document pins each item at an approved version; a release records them, and the package lists them in its manifest (`library`) instead of a `library/` folder, because the content is already in `template.json`.*
 5. **Assisted import.** Draft a template from wording tables, a data dictionary and a sample PDF, with the list of what was not brought across.
 6. **First adapter**, for whichever CCM is named first; and optionally Git as a release destination.
 7. **Runnable package.** An extra export per release that an external system runs to produce documents itself, with no rebuild of the template (see below).

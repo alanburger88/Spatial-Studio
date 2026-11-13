@@ -30,7 +30,7 @@ Builder: `apps/api/src/releasePackage.ts`. Routes: `docs/api/RELEASES.md`. Desig
 
 Entries are stored with `manifest.json` first and the rest in path order. Text files are UTF-8. JSON files are pretty-printed with two spaces and end with a newline.
 
-Not in the package, by decision: customer data; draft wording and unapproved translations; the release's stage and handover record (the studio keeps those, because they change and the release does not); `library/` (phase 4); `data/mapping-<ccm>.json` (phase 3); font files; an AFP print stream; the engine (phase 7).
+Not in the package, by decision: customer data; draft wording and unapproved translations; the release's stage and handover record (the studio keeps those, because they change and the release does not); `library/` (phase 4 lists what came from the library in the manifest instead; the content is in `template.json`); `data/mapping-<ccm>.json` (phase 3); font files; an AFP print stream; the engine (phase 7).
 
 ## Rules the package keeps
 
@@ -345,6 +345,20 @@ absent from the package of a template that does not use the feature, so such pac
   then the greedy cover of the remaining outcomes as before.
 - `README.html` gains a "Dates" section (what changes on which day, and the scenarios on each side) when the template
   uses dates.
+
+### Additions for the shared library (wave 2, phase 4)
+
+No reader of format 1 can misread a package because of these, so `formatVersion` stays **1**. A template that uses
+nothing from the library produces exactly the package it did before.
+
+- `template.json` may carry `libraryLinks` (each `{ linkId, itemId, kind, title, version, fingerprint, target }`) and
+  `houseWordingRules`. The linked content itself is ordinary template content, already in `template.json`; the package
+  never depends on the library, and a reader that ignores these fields builds the same document.
+- `manifest.json`: `library`, one entry per linked item, sorted by title: `{ itemId, title, kind, version }` (`kind` is
+  `brand`, `block`, `wording`, `glossary`, `wording-rules` or `lookup-table`). Absent when the template links to nothing.
+- `README.html` gains a "What came from the library" table (item, kind, version) when the template uses the library.
+- There is still no `library/` folder: the content of each item is in `template.json`, where it is used, so a copy of
+  it would only repeat it. `notIncluded` keeps naming `library/`.
 
 ## Limits
 

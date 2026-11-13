@@ -409,7 +409,6 @@ export interface GlossaryEntry {
 }
 
 export const GLOSSARY: GlossaryEntry[] = [
-  { term: 'Library item', screen: 'S25', means: 'Something many documents share, kept in the Library in numbered versions: a brand, a building block, wording, a glossary, the house wording rules or a lookup table. A document links to one approved version and holds a copy of it, read-only; a newer version reaches the document only when someone reviews the change and its impact and applies it.' },
   { term: 'Blocker', screen: 'S17', means: 'A problem that stops a document being issued to a customer, such as missing approved wording, rules that tie, values that do not add up, a broken data link or content that runs off the page. The studio lists one blocker for each cause and says how many customers it stops. Fix the cause and they are all cleared.' },
   { term: 'Known data problem', screen: 'S17', means: 'The only exception to "a blocker must be fixed", and a narrow one. It applies to one customer and one problem caused by that customer\'s own data, is set aside by an approver with a reason, and never applies to a blocker in the document itself. It is listed on the approval screen and in every release.' },
   { term: 'Release', screen: 'S18', means: 'An approved, numbered, frozen version of a document. Approving the document makes the next release; nothing can change a release afterwards, so a change is always a new release. The receiving team gets a release, never a draft.' },
