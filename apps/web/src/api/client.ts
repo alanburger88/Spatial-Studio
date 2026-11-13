@@ -391,7 +391,7 @@ export interface ReleasePdfRecordDto {
 
 /* ------------------------------------------------------------------ shared library */
 
-export interface LibraryCan { create: boolean; approve: boolean }
+export interface LibraryCan { create: boolean; approve: boolean; /** Only an admin sets whether a house wording rule is a “must” or a “should”. */ setSeverity?: boolean }
 export type LibraryItemDto = LibraryItemInfo & { usage: { documents: number; links: number; behind: number } };
 export interface LibraryImpactDto {
   linkId: string; title: string; kind: LibraryKind; from: number; to: number;

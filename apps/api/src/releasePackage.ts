@@ -8,7 +8,7 @@ import {
 import { RECORDS } from '@iss/model/fixtures';
 import { indexTree, predicatePaths, resolve, type Resolution } from '@iss/resolver';
 import { BRAND_FONTS, DOC_FONT, SCREEN_FONT, checkChannelParity, compareManifests, imageSrc, renderEmail, renderInteractiveHtml, renderPagedDocument, renderSms, type ExtractedManifest } from '@iss/renderers';
-import { baselineCustomer, documentDateBoundaries, documentTimeline, planTestData, runTestCase } from '@iss/scenarios';
+import { baselineCustomer, documentDateBoundaries, documentTimeline, planTestData, runTestCase, wordingReleaseRecord, wordingRuleLabel } from '@iss/scenarios';
 import type { Composer } from './composer';
 import type { PinnedCustomerRef, StoredRelease } from './db';
 import { ZIP_FIXED_DATE, zipFiles } from './zip';
@@ -793,7 +793,14 @@ ${fromLibrary.map((l) => `<tr><td>${escHtml(l.title)}</td><td>${escHtml(LIBRARY_
 </table>
 
 ` : '';
-  add('README.html', 'readme', readmeHtml({ title: release.title, kind: DOCUMENT_TYPE_LABEL[release.documentType], number: release.number, approver: release.approvedBy?.name ?? null, approvedAt: release.approvedAt, fileName, languages, plan, references, known: release.knownDataProblems, dates: datesHtml, library: libraryHtml }));
+  // Wording rules (wave 2): the rules in force when the content was approved, and what the checker found in it.
+  const wording = wordingReleaseRecord(template);
+  const wordingHtml = wording ? `<h2>Wording rules</h2>
+<p>${wording.house ? `The house rules “${escHtml(wording.house.title)}” (version ${wording.house.version}, ${wording.house.rules} rules) from the library` : wording.houseKept ? `${wording.houseKept} house rules kept from the library` : 'No house rules'}${wording.own.length ? `, and ${wording.own.length} of the document's own` : ''}. The approved content had ${wording.mustFindings === 0 ? 'no' : wording.mustFindings} finding${wording.mustFindings === 1 ? '' : 's'} against a “must” rule and ${wording.shouldFindings} against a “should” rule (${wording.textsChecked} texts checked).</p>
+${wording.own.length ? `<ul>${wording.own.map((r) => `<li>${escHtml(wordingRuleLabel(r))} (${r.severity})</li>`).join('')}</ul>` : ''}
+
+` : '';
+  add('README.html', 'readme', readmeHtml({ title: release.title, kind: DOCUMENT_TYPE_LABEL[release.documentType], number: release.number, approver: release.approvedBy?.name ?? null, approvedAt: release.approvedAt, fileName, languages, plan, references, known: release.knownDataProblems, dates: datesHtml, library: libraryHtml + wordingHtml }));
 
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const contents: PackageFile[] = files.map((f) => ({ path: f.path, sha256: sha256(f.data), bytes: f.data.length, role: f.role }));
@@ -828,6 +835,12 @@ ${fromLibrary.map((l) => `<tr><td>${escHtml(l.title)}</td><td>${escHtml(LIBRARY_
      * with its kind and the approved version the release holds. The content itself is in template.json. Absent when none.
      */
     ...(fromLibrary.length ? { library: fromLibrary } : {}),
+    /**
+     * The wording rules in force (an addition to format 1: readers that do not know it ignore it): the house rules' library
+     * item and version, the document's own rules, and the "must" and "should" findings in the approved content. Absent when
+     * the document has no wording rules.
+     */
+    ...(wording ? { wordingRules: wording } : {}),
     syntheticOnly: true,
     notIncluded: ['customer data', 'draft wording and unapproved translations', 'stage and handover record', 'data/mapping-<ccm>.json', 'library/', 'font files', 'AFP print stream', 'the engine'],
     /** Every file in the package except this one. A reader must ignore roles and paths it does not know. */

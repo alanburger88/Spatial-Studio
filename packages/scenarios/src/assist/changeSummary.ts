@@ -1,5 +1,5 @@
 import {
-  channelConfig, diffProjects, LIBRARY_KIND_LABEL, EMAIL_SECTION_LABELS, languageName, periodInWords, projectLanguages, richToPlain, SOURCE_LANGUAGE, tokensOfText, translatableStrings, translationStatus,
+  channelConfig, diffProjects, LIBRARY_KIND_LABEL, WORDING_RULE_KIND_LABEL, EMAIL_SECTION_LABELS, languageName, periodInWords, projectLanguages, richToPlain, SOURCE_LANGUAGE, tokensOfText, translatableStrings, translationStatus,
   type ChannelConfig, type DocNode, type GlossaryEntry, type Predicate, type Project, type SyntheticRecord,
 } from '@iss/model';
 import { resolve } from '@iss/resolver';
@@ -391,6 +391,13 @@ export function summarizeChanges(before: Project, after: Project, records: Synth
     for (const l of d.library.linked) add('settings', `Now uses the library ${kind(l.kind)} ${q(l.title)} (version ${l.version}), read-only in this document`);
     for (const l of d.library.updated) add('settings', `The library ${kind(l.kind)} ${q(l.title)} was updated from version ${l.from} to version ${l.version}`);
     for (const l of d.library.unlinked) add('settings', `The library ${kind(l.kind)} ${q(l.title)} was unlinked: its content is now this document’s own`);
+  }
+  // The document's own wording rules (wave 2): what it now asks of its wording.
+  if (d.wordingRules) {
+    const rw = (r: { kind: string; phrase?: string; severity: string }) => `${(WORDING_RULE_KIND_LABEL as Record<string, string>)[r.kind] ?? r.kind}${r.phrase ? ` ${q(r.phrase)}` : ''} (${r.severity})`;
+    for (const r of d.wordingRules.added) add('wording', `Wording rule added: ${rw(r)}`);
+    for (const r of d.wordingRules.removed) add('wording', `Wording rule removed: ${rw(r)}`);
+    for (const r of d.wordingRules.changed) add('wording', `Wording rule changed: ${rw(r)}${r.severityChange ? `, now a “${r.severityChange.to}” (was a “${r.severityChange.from}”)` : ''}`);
   }
   if (d.title) add('settings', `The project was renamed from ${q(d.title.from)} to ${q(d.title.to)}`);
   const langsBefore = projectLanguages(before), langsAfter = projectLanguages(after);

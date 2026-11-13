@@ -11,7 +11,7 @@ import { libraryLinkProblems } from '@iss/model';
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
 import { renderPagedDocument, renderInteractiveHtml, compareManifests, afpSimulation, pageDesignFindings, AFP_SIMULATION_LABEL, PAGED_RENDERER_VERSION, HTML_RENDERER_VERSION } from '@iss/renderers';
-import { blockerIdOf, buildCube, buildLandscape, generateEdgeCase, replayJourney, runTestCases, EDGE_CASE_PRESETS, DIMENSIONS, type DimensionId } from '@iss/scenarios';
+import { blockerIdOf, buildCube, buildLandscape, generateEdgeCase, replayJourney, runTestCases, wordingFindings, EDGE_CASE_PRESETS, DIMENSIONS, type DimensionId } from '@iss/scenarios';
 import { staticRuleAnalysis, bindingAnalysis, modelAccessibility, axeToFindings, toIssue, type ValidationIssue, type Suite } from '@iss/validation';
 import { Composer } from './composer';
 import { Store } from './db';
@@ -81,7 +81,7 @@ function checkDraftProject(p: any, projectId: string): Project {
     if (problems.length) throw new ApiError(422, 'INVALID_PROJECT', problems.map((x) => x.message).slice(0, 3).join(' '));
   }
   // Shared library: the links and the house wording rules a client sends are checked like the rest (absent = nothing to check).
-  if (p.libraryLinks !== undefined || p.houseWordingRules !== undefined) {
+  if (p.libraryLinks !== undefined || p.houseWordingRules !== undefined || p.wordingRules !== undefined) {
     const problems = libraryLinkProblems(p);
     if (problems.length) throw new ApiError(422, 'INVALID_PROJECT', problems.slice(0, 3).join(' '));
   }
@@ -328,6 +328,8 @@ export async function buildApp(opts: AppOptions = {}) {
     const days: Array<string | null> = project.documentDate?.source === 'run' ? approvalDays(project) : [null];
     for (const record of records) for (const day of days) for (const f of resolve({ project, record, ...(day ? { issueDate: day } : {}) }).findings) if (f.severity === 'blocking' && !(excused.size && excused.has(`${blockerIdOf(f)}|${record.recordId}`))) add(f, record.recordId);
     for (const f of [...staticRuleAnalysis(project, allRecords(project.projectId)), ...bindingAnalysis(project)]) if (f.severity === 'blocking') add(f, null);
+    // Wording rules (wave 2): a broken "must" rule blocks approval (one entry per rule and text; "should" rules only warn).
+    for (const f of wordingFindings(project)) if (f.severity === 'blocking') add(f, null);
     // Same runner as Rules & Data → Tests, so "passes" means the same thing everywhere.
     const tests = runTestCases(project, allRecords(project.projectId));
     const issues = [...groups.values()];
@@ -675,7 +677,8 @@ export async function buildApp(opts: AppOptions = {}) {
       const sev = list.filter((i) => i.severity !== 'info');
       suiteStatus[suite] = { status: sev.some((i) => i.severity === 'blocking' || i.severity === 'error') ? 'errors' : sev.length ? 'warnings' : 'clean', count: list.length, durationMs: Date.now() - t0 };
     };
-    if (suites.includes('rules')) { const t0 = t(); add('rules', [...res.findings.filter((f) => f.source === 'resolver' || f.source === 'domain'), ...staticRuleAnalysis(project, allRecords(project.projectId))].map((f) => toIssue(f, 'rules', { runId: res.runId, reproduction: repro })), t0); }
+    // The rules suite also runs the wording rules (wave 2): a "must" is blocking, a "should" a warning.
+    if (suites.includes('rules')) { const t0 = t(); add('rules', [...res.findings.filter((f) => f.source === 'resolver' || f.source === 'domain'), ...staticRuleAnalysis(project, allRecords(project.projectId)), ...wordingFindings(project)].map((f) => toIssue(f, 'rules', { runId: res.runId, reproduction: repro })), t0); }
     if (suites.includes('bindings')) {
       const t0 = t();
       const seen = new Set<string>();

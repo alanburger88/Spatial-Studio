@@ -190,8 +190,8 @@ describe('linking, updating and unlinking (every kind, one undoable step each)',
       const before = p;
       p = run(p, { type: 'UNLINK_LIBRARY_ITEM', linkId: link(p, k).linkId });
       expect(p.libraryLinks?.some((l) => l.kind === k) ?? false).toBe(false);
-      // the content stays
-      expect({ b: before.brand, g: before.glossary, t: before.lookupTables, r: before.houseWordingRules }).toEqual({ b: p.brand, g: p.glossary, t: p.lookupTables, r: p.houseWordingRules });
+      // the content stays (unlinked house wording rules become the document's own rules, so they can be edited)
+      expect({ b: before.brand, g: before.glossary, t: before.lookupTables, r: before.houseWordingRules }).toEqual({ b: p.brand, g: p.glossary, t: p.lookupTables, r: k === 'wording-rules' ? p.wordingRules : p.houseWordingRules });
     }
     expect(p.libraryLinks).toBeUndefined();
   });
@@ -312,6 +312,11 @@ const PROBES: Record<Command['type'], Probe[]> = {
   LINK_LIBRARY_ITEM: [{ what: 'a second brand', cmd: () => ({ type: 'LINK_LIBRARY_ITEM', item: { id: 'other-brand', kind: 'brand', title: 'Other' }, version: 1, content: { primary: '#111111', accent: '#222222' } }) }],
   UPDATE_LIBRARY_LINK: [{ what: 'the block to version 2', cmd: (x) => ({ type: 'UPDATE_LIBRARY_LINK', linkId: x.block.linkId, version: 2, content: blockV2 }), allowed: true }],
   UNLINK_LIBRARY_ITEM: [{ what: 'the block', cmd: (x) => ({ type: 'UNLINK_LIBRARY_ITEM', linkId: x.block.linkId }), allowed: true }],
+  // The document's own wording rules sit beside the linked house rules and never change them.
+  ADD_WORDING_RULE: [{ what: 'an own wording rule beside the linked house rules', cmd: () => ({ type: 'ADD_WORDING_RULE', rule: { id: 'own-1', kind: 'banned', severity: 'should', phrase: 'kindly' } }), allowed: true }],
+  UPDATE_WORDING_RULE: [],
+  REMOVE_WORDING_RULE: [],
+  MOVE_WORDING_RULE: [],
 };
 
 describe('linked content is read-only in the document', () => {

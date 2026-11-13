@@ -1,8 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   LIBRARY_DESCRIPTION_MAX, LIBRARY_KIND_LABEL, LIBRARY_NOTE_MAX, LIBRARY_TITLE_MAX, checkLibraryContent, isLibraryKind, libraryContentFromProject, libraryListOf, linkFor, parseReleaseId, roleCan,
+  wordingSeverityProblem, type LibraryWordingRulesContent,
   type LibraryItemInfo, type LibraryKind, type LibrarySource, type Project,
 } from '@iss/model';
+import { wordingReleaseRecord } from '@iss/scenarios';
 import { audit } from '../auth';
 import { LibraryStore, libraryUpdateImpact, libraryUsage } from '../library';
 import type { RouteDeps } from './deps';
@@ -19,7 +21,13 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: RouteDeps): vo
   const library = new LibraryStore(store);
   const by = (req: FastifyRequest) => (req.user ? { id: req.user.id, name: req.user.name } : null);
   const role = (req: FastifyRequest) => req.user?.role;
-  const can = (req: FastifyRequest) => ({ create: roleCan(role(req), 'edit'), approve: roleCan(role(req), 'approve') });
+  // `setSeverity`: only an admin decides whether a house wording rule is a "must" or a "should" (section 4 of the wave 2 design).
+  const can = (req: FastifyRequest) => ({ create: roleCan(role(req), 'edit'), approve: roleCan(role(req), 'approve'), setSeverity: role(req) === 'admin' });
+  /** Refuses a wording-rules draft in which someone who is not an admin set or changed whether a rule is a "must" or a "should". */
+  const checkSeverity = (req: FastifyRequest, base: LibraryWordingRulesContent | null, next: LibraryWordingRulesContent) => {
+    const why = wordingSeverityProblem(base?.rules ?? null, next.rules, role(req) === 'admin');
+    if (why) throw new ApiError(403, 'SEVERITY_ADMIN_ONLY', why, { role: role(req) ?? null });
+  };
   const itemOr404 = (id: string): LibraryItemInfo => {
     const it = typeof id === 'string' && id.length <= 64 ? library.item(id) : undefined;
     if (!it) throw new ApiError(404, 'NOT_FOUND', `The library has no item ${String(id).slice(0, 64)}.`);
@@ -96,6 +104,7 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: RouteDeps): vo
     const all = library.list();
     if (all.some((i) => i.kind === kind && i.title.toLowerCase() === title.toLowerCase())) throw new ApiError(409, 'LIBRARY_NAME_TAKEN', `There is already a ${LIBRARY_KIND_LABEL[kind].toLowerCase()} called “${title}” in the library. Choose another name, or add a new version to it.`);
     const content = contentOf(kind, b);
+    if (kind === 'wording-rules') checkSeverity(req, null, content as LibraryWordingRulesContent);
     let source: LibrarySource | null = null;
     const srcId = typeof b.source?.projectId === 'string' ? b.source.projectId : typeof b.projectId === 'string' ? b.projectId : null;
     if (srcId) { const p = store.getProject(srcId); if (p) source = { projectId: p.projectId, projectTitle: p.title, ref: oneLine(b.source?.ref ?? b.ref ?? '', 100) }; }
@@ -113,6 +122,7 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: RouteDeps): vo
     const item = itemOr404(req.params.itemId);
     const b = req.body ?? {};
     const content = contentOf(item.kind, b);
+    if (item.kind === 'wording-rules') checkSeverity(req, (library.content(item.id, item.draft ?? undefined)?.content ?? null) as LibraryWordingRulesContent | null, content as LibraryWordingRulesContent);
     const meta: { title?: string; description?: string } = {};
     if (b.title !== undefined) {
       meta.title = titleOf(b.title);
@@ -177,7 +187,8 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: RouteDeps): vo
     const frozen = store.releaseProject(r.id);
     if (!frozen) throw new ApiError(410, 'RELEASE_CONTENT_MISSING', `The stored content of release ${r.number} is missing.`);
     const known = new Set(library.list().map((i) => i.id));
-    return { library: libraryListOf(frozen).map((x) => ({ ...x, inLibrary: known.has(x.itemId) })) };
+    // The wording rules in force when it was approved and what the checker found in the frozen content (null: none).
+    return { library: libraryListOf(frozen).map((x) => ({ ...x, inLibrary: known.has(x.itemId) })), wordingRules: wordingReleaseRecord(frozen) };
   });
 
   /** Test and demo reset: removes every item and version. Refused unless the server was started with LIBRARY_RESET=allow. */

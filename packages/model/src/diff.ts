@@ -1,7 +1,7 @@
 import { canonicalJson } from './digest';
 import { richToPlain } from './rich';
 import { effectivePageDesign, PAGE_TEMPLATE_LABEL, PAPER_SIZES } from './pageDesign';
-import type { LibraryKind, LibraryLink } from './types';
+import type { LibraryKind, LibraryLink, WordingRule } from './types';
 import type { BrandKit, CalculatedField, ContentPart, CustomField, DocNode, DocumentDateSource, JourneyEvent, LookupTable, NodeLayout, Predicate, PresentationProfile, Project, Rule, RuleAction, TestCase, TextStyle } from './types';
 import { printFormula } from './formula';
 import { periodInWords } from './formulaWords';
@@ -63,7 +63,28 @@ export interface ProjectDiff {
   other: string[];
   /** Shared library links made, updated to another version and removed (only present when one of them changed). */
   library?: { linked: LibraryLinkRef[]; updated: Array<LibraryLinkRef & { from: number }>; unlinked: LibraryLinkRef[] };
-  summary: { counts: Record<'title' | 'components' | 'rules' | 'content' | 'customFields' | 'styles' | 'brand' | 'testCases' | 'journey' | 'profiles' | 'calculations' | 'lookupTables' | 'documentDate' | 'other', number> & { library?: number }; total: number; identical: boolean };
+  /** The document's own wording rules added, removed and changed, by id (only present when one of them changed). */
+  wordingRules?: { added: WordingRuleRef[]; removed: WordingRuleRef[]; changed: Array<WordingRuleRef & { fields: string[]; severityChange?: { from: string; to: string } }> };
+  summary: { counts: Record<'title' | 'components' | 'rules' | 'content' | 'customFields' | 'styles' | 'brand' | 'testCases' | 'journey' | 'profiles' | 'calculations' | 'lookupTables' | 'documentDate' | 'other', number> & { library?: number; wordingRules?: number }; total: number; identical: boolean };
+}
+
+/** One of the document's own wording rules in a diff: its id, kind, must/should and phrase (when it has one). */
+export interface WordingRuleRef { id: string; kind: WordingRule['kind']; severity: WordingRule['severity']; phrase?: string }
+
+/** The document's own wording rules added, removed and changed between two versions (null when none). */
+export function diffWordingRules(a: Project, b: Project): ProjectDiff['wordingRules'] | null {
+  if (!a.wordingRules?.length && !b.wordingRules?.length) return null;
+  const ref = (r: WordingRule): WordingRuleRef => ({ id: r.id, kind: r.kind, severity: r.severity, ...(r.phrase ? { phrase: r.phrase } : {}) });
+  const A = byId(a.wordingRules, (r) => r.id), B = byId(b.wordingRules, (r) => r.id);
+  const changed: NonNullable<ProjectDiff['wordingRules']>['changed'] = [];
+  for (const r of b.wordingRules ?? []) {
+    const o = A.get(r.id);
+    if (!o || same(o, r)) continue;
+    const fields = [...new Set([...Object.keys(o), ...Object.keys(r)])].filter((k) => !same((o as any)[k], (r as any)[k])).sort();
+    changed.push({ ...ref(r), fields, ...(o.severity !== r.severity ? { severityChange: { from: o.severity, to: r.severity } } : {}) });
+  }
+  const out = { added: (b.wordingRules ?? []).filter((r) => !A.has(r.id)).map(ref), removed: (a.wordingRules ?? []).filter((r) => !B.has(r.id)).map(ref), changed };
+  return out.added.length + out.removed.length + out.changed.length ? out : null;
 }
 
 /** A library link in a diff: the item, its kind and the version the document holds (after the change, or before an unlink). */
@@ -246,7 +267,7 @@ function diffBrand(a: BrandKit | undefined, b: BrandKit | undefined): ValueChang
     : { field: k, from: scalarText((a as any)?.[k]), to: scalarText((b as any)?.[k]) });
 }
 
-const KNOWN = new Set(['schemaVersion', 'projectId', 'title', 'modelVersion', 'lastSavedAt', 'nodes', 'rules', 'contentParts', 'customFields', 'styles', 'brand', 'testCases', 'journey', 'presentationProfiles', 'derivedFrom', 'fromTemplate', 'importedFrom', 'calculatedFields', 'lookupTables', 'documentDate', 'libraryLinks', 'houseWordingRules']);
+const KNOWN = new Set(['schemaVersion', 'projectId', 'title', 'modelVersion', 'lastSavedAt', 'nodes', 'rules', 'contentParts', 'customFields', 'styles', 'brand', 'testCases', 'journey', 'presentationProfiles', 'derivedFrom', 'fromTemplate', 'importedFrom', 'calculatedFields', 'lookupTables', 'documentDate', 'libraryLinks', 'houseWordingRules', 'wordingRules']);
 
 /** Where the document's date comes from, in plain words. */
 export function documentDateWords(src: DocumentDateSource | undefined, fieldLabel?: (path: string) => string): string | null {
@@ -312,14 +333,17 @@ export function diffProjects(a: Project, b: Project): ProjectDiff {
   };
   const library = diffLibraryLinks(a, b);
   const libraryCount = library ? library.linked.length + library.updated.length + library.unlinked.length : 0;
-  const total = Object.values(counts).reduce((s, n) => s + n, 0) + libraryCount;
+  const wording = diffWordingRules(a, b);
+  const wordingCount = wording ? wording.added.length + wording.removed.length + wording.changed.length : 0;
+  const total = Object.values(counts).reduce((s, n) => s + n, 0) + libraryCount + wordingCount;
   return {
     ...(a.title !== b.title ? { title: { from: a.title, to: b.title } } : {}),
     components, rules, content, customFields, styles, brand, testCases, journey, profiles, calculations, lookupTables,
     ...(dateChanged ? { documentDate: { from: documentDateWords(a.documentDate), to: documentDateWords(b.documentDate) } } : {}),
     other,
     ...(library ? { library } : {}),
-    summary: { counts: library ? { ...counts, library: libraryCount } : counts, total, identical: total === 0 },
+    ...(wording ? { wordingRules: wording } : {}),
+    summary: { counts: { ...counts, ...(library ? { library: libraryCount } : {}), ...(wording ? { wordingRules: wordingCount } : {}) }, total, identical: total === 0 },
   };
 }
 
