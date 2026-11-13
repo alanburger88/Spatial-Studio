@@ -70,10 +70,38 @@ const SYSTEM_ES_US: Record<string, string> = {
   '@sys/emailTotal': 'Total {total}',
 };
 
+/** Spanish (US) headings of the shared sample messages and disclosures. */
+const TITLES_ES_US: Record<string, string> = {
+  '@title/payment-standard': 'Instrucciones de pago',
+  '@title/payment-reminder': 'Recordatorio de pago',
+  '@title/payment-support-offer': 'Ayuda con el pago',
+  '@title/payment-assistance-requested': 'Asistencia solicitada',
+  '@title/payment-arrangement-active': 'Acuerdo de pago activo',
+  '@title/relationship-manager': 'Equipo de relaciones',
+  '@title/rewards-summary': 'Sus recompensas',
+  '@title/billing-summary': 'Resumen de la cuenta',
+  '@title/payment-due': 'Pago adeudado',
+  '@title/sample-disclosure-set': 'Divulgaciones de demostración',
+  '@title/high-volume-help': 'Guía de transacciones',
+  '@title/eob-covered': 'Servicios cubiertos',
+  '@title/eob-review-needed': 'Reclamo en revisión',
+  '@title/eob-appeal-status': 'Actualización de la apelación',
+  '@title/network-explanation': 'Estado de la red',
+  '@title/deductible-explanation': 'Deducible',
+  '@title/member-responsibility-summary': 'Responsabilidad del miembro',
+  '@title/multi-claim-index': 'Varios reclamos',
+  '@title/not-a-bill-banner': 'Esto no es una factura',
+  '@title/claim-identifiers': 'Referencia del reclamo',
+  '@title/totals-and-terms': 'Totales del reclamo',
+  '@title/claim-glossary': 'Términos explicados',
+  '@title/eob-processing': 'Procesando su reclamo',
+};
+
 export const SAMPLE_TRANSLATIONS: Record<string, Record<string, Record<string, string>>> = {
   'aster-card-demo': {
     'es-US': {
       ...SYSTEM_ES_US,
+      ...TITLES_ES_US,
       'payment-standard': 'Su pago vence el {{card.dueDate}}.',
       'payment-reminder': 'Notamos que su pago programado aún no ha llegado.',
       'payment-support-offer': 'Si tiene dificultades para realizar un pago, consulte las opciones de asistencia.',
@@ -121,6 +149,7 @@ export const SAMPLE_TRANSLATIONS: Record<string, Record<string, Record<string, s
   'harborcare-demo': {
     'es-US': {
       ...SYSTEM_ES_US,
+      ...TITLES_ES_US,
       'eob-covered': 'El plan ha procesado el servicio indicado.',
       'eob-review-needed': 'Este reclamo requiere revisión; no considere los cargos en revisión como una factura.',
       'eob-appeal-status': 'Su apelación está en revisión.',

@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { resolve, type SemanticManifest } from '@iss/resolver';
 import { compareManifests, type ExtractedManifest } from '@iss/renderers';
-import type { ProfileId } from '@iss/model';
+import { languageName, type ProfileId } from '@iss/model';
 import { api, ApiFailure, type BatchDto, type BatchItemDto, type BinaryResult, type ScenarioRequest } from '../api/client';
 import { useStudio, useScenarioRequest, useIsDirty } from '../state/store';
 import { ScreenHeader, Empty, Proof, Tech, Named } from '../ui/common';
@@ -92,6 +92,8 @@ export function PreviewExport() {
   const [tab, setTab] = useState<Tab>('pdf');
   const [session, setSession] = useState<Session>(() => cache.get(projectId) ?? emptySession());
   const [device, setDevice] = useState<Device>('desktop');
+  // Previews may show unapproved translation drafts (as a marked draft); switching this off builds the clean, approved-only outputs.
+  const [showDrafts, setShowDrafts] = useState(true);
   const [history, setHistory] = useState<any[] | null>(null);
   const [historyErr, setHistoryErr] = useState<string | null>(null);
   const [histTick, setHistTick] = useState(0);
@@ -110,19 +112,22 @@ export function PreviewExport() {
     return () => { live = false; };
   }, [projectId, histTick]);
 
-  const profileReq = (p?: ProfileId): ScenarioRequest | null => (baseReq ? { ...baseReq, ...(p ? { outputContext: { profileId: p } } : {}) } : null);
+  const profileReq = (p?: ProfileId): ScenarioRequest | null => (baseReq ? { ...baseReq, ...(p ? { outputContext: { profileId: p } } : {}), ...(previewDrafts ? { allowDraft: true, includeDrafts: true } : {}) } : null);
 
   /** Expected run id per output profile for the live (possibly unsaved) model and scenario. */
-  const { expected, manifest } = useMemo(() => {
+  const { expected, manifest, draftCount, language } = useMemo(() => {
     const rec = records.find((r) => r.recordId === ctx.recordId);
     const out: Record<string, string | null> = { 'paged-pdf': null, 'html-responsive': null, 'paged-afp-sim': null };
     let manifest: SemanticManifest | null = null;
-    if (!rec || rec.documentType !== project.documentType) return { expected: out, manifest };
+    if (!rec || rec.documentType !== project.documentType) return { expected: out, manifest, draftCount: 0, language: 'en-US' };
+    let draftCount = 0, language = 'en-US';
+    try { const probe = resolve({ project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: 'paged-pdf', includeDrafts: true }); draftCount = probe.translation.draftsShown.length; language = probe.locale; } catch { /* reported by the per-profile resolution below */ }
     for (const p of Object.keys(out) as ProfileId[]) {
-      try { const r = resolve({ project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: p }); out[p] = r.runId; if (p === 'paged-pdf') manifest = r.semanticManifest; } catch { out[p] = null; }
+      try { const r = resolve({ project, record: rec, overrides: ctx.overrides, journeyCursor: ctx.journeyCursor, profileId: p, includeDrafts: draftCount > 0 && showDrafts }); out[p] = r.runId; if (p === 'paged-pdf') manifest = r.semanticManifest; } catch { out[p] = null; }
     }
-    return { expected: out, manifest };
-  }, [project, records, ctx.recordId, ctx.overrides, ctx.journeyCursor]);
+    return { expected: out, manifest, draftCount, language };
+  }, [project, records, ctx.recordId, ctx.overrides, ctx.journeyCursor, showDrafts]);
+  const previewDrafts = draftCount > 0 && showDrafts;
   const wantPdf = expected['paged-pdf'], wantHtml = expected['html-responsive'], wantAfp = expected['paged-afp-sim'];
   const pairKey = wantPdf && wantHtml ? `${wantPdf}|${wantHtml}` : null;
 
@@ -280,6 +285,15 @@ export function PreviewExport() {
       />
       <div className="screen-body ox-body">
         <div className="panel ox-main">
+          {draftCount > 0 && (
+            <div className={`callout ${previewDrafts ? 'warning' : 'accent'} ox-drafts`} role="status" data-testid="ox-drafts-banner">
+              <span>
+                <strong>{draftCount} {languageName(language)} translation{draftCount === 1 ? ' is' : 's are'} not approved yet.</strong>{' '}
+                {previewDrafts ? 'These previews show the drafts and are marked as drafts. A clean export uses approved text only.' : 'These outputs use approved text only; where a translation is missing, English is shown or the document is blocked.'}
+              </span>
+              <label className="ox-drafts-switch"><input type="checkbox" checked={showDrafts} onChange={(e) => setShowDrafts(e.target.checked)} data-testid="ox-preview-drafts" /> Show drafts in previews</label>
+            </div>
+          )}
           <div className="tabs ox-tabs" role="tablist" aria-label="Output type" onKeyDown={onTabKey}>
             {tabs.map((t) => (
               <button key={t.id} role="tab" id={`ox-tab-${t.id}`} aria-selected={tab === t.id} aria-controls={`ox-panel-${t.id}`} tabIndex={tab === t.id ? 0 : -1} onClick={() => setTab(t.id)} data-testid={`tab-${t.id}`}>

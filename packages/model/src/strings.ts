@@ -9,7 +9,8 @@ import { SYSTEM_STRINGS, SYSTEM_STRING_KEYS, systemStringId } from './systemStri
  * rich text, table titles and column headings, link and chart text, header/footer text, and the email and SMS wording.
  * English is always the live model text; translations live in `project.strings` keyed by the ids produced here.
  *
- * Ids start with "@" so they can never collide with a content-part id: `@<nodeId>/<field>`, `@email/<field>`, `@sms/text`.
+ * Ids start with "@" so they can never collide with a content-part id: `@<nodeId>/<field>`, `@title/<partId>` (the heading
+ * of a message or disclosure), `@email/<field>`, `@sms/text`, `@sys/<key>`.
  */
 export interface StringItem {
   id: string;
@@ -98,10 +99,19 @@ export function translatableStrings(project: Project): StringItem[] {
       if (hasWords(source)) out.push({ id: slot.id, kind: slot.kind, title: `${n.name ?? n.id} · ${slot.what}`, source, nodeId: n.id });
     }
   }
+  // Headings of the messages and disclosures the document uses (shown above the chosen wording).
+  for (const p of usedPartsOf(project)) if (hasWords(p.title)) out.push({ id: `@title/${p.id}`, kind: 'label', title: `${p.title} · heading`, source: p.title });
   for (const c of channelStrings(project)) if (hasWords(c.source)) out.push({ id: c.id, kind: 'channel', title: c.title, source: c.source });
   // Fixed wording the outputs add (web page controls, page numbers, email footer, "under review" phrases).
   for (const k of SYSTEM_STRING_KEYS) if (hasWords(SYSTEM_STRINGS[k])) out.push({ id: systemStringId(k), kind: 'system', title: `Fixed wording · ${k.replace(/([A-Z])/g, ' $1').toLowerCase()}`, source: SYSTEM_STRINGS[k] });
   return out;
+}
+
+/** Content parts a node shows: variants, single-part sections and disclosures. */
+function usedPartsOf(project: Project): ContentPart[] {
+  const ids = new Set<string>();
+  for (const n of project.nodes) { for (const v of n.variantIds ?? []) ids.add(v); if (n.contentPartId) ids.add(n.contentPartId); ids.add(n.id); }
+  return project.contentParts.filter((p) => ids.has(p.id));
 }
 
 export interface LocalizedProject {
@@ -157,9 +167,14 @@ export function localizeProject(project: Project, locale: string | null | undefi
     const text = pick(systemStringId(k));
     if (text !== undefined) system[k] = text;
   }
-  let contentParts: ContentPart[] = project.contentParts;
+  const titled = new Set(usedPartsOf(project).map((p) => p.id));
+  let contentParts: ContentPart[] = project.contentParts.map((p) => {
+    if (!titled.has(p.id) || !hasWords(p.title)) return p;
+    const title = pick(`@title/${p.id}`);
+    return title === undefined ? p : { ...p, title };
+  });
   if (opts.includeDrafts) {
-    contentParts = project.contentParts.map((p) => {
+    contentParts = contentParts.map((p) => {
       const draft = p.draftLocales?.[locale];
       if (p.approvedLocales[locale]?.trim() || !draft?.trim()) return p;
       draftsShown.push(p.id);

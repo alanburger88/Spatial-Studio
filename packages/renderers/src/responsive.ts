@@ -458,7 +458,7 @@ ${documentCss(accent, project)}
 ${screenOverrides()}</style></head>
 <body>
 <a class="iss-skip" href="#iss-main">${T('skipToContent')}</a>
-<aside class="iss-demo-ribbon" aria-label="${T('syntheticNoticeLabel')}">${T('syntheticNotice', { issuer: project.issuer?.name ?? '' })}${isEob ? T('syntheticNoticeNotBill') : ''}</aside>
+<aside class="iss-demo-ribbon" aria-label="${T('syntheticNoticeLabel')}">${T('syntheticNotice', { issuer: project.issuer?.name ?? '' })}${isEob ? T('syntheticNoticeNotBill') : ''}${res.translation?.draftsShown.length ? ' · DRAFT — UNAPPROVED TRANSLATIONS' : ''}</aside>
 ${bar}
 <div class="iss-shell">
 <header class="iss-head" aria-label="${T('documentHeaderLabel')}">${areas.header.map((n) => card(n)).join('').replace(/<h2>([\s\S]*?)<\/h2>/, '<h1>$1</h1>')}</header>

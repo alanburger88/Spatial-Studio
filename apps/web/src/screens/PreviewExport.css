@@ -186,3 +186,7 @@ a.btn { text-decoration: none; }
 .ox-allowed { border-top: 1px solid var(--iss-row-border); }
 .ox-par-table td, .ox-par-table th { border-bottom: 1px solid var(--iss-row-border); }
 .ox-proof .chip.code { white-space: normal; overflow-wrap: anywhere; }
+
+/* Unapproved-translation notice above the output tabs */
+.ox-drafts { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 10px 12px 0; font-size: 12.5px; }
+.ox-drafts-switch { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-weight: 600; }
