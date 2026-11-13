@@ -128,6 +128,11 @@ const ROUTES: Record<string, Need> = {
   'POST /api/v1/releases/:releaseId/package': 'any',
   // The runnable package (phase 7) follows the release package: anyone who may download it may ask for it.
   'POST /api/v1/releases/:releaseId/runtime': 'any',
+  // Proof records: producing and adding records are checked in the handler (approvers and admins, with a plain refusal); a check stores nothing.
+  'POST /api/v1/releases/:releaseId/produce': 'any',
+  'POST /api/v1/proofs/import': 'any',
+  'POST /api/v1/proofs/:proofId/verify': 'any',
+  'POST /api/v1/proofs/reset': 'manage_users',
 };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Routes not listed above: reads need a session; anything that writes needs edit rights (safe default for new modules). */

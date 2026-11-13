@@ -9,6 +9,7 @@ import { fmtAbs, When } from '../../shell/History';
 import { PackageSection } from './PackageSection';
 import { RuntimeSection } from './RuntimeSection';
 import { HandoverSection } from './HandoverSection';
+import { ProduceSection } from './ProduceSection';
 import { STANDING_CHIP, personName } from './format';
 
 export interface DetailProps {
@@ -37,6 +38,7 @@ export function ReleaseDetail({ detail, releases, role, onChanged }: DetailProps
       <Actions detail={detail} releases={releases} role={role} onChanged={onChanged} />
       <PackageSection release={r} onChanged={onChanged} />
       <RuntimeSection release={r} onChanged={onChanged} />
+      <ProduceSection release={r} role={role} />
       <HandoverSection release={r} entries={detail.handover} role={role} onChanged={onChanged} />
     </div>
   );

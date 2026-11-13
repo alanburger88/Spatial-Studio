@@ -1,0 +1,79 @@
+/* S21 Proof. Tokens only; every class is prefixed prf-. */
+.prf-body { grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); align-items: stretch; min-height: 0; }
+.prf-side { min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.prf-side > *, .prf-search > * { flex-shrink: 0; }
+.prf-more > summary { cursor: pointer; font-size: 12.5px; font-weight: 600; margin: 0 0 8px; color: var(--iss-text-muted); }
+.prf-more[open] > summary { margin-bottom: 6px; }
+.prf-main { min-height: 0; display: flex; flex-direction: column; }
+.prf-main > .panel-body { overflow: auto; min-height: 0; flex: 1; }
+.prf-pad { padding: 8px 12px; margin: 0; }
+
+/* search */
+.prf-search { display: flex; flex-direction: column; min-height: 0; }
+.prf-form { padding: 12px 12px 4px; border-bottom: 1px solid var(--iss-row-border); }
+.prf-form .field { margin-bottom: 8px; }
+.prf-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.prf-check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; margin: 2px 0 8px; }
+.prf-form-actions { gap: 8px; padding-bottom: 6px; }
+.prf-results-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px; }
+.prf-results-head .section-title { margin: 0; }
+.prf-list > li { padding: 0; }
+.prf-row { display: grid; gap: 3px; width: 100%; padding: 9px 12px; background: transparent; border: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.prf-row:hover { background: var(--iss-row-hover); }
+.prf-row[aria-current='true'] { background: var(--iss-accent-soft); box-shadow: inset 3px 0 0 var(--iss-accent); }
+.prf-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--iss-accent); }
+.prf-row-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.prf-ref { font-family: var(--iss-font-mono, ui-monospace, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.prf-row-sub { font-size: 12.5px; }
+.prf-row-marks { display: flex; gap: 6px; flex-wrap: wrap; }
+.prf-pager { justify-content: space-between; padding: 8px 12px; gap: 8px; font-size: 12.5px; }
+.prf-limits { margin-top: auto; padding: 10px 12px 12px; border-top: 1px solid var(--iss-row-border); font-size: 12.5px; }
+.prf-limits .section-title { margin: 0 0 4px; }
+.prf-limits ul { margin: 0 0 6px; padding-left: 18px; }
+.prf-limits p { margin: 0; }
+
+/* detail */
+.prf-detail { display: flex; flex-direction: column; gap: 6px; max-width: 980px; }
+.prf-detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.prf-detail-title { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -.01em; display: flex; gap: 6px; min-width: 0; }
+.prf-summary { margin: 4px 0 0; font-size: 14px; line-height: 1.5; }
+.prf-hint { margin: 0; font-size: 12.5px; }
+.prf-release { margin: 4px 0; font-size: 13px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.prf-section { padding: 12px 0; border-top: 1px solid var(--iss-row-border); display: flex; flex-direction: column; gap: 8px; }
+.prf-section .section-title { margin: 0; }
+.prf-table-wrap { overflow-x: auto; }
+.prf-why tbody th { position: static; font-size: 12.5px; color: var(--iss-text); font-weight: 600; background: transparent; border-bottom: 1px solid var(--iss-row-border); vertical-align: top; }
+.prf-rules { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.prf-outputs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.prf-hash { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; margin-left: 6px; }
+.prf-kv dd { text-align: left; font-size: 12px; }
+
+/* verify */
+.prf-sources { border: 0; margin: 0; padding: 0; display: flex; gap: 16px; flex-wrap: wrap; }
+.prf-radio { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.prf-verify .field { max-width: 640px; margin-bottom: 4px; }
+.prf-verify textarea { font-size: 12px; }
+.prf-verdict { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.prf-verdict > strong { font-size: 15px; }
+.prf-diffs { margin: 4px 0 0; padding-left: 18px; }
+.prf-sub { margin: 10px 0 4px; font-size: 13px; font-weight: 700; }
+.prf-explain-list { margin: 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.prf-explain-list ul { margin: 2px 0 0; padding-left: 16px; color: var(--iss-text-muted); }
+.prf-recreated { display: flex; flex-direction: column; gap: 6px; }
+.prf-recreated .segmented { align-self: flex-start; }
+.prf-frame { width: 100%; height: 420px; border: 1px solid var(--iss-border); border-radius: var(--iss-radius-md, 8px); background: var(--iss-paper); }
+.prf-subject { margin: 0; font-size: 13px; }
+.prf-sms { margin: 0; padding: 10px 12px; white-space: pre-wrap; background: var(--iss-surface-sunken); border: 1px solid var(--iss-border); border-radius: var(--iss-radius-md, 8px); font-size: 13px; max-width: 420px; }
+
+/* add records */
+.prf-add p { margin: 0 0 8px; }
+.prf-add-counts { margin: 0 0 8px; padding-left: 18px; }
+.prf-add-why { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; max-height: 200px; overflow: auto; overflow-wrap: anywhere; }
+
+/* narrow windows: the search stacks above the record instead of becoming a drawer (it is the way in). */
+@media (max-width: 1100px) {
+  #main .prf-body { display: flex; flex-direction: column; overflow: auto; }
+  .prf-side, .prf-main { flex: none; min-height: auto; overflow: visible; }
+  .prf-main > .panel-body { overflow: visible; }
+  .prf-list { max-height: 240px; overflow: auto; }
+}
