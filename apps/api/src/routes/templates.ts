@@ -170,8 +170,8 @@ export function registerTemplateRoutes(app: FastifyInstance, deps: RouteDeps): v
 
     const warnings: string[] = [];
     const lostTests = (project.testCases ?? []).filter((t: any) => t.recordId && !known.has(t.recordId));
-    if (lostTests.length) warnings.push(`${lostTests.length} pinned test${lostTests.length === 1 ? ' uses a customer' : 's use customers'} that this studio does not have. ${lostTests.length === 1 ? 'It was' : 'They were'} kept and will fail until those customers are imported.`);
-    if (store.getProject(String(file.projectId ?? ''))) warnings.push(`A document with the file’s original id already exists here. This import is a separate new document; nothing was replaced.`);
+    if (lostTests.length) warnings.push(`${lostTests.length} pinned test${lostTests.length === 1 ? ' uses a customer' : 's use customers'} that this studio does not have. ${lostTests.length === 1 ? 'It is' : 'They are'} kept and will fail until those customers are imported.`);
+    if (store.getProject(String(file.projectId ?? ''))) warnings.push(`The document this file was exported from (“${store.getProject(String(file.projectId))!.title}”) is still here. The import is a separate new document; nothing is replaced.`);
     if ((project.customFields ?? []).length) warnings.push(`${project.customFields!.length} extra data field${project.customFields!.length === 1 ? '' : 's'} came with the file. Synthetic customers here have no values for ${project.customFields!.length === 1 ? 'it' : 'them'} until you add them.`);
     const report = {
       from: { projectId: importedFrom.projectId, title: importedFrom.title, modelVersion: importedFrom.modelVersion },

@@ -13,7 +13,7 @@ test_rule_ast_and_target_integrity (test_pack_contract.PackContractTests.test_ru
 test_synthetic_financial_reconciliation (test_pack_contract.PackContractTests.test_synthetic_financial_reconciliation) ... ok
 
 ----------------------------------------------------------------------
-Ran 13 tests in 0.037s
+Ran 13 tests in 0.042s
 
 OK
 PACK VALIDATION: PASS — inputs, test oracle, contracts and reference assets only. APP NOT YET VERIFIED.
@@ -41,7 +41,7 @@ APP VERIFICATION: 18 pass, 0 fail. This is smoke verification, not the complete 
 > node scripts/lint.mjs
 
 ✓ typecheck
-✓ guardrails (152 files)
+✓ guardrails (154 files)
 
 > infoslips-spatial-studio@0.1.0 typecheck /home/user/Spatial-Studio
 > tsc -p tsconfig.json --noEmit
@@ -53,240 +53,252 @@ APP VERIFICATION: 18 pass, 0 fail. This is smoke verification, not the complete 
 
  RUN  v2.1.8 /home/user/Spatial-Studio
 
- ✓ packages/scenarios/test/assist-rule-draft.test.ts (75 tests) 223ms
- ✓ packages/scenarios/test/assist-helpers.test.ts (25 tests) 121ms
-(node:18245) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+ ✓ packages/scenarios/test/assist-rule-draft.test.ts (75 tests) 199ms
+ ✓ packages/scenarios/test/assist-helpers.test.ts (25 tests) 158ms
+(node:31185) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
- ✓ packages/scenarios/test/assist-fixes.test.ts (68 tests) 2909ms
-   ✓ grouping and “Fix all safe issues” > combines the safe fixes for findings from other checks into one undoable step 366ms
- ✓ apps/api/test/collab.test.ts (12 tests) 1434ms
-   ✓ collaboration (AUTH=on) > roles: reviewer can comment and request changes but not save or approve; admin manages users 422ms
- ✓ packages/scenarios/test/assist-coverage.test.ts (23 tests) 2015ms
-   ✓ coverage of the untouched Aster sample > with journey steps counted as coverage, only R03 and its message remain 427ms
- ✓ packages/scenarios/test/assist-change-summary.test.ts (9 tests) 2186ms
-   ✓ summarizeChanges > describes a rule condition edit in one sentence and names the customers it moves 503ms
-   ✓ summarizeChanges > reports drafted and approved Spanish translations per language and the customers they unblock 566ms
-   ✓ summarizeChanges > puts a removed fallback in the attention list and counts the customers it blocks 381ms
-   ✓ summarizeChanges > covers settings and tests, is deterministic, leaves its inputs alone and is fast 312ms
- ✓ packages/resolver/test/languages.test.ts (11 tests) 118ms
- ✓ packages/scenarios/test/assist-rule-review.test.ts (16 tests) 5113ms
-   ✓ reviewRules on the untouched samples > uses names, never ids or field paths, and counts are labelled synthetic 688ms
-   ✓ reviewRules on the untouched samples > is deterministic, ordered and leaves its inputs alone 449ms
-   ✓ reviewRules: ties > reports the injected tie as blocking, with a proposal that removes it 570ms
-   ✓ reviewRules: ties > prefers the more specific rule as the winner 515ms
-   ✓ reviewRules: ties > warns about equal priorities that could meet, and stays quiet when the conditions exclude each other 742ms
-   ✓ reviewRules: ties > lowers the other rule when there is no room above the winner 441ms
-   ✓ reviewRules: shadowed rules and overlaps > proposes raising a shadowed rule that is the more specific one 429ms
-   ✓ reviewRules: fallbacks, unreachable and disabled rules > reports a variant set without a fallback and proposes one 372ms
-   ✓ reviewRules: fallbacks, unreachable and disabled rules > is blocking when customers match no rule, and lists the switched-off rule 591ms
- ✓ packages/renderers/test/sms-fit.test.ts (8 tests) 15ms
- ✓ packages/scenarios/test/assist-translation-qa.test.ts (9 tests) 239ms
-(node:18349) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+ ✓ packages/scenarios/test/assist-fixes.test.ts (68 tests) 2412ms
+(node:31224) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
- ✓ apps/api/test/assist.test.ts (8 tests) 193ms
-(node:18406) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+ ✓ apps/api/test/collab.test.ts (12 tests) 1373ms
+   ✓ collaboration (AUTH=on) > roles: reviewer can comment and request changes but not save or approve; admin manages users 355ms
+ ✓ apps/api/test/saved-templates.test.ts (9 tests) 799ms
+   ✓ templates and project import: roles (auth on) > approvers and admins save templates; authors and reviewers cannot. Authors import; reviewers and approvers cannot 321ms
+ ✓ packages/scenarios/test/assist-coverage.test.ts (23 tests) 1914ms
+   ✓ coverage of the untouched Aster sample > with journey steps counted as coverage, only R03 and its message remain 329ms
+ ✓ packages/scenarios/test/assist-rule-review.test.ts (16 tests) 4814ms
+   ✓ reviewRules on the untouched samples > uses names, never ids or field paths, and counts are labelled synthetic 663ms
+   ✓ reviewRules on the untouched samples > is deterministic, ordered and leaves its inputs alone 490ms
+   ✓ reviewRules: ties > reports the injected tie as blocking, with a proposal that removes it 541ms
+   ✓ reviewRules: ties > prefers the more specific rule as the winner 392ms
+   ✓ reviewRules: ties > warns about equal priorities that could meet, and stays quiet when the conditions exclude each other 514ms
+   ✓ reviewRules: ties > lowers the other rule when there is no room above the winner 431ms
+   ✓ reviewRules: shadowed rules and overlaps > proposes raising a shadowed rule that is the more specific one 391ms
+   ✓ reviewRules: fallbacks, unreachable and disabled rules > reports a variant set without a fallback and proposes one 414ms
+   ✓ reviewRules: fallbacks, unreachable and disabled rules > is blocking when customers match no rule, and lists the switched-off rule 634ms
+ ✓ packages/resolver/test/languages.test.ts (11 tests) 77ms
+ ✓ packages/scenarios/test/assist-change-summary.test.ts (9 tests) 2180ms
+   ✓ summarizeChanges > describes a rule condition edit in one sentence and names the customers it moves 359ms
+   ✓ summarizeChanges > reports drafted and approved Spanish translations per language and the customers they unblock 647ms
+   ✓ summarizeChanges > puts a removed fallback in the attention list and counts the customers it blocks 349ms
+   ✓ summarizeChanges > covers settings and tests, is deterministic, leaves its inputs alone and is fast 346ms
+(node:31303) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
- ✓ packages/renderers/test/responsive-web.test.ts (8 tests) 72ms
-(node:18429) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+ ✓ packages/scenarios/test/assist-translation-qa.test.ts (9 tests) 189ms
+ ✓ packages/renderers/test/sms-fit.test.ts (8 tests) 23ms
+ ✓ apps/api/test/assist.test.ts (8 tests) 165ms
+ ✓ packages/renderers/test/responsive-web.test.ts (8 tests) 48ms
+(node:31365) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
- ✓ apps/api/test/api.test.ts (9 tests) 353ms
- ✓ packages/model/test/diff.test.ts (10 tests) 44ms
-(node:18467) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:31371) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
- ✓ apps/api/test/translate.test.ts (6 tests) 143ms
- ✓ apps/api/test/assets-batch.test.ts (4 tests) 1444ms
-   ✓ image asset library > accepts PNG by magic bytes, dedupes identical uploads, rejects SVG and oversize images, and the data URI renders in exports 381ms
-   ✓ export history > rebuilding the PDF of the same document replaces the earlier export instead of adding another 608ms
- ✓ packages/model/test/commands.test.ts (7 tests) 40ms
- ✓ packages/renderers/test/channels.test.ts (8 tests) 84ms
-(node:18641) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+ ✓ apps/api/test/api.test.ts (9 tests) 385ms
+(node:31423) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
- ✓ packages/scenarios/test/scenarios.test.ts (8 tests) 1579ms
-   ✓ scenario intelligence > cube intersections come from resolution; empty intersections are honest (AT-14/AT-15) 999ms
-   ✓ scenario intelligence > landscape cluster sizes reconcile to the evaluated universe (AT-16) and defects are real (AT-17) 515ms
- ✓ apps/api/test/projects-import.test.ts (3 tests) 220ms
- ✓ packages/scenarios/test/decisionTable.test.ts (9 tests) 759ms
- ✓ packages/model/test/translations.test.ts (5 tests) 281ms
- ✓ packages/model/test/custom-fields.test.ts (2 tests) 33ms
- ✓ packages/scenarios/test/testCases.test.ts (6 tests) 72ms
- ✓ packages/renderers/test/renderers.test.ts (5 tests) 80ms
-(node:18724) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+ ✓ packages/model/test/diff.test.ts (10 tests) 45ms
+ ✓ apps/api/test/translate.test.ts (6 tests) 174ms
+ ✓ packages/model/test/commands.test.ts (7 tests) 72ms
+ ✓ apps/api/test/assets-batch.test.ts (4 tests) 1342ms
+   ✓ image asset library > accepts PNG by magic bytes, dedupes identical uploads, rejects SVG and oversize images, and the data URI renders in exports 367ms
+   ✓ export history > rebuilding the PDF of the same document replaces the earlier export instead of adding another 546ms
+ ✓ packages/renderers/test/channels.test.ts (8 tests) 88ms
+(node:31608) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
- ✓ packages/renderers/test/styles-brand.test.ts (4 tests) 92ms
- ✓ apps/api/test/templates.test.ts (5 tests) 522ms
-   ✓ templates > a created project accepts styles and brand through the save API 316ms
- ✓ packages/resolver/test/golden.test.ts (13 tests) 70ms
+ ✓ packages/scenarios/test/scenarios.test.ts (8 tests) 1378ms
+   ✓ scenario intelligence > cube intersections come from resolution; empty intersections are honest (AT-14/AT-15) 865ms
+   ✓ scenario intelligence > landscape cluster sizes reconcile to the evaluated universe (AT-16) and defects are real (AT-17) 429ms
+ ✓ apps/api/test/projects-import.test.ts (3 tests) 183ms
+ ✓ packages/scenarios/test/decisionTable.test.ts (9 tests) 732ms
+ ✓ packages/model/test/translations.test.ts (5 tests) 241ms
+ ✓ packages/model/test/custom-fields.test.ts (2 tests) 45ms
+ ✓ packages/scenarios/test/testCases.test.ts (6 tests) 71ms
+(node:31678) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ packages/renderers/test/renderers.test.ts (5 tests) 79ms
+ ✓ packages/renderers/test/styles-brand.test.ts (4 tests) 79ms
+ ✓ apps/api/test/templates.test.ts (5 tests) 514ms
+   ✓ templates > a created project accepts styles and brand through the save API 312ms
+ ✓ packages/resolver/test/golden.test.ts (13 tests) 57ms
 stdout | packages/scenarios/test/impact.test.ts > impactOf > time for 70 records stays small
-impactOf 70 records: 86 ms
+impactOf 70 records: 48 ms
 
- ✓ packages/scenarios/test/impact.test.ts (4 tests) 445ms
+ ✓ packages/scenarios/test/impact.test.ts (4 tests) 347ms
 
- Test Files  29 passed (29)
-      Tests  380 passed (380)
-   Start at  08:20:12
-   Duration  14.01s (transform 1.90s, setup 0ms, collect 13.87s, tests 20.90s, environment 6ms, prepare 2.07s)
+ Test Files  30 passed (30)
+      Tests  389 passed (389)
+   Start at  09:38:06
+   Duration  14.29s (transform 2.16s, setup 0ms, collect 15.14s, tests 20.18s, environment 6ms, prepare 1.97s)
 
 
 > infoslips-spatial-studio@0.1.0 e2e /home/user/Spatial-Studio
 > playwright test --trace off
 
 
-Running 152 tests using 1 worker
+Running 161 tests using 1 worker
 
   ✓    1 e2e/acceptance.spec.ts:18:1 › AT-01 open Aster and reload: same node IDs, record, selection and profile persist (1.7s)
-  ✓    2 e2e/acceptance.spec.ts:34:1 › AT-02 drag C02 Rich Text into the flow region; saved model contains a real editable node (1.7s)
-  ✓    3 e2e/acceptance.spec.ts:59:1 › AT-03 resize, align and nudge a C06 Bound Field; undo/redo restores geometry (1.8s)
-  ✓    4 e2e/acceptance.spec.ts:91:1 › AT-04 dropping into a protected disclosure is blocked with a reason; model unchanged (1.3s)
-  ✓    5 e2e/acceptance.spec.ts:102:1 › AT-05 insert {{customer.givenName}} token: fixture value renders with correct lineage (1.5s)
-  ✓    6 e2e/acceptance.spec.ts:118:1 › AT-06 unknown token path is caught by binding validation (1.3s)
-  ✓    7 e2e/acceptance.spec.ts:131:1 › AT-07 create 3 variants for a Conditional Region; all appear in editor and Exploded view (1.9s)
-  ✓    8 e2e/acceptance.spec.ts:154:1 › AT-08 switch persona P01 → P04: assistance variant selected and trace explains why (1.6s)
+  ✓    2 e2e/acceptance.spec.ts:34:1 › AT-02 drag C02 Rich Text into the flow region; saved model contains a real editable node (1.6s)
+  ✓    3 e2e/acceptance.spec.ts:59:1 › AT-03 resize, align and nudge a C06 Bound Field; undo/redo restores geometry (1.9s)
+  ✓    4 e2e/acceptance.spec.ts:91:1 › AT-04 dropping into a protected disclosure is blocked with a reason; model unchanged (1.4s)
+  ✓    5 e2e/acceptance.spec.ts:102:1 › AT-05 insert {{customer.givenName}} token: fixture value renders with correct lineage (1.8s)
+  ✓    6 e2e/acceptance.spec.ts:118:1 › AT-06 unknown token path is caught by binding validation (1.6s)
+  ✓    7 e2e/acceptance.spec.ts:131:1 › AT-07 create 3 variants for a Conditional Region; all appear in editor and Exploded view (2.3s)
+  ✓    8 e2e/acceptance.spec.ts:154:1 › AT-08 switch persona P01 → P04: assistance variant selected and trace explains why (1.4s)
   ✓    9 e2e/acceptance.spec.ts:163:1 › AT-09 forced R03/R04 tie at equal priority is a blocking finding with no winner (1.6s)
   ✓   10 e2e/acceptance.spec.ts:174:1 › AT-10 removing the exclusive fallback with no rule match is a blocking no-match (1.1s)
-  ✓   11 e2e/acceptance.spec.ts:181:1 › AT-11 unrelated chart style change leaves financial digest values unchanged (1.3s)
-  ✓   12 e2e/acceptance.spec.ts:197:1 › AT-12 select a variant in Exploded, return to Design: same semantic node selected (3.4s)
-  ✓   13 e2e/acceptance.spec.ts:210:1 › AT-13 repeated expand/collapse under reduced motion: no lost edits, flat alternative works (3.0s)
-  ✓   14 e2e/acceptance.spec.ts:232:1 › AT-14 Cube persona × language × journey recomputes intersections, labels and filters (2.1s)
-  ✓   15 e2e/acceptance.spec.ts:242:1 › AT-15 Cube empty intersection shows an honest "No matching fixture" state (2.1s)
-  ✓   16 e2e/acceptance.spec.ts:251:1 › AT-16 Landscape cluster counts reconcile with seeded records; synthetic label visible (895ms)
-  ✓   17 e2e/acceptance.spec.ts:259:1 › AT-17 Landscape "show defects only" contains only scenarios with recorded findings (928ms)
-  ✓   18 e2e/acceptance.spec.ts:271:1 › AT-18 250-row card scenario: real continuation pages with repeated headings (3.3s)
-  ✓   19 e2e/acceptance.spec.ts:290:1 › AT-19 disabling continuation on an overflowing region yields a real overflow finding (2.6s)
-  ✓   20 e2e/acceptance.spec.ts:300:1 › AT-20 es-US with missing required copy is a blocking error; no silent translation (3.0s)
-  ✓   21 e2e/acceptance.spec.ts:311:1 › AT-21/AT-22 Day 30 then Day 45 events: future previews change; Day 1 issued snapshot unchanged (1.5s)
-  ✓   22 e2e/acceptance.spec.ts:329:1 › AT-23 reorder and replay an event: new deterministic snapshot sequence matches evaluated state (1.1s)
-  ✓   23 e2e/acceptance.spec.ts:343:1 › AT-24 PDF from CARD-0001: valid PDF, account suffix, $1,248 total, pages recorded (186ms)
-  ✓   24 e2e/acceptance.spec.ts:358:1 › AT-25 interactive HTML from the same run: sort, filter, expand; totals preserved (477ms)
-  ✓   25 e2e/acceptance.spec.ts:381:1 › AT-26 PDF/HTML semantic manifests: disclosures and amounts match; differences documented (2.4s)
-  ✓   26 e2e/acceptance.spec.ts:393:1 › AT-27 AFP simulation: no AFP binary; explicit simulation warning visible (1.4s)
-  ✓   27 e2e/acceptance.spec.ts:407:1 › AT-28 EOB-0001: billed/allowed/plan/member reconcile; NOT A BILL visible (1.3s)
-  ✓   28 e2e/acceptance.spec.ts:419:1 › AT-29 EOB-0002 with "$300 owed" and unconfirmed liability is blocked by domain validation (1.6s)
-  ✓   29 e2e/acceptance.spec.ts:441:1 › AT-30 ask AI to select the assistance persona: validated tool call; trace from engine (1.2s)
-  ✓   30 e2e/acceptance.spec.ts:454:1 › AT-31 AI proposes a rule change; declining leaves the approved model version unchanged (1.3s)
-  ✓   31 e2e/acceptance.spec.ts:467:1 › AT-32 provider disconnected: labelled offline fallback still performs scenario/trace actions (1.2s)
-  ✓   32 e2e/acceptance.spec.ts:480:1 › AT-33 keyboard: navigate node tree and spatial alternative without the 3D camera (1.9s)
-  ✓   33 e2e/acceptance.spec.ts:498:1 › AT-34 automated accessibility checks: results with source nodes; no certification claim (938ms)
-  ✓   34 e2e/acceptance.spec.ts:506:1 › AT-35 reload after edit and save: edit persists; default fixture can be restored (2.7s)
-  ✓   35 e2e/acceptance.spec.ts:524:1 › AT-36 Guided demo start → finish → reset twice: no stale state, deterministic replay (23.5s)
-  ✓   36 e2e/assist-fixes.spec.ts:12:1 › F01 a blocking priority tie gets a proposal whose effect is shown first; Apply removes the blocker and Undo brings it back (3.0s)
-  ✓   37 e2e/assist-fixes.spec.ts:37:1 › F02 "No message matches": the fallback proposal resolves it (2.8s)
+  ✓   11 e2e/acceptance.spec.ts:181:1 › AT-11 unrelated chart style change leaves financial digest values unchanged (1.1s)
+  ✓   12 e2e/acceptance.spec.ts:197:1 › AT-12 select a variant in Exploded, return to Design: same semantic node selected (3.3s)
+  ✓   13 e2e/acceptance.spec.ts:210:1 › AT-13 repeated expand/collapse under reduced motion: no lost edits, flat alternative works (2.9s)
+  ✓   14 e2e/acceptance.spec.ts:232:1 › AT-14 Cube persona × language × journey recomputes intersections, labels and filters (1.9s)
+  ✓   15 e2e/acceptance.spec.ts:242:1 › AT-15 Cube empty intersection shows an honest "No matching fixture" state (1.9s)
+  ✓   16 e2e/acceptance.spec.ts:251:1 › AT-16 Landscape cluster counts reconcile with seeded records; synthetic label visible (725ms)
+  ✓   17 e2e/acceptance.spec.ts:259:1 › AT-17 Landscape "show defects only" contains only scenarios with recorded findings (847ms)
+  ✓   18 e2e/acceptance.spec.ts:271:1 › AT-18 250-row card scenario: real continuation pages with repeated headings (3.1s)
+  ✓   19 e2e/acceptance.spec.ts:290:1 › AT-19 disabling continuation on an overflowing region yields a real overflow finding (2.4s)
+  ✓   20 e2e/acceptance.spec.ts:300:1 › AT-20 es-US with missing required copy is a blocking error; no silent translation (2.9s)
+  ✓   21 e2e/acceptance.spec.ts:311:1 › AT-21/AT-22 Day 30 then Day 45 events: future previews change; Day 1 issued snapshot unchanged (1.4s)
+  ✓   22 e2e/acceptance.spec.ts:329:1 › AT-23 reorder and replay an event: new deterministic snapshot sequence matches evaluated state (1.0s)
+  ✓   23 e2e/acceptance.spec.ts:343:1 › AT-24 PDF from CARD-0001: valid PDF, account suffix, $1,248 total, pages recorded (177ms)
+  ✓   24 e2e/acceptance.spec.ts:358:1 › AT-25 interactive HTML from the same run: sort, filter, expand; totals preserved (499ms)
+  ✓   25 e2e/acceptance.spec.ts:381:1 › AT-26 PDF/HTML semantic manifests: disclosures and amounts match; differences documented (1.6s)
+  ✓   26 e2e/acceptance.spec.ts:393:1 › AT-27 AFP simulation: no AFP binary; explicit simulation warning visible (1.1s)
+  ✓   27 e2e/acceptance.spec.ts:407:1 › AT-28 EOB-0001: billed/allowed/plan/member reconcile; NOT A BILL visible (1.1s)
+  ✓   28 e2e/acceptance.spec.ts:419:1 › AT-29 EOB-0002 with "$300 owed" and unconfirmed liability is blocked by domain validation (1.3s)
+  ✓   29 e2e/acceptance.spec.ts:441:1 › AT-30 ask AI to select the assistance persona: validated tool call; trace from engine (974ms)
+  ✓   30 e2e/acceptance.spec.ts:454:1 › AT-31 AI proposes a rule change; declining leaves the approved model version unchanged (1.0s)
+  ✓   31 e2e/acceptance.spec.ts:467:1 › AT-32 provider disconnected: labelled offline fallback still performs scenario/trace actions (929ms)
+  ✓   32 e2e/acceptance.spec.ts:480:1 › AT-33 keyboard: navigate node tree and spatial alternative without the 3D camera (1.6s)
+  ✓   33 e2e/acceptance.spec.ts:498:1 › AT-34 automated accessibility checks: results with source nodes; no certification claim (882ms)
+  ✓   34 e2e/acceptance.spec.ts:506:1 › AT-35 reload after edit and save: edit persists; default fixture can be restored (2.5s)
+  ✓   35 e2e/acceptance.spec.ts:524:1 › AT-36 Guided demo start → finish → reset twice: no stale state, deterministic replay (22.6s)
+  ✓   36 e2e/assist-fixes.spec.ts:12:1 › F01 a blocking priority tie gets a proposal whose effect is shown first; Apply removes the blocker and Undo brings it back (2.9s)
+  ✓   37 e2e/assist-fixes.spec.ts:37:1 › F02 "No message matches": the fallback proposal resolves it (2.7s)
   ✓   38 e2e/assist-fixes.spec.ts:55:1 › F03 table overflow: the proposal is low risk, Fix all safe issues lists it and applies it as one undoable step (3.0s)
-  ✓   39 e2e/assist-fixes.spec.ts:85:1 › F04 a missing translation offers a link to Content & Translations and no Apply button (3.8s)
-  ✓   40 e2e/assist-fixes.spec.ts:103:1 › F05 All customers shows proposals for a group, with the effect across the synthetic population (1.5s)
-  ✓   41 e2e/assist-fixes.spec.ts:118:1 › F06 with nothing to fix, Fix all safe issues is disabled and says why (2.0s)
+  ✓   39 e2e/assist-fixes.spec.ts:85:1 › F04 a missing translation offers a link to Content & Translations and no Apply button (3.4s)
+  ✓   40 e2e/assist-fixes.spec.ts:103:1 › F05 All customers shows proposals for a group, with the effect across the synthetic population (1.6s)
+  ✓   41 e2e/assist-fixes.spec.ts:118:1 › F06 with nothing to fix, Fix all safe issues is disabled and says why (1.7s)
   ✓   42 e2e/assist-import.spec.ts:10:1 › I01 import: everyday column names are matched with reasons, a dollars-not-cents value is flagged, an unknown column is left out (1.4s)
-  ✓   43 e2e/assist-panel.spec.ts:31:1 › A01 "Ask AI" is on every studio screen but the assistant screen; Escape closes the panel and focus returns; the context names screen, customer and selection (9.7s)
-  ✓   44 e2e/assist-panel.spec.ts:75:1 › A02 Explain on the Exploded Document names the winning rule, follows the customer, and says why nothing is chosen after a tie (2.0s)
-  ✓   45 e2e/assist-panel.spec.ts:100:1 › A03 the Ask tab shares its conversation with the AI Assistant screen (2.1s)
+  ✓   43 e2e/assist-panel.spec.ts:31:1 › A01 "Ask AI" is on every studio screen but the assistant screen; Escape closes the panel and focus returns; the context names screen, customer and selection (8.8s)
+  ✓   44 e2e/assist-panel.spec.ts:75:1 › A02 Explain on the Exploded Document names the winning rule, follows the customer, and says why nothing is chosen after a tie (2.1s)
+  ✓   45 e2e/assist-panel.spec.ts:100:1 › A03 the Ask tab shares its conversation with the AI Assistant screen (2.0s)
   ✓   46 e2e/assist-panel.spec.ts:119:1 › A04 change summary: both edits under the right areas with an impact line; no edits say "No changes"; review shows it too (2.9s)
-  ✓   47 e2e/assist-panel.spec.ts:166:1 › A05 activity search: "saves today" shows the save with chips, a nonsense word is ignored, clearing restores the list (2.2s)
+  ✓   47 e2e/assist-panel.spec.ts:166:1 › A05 activity search: "saves today" shows the save with chips, a nonsense word is ignored, clearing restores the list (2.1s)
   ✓   48 e2e/assist-panel.spec.ts:205:1 › A06 at 1280x720 the panel stays between the top bar and the status bar and sits beside the Demo tools panel (1.8s)
-  ✓   49 e2e/assist-rules.spec.ts:20:1 › describe a rule: restated, impact shown, opens as an unsaved draft, saving adds it and Undo removes it (1.5s)
-  ✓   50 e2e/assist-rules.spec.ts:51:1 › describe a rule: an ambiguous sentence shows what it could mean and no rule (1.2s)
+  ✓   49 e2e/assist-rules.spec.ts:20:1 › describe a rule: restated, impact shown, opens as an unsaved draft, saving adds it and Undo removes it (1.4s)
+  ✓   50 e2e/assist-rules.spec.ts:51:1 › describe a rule: an ambiguous sentence shows what it could mean and no rule (1.1s)
   ✓   51 e2e/assist-rules.spec.ts:63:1 › describe a rule: a sentence the built-in reader cannot read shows the needs-AI state (1.2s)
-  ✓   52 e2e/assist-rules.spec.ts:73:1 › review my rules: the untouched sample has no blocking items; a tie is reported and its fix removes it (2.5s)
-  ✓   53 e2e/assist-rules.spec.ts:98:1 › coverage: lists the unreached rules, previews a scenario in the top bar, pins a passing test, one Undo removes it (2.4s)
-  ✓   54 e2e/assist-writing.spec.ts:23:1 › inspector: writing help shows the reading level, needs a key without one, and a rewrite goes into the editor, then commits and undoes (1.7s)
-  ✓   55 e2e/assist-writing.spec.ts:67:1 › inspector: Escape closes writing help and focus returns to its button (1.2s)
+  ✓   52 e2e/assist-rules.spec.ts:73:1 › review my rules: the untouched sample has no blocking items; a tie is reported and its fix removes it (2.4s)
+  ✓   53 e2e/assist-rules.spec.ts:98:1 › coverage: lists the unreached rules, previews a scenario in the top bar, pins a passing test, one Undo removes it (2.2s)
+  ✓   54 e2e/assist-writing.spec.ts:23:1 › inspector: writing help shows the reading level, needs a key without one, and a rewrite goes into the editor, then commits and undoes (1.6s)
+  ✓   55 e2e/assist-writing.spec.ts:67:1 › inspector: Escape closes writing help and focus returns to its button (1.1s)
   ✓   56 e2e/assist-writing.spec.ts:79:1 › inspector: draft a new version needs a key without one; with a reply it adds a version through the normal path (1.4s)
-  ✓   57 e2e/assist-writing.spec.ts:105:1 › inspector: image description is suggested built-in and fills the alt text field (1.5s)
-  ✓   58 e2e/assist-writing.spec.ts:123:1 › email and SMS: fit in one message (built-in), subject lines need a key, and with a reply fill the subject (4.0s)
-  ✓   59 e2e/assist-writing.spec.ts:174:1 › translations: Check drafts is quiet on the samples, flags untranslated and length, and Flagged narrows the list (2.2s)
-  ✓   60 e2e/assist-writing.spec.ts:216:1 › translations: glossary saves one undoable step and a differing draft gets a glossary flag (2.7s)
-  ✓   61 e2e/blockers.spec.ts:6:1 › B01 All customers lists blockers across every synthetic customer, blocking first, with a pre-filled detail panel (2.8s)
-  ✓   62 e2e/blockers.spec.ts:44:1 › B02 the Blocking only toggle hides warnings; the translation blocker names the Spanish-preferred customers (1.5s)
-  ✓   63 e2e/blockers.spec.ts:58:1 › B03 "Preview this customer" switches the top-bar customer and returns to This customer with the issue selected (3.3s)
-  ✓   64 e2e/channels-editor.spec.ts:10:1 › default wording is shown with the composed preview for the previewed customer (1.8s)
-  ✓   65 e2e/channels-editor.spec.ts:24:1 › changing the subject updates the preview and Undo restores it (3.4s)
-  ✓   66 e2e/channels-editor.spec.ts:36:1 › an unknown {{token}} is flagged and refused, and the model is unchanged (878ms)
-  ✓   67 e2e/channels-editor.spec.ts:46:1 › insert field puts the token at the caret (2.0s)
-  ✓   68 e2e/channels-editor.spec.ts:58:1 › sections: hide Short tables and move Action buttons first; the rendered email follows (4.0s)
-  ✓   69 e2e/channels-editor.spec.ts:82:1 › SMS meter: GSM-7 by default, UCS-2 once a non-GSM character is typed (1.8s)
-  ✓   70 e2e/channels-editor.spec.ts:97:1 › the preview follows a customer switch (2.7s)
-  ✓   71 e2e/channels-editor.spec.ts:106:1 › EOB keeps THIS IS NOT A BILL; removing it from the SMS turns parity to a mismatch (2.7s)
-  ✓   72 e2e/channels-editor.spec.ts:122:1 › reset to default wording asks first and restores the defaults (3.0s)
-  ✓   73 e2e/channels.spec.ts:6:1 › Email tab shows subject, parity and a sandboxed 600px iframe for CARD-0001 (1.4s)
-  ✓   74 e2e/channels.spec.ts:25:1 › SMS tab shows a segment counter and the DEMO marker (1.1s)
-  ✓   75 e2e/channels.spec.ts:33:1 › EOB-0002 email says THIS IS NOT A BILL and never shows member liability as owed (1.6s)
-  ✓   76 e2e/channels.spec.ts:49:1 › compose/email API returns subject, parity and stores an email artifact (26ms)
-  ✓   77 e2e/collab.spec.ts:20:1 › history: a saved edit appears as a new version, the diff says what changed, restore brings it back (1.9s)
-  ✓   78 e2e/collab.spec.ts:60:1 › history: restore is disabled while there are unsaved changes, and the palette opens history (1.8s)
+  ✓   57 e2e/assist-writing.spec.ts:105:1 › inspector: image description is suggested built-in and fills the alt text field (1.4s)
+  ✓   58 e2e/assist-writing.spec.ts:123:1 › email and SMS: fit in one message (built-in), subject lines need a key, and with a reply fill the subject (3.9s)
+  ✓   59 e2e/assist-writing.spec.ts:174:1 › translations: Check drafts is quiet on the samples, flags untranslated and length, and Flagged narrows the list (1.9s)
+  ✓   60 e2e/assist-writing.spec.ts:216:1 › translations: glossary saves one undoable step and a differing draft gets a glossary flag (2.4s)
+  ✓   61 e2e/blockers.spec.ts:6:1 › B01 All customers lists blockers across every synthetic customer, blocking first, with a pre-filled detail panel (2.5s)
+  ✓   62 e2e/blockers.spec.ts:44:1 › B02 the Blocking only toggle hides warnings; the translation blocker names the Spanish-preferred customers (1.3s)
+  ✓   63 e2e/blockers.spec.ts:58:1 › B03 "Preview this customer" switches the top-bar customer and returns to This customer with the issue selected (3.1s)
+  ✓   64 e2e/channels-editor.spec.ts:10:1 › default wording is shown with the composed preview for the previewed customer (1.7s)
+  ✓   65 e2e/channels-editor.spec.ts:24:1 › changing the subject updates the preview and Undo restores it (3.3s)
+  ✓   66 e2e/channels-editor.spec.ts:36:1 › an unknown {{token}} is flagged and refused, and the model is unchanged (792ms)
+  ✓   67 e2e/channels-editor.spec.ts:46:1 › insert field puts the token at the caret (1.8s)
+  ✓   68 e2e/channels-editor.spec.ts:58:1 › sections: hide Short tables and move Action buttons first; the rendered email follows (3.9s)
+  ✓   69 e2e/channels-editor.spec.ts:82:1 › SMS meter: GSM-7 by default, UCS-2 once a non-GSM character is typed (1.6s)
+  ✓   70 e2e/channels-editor.spec.ts:97:1 › the preview follows a customer switch (2.5s)
+  ✓   71 e2e/channels-editor.spec.ts:106:1 › EOB keeps THIS IS NOT A BILL; removing it from the SMS turns parity to a mismatch (2.5s)
+  ✓   72 e2e/channels-editor.spec.ts:122:1 › reset to default wording asks first and restores the defaults (2.8s)
+  ✓   73 e2e/channels.spec.ts:6:1 › Email tab shows subject, parity and a sandboxed 600px iframe for CARD-0001 (1.1s)
+  ✓   74 e2e/channels.spec.ts:25:1 › SMS tab shows a segment counter and the DEMO marker (943ms)
+  ✓   75 e2e/channels.spec.ts:33:1 › EOB-0002 email says THIS IS NOT A BILL and never shows member liability as owed (1.5s)
+  ✓   76 e2e/channels.spec.ts:49:1 › compose/email API returns subject, parity and stores an email artifact (19ms)
+  ✓   77 e2e/collab.spec.ts:20:1 › history: a saved edit appears as a new version, the diff says what changed, restore brings it back (1.5s)
+  ✓   78 e2e/collab.spec.ts:60:1 › history: restore is disabled while there are unsaved changes, and the palette opens history (1.6s)
   ✓   79 e2e/collab.spec.ts:78:1 › review: submit → approve → publish on a clean project, comments add/resolve, Activity lists the save (2.2s)
-  ✓   80 e2e/collab.spec.ts:127:1 › approval is blocked with plain reasons when the model has blocking issues (1.6s)
-  ✓   81 e2e/collab.spec.ts:145:1 › global Activity is reachable from the gallery header (1.2s)
+  ✓   80 e2e/collab.spec.ts:127:1 › approval is blocked with plain reasons when the model has blocking issues (1.7s)
+  ✓   81 e2e/collab.spec.ts:145:1 › global Activity is reachable from the gallery header (1.1s)
   ✓   82 e2e/content.spec.ts:17:1 › S13 lists the missing mandatory es-US parts and what they affect (1.2s)
-  ✓   83 e2e/content.spec.ts:33:1 › draft then approve one part; the summary updates (1.3s)
-  ✓   84 e2e/content.spec.ts:46:1 › token mismatch blocks approval with an inline message and offers the missing token (1.5s)
+  ✓   83 e2e/content.spec.ts:33:1 › draft then approve one part; the summary updates (1.2s)
+  ✓   84 e2e/content.spec.ts:46:1 › token mismatch blocks approval with an inline message and offers the missing token (1.4s)
   ✓   85 e2e/content.spec.ts:60:1 › approving every mandatory part clears REQUIRED_TRANSLATION_MISSING for Spanish customers (1.7s)
   ✓   86 e2e/content.spec.ts:72:1 › CSV export downloads and import creates drafts (never approvals) with a result summary (1.5s)
-  ✓   87 e2e/content.spec.ts:89:1 › API: translations.csv and import return real data (88ms)
-  ✓   88 e2e/content.spec.ts:100:1 › See it in context opens 2D Design with an es-US record and the part selected (1.2s)
-  ✓   89 e2e/content.spec.ts:110:1 › Landscape 2.5D: switch view, change metric, legend changes, click a cluster opens the inspector (1.9s)
+  ✓   87 e2e/content.spec.ts:89:1 › API: translations.csv and import return real data (89ms)
+  ✓   88 e2e/content.spec.ts:100:1 › See it in context opens 2D Design with an es-US record and the part selected (1.1s)
+  ✓   89 e2e/content.spec.ts:110:1 › Landscape 2.5D: switch view, change metric, legend changes, click a cluster opens the inspector (1.6s)
   ✓   90 e2e/features.spec.ts:18:1 › F01 Business view speaks plainly; Technical view shows engine internals; theme toggles (1.5s)
-  ✓   91 e2e/features.spec.ts:34:1 › F02 Ctrl+K finds a rule by ID and opens it; ? opens the shortcuts sheet (1.4s)
-  ✓   92 e2e/features.spec.ts:47:1 › F03 Duplicate, rename and delete a project from the gallery; samples cannot be deleted (2.7s)
-  ✓   93 e2e/features.spec.ts:67:1 › F04 Import CSV with everyday column names: columns are matched, the record appears everywhere, and can be removed (3.0s)
-  ✓   94 e2e/features.spec.ts:88:1 › F05 Data fields: add a custom choice field; it becomes available to rules (1.8s)
-  ✓   95 e2e/features.spec.ts:105:1 › F06 Impact preview: disabling a rule reports which synthetic customers change, with undo (2.0s)
-  ✓   96 e2e/features.spec.ts:117:1 › F07 Batch run: compose all synthetic card customers into one ZIP with a run report (12.3s)
-  ✓   97 e2e/features.spec.ts:141:1 › F08 Image library: upload a PNG, use it for the issuer logo; the image is embedded in the model (1.4s)
-  ✓   98 e2e/features.spec.ts:154:1 › F09 Status dock and Validate & Compare agree on blocking counts (3.1s)
-  ✓   99 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 aster-card-demo reflows at 390px: no horizontal overflow, no clipped tiles (344ms)
-  ✓  100 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 aster-card-demo reflows at 768px: no horizontal overflow, no clipped tiles (337ms)
-  ✓  101 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 aster-card-demo reflows at 1200px: no horizontal overflow, no clipped tiles (312ms)
-  ✓  102 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 harborcare-demo reflows at 390px: no horizontal overflow, no clipped tiles (288ms)
-  ✓  103 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 harborcare-demo reflows at 768px: no horizontal overflow, no clipped tiles (321ms)
-  ✓  104 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 harborcare-demo reflows at 1200px: no horizontal overflow, no clipped tiles (343ms)
-  ✓  105 e2e/html-web.spec.ts:44:3 › layout, sticky header, menu › W02 tiles go one-up below 340px (257ms)
-  ✓  106 e2e/html-web.spec.ts:52:5 › layout, sticky header, menu › W03 sticky header stays visible after scrolling and the menu anchors work at 390px (2.1s)
+  ✓   91 e2e/features.spec.ts:34:1 › F02 Ctrl+K finds a rule by ID and opens it; ? opens the shortcuts sheet (1.2s)
+  ✓   92 e2e/features.spec.ts:47:1 › F03 Duplicate, rename and delete a project from the gallery; samples cannot be deleted (2.4s)
+  ✓   93 e2e/features.spec.ts:67:1 › F04 Import CSV with everyday column names: columns are matched, the record appears everywhere, and can be removed (2.6s)
+  ✓   94 e2e/features.spec.ts:88:1 › F05 Data fields: add a custom choice field; it becomes available to rules (1.6s)
+  ✓   95 e2e/features.spec.ts:105:1 › F06 Impact preview: disabling a rule reports which synthetic customers change, with undo (1.8s)
+  ✓   96 e2e/features.spec.ts:117:1 › F07 Batch run: compose all synthetic card customers into one ZIP with a run report (11.6s)
+  ✓   97 e2e/features.spec.ts:141:1 › F08 Image library: upload a PNG, use it for the issuer logo; the image is embedded in the model (1.3s)
+  ✓   98 e2e/features.spec.ts:154:1 › F09 Status dock and Validate & Compare agree on blocking counts (2.9s)
+  ✓   99 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 aster-card-demo reflows at 390px: no horizontal overflow, no clipped tiles (373ms)
+  ✓  100 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 aster-card-demo reflows at 768px: no horizontal overflow, no clipped tiles (304ms)
+  ✓  101 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 aster-card-demo reflows at 1200px: no horizontal overflow, no clipped tiles (310ms)
+  ✓  102 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 harborcare-demo reflows at 390px: no horizontal overflow, no clipped tiles (301ms)
+  ✓  103 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 harborcare-demo reflows at 768px: no horizontal overflow, no clipped tiles (304ms)
+  ✓  104 e2e/html-web.spec.ts:27:7 › layout, sticky header, menu › W01 harborcare-demo reflows at 1200px: no horizontal overflow, no clipped tiles (303ms)
+  ✓  105 e2e/html-web.spec.ts:44:3 › layout, sticky header, menu › W02 tiles go one-up below 340px (227ms)
+  ✓  106 e2e/html-web.spec.ts:52:5 › layout, sticky header, menu › W03 sticky header stays visible after scrolling and the menu anchors work at 390px (2.0s)
   ✓  107 e2e/html-web.spec.ts:52:5 › layout, sticky header, menu › W03 sticky header stays visible after scrolling and the menu anchors work at 1200px (2.2s)
-  ✓  108 e2e/html-web.spec.ts:81:3 › layout, sticky header, menu › W04 phone: sections collapse natively (Summary and Message open); disclosures stay open and uncollapsible; touch targets 44px (405ms)
+  ✓  108 e2e/html-web.spec.ts:81:3 › layout, sticky header, menu › W04 phone: sections collapse natively (Summary and Message open); disclosures stay open and uncollapsible; touch targets 44px (357ms)
   ✓  109 e2e/html-web.spec.ts:98:3 › layout, sticky header, menu › W05 EOB guarded liability is never a number in the sticky header (431ms)
-  ✓  110 e2e/html-web.spec.ts:110:3 › table and chart interaction › W06 ten rows at a time; show more / show all; sort; search; totals never change (564ms)
-  ✓  111 e2e/html-web.spec.ts:147:3 › table and chart interaction › W07 merchant quick filter and chart bar filter (mouse and keyboard) with Clear filter chip (590ms)
-  ✓  112 e2e/html-web.spec.ts:187:3 › table and chart interaction › W08 explanations still expand; expand-all works (393ms)
-  ✓  113 e2e/html-web.spec.ts:195:3 › table and chart interaction › W09 with JavaScript off everything is readable and complete (321ms)
-  ✓  114 e2e/html-web.spec.ts:208:3 › table and chart interaction › W10 reduced motion: no smooth scrolling (304ms)
+  ✓  110 e2e/html-web.spec.ts:110:3 › table and chart interaction › W06 ten rows at a time; show more / show all; sort; search; totals never change (554ms)
+  ✓  111 e2e/html-web.spec.ts:147:3 › table and chart interaction › W07 merchant quick filter and chart bar filter (mouse and keyboard) with Clear filter chip (555ms)
+  ✓  112 e2e/html-web.spec.ts:187:3 › table and chart interaction › W08 explanations still expand; expand-all works (363ms)
+  ✓  113 e2e/html-web.spec.ts:195:3 › table and chart interaction › W09 with JavaScript off everything is readable and complete (273ms)
+  ✓  114 e2e/html-web.spec.ts:208:3 › table and chart interaction › W10 reduced motion: no smooth scrolling (307ms)
   ✓  115 e2e/html-web.spec.ts:218:3 › studio device frame › W11 Design Studio: Interactive HTML sits in a Phone / Tablet / Desktop frame that scrolls inside (1.5s)
   ✓  116 e2e/html-web.spec.ts:239:3 › studio device frame › W12 Preview & Export: HTML tab defaults to Desktop and offers Phone / Tablet / Desktop (1.8s)
-  ✓  117 e2e/rules.spec.ts:7:1 › decision table lists Payment guidance rules in priority order and flags an injected tie (1.6s)
-  ✓  118 e2e/rules.spec.ts:36:1 › pin CARD-0002 as a test; disabling R04 fails it in plain language and undo passes it again (3.1s)
-  ✓  119 e2e/styles.spec.ts:4:1 › A4: new project from the Blank letter template, text style applied on the canvas, brand reaches exported HTML (2.5s)
-  ✓  120 e2e/translations.spec.ts:16:1 › language bar, three groups with counts and honest AI status (1.4s)
-  ✓  121 e2e/translations.spec.ts:37:1 › sample drafts, edit clears the chip, token mismatch blocks, bulk approve unblocks Spanish customers, undo (3.1s)
-  ✓  122 e2e/translations.spec.ts:97:1 › draft a single row with the row action (1.3s)
-  ✓  123 e2e/translations.spec.ts:107:1 › add French through the dialog, see the unavailable explanation, remove it again (1.8s)
-  ✓  124 e2e/translations.spec.ts:127:1 › Spanish cannot be removed while a rule selects it (1.2s)
-  ✓  125 e2e/translations.spec.ts:135:1 › Preview in this language switches the previewed language and opens Preview & Export (1.1s)
-  ✓  126 e2e/ux.spec.ts:12:1 › U01 menu is grouped by job and keeps every screen; top bar controls are labelled (969ms)
-  ✓  127 e2e/ux.spec.ts:26:1 › U12 official InfoSlips logo: icon on a laptop-sized window, full logo on a wide one, artwork follows the theme (1.2s)
-  ✓  128 e2e/ux.spec.ts:51:1 › U02 settings menu holds detail level, theme, tour and shortcuts; choices persist (1.5s)
-  ✓  129 e2e/ux.spec.ts:68:1 › U03 Demo tools: closed by default, not in the working screens; applying a defect is reported and reversible (1.1s)
-  ✓  130 e2e/ux.spec.ts:82:1 › U04 Validate & Compare runs by itself, pre-selects an issue, and re-runs when the customer changes (4.3s)
-  ✓  131 e2e/ux.spec.ts:92:1 › U05 Preview & Export builds the PDF without a click and a second visit adds nothing to the export history (2.4s)
-  ✓  132 e2e/ux.spec.ts:104:1 › U06 detail panels open with something selected: Cube, Landscape and Page Stack (3.9s)
-  ✓  133 e2e/ux.spec.ts:118:1 › U07 Design inspector has four tabs on one row; Business view shows names, Technical view shows codes (2.5s)
-  ✓  134 e2e/ux.spec.ts:147:1 › U08 Gallery: one main button per card, the rest in a menu; restoring an unchanged sample keeps its version (881ms)
-  ✓  135 e2e/ux.spec.ts:167:1 › U09 narrow window: side panels become drawers; below 900px the studio asks for a wider window (1.0s)
-  ✓  136 e2e/ux.spec.ts:184:1 › U10 Start here → "Show me where" opens the sample and focuses the customer picker once it has loaded (817ms)
-  ✓  137 e2e/ux.spec.ts:192:1 › U11 Demo tools stays closed when the guided demo starts; Design fits the page width with a whole-page option (1.6s)
-  ✓  138 e2e/ux.spec.ts:205:1 › U13 Document Cube filters: legend and Problems only fade the Grid and hide in 3D; 3D opens on one layer with a stepper (2.7s)
-  ✓  139 tests/e2e/critical_path.spec.ts:5:1 › Aster loads real editable model, save and spatial continuity (2.3s)
-  ✓  140 tests/e2e/critical_path.spec.ts:15:1 › Real PDF export produces document bytes (133ms)
-  ✓  141 tests/e2e/screen_routes.spec.ts:9:3 › screen S01: Project Gallery (490ms)
-  ✓  142 tests/e2e/screen_routes.spec.ts:9:3 › screen S02: 2D Design Studio (814ms)
-  ✓  143 tests/e2e/screen_routes.spec.ts:9:3 › screen S03: Exploded Document (953ms)
-  ✓  144 tests/e2e/screen_routes.spec.ts:9:3 › screen S04: Document Cube (1.9s)
-  ✓  145 tests/e2e/screen_routes.spec.ts:9:3 › screen S05: Scenario Landscape (979ms)
-  ✓  146 tests/e2e/screen_routes.spec.ts:9:3 › screen S06: Page Composition Stack (812ms)
-  ✓  147 tests/e2e/screen_routes.spec.ts:9:3 › screen S07: Rules & Data (874ms)
-  ✓  148 tests/e2e/screen_routes.spec.ts:9:3 › screen S08: Journey Simulator (841ms)
-  ✓  149 tests/e2e/screen_routes.spec.ts:9:3 › screen S09: Validate & Compare (798ms)
-  ✓  150 tests/e2e/screen_routes.spec.ts:9:3 › screen S10: Preview & Export (1.0s)
-  ✓  151 tests/e2e/screen_routes.spec.ts:9:3 › screen S11: Guided Demo (698ms)
-  ✓  152 tests/e2e/screen_routes.spec.ts:9:3 › screen S12: AI Assistant (816ms)
+  ✓  117 e2e/nav-collapse.spec.ts:11:1 › N01 the left menu collapses to icons and expands again; the choice is remembered and the work area gets the room (1.7s)
+  ✓  118 e2e/nav-collapse.spec.ts:47:1 › N02 in a narrow window the menu is already an icon strip, so no toggle is offered (914ms)
+  ✓  119 e2e/rules.spec.ts:7:1 › decision table lists Payment guidance rules in priority order and flags an injected tie (1.4s)
+  ✓  120 e2e/rules.spec.ts:36:1 › pin CARD-0002 as a test; disabling R04 fails it in plain language and undo passes it again (2.9s)
+  ✓  121 e2e/styles.spec.ts:4:1 › A4: new project from the Blank letter template, text style applied on the canvas, brand reaches exported HTML (2.3s)
+  ✓  122 e2e/templates.spec.ts:37:1 › T01 save as template, start a project from it, and the card says where it came from (2.0s)
+  ✓  123 e2e/templates.spec.ts:63:1 › T02 a second save adds version 2; the older version stays usable (1.8s)
+  ✓  124 e2e/templates.spec.ts:95:1 › T03 a name that is already taken is explained in the dialog and nothing is saved (1.3s)
+  ✓  125 e2e/templates.spec.ts:106:1 › T04 retire hides a template, "Show retired templates" lists it, "Bring back" restores it (2.0s)
+  ✓  126 e2e/templates.spec.ts:129:1 › T05 import a project file as a new draft; the original is unchanged (1.6s)
+  ✓  127 e2e/templates.spec.ts:153:1 › T06 a broken file lists every problem, says nothing was imported, and creates no project (1.0s)
+  ✓  128 e2e/templates.spec.ts:179:1 › T07 without the right to save, "Save as template…" is disabled and says why (787ms)
+  ✓  129 e2e/translations.spec.ts:16:1 › language bar, three groups with counts and honest AI status (1.2s)
+  ✓  130 e2e/translations.spec.ts:37:1 › sample drafts, edit clears the chip, token mismatch blocks, bulk approve unblocks Spanish customers, undo (2.8s)
+  ✓  131 e2e/translations.spec.ts:97:1 › draft a single row with the row action (1.0s)
+  ✓  132 e2e/translations.spec.ts:107:1 › add French through the dialog, see the unavailable explanation, remove it again (1.5s)
+  ✓  133 e2e/translations.spec.ts:127:1 › Spanish cannot be removed while a rule selects it (1.1s)
+  ✓  134 e2e/translations.spec.ts:135:1 › Preview in this language switches the previewed language and opens Preview & Export (949ms)
+  ✓  135 e2e/ux.spec.ts:12:1 › U01 menu is grouped by job and keeps every screen; top bar controls are labelled (818ms)
+  ✓  136 e2e/ux.spec.ts:26:1 › U12 official InfoSlips logo: icon on a laptop-sized window, full logo on a wide one, artwork follows the theme (1.0s)
+  ✓  137 e2e/ux.spec.ts:51:1 › U02 settings menu holds detail level, theme, tour and shortcuts; choices persist (1.3s)
+  ✓  138 e2e/ux.spec.ts:68:1 › U03 Demo tools: closed by default, not in the working screens; applying a defect is reported and reversible (1.1s)
+  ✓  139 e2e/ux.spec.ts:82:1 › U04 Validate & Compare runs by itself, pre-selects an issue, and re-runs when the customer changes (3.6s)
+  ✓  140 e2e/ux.spec.ts:92:1 › U05 Preview & Export builds the PDF without a click and a second visit adds nothing to the export history (2.4s)
+  ✓  141 e2e/ux.spec.ts:104:1 › U06 detail panels open with something selected: Cube, Landscape and Page Stack (3.7s)
+  ✓  142 e2e/ux.spec.ts:118:1 › U07 Design inspector has four tabs on one row; Business view shows names, Technical view shows codes (2.5s)
+  ✓  143 e2e/ux.spec.ts:147:1 › U08 Gallery: one main button per card, the rest in a menu; restoring an unchanged sample keeps its version (870ms)
+  ✓  144 e2e/ux.spec.ts:167:1 › U09 narrow window: side panels become drawers; below 900px the studio asks for a wider window (976ms)
+  ✓  145 e2e/ux.spec.ts:184:1 › U10 Start here → "Show me where" opens the sample and focuses the customer picker once it has loaded (943ms)
+  ✓  146 e2e/ux.spec.ts:192:1 › U11 Demo tools stays closed when the guided demo starts; Design fits the page width with a whole-page option (1.5s)
+  ✓  147 e2e/ux.spec.ts:205:1 › U13 Document Cube filters: legend and Problems only fade the Grid and hide in 3D; 3D opens on one layer with a stepper (2.5s)
+  ✓  148 tests/e2e/critical_path.spec.ts:5:1 › Aster loads real editable model, save and spatial continuity (2.2s)
+  ✓  149 tests/e2e/critical_path.spec.ts:15:1 › Real PDF export produces document bytes (148ms)
+  ✓  150 tests/e2e/screen_routes.spec.ts:9:3 › screen S01: Project Gallery (593ms)
+  ✓  151 tests/e2e/screen_routes.spec.ts:9:3 › screen S02: 2D Design Studio (804ms)
+  ✓  152 tests/e2e/screen_routes.spec.ts:9:3 › screen S03: Exploded Document (975ms)
+  ✓  153 tests/e2e/screen_routes.spec.ts:9:3 › screen S04: Document Cube (1.7s)
+  ✓  154 tests/e2e/screen_routes.spec.ts:9:3 › screen S05: Scenario Landscape (803ms)
+  ✓  155 tests/e2e/screen_routes.spec.ts:9:3 › screen S06: Page Composition Stack (797ms)
+  ✓  156 tests/e2e/screen_routes.spec.ts:9:3 › screen S07: Rules & Data (718ms)
+  ✓  157 tests/e2e/screen_routes.spec.ts:9:3 › screen S08: Journey Simulator (683ms)
+  ✓  158 tests/e2e/screen_routes.spec.ts:9:3 › screen S09: Validate & Compare (818ms)
+  ✓  159 tests/e2e/screen_routes.spec.ts:9:3 › screen S10: Preview & Export (885ms)
+  ✓  160 tests/e2e/screen_routes.spec.ts:9:3 › screen S11: Guided Demo (706ms)
+  ✓  161 tests/e2e/screen_routes.spec.ts:9:3 › screen S12: AI Assistant (726ms)
 
-  152 passed (4.9m)
+  161 passed (4.8m)
 
 > infoslips-spatial-studio@0.1.0 build /home/user/Spatial-Studio
 > pnpm --filter @iss/web build
@@ -297,7 +309,7 @@ Running 152 tests using 1 worker
 
 vite v6.0.5 building for production...
 transforming...
-✓ 280 modules transformed.
+✓ 281 modules transformed.
 rendering chunks...
 [plugin:vite:reporter] [plugin vite:reporter] 
 (!) /home/user/Spatial-Studio/packages/scenarios/src/index.ts is dynamically imported by /home/user/Spatial-Studio/apps/web/src/demo/demo.ts but also statically imported by /home/user/Spatial-Studio/apps/web/src/assist/AssistPanel.tsx, /home/user/Spatial-Studio/apps/web/src/assist/ChangeSummaryCard.tsx, /home/user/Spatial-Studio/apps/web/src/assist/WritingHelp.tsx, /home/user/Spatial-Studio/apps/web/src/demo/demo.ts, /home/user/Spatial-Studio/apps/web/src/screens/Activity.tsx, /home/user/Spatial-Studio/apps/web/src/screens/DocumentCube.tsx, /home/user/Spatial-Studio/apps/web/src/screens/JourneySimulator.tsx, /home/user/Spatial-Studio/apps/web/src/screens/ProjectGallery.tsx, /home/user/Spatial-Studio/apps/web/src/screens/RulesData.tsx, /home/user/Spatial-Studio/apps/web/src/screens/ScenarioLandscape.tsx, /home/user/Spatial-Studio/apps/web/src/screens/Translations.tsx, /home/user/Spatial-Studio/apps/web/src/screens/ValidateCompare.tsx, /home/user/Spatial-Studio/apps/web/src/screens/design/Inspector.tsx, /home/user/Spatial-Studio/apps/web/src/screens/rules/Coverage.tsx, /home/user/Spatial-Studio/apps/web/src/screens/rules/DecisionTable.tsx, /home/user/Spatial-Studio/apps/web/src/screens/rules/RuleAssist.tsx, /home/user/Spatial-Studio/apps/web/src/screens/rules/TestCases.tsx, /home/user/Spatial-Studio/apps/web/src/state/store.ts, /home/user/Spatial-Studio/apps/web/src/ui/ImpactPreview.tsx, dynamic import will not move module into another chunk.
@@ -319,23 +331,23 @@ dist/assets/DesignStudio-D8ztdi9p.css              12.77 kB │ gzip:   3.21 kB
 dist/assets/PreviewExport-BAX1v_tS.css             13.42 kB │ gzip:   3.11 kB
 dist/assets/DocumentCube-YcNd-61o.css              16.38 kB │ gzip:   3.79 kB
 dist/assets/RulesData-C6GNTnv1.css                 24.63 kB │ gzip:   4.77 kB
-dist/assets/index-BzRk8Fhz.css                     77.92 kB │ gzip:  14.97 kB
-dist/assets/explain-ClEHy47v.js                     1.77 kB │ gzip:   0.90 kB │ map:     4.85 kB
-dist/assets/ImpactPreview-mZ-eOUT3.js               4.82 kB │ gzip:   1.94 kB │ map:    13.58 kB
-dist/assets/WritingHelp-0XAc3_RE.js                 4.84 kB │ gzip:   2.11 kB │ map:    14.62 kB
-dist/assets/AiAssistant-Cd9bByK2.js                 5.12 kB │ gzip:   1.97 kB │ map:    10.12 kB
-dist/assets/PageStack-mk9zphgi.js                  22.40 kB │ gzip:   7.64 kB │ map:    62.22 kB
-dist/assets/Activity-DKXiqhEv.js                   22.56 kB │ gzip:   7.29 kB │ map:    58.25 kB
-dist/assets/ScenarioLandscape-Dppq5Sn1.js          23.58 kB │ gzip:   7.17 kB │ map:    61.19 kB
-dist/assets/ExplodedDocument-Cwgdm0yZ.js           26.05 kB │ gzip:   8.88 kB │ map:    70.35 kB
-dist/assets/responsive-DoluvS87.js                 30.43 kB │ gzip:   9.65 kB │ map:    46.04 kB
-dist/assets/DocumentCube-7m8plp6B.js               31.50 kB │ gzip:   9.89 kB │ map:    87.55 kB
-dist/assets/JourneySimulator-B9Ghmxto.js           32.16 kB │ gzip:   9.29 kB │ map:    78.61 kB
-dist/assets/Translations-B7Nkv7AE.js               34.28 kB │ gzip:  10.71 kB │ map:    88.18 kB
-dist/assets/EmailSms-D8B5wbGa.js                   35.73 kB │ gzip:  12.96 kB │ map:   108.53 kB
-dist/assets/ValidateCompare-Bgb8RiwK.js            42.03 kB │ gzip:  12.45 kB │ map:   111.91 kB
-dist/assets/PreviewExport-3SEU36u6.js              54.69 kB │ gzip:  16.30 kB │ map:   140.07 kB
-dist/assets/RulesData-DvT5GTtF.js                  93.33 kB │ gzip:  27.44 kB │ map:   245.59 kB
-dist/assets/DesignStudio-DYLtvJsb.js              423.68 kB │ gzip: 132.67 kB │ map: 1,752.95 kB
-dist/assets/index-Cmz-hmvo.js                     738.76 kB │ gzip: 242.67 kB │ map: 2,415.52 kB
-✓ built in 5.47s
+dist/assets/index-FyZQmNJ1.css                     81.18 kB │ gzip:  15.49 kB
+dist/assets/explain-CFUZ9MOM.js                     1.77 kB │ gzip:   0.90 kB │ map:     4.85 kB
+dist/assets/ImpactPreview-Cg3ETczw.js               4.82 kB │ gzip:   1.94 kB │ map:    13.58 kB
+dist/assets/WritingHelp-Cww9_33t.js                 4.84 kB │ gzip:   2.11 kB │ map:    14.62 kB
+dist/assets/AiAssistant-CUbuM38z.js                 5.12 kB │ gzip:   1.97 kB │ map:    10.12 kB
+dist/assets/PageStack-CEN0aCcJ.js                  22.40 kB │ gzip:   7.64 kB │ map:    62.22 kB
+dist/assets/Activity-DVr6CNUj.js                   23.24 kB │ gzip:   7.43 kB │ map:    59.53 kB
+dist/assets/ScenarioLandscape-CNTCiCq4.js          23.58 kB │ gzip:   7.17 kB │ map:    61.19 kB
+dist/assets/ExplodedDocument-DgpL8oiQ.js           26.05 kB │ gzip:   8.88 kB │ map:    70.35 kB
+dist/assets/responsive-BnIESaST.js                 30.43 kB │ gzip:   9.65 kB │ map:    46.04 kB
+dist/assets/DocumentCube-BJQxynKL.js               31.50 kB │ gzip:   9.89 kB │ map:    87.55 kB
+dist/assets/JourneySimulator-D4nJpfOG.js           32.16 kB │ gzip:   9.29 kB │ map:    78.61 kB
+dist/assets/Translations-B7hLKYpu.js               34.28 kB │ gzip:  10.71 kB │ map:    88.18 kB
+dist/assets/EmailSms-YjeMMVIG.js                   35.73 kB │ gzip:  12.96 kB │ map:   108.53 kB
+dist/assets/ValidateCompare-DWvhHWdQ.js            42.03 kB │ gzip:  12.45 kB │ map:   111.91 kB
+dist/assets/PreviewExport-DgA7tNhJ.js              54.69 kB │ gzip:  16.30 kB │ map:   140.07 kB
+dist/assets/RulesData-CkXetpSL.js                  93.33 kB │ gzip:  27.44 kB │ map:   245.59 kB
+dist/assets/DesignStudio-CGZ_HMPI.js              423.68 kB │ gzip: 132.67 kB │ map: 1,752.95 kB
+dist/assets/index-DMzuA5dW.js                     754.36 kB │ gzip: 246.71 kB │ map: 2,454.42 kB
+✓ built in 5.05s

@@ -136,7 +136,7 @@ test('T05 import a project file as a new draft; the original is unchanged', asyn
   await expect(report).toBeVisible();
   await expect(report).toContainText(file.title);
   await expect(report).toContainText('Customers, Version history, Review state, Comments');
-  await expect(page.getByTestId('import-project-warning').first()).toContainText('nothing was replaced');
+  await expect(page.getByTestId('import-project-warning').first()).toContainText('nothing is replaced');
   await expect(page.getByTestId('import-project-title')).toHaveValue(file.title);
   await page.getByTestId('import-project-title').fill('Imported aster e2e');
   await page.getByTestId('import-project-confirm').click();

@@ -1,6 +1,6 @@
 # Autonomous implementation checkpoint
 
-**Status:** POC v0.6 (assistant on every screen, on top of v0.5 languages and channels) built and verified locally (2026-11-13). Branch `claude/magical-franklin-aonsol`.
+**Status:** POC v0.7 (templates phase 1: saved templates with versions, project file import; on top of the v0.6 assistant) built and verified locally (2026-11-13). Branch `claude/magical-franklin-aonsol`.
 
 ## Gate log
 
@@ -21,8 +21,8 @@ Last full gate: `./scripts/verify-all.sh --app` → exit 0. Its log is `reports/
 | Pack validation | PASS |
 | `verify_app.py` | 18/18 |
 | Lint | Clean |
-| Unit tests | 380/380 |
-| Browser tests | 152/152 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests + 36 v0.5 tests + 25 v0.6 assistant tests: fixes 6, rules 5, writing 7, side panel 6, import 1) |
+| Unit tests | 389/389 |
+| Browser tests | 161/161 (49 acceptance/pack + 29 v0.2/v0.3 feature tests + 13 v0.4 UX tests + 36 v0.5 tests + 25 v0.6 assistant tests + 9 v0.7 tests: templates and project files 7, left menu 2 v0.7 template tests) |
 | Build | OK |
 
 ## v0.2 additions (all verified by the tests above)
@@ -90,8 +90,17 @@ Policy (D65): the assistant proposes and a person approves; every applied propos
 
 Engines are pure functions in `packages/scenarios/src/assist/`; model-backed features go through `/api/v1/projects/:id/assist/*`, where model output is validated before it is returned.
 
+## v0.7 additions (templates and CCM integration, phase 1 of 7 — D64, D72, D73)
+
+- **Save as template** (approvers and admins): from a project's menu in the gallery. Carries layout, rules, wording, translations, email and SMS wording, glossary and pinned tests; never customers, history, review state or comments.
+- **Numbered versions:** each save is a new frozen version; earlier versions stay usable; a project records the template version it started from. Templates can be retired and brought back.
+- **Project files:** export as one JSON file; import as a new draft after the file's shape, every rule and resolvability are checked. An import never replaces an existing document.
+- **Design record:** phases 2 to 7 are agreed and not built. Phase 7 is the runnable package per release (D72). AFP direction: PDF now through the print side's own transform, a native writer later.
+
 ## Not verified / open
 
+- **Templates (v0.7):** roles are enforced and tested on the server (author, reviewer, approver, admin). In the browser only the "not allowed" state was checked, by simulating an author's session; no browser run was made with sign-in switched on. Moving a template between two installations was not tried (the project file route was: export, then import into the same installation). A template version cannot be deleted, only superseded or retired.
+- **Phases 2 to 7 of the template work** (releases and packages, data dictionary and mappings, shared library, assisted import, first CCM adapter, runnable package) are **not built**.
 - **Assistant, model-backed features (v0.6):** no live model call was made (no key in this environment). Rewrites, new message versions, subject lines and free-form rule sentences were exercised only with a stand-in model on the server and intercepted replies in the browser. An AI image description, an AI rewrite of an SMS and AI meaning flags on translations were **never rendered on screen**, even simulated; only their server handling is tested.
 - **Assistant, combinations not checked (v0.6):** the read-only (viewer) role, the HarborCare sample project, Technical view and windows narrower than 1280 px were not checked on every new assistant surface. The side panel was checked at 1000×700 on one screen only.
 - **Assistant, known limits (v0.6):** rule sentences and Activity search understand English only; the reading level is English only; the History change summary compares the previous saved version with the current one (not automatically "since last approved"); a project reset does not clear its review state.

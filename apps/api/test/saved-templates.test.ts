@@ -122,7 +122,7 @@ describe('project file import (auth off)', () => {
     expect(project).toMatchObject({ projectId: 'aster-statement-from-file', title: 'Aster statement (from file)', modelVersion: 1, importedFrom: { projectId: 'aster-card-demo', modelVersion: file.modelVersion } });
     expect(project.rules).toEqual(file.rules);
     expect(report.counts).toMatchObject({ components: file.nodes.length, rules: file.rules.length });
-    expect(report.warnings.join(' ')).toContain('nothing was replaced');
+    expect(report.warnings.join(' ')).toContain('nothing is replaced');
     expect(await count()).toBe(before + 1);
     expect((await inj('GET', '/api/v1/projects/aster-card-demo')).json().project.modelVersion).toBe(file.modelVersion);
     expect((await inj('POST', '/api/v1/resolve', { projectId: project.projectId, recordId: 'CARD-0001' })).statusCode).toBe(200);

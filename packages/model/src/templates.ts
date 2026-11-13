@@ -159,15 +159,16 @@ export function projectFileProblems(raw: unknown): ProjectFileProblem[] {
     ids.add(n.id);
   }
   if (typeof p.rootNodeId !== 'string' || !ids.has(p.rootNodeId)) bad('ROOT', 'The file does not name a top-level component that exists.');
+  const called = (n: any) => (typeof n?.name === 'string' && n.name.trim() ? n.name.trim().slice(0, 60) : String(n?.id));
   for (const n of p.nodes as any[]) {
     if (!n || typeof n !== 'object') continue;
     if (n.children !== undefined) {
-      if (!Array.isArray(n.children)) bad('COMPONENT', `"${n.id}" has a broken list of contents.`);
-      else for (const c of n.children) if (!ids.has(c)) bad('COMPONENT', `"${n.id}" contains "${String(c)}", which is not in the file.`);
+      if (!Array.isArray(n.children)) bad('COMPONENT', `The component “${called(n)}” has a broken list of contents.`);
+      else for (const c of n.children) if (!ids.has(c)) bad('COMPONENT', `The component “${called(n)}” contains “${String(c).slice(0, 60)}”, which is not in the file.`);
     }
     const src = n.image?.src;
-    if (typeof src === 'string' && /^[a-z][a-z0-9+.-]*:|^\/\//i.test(src) && !SAFE_IMAGE.test(src) && !/^asset:[a-z0-9-]+$/.test(src)) bad('IMAGE', `The image in "${n.id}" points outside the file. Only images stored in the file (PNG, JPEG or WebP) can be imported.`);
-    for (const href of [n.action?.url, n.qr?.url]) if (typeof href === 'string' && href && !SAFE_LINK.test(href) && !href.includes('{{') && /^[a-z][a-z0-9+.-]*:/i.test(href)) bad('LINK', `The link in "${n.id}" is not a web, email or phone link.`);
+    if (typeof src === 'string' && /^[a-z][a-z0-9+.-]*:|^\/\//i.test(src) && !SAFE_IMAGE.test(src) && !/^asset:[a-z0-9-]+$/.test(src)) bad('IMAGE', `The image “${called(n)}” points outside the file. Only images stored in the file (PNG, JPEG or WebP) can be imported.`);
+    for (const href of [n.action?.url, n.qr?.url]) if (typeof href === 'string' && href && !SAFE_LINK.test(href) && !href.includes('{{') && /^[a-z][a-z0-9+.-]*:/i.test(href)) bad('LINK', `The link in “${called(n)}” is not a web, email or phone link.`);
   }
   const logo = p.brand?.logoDataUri;
   if (typeof logo === 'string' && logo && !SAFE_IMAGE.test(logo)) bad('IMAGE', 'The brand logo points outside the file. Only an image stored in the file can be imported.');

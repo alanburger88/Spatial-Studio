@@ -120,6 +120,7 @@ pnpm verify
 | `pnpm evidence` | Regenerates real PDFs, HTML, parity and composition manifests into `reports/evidence/` |
 | `node scripts/screens.mjs` | Captures all 12 screens from the running app |
 | `node scripts/screens-assist.mjs` | Captures five assistant screens (explain, suggested fix, describe a rule, coverage gaps, translation check) from the running app |
+| `node scripts/screens-templates.mjs` | Captures five screens of saved templates and project file import from the running app |
 
 ## The screens
 
