@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type SVGProps } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { create } from 'zustand';
 import { ROLE_LABEL, languageName, languageShortName, projectLanguages, type ProfileId } from '@iss/model';
 import { editBlockedReason, personaLabel, setPreviewLanguage, useIsDirty, useModelChecks, usePreviewLanguage, useRecord, useResolution, useStudio } from '../state/store';
 import { RecordPicker, recordSummary } from './RecordPicker';
@@ -250,12 +251,27 @@ function UserChip() {
   );
 }
 
+/** Whether the person has collapsed the left menu to icons (remembered on this device). Narrow windows collapse it anyway. */
+const NAV_KEY = 'iss.navCollapsed';
+const readNavCollapsed = () => { try { return localStorage.getItem(NAV_KEY) === '1'; } catch { return false; } };
+const useNavCollapsed = create<{ collapsed: boolean; toggle(): void }>((set, get) => ({
+  collapsed: readNavCollapsed(),
+  toggle() {
+    const collapsed = !get().collapsed;
+    try { localStorage.setItem(NAV_KEY, collapsed ? '1' : '0'); } catch { /* private mode: the choice lasts for this visit */ }
+    set({ collapsed });
+  },
+}));
+const shellClass = (collapsed: boolean) => `shell${collapsed ? ' nav-collapsed' : ''}`;
+
 function Nav() {
+  const collapsed = useNavCollapsed((s) => s.collapsed);
+  const toggleNav = useNavCollapsed((s) => s.toggle);
   const project = useStudio((s) => s.project);
   const sel = useStudio((s) => s.ctx.selectedNodeId);
   const pid = project?.projectId ?? 'aster-card-demo';
   return (
-    <nav className="nav" aria-label="Studio views">
+    <nav className="nav" id="studio-nav" aria-label="Studio views">
       {NAV_GROUPS.map((g) => (
         <div className="nav-group" key={g.id} role="group" aria-label={g.label ?? 'Projects'}>
           {g.label && <div className="nav-title" aria-hidden="true"><span>{g.label}</span></div>}
@@ -273,6 +289,9 @@ function Nav() {
           })}
         </div>
       ))}
+      <button type="button" className="nav-toggle" onClick={toggleNav} aria-expanded={!collapsed} aria-controls="studio-nav" title={collapsed ? 'Show the menu names' : 'Collapse the menu to icons for more room'} data-testid="nav-toggle">
+        <Icon.chevron aria-hidden="true" /><span>{collapsed ? 'Expand menu' : 'Collapse menu'}</span>
+      </button>
     </nav>
   );
 }
@@ -324,8 +343,9 @@ export function StudioShell({ children }: { children: ReactNode }) {
   useEffect(() => { if (projectsStatus === 'idle') useStudio.getState().loadProjects(); }, [projectsStatus]);
   useEffect(() => { if (projectId) useStudio.getState().openProject(projectId); }, [projectId]);
   const ready = project && project.projectId === projectId && status === 'ready';
+  const navCollapsed = useNavCollapsed((s) => s.collapsed);
   return (
-    <div className="shell">
+    <div className={shellClass(navCollapsed)}>
       <TopBar />
       <Nav />
       <main className="main" id="main">
@@ -343,8 +363,9 @@ export function StudioShell({ children }: { children: ReactNode }) {
 
 export function PlainShell({ children }: { children: ReactNode }) {
   useEffect(() => { useStudio.getState().loadProjects(); }, []);
+  const navCollapsed = useNavCollapsed((s) => s.collapsed);
   return (
-    <div className="shell">
+    <div className={shellClass(navCollapsed)}>
       <TopBar />
       <Nav />
       <main className="main" id="main">{children}</main>
