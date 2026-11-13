@@ -71,7 +71,11 @@ test('C05 every studio screen opens for a document with its own data, without er
 /* ------------------------------------------------------------------------------------------------ helpers */
 
 const idFromUrl = (page: Page) => /\/studio\/([^/]+)\//.exec(page.url())![1];
-const store = <T>(page: Page, fn: (s: any) => T) => page.evaluate((src) => (new Function('s', `return (${src})(s)`))((window as any).__iss.store.getState()), fn.toString());
+/** Reads from the studio store in the page. */
+const store = async <T>(page: Page, fn: (s: any) => T): Promise<T> => {
+  const h = await page.evaluateHandle(() => (window as any).__iss.store.getState());
+  try { return await h.evaluate(fn); } finally { await h.dispose(); }
+};
 const dispatch = (page: Page, cmd: unknown) => page.evaluate((c) => { const r = (window as any).__iss.store.getState().dispatch(c); return r.ok ? null : r.message as string; }, cmd);
 const customersOf = async (request: APIRequestContext, id: string) => ((await (await request.get(`${API}/records?documentType=custom&full=1&projectId=${id}`)).json()).records as any[]);
 const saved = async (page: Page) => { await page.getByTestId('save-project').click(); await expect(page.getByTestId('save-state')).toContainText('Saved'); };
