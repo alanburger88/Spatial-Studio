@@ -128,7 +128,7 @@ class Env {
   private readonly states = new Map<number, Array<{ cursor: number | null; ctx: unknown }>>();
   private readonly base = new Map<number, unknown>();
 
-  constructor(readonly project: Project, records: SyntheticRecord[], readonly maxCandidates: number) {
+  constructor(readonly project: Project, records: SyntheticRecord[], readonly maxCandidates: number, readonly issueDate: string | null = null) {
     this.recs = records.filter((r) => r.documentType === project.documentType);
     this.fields = projectFieldIndex(project);
     this.events = project.journey?.events ?? [];
@@ -287,7 +287,7 @@ class Env {
     for (const a of attempts.slice(0, budget)) {
       tried++;
       const record = this.recs[a.i];
-      const res = resolve({ project: this.project, record, overrides: a.overrides, journeyCursor: a.cursor });
+      const res = resolve({ project: this.project, record, overrides: a.overrides, journeyCursor: a.cursor, ...(this.issueDate ? { issueDate: this.issueDate } : {}) });
       if (!confirmed(res)) continue;
       const blocking = res.findings.filter((f) => f.severity === 'blocking');
       const newBlocking = blocking.filter((f) => !this.baseBlocking[a.i]?.has(blockingKey(f)));
@@ -514,8 +514,9 @@ function targetsOf(project: Project, covered: { matched: Set<string>; selected: 
  * A target counts as covered when some customer reaches it as issued (baseline). `opts.journeySteps: true` also counts a
  * customer reaching it at any journey step as covered. Either way the scenario search uses journey steps.
  */
-export function coverageGaps(project: Project, records: SyntheticRecord[], opts?: { maxCandidates?: number; journeySteps?: boolean }): CoverageGap[] {
-  const env = new Env(project, records, Math.max(1, Math.floor(opts?.maxCandidates ?? 12)));
+export function coverageGaps(project: Project, records: SyntheticRecord[], opts?: { maxCandidates?: number; journeySteps?: boolean; /** "As issued on": the document's date (documents that use dates). */ issueDate?: string | null }): CoverageGap[] {
+  const issueDate = project.documentDate && opts?.issueDate ? opts.issueDate : null;
+  const env = new Env(project, records, Math.max(1, Math.floor(opts?.maxCandidates ?? 12)), issueDate);
 
   /* --- what the synthetic customers reach today */
   const matched = new Set<string>();
@@ -524,7 +525,7 @@ export function coverageGaps(project: Project, records: SyntheticRecord[], opts?
   const cursors: Array<number | null> = opts?.journeySteps ? [null, ...env.events.map((_, i) => i)] : [null];
   env.recs.forEach((record, i) => {
     for (const cursor of cursors) {
-      const res = resolve({ project, record, journeyCursor: cursor });
+      const res = resolve({ project, record, journeyCursor: cursor, ...(issueDate ? { issueDate } : {}) });
       if (cursor === null) env.baseBlocking[i] = new Set(res.findings.filter((f) => f.severity === 'blocking').map(blockingKey));
       res.result.matchedRuleIds.forEach((id) => matched.add(id));
       for (const n of treeOf(res).values()) {
@@ -557,7 +558,7 @@ export function coverageGaps(project: Project, records: SyntheticRecord[], opts?
     const strong = env.search(t.alts, t.reached);
     if (strong.hit) {
       const hit = strong.hit;
-      const testCase: TestCase = { id: nextTestId([...(project.testCases ?? []), ...pinned]), name: t.testName, recordId: hit.record.recordId, overrides: hit.overrides, journeyCursor: hit.cursor, expect: captureExpectation(project, hit.record, hit.overrides, hit.cursor) };
+      const testCase: TestCase = { id: nextTestId([...(project.testCases ?? []), ...pinned]), name: t.testName, recordId: hit.record.recordId, overrides: hit.overrides, journeyCursor: hit.cursor, ...(issueDate ? { issueDate } : {}), expect: captureExpectation(project, hit.record, hit.overrides, hit.cursor, issueDate) };
       const gap: CoverageGap = { ...base, scenario: scenarioOf(hit) };
       if (applyCommand(project, { type: 'UPSERT_TEST_CASE', testCase }).ok) { pinned.push(testCase); gap.testCase = testCase; }
       return gap;
