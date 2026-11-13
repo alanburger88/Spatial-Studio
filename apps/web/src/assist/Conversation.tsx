@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { create } from 'zustand';
-import { projectContentDigest } from '@iss/model';
-import { resolve } from '@iss/resolver';
+import { projectContentDigest, projectFieldIndex, type Project } from '@iss/model';
+import { formatCents, formatDate, resolve } from '@iss/resolver';
 import { api } from '../api/client';
-import { Biz, Proof } from '../ui/common';
-import { ruleSentence, ruleTitle } from '../ui/plain';
+import { Biz, Proof, Tech } from '../ui/common';
+import { fieldLabel, nodeTitle, predicateSentence, ruleSentence, ruleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
 import { useStudio } from '../state/store';
 import '../screens/AiAssistant.css';
@@ -311,22 +311,7 @@ function AssistantTurn({ turn, project, onApply, onDecide, onPick }: { turn: Ext
         </div>
       )}
 
-      {reply.explanation && (
-        <div className="card ai-explain" data-testid="assistant-explanation">
-          <div className="ai-card-h"><Icon.info width={14} height={14} /> Explanation</div>
-          <p className="ai-text">{reply.explanation.summary}</p>
-          {reply.explanation.evidence.length > 0 && (
-            <table className="table" aria-label="Evidence">
-              <thead><tr><th>Rule</th><th>Outcome</th><th>Condition</th><th>Inputs</th></tr></thead>
-              <tbody>{reply.explanation.evidence.map((e, i) => (
-                <tr key={i}><td className="mono">{e.ruleId}</td><td>{e.outcome}</td><td>{e.condition}</td><td className="mono ai-small">{Object.entries(e.inputs).map(([k, v]) => `${k} = ${fmt(v)}`).join(', ')}</td></tr>
-              ))}</tbody>
-            </table>
-          )}
-          {reply.explanation.notRendered && <p className="muted">{reply.explanation.notRendered}</p>}
-          <p className="muted ai-src">Source: deterministic resolver trace, run <span className="mono">{reply.explanation.runId}</span></p>
-        </div>
-      )}
+      {reply.explanation && <ExplanationCard project={project} ex={reply.explanation} />}
       {!hasEngineEvidence && reply.mode === 'external' && reply.actions.length === 0 && !reply.proposal && <p className="muted ai-small">Live AI text is not engine evidence. Ask &ldquo;explain the selected variant&rdquo; for a trace-based explanation.</p>}
 
       {reply.proposal && <ProposalCard project={project} proposal={reply.proposal} state={turn.proposal!} currentVersion={useStudio.getState().project!.modelVersion} onDecide={onDecide} />}
@@ -337,7 +322,7 @@ function AssistantTurn({ turn, project, onApply, onDecide, onPick }: { turn: Ext
 function ActionSummary({ a }: { a: Action }) {
   switch (a.action) {
     case 'select_scenario': return <div>Record <span className="mono">{a.recordId}</span>{a.overrides && Object.keys(a.overrides).length > 0 && <> with overrides <span className="mono">{JSON.stringify(a.overrides)}</span></>}</div>;
-    case 'set_scenario_fields': return <table className="table ai-fields" aria-label="Scenario fields"><tbody>{Object.entries(a.fields).map(([k, v]) => <tr key={k}><td className="mono">{k}</td><td><strong>{fmt(v)}</strong></td></tr>)}</tbody></table>;
+    case 'set_scenario_fields': return <div className="ai-scroll-x"><table className="table ai-fields" aria-label="Scenario fields"><tbody>{Object.entries(a.fields).map(([k, v]) => <tr key={k}><td className="mono">{k}</td><td><strong>{fmt(v)}</strong></td></tr>)}</tbody></table></div>;
     case 'navigate_view': return <div>View <span className="mono">{a.view}</span>{a.nodeId && <> · node <span className="mono">{a.nodeId}</span></>}</div>;
     case 'open_project': return <div>Project <span className="mono">{a.projectId}</span></div>;
     case 'set_cube_axes': return <div>Axes <span className="mono">{a.axes.join(' × ')}</span></div>;
@@ -395,8 +380,8 @@ function ProposalCard({ project, proposal: p, state, currentVersion, onDecide }:
           <div className="section-title">Impact (deterministic engine)</div>
           <p className="ai-impact" data-testid="proposal-impact"><strong>{p.impact.evaluated}</strong> scenarios evaluated · <strong>{p.impact.changed}</strong> would change</p>
           {p.impact.sample.length > 0 ? (
-            <table className="table" aria-label="Impact sample"><thead><tr><th>Record</th><th>Before</th><th>After</th></tr></thead>
-              <tbody>{p.impact.sample.map((s) => <tr key={s.recordId}><td className="mono">{s.recordId}</td><td className="mono">{fmt(s.before)}</td><td className="mono">{fmt(s.after)}</td></tr>)}</tbody></table>
+            <div className="ai-scroll-x"><table className="table" aria-label="Impact sample"><thead><tr><th>Record</th><th>Before</th><th>After</th></tr></thead>
+              <tbody>{p.impact.sample.map((s) => <tr key={s.recordId}><td className="mono">{s.recordId}</td><td className="mono">{fmt(s.before)}</td><td className="mono">{fmt(s.after)}</td></tr>)}</tbody></table></div>
           ) : <p className="muted">No evaluated scenario changes its selected variant.</p>}
         </div>
       </div>
@@ -428,3 +413,84 @@ function ProposalCard({ project, proposal: p, state, currentVersion, onDecide }:
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ engine explanation */
+
+type EngineExplanation = NonNullable<Reply['explanation']>;
+const OUTCOME_WORDS: Record<string, { text: string; tone: string }> = {
+  selected: { text: 'Applied · decides the message', tone: 'ok' },
+  applied: { text: 'Applied', tone: 'ok' },
+  required: { text: 'Always included', tone: 'ok' },
+  outranked: { text: 'Matched, but a higher-priority rule won', tone: 'warning' },
+  tie: { text: 'Matched, but tied with another rule', tone: 'warning' },
+  'not-matched': { text: 'Did not apply', tone: '' },
+  disabled: { text: 'Switched off', tone: '' },
+  'out-of-scope': { text: 'Not for this output', tone: '' },
+};
+
+/**
+ * Why the engine chose what it chose. Business view: one stacked block per rule, in plain words with names (it has to
+ * stay readable in the narrow side panel). The rule ids, raw conditions and input paths are the proof, kept in a
+ * scrollable table that Technical view shows open.
+ */
+function ExplanationCard({ project, ex }: { project: Project; ex: EngineExplanation }) {
+  const fields = projectFieldIndex(project);
+  const valueOf = (path: string, v: unknown): string => {
+    const f = fields.get(path);
+    if (v === null || v === undefined || v === '') return 'empty';
+    if (typeof v === 'boolean') return v ? 'yes' : 'no';
+    if (f?.type === 'cents' && typeof v === 'number') return formatCents(v);
+    if (f?.type === 'date' && typeof v === 'string') return formatDate(v);
+    return String(v).replace(/[-_]/g, ' ');
+  };
+  const ruleOf = (id: string) => project.rules.find((r) => r.id === id);
+  const subject = project.nodes.some((n) => n.id === ex.nodeId) ? nodeTitle(project, ex.nodeId) : 'This part';
+  const names = (outcome: string) => ex.evidence.filter((e) => e.outcome === outcome).map((e) => { const r = ruleOf(e.ruleId); return `“${r ? ruleTitle(project, r) : e.ruleId}”`; });
+  const decided = names('selected'), applied = names('applied'), tied = names('tie');
+  const headline = ex.notRendered ? `“${subject}” is not shown for this customer.`
+    : decided.length ? `“${subject}” is decided by the rule ${decided[0]}.`
+    : tied.length ? `The rules ${tied.join(' and ')} tie for “${subject}”, so nothing is chosen.`
+    : applied.length ? `“${subject}” is affected by the rule${applied.length === 1 ? '' : 's'} ${applied.join(', ')}.`
+    : ex.evidence.length ? `None of the rules below applied to “${subject}” for this customer.`
+    : `No rules are involved in “${subject}” for this customer.`;
+  return (
+    <div className="card ai-explain" data-testid="assistant-explanation">
+      <div className="ai-card-h"><Icon.info width={14} height={14} /> Explanation</div>
+      <Biz>
+        <p className="ai-text" data-testid="assistant-explanation-headline">{headline}</p>
+        {ex.evidence.length > 0 && (
+          <ul className="ai-ev" aria-label="Rules checked">
+            {ex.evidence.map((e, i) => {
+              const rule = ruleOf(e.ruleId);
+              const words = OUTCOME_WORDS[e.outcome] ?? { text: e.outcome, tone: '' };
+              const inputs = Object.entries(e.inputs);
+              return (
+                <li key={i} className="ai-ev-item" data-outcome={e.outcome} data-testid="assistant-evidence">
+                  <div className="ai-ev-head"><strong>{rule ? ruleTitle(project, rule) : e.ruleId}</strong><span className={`chip ${words.tone}`}>{words.text}</span></div>
+                  <div className="ai-ev-line"><span className="ai-ev-k">Applies when</span><span>{rule ? predicateSentence(project, rule.when) : e.condition}</span></div>
+                  {inputs.length > 0 && <div className="ai-ev-line"><span className="ai-ev-k">This customer</span><span>{inputs.map(([k, v]) => `${fieldLabel(project, k)}: ${valueOf(k, v)}`).join(' · ')}</span></div>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Biz>
+      <Proof label="Rule IDs and engine trace" testId="assistant-explanation-proof">
+        <p className="ai-text ai-small">{ex.summary}</p>
+        {ex.evidence.length > 0 && (
+          <div className="ai-scroll-x">
+            <table className="table ai-evidence-table" aria-label="Evidence">
+              <thead><tr><th>Rule</th><th>Outcome</th><th>Condition</th><th>Inputs</th></tr></thead>
+              <tbody>{ex.evidence.map((e, i) => (
+                <tr key={i}><td className="mono">{e.ruleId}</td><td>{e.outcome}</td><td>{e.condition}</td><td className="mono ai-small">{Object.entries(e.inputs).map(([k, v]) => `${k} = ${fmt(v)}`).join(', ')}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+        {ex.notRendered && <p className="muted">{ex.notRendered}</p>}
+      </Proof>
+      <p className="muted ai-src">Source: deterministic resolver trace (worked out by the rule engine, not by AI)<Tech>, run <span className="mono">{ex.runId}</span></Tech></p>
+    </div>
+  );
+}
+

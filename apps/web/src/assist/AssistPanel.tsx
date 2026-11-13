@@ -8,6 +8,7 @@ import { Icon } from '../ui/icons';
 import { localeLabel, nodeTitle, ruleTitle } from '../ui/plain';
 import { recordSummary } from '../shell/RecordPicker';
 import { Conversation } from './Conversation';
+import { PanelResizer } from './PanelResizer';
 import { ChangeSummaryCard, lastApprovedVersion } from './ChangeSummaryCard';
 import { useAiLive } from './common';
 import { usePanel } from './panelStore';
@@ -75,6 +76,7 @@ function PanelInner() {
 
   return (
     <aside className="assist-panel" id="assist-panel" role="complementary" aria-label="Assistant" data-testid="assist-panel" ref={ref}>
+      <PanelResizer />
       <header className="assist-head">
         <h2 tabIndex={-1} ref={titleRef}><Icon.ai width={16} height={16} /> Assistant</h2>
         <button type="button" className="btn ghost icon" onClick={() => close()} aria-label="Close assistant" data-testid="assist-close"><Icon.close /></button>

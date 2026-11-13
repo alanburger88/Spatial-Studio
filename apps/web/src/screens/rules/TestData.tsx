@@ -111,7 +111,7 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
   return (
     <Dialog title={<>Generate test customers <SourceChip source="builtin" /></>} onClose={onClose} labelledBy="testdata-title" footer={footer}>
       <div className="ra-wide td-wide" data-testid="testdata-dialog">
-        <p className="td-intro">Make customers for this document only, so every rule, message version, optional section and language is tried. They are marked “Generated” and never touch the sample or imported customers.</p>
+        {!done && <p className="td-intro">Make customers for this document only, so every rule, message version, optional section and language is tried. They are marked “Generated” and never touch the sample or imported customers.</p>}
         <fieldset className="td-options">
           <legend className="sr-only">What to generate</legend>
           <label className="td-opt"><input type="checkbox" checked={outcomes} onChange={() => toggle('outcomes')} aria-disabled={outcomes && !edges} data-testid="testdata-outcomes" />
@@ -121,7 +121,7 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
           <p className="hint">At least one has to stay on.</p>
         </fieldset>
 
-        {existingCount > 0 && (
+        {existingCount > 0 && !done && (
           <p className="callout td-existing" data-testid="testdata-existing">
             This document already has {plural(existingCount, 'generated customer', 'generated customers')}. Generating again replaces them.
             {existing?.stale && <strong> The document has changed since they were generated.</strong>}
@@ -150,7 +150,7 @@ export function TestDataDialog({ project, onClose }: { project: Project; onClose
                       {shownUnreachable.length > 0 && (
                         <ul className="list-rows">
                           {shownUnreachable.map((t) => (
-                            <li key={t.id} className="td-item"><strong>{t.title}</strong>{t.reason && <span className="muted"> {t.reason}</span>}<Tech> <span className="chip code">{t.targetId}</span></Tech></li>
+                            <li key={t.id} className="td-item"><strong>{t.title}</strong>{t.reason && <span className="muted"> · {t.reason}</span>}<Tech> <span className="chip code">{t.targetId}</span></Tech></li>
                           ))}
                         </ul>
                       )}

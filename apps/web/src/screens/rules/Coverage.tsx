@@ -94,7 +94,7 @@ export function CoverageDialog({ project, onClose, onPreview, onGenerate }: { pr
       <div className="ra-wide ra-cov" data-testid="coverage-panel">
         {onGenerate && (
           <p className="row wrap ra-covbar ra-gen">
-            <span className="muted">Rather than fixing gaps one by one:</span>
+            <span className="muted">Want customers that exercise every outcome and edge value?</span>
             <button type="button" className="btn sm" onClick={onGenerate} data-testid="coverage-generate">Generate test customers for all of this</button>
           </p>
         )}

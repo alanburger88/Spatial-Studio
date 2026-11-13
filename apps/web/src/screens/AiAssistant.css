@@ -74,4 +74,17 @@
 .ai-msg.assistant > * { min-width: 0; max-width: 100%; }
 .ai-msg-head, .ai-action-title { flex-wrap: wrap; }
 .ai-msg pre.code { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Tables in a reply keep their natural column widths and scroll sideways inside their own box; they never squash letter by letter. */
+.ai-scroll-x { max-width: 100%; overflow-x: auto; }
+.ai-msg .ai-scroll-x table, .ai-msg .ai-scroll-x th, .ai-msg .ai-scroll-x td { overflow-wrap: normal; word-break: normal; }
+.ai-evidence-table { min-width: 460px; }
+.ai-evidence-table td, .ai-evidence-table th { vertical-align: top; }
+/* Explanation in plain words: one stacked block per rule, readable at the side panel's narrowest width. */
+.ai-ev { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ai-ev-item { border: 1px solid var(--iss-border); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; background: var(--iss-surface-raised); }
+.ai-ev-item[data-outcome='selected'], .ai-ev-item[data-outcome='applied'] { border-color: var(--iss-accent-line); background: var(--iss-accent-soft); }
+.ai-ev-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.ai-ev-head strong { font-size: 13px; }
+.ai-ev-line { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; font-size: 12.5px; line-height: 1.45; }
+.ai-ev-k { color: var(--iss-text-muted); }
 
