@@ -51,6 +51,8 @@ export interface TranslationRow {
   origin?: TranslationOrigin;
   /** The English text changed after this translation was approved. */
   sourceChanged?: boolean;
+  /** Fixed wording added by the outputs (web page controls, page numbers, email footer); its English cannot be edited in the studio. */
+  fixed?: boolean;
 }
 
 export interface TranslationSummary { locale: Locale; total: number; approved: number; drafts: number; missing: number; mandatoryMissing: number; affectedRecords: number; usageKnown: boolean }
@@ -62,8 +64,9 @@ export const SOURCE_LOCALE: Locale = 'en-US';
 /** @deprecated Use `projectLanguages(project)`; kept for older callers. */
 export const TARGET_LOCALES: Locale[] = ['es-US'];
 
-const TOKEN_RE = /\{\{\s*([\w.]+)\s*\}\}/g;
-export const tokensOfText = (t: string): string[] => [...(t ?? '').matchAll(TOKEN_RE)].map((m) => m[1]).sort();
+/** Data tokens `{{path}}` and, in fixed wording, placeholders `{name}`. Both must survive translation unchanged. */
+const TOKEN_RE = /\{\{\s*([\w.]+)\s*\}\}|\{(\w+)\}/g;
+export const tokensOfText = (t: string): string[] => [...(t ?? '').matchAll(TOKEN_RE)].map((m) => m[1] ?? `{${m[2]}}`).sort();
 
 export function checkTokens(source: string, target: string): TokenCheck {
   const s = tokensOfText(source), t = tokensOfText(target);
@@ -150,7 +153,7 @@ export function translationStatus(project: Project, locale: Locale = 'es-US', us
     const textToCheck = draftText?.trim() ? draftText : approvedText ?? '';
     const origin = project.translationOrigins?.[`${locale}|${s.id}`];
     rows.push({
-      partId: s.id, title: s.title, type: 'text', version: 0, kind: 'string', group: s.kind === 'channel' ? 'channels' : 'labels',
+      partId: s.id, title: s.title, type: 'text', version: 0, kind: 'string', group: s.kind === 'channel' ? 'channels' : 'labels', ...(s.kind === 'system' ? { fixed: true } : {}),
       usedAs: ['node'], nodeIds: s.nodeId ? [s.nodeId] : [], sourceText: s.source, sourceTokens: tokensOfText(s.source),
       seenByRecords: null,
       ...(origin && status === 'draft' ? { origin } : {}),

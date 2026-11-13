@@ -2,6 +2,7 @@ import type { ChannelConfig, ContentPart, DocNode, Project, RichBlock, RichDoc, 
 import { richFromMarkup } from './rich';
 import { channelConfig, channelStrings, setChannelString } from './channels';
 import { SOURCE_LANGUAGE } from './languages';
+import { SYSTEM_STRINGS, SYSTEM_STRING_KEYS, systemStringId } from './systemStrings';
 
 /**
  * Translatable strings: every customer-visible text that is NOT a content part — figure labels, headings and other
@@ -12,7 +13,7 @@ import { SOURCE_LANGUAGE } from './languages';
  */
 export interface StringItem {
   id: string;
-  kind: 'label' | 'text' | 'channel';
+  kind: 'label' | 'text' | 'channel' | 'system';
   /** Human title for lists: "New balance · label". */
   title: string;
   source: string;
@@ -60,7 +61,7 @@ export function richToMarkup(doc: RichDoc | undefined): string {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-const TOKEN_RE = /\{\{\s*[\w.]+\s*\}\}/g;
+const TOKEN_RE = /\{\{\s*[\w.]+\s*\}\}|\{\w+\}/g;
 /** Worth translating: has at least one letter outside data tokens and link targets. */
 const hasWords = (s: string | undefined): s is string => !!s && /\p{L}/u.test(s.replace(TOKEN_RE, '').replace(/\]\([^)]*\)/g, ']'));
 
@@ -98,6 +99,8 @@ export function translatableStrings(project: Project): StringItem[] {
     }
   }
   for (const c of channelStrings(project)) if (hasWords(c.source)) out.push({ id: c.id, kind: 'channel', title: c.title, source: c.source });
+  // Fixed wording the outputs add (web page controls, page numbers, email footer, "under review" phrases).
+  for (const k of SYSTEM_STRING_KEYS) if (hasWords(SYSTEM_STRINGS[k])) out.push({ id: systemStringId(k), kind: 'system', title: `Fixed wording · ${k.replace(/([A-Z])/g, ' $1').toLowerCase()}`, source: SYSTEM_STRINGS[k] });
   return out;
 }
 
@@ -105,6 +108,8 @@ export interface LocalizedProject {
   /** The project with every available translation written into the node fields, channel wording and content parts. */
   project: Project;
   channels: ChannelConfig;
+  /** Translated fixed wording by system-string key (only the keys that have a translation). */
+  system: Record<string, string>;
   /** Ids (content parts and strings) whose shown text is an unapproved draft. Only ever non-empty when `includeDrafts` is set. */
   draftsShown: string[];
   /** String ids (not content parts) that have no usable translation: the English text is shown. */
@@ -117,7 +122,7 @@ export interface LocalizedProject {
  */
 export function localizeProject(project: Project, locale: string | null | undefined, opts: { includeDrafts?: boolean } = {}): LocalizedProject {
   const channels = channelConfig(project);
-  if (!locale || locale === SOURCE_LANGUAGE) return { project, channels, draftsShown: [], missing: [] };
+  if (!locale || locale === SOURCE_LANGUAGE) return { project, channels, system: {}, draftsShown: [], missing: [] };
   const draftsShown: string[] = [];
   const missing: string[] = [];
   const pick = (id: string): string | undefined => {
@@ -146,6 +151,12 @@ export function localizeProject(project: Project, locale: string | null | undefi
     const text = pick(c.id);
     if (text !== undefined) setChannelString(ch, c.id, text);
   }
+  const system: Record<string, string> = {};
+  for (const k of SYSTEM_STRING_KEYS) {
+    if (!hasWords(SYSTEM_STRINGS[k])) continue;
+    const text = pick(systemStringId(k));
+    if (text !== undefined) system[k] = text;
+  }
   let contentParts: ContentPart[] = project.contentParts;
   if (opts.includeDrafts) {
     contentParts = project.contentParts.map((p) => {
@@ -155,5 +166,5 @@ export function localizeProject(project: Project, locale: string | null | undefi
       return { ...p, approvedLocales: { ...p.approvedLocales, [locale]: draft } };
     });
   }
-  return { project: { ...project, nodes, contentParts }, channels: ch, draftsShown, missing };
+  return { project: { ...project, nodes, contentParts }, channels: ch, system, draftsShown, missing };
 }

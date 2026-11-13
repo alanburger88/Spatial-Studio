@@ -92,7 +92,7 @@ export const PAGINATOR_JS = String.raw`
         var b = block.cloneNode(false);
         var w = wrap.cloneNode(false);
         var cap = caption.cloneNode(true);
-        if (chunkNo > 0) { cap.textContent = caption.textContent + ' (continued)'; b.setAttribute('data-continued', '1'); }
+        if (chunkNo > 0) { cap.textContent = caption.textContent + ' ' + ((cfg.strings && cfg.strings.tableContinued) || '(continued)'); b.setAttribute('data-continued', '1'); }
         w.appendChild(cap);
         var tb = table.cloneNode(false);
         var headerShown = chunkNo === 0 || repeatHeader;
@@ -187,7 +187,7 @@ export const PAGINATOR_JS = String.raw`
 
     var total = pages.length;
     pagesEl.querySelectorAll('.iss-page-number').forEach(function (s) {
-      var pg = s.closest('.page'); s.textContent = 'Page ' + pg.getAttribute('data-page') + ' of ' + total;
+      var pg = s.closest('.page'); s.textContent = ((cfg.strings && cfg.strings.pageOf) || 'Page {page} of {total}').replace('{page}', pg.getAttribute('data-page')).replace('{total}', total);
     });
     source.parentNode.removeChild(source);
     var result = {

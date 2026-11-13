@@ -1,7 +1,7 @@
 import type { Project } from '@iss/model';
 import type { Resolution } from '@iss/resolver';
 import { formatCents } from '@iss/resolver';
-import { extractChannelFacts, fillChannelText, notABillPhrase, NOT_DETERMINED, type ChannelFacts, type EmailRender } from './email';
+import { extractChannelFacts, fillChannelText, notABillPhrase, notDetermined, NOT_DETERMINED, type ChannelFacts, type EmailRender } from './email';
 
 export const SMS_RENDERER_VERSION = 'sms-renderer/1';
 
@@ -109,7 +109,7 @@ export function checkChannelParity(res: Resolution, email: EmailRender, sms: Sms
   // guarded liability
   if (m.guardedLiabilityNodeIds.length) {
     const guarded = email.facts.keyFacts.filter((k) => m.guardedLiabilityNodeIds.includes(k.nodeId));
-    const shownOk = guarded.every((k) => et.includes(`${k.label}: ${NOT_DETERMINED}`) && eh.includes(NOT_DETERMINED));
+    const shownOk = guarded.every((k) => et.includes(`${k.label}: ${notDetermined(email.facts)}`) && eh.includes(notDetermined(email.facts)));
     const leaked = guarded.some((k) => new RegExp(`${k.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: \\$`).test(et));
     add({ id: 'member-liability', label: 'Unconfirmed member liability is never shown as an amount', status: shownOk && !leaked && !/\$/.test(sms.text) ? 'match' : 'mismatch', blocking: true, expected: m.guardedLiabilityNodeIds, email: { shownAsUnderReview: shownOk, leakedAmount: leaked }, sms: { containsAmount: /\$/.test(sms.text) } });
   } else add({ id: 'member-liability', label: 'Unconfirmed member liability is never shown as an amount', status: 'not-applicable', blocking: false });

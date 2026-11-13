@@ -333,7 +333,7 @@ type SectionKey = 'summary' | 'message' | 'data' | 'notices';
 
 /** Renders the interactive, standalone responsive HTML communication (no external assets or scripts). */
 export function renderInteractiveHtml(res: Resolution, project: Project, opts?: InteractiveHtmlOptions): string {
-  const strings = resolveHtmlStrings(opts?.strings);
+  const strings = resolveHtmlStrings(opts?.strings ?? res.systemStrings);
   const T = (k: HtmlStringKey, v?: Record<string, string | number>) => esc(fmtString(strings[k], v));
   const mode: RenderMode = { target: 'html', project, strings };
   const isEob = project.documentType === 'eob';

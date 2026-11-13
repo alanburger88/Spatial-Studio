@@ -5,6 +5,7 @@ import { blocksHtml } from '@iss/renderers';
 import { describePredicate, explainNode, indexTree, type RNode, type RVariant, type Resolution, type TraceEntry } from '@iss/resolver';
 import { personaLabel, useResolution, useScenarioEngine, useStudio } from '../state/store';
 import { Dialog, Empty, Proof, ScreenHeader } from '../ui/common';
+import { languageName } from '@iss/model';
 import { Icon } from '../ui/icons';
 import { fieldLabel, nodeTitle, predicateSentence, ruleSentence, ruleTitle } from '../ui/plain';
 import { PagePreview } from '../doc/PagePreview';
@@ -304,7 +305,10 @@ export function ExplodedDocument() {
               <dt>Customer</dt><dd title={res.recordId}>{`${(res.effectiveRecord as any).customer?.givenName ?? ''} ${(res.effectiveRecord as any).customer?.familyName ?? ''}`.trim() || res.recordId}{tech && <> <span className="chip code">{res.recordId}</span></>}</dd>
               <dt>Persona</dt><dd>{personaLabel(personas, (res.effectiveRecord as any).personaId)}</dd>
               <dt>Journey</dt><dd>{ctx.journeyCursor === null ? 'Baseline' : project.journey.events[ctx.journeyCursor]?.label}</dd>
+              <dt>Language</dt><dd data-testid="exploded-language">{languageName(res.locale)}</dd>
+              <dt>Output</dt><dd>Same for every output</dd>
             </dl>
+            <p className="muted ex-output-note" data-testid="exploded-output-note">A component’s versions and the rules that choose between them are defined once and shared by the PDF, HTML, email and AFP outputs, so the Output choice in the top bar does not change this view. The Language choice does: each version is shown in the document language.</p>
           </div>
         </aside>
 

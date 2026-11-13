@@ -5,6 +5,7 @@ import { isSafeUrl, sanitizeRichDoc, tokensIn } from './rich';
 import { projectFieldIndex, validateCustomFields } from './fields';
 import { isSupportedLanguage, languageName, languageShortName, projectLanguages, SOURCE_LANGUAGE } from './languages';
 import { isStringId, translatableStrings } from './strings';
+import { tokensOfText } from './translations';
 import { CHANNEL_TEXT_LIMITS, CHANNEL_TOKENS, EMAIL_SECTION_IDS } from './channels';
 import type { ChannelConfig, TranslationOrigin } from './types';
 import type { BrandKit, ContentPart, CustomField, DocNode, Locale, TestCase, TextStyle, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
@@ -366,14 +367,14 @@ export function applyCommand(project: Project, cmd: Command): CommandResult {
       if (!target) return reject('NOT_FOUND', `Unknown text ${cmd.partId}.`);
       const draft = target.draft(cmd.locale);
       if (!draft?.trim()) return reject('NO_DRAFT', `There is no ${cmd.locale} draft to approve for “${target.title}”.`);
-      const tokensOf = (t: string) => [...t.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]).sort().join(',');
+      const tokensOf = (t: string) => tokensOfText(t).join(',');
       const source = target.source;
       if (source && tokensOf(source) !== tokensOf(draft)) return reject('TOKEN_MISMATCH', `The ${languageShortName(cmd.locale)} text must use the same data tokens as the English text (${tokensOf(source) || 'none'}).`);
       return { ok: true, label: `Approve ${cmd.locale} for “${target.title}”`, project: bump(project, (d) => { writeApproval(d, cmd.partId, cmd.locale, draft, source); }) };
     }
     case 'APPROVE_TRANSLATIONS': {
       if (!cmd.ids.length) return reject('EMPTY', 'There is nothing to approve.');
-      const tokensOf = (t: string) => [...t.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]).sort().join(',');
+      const tokensOf = (t: string) => tokensOfText(t).join(',');
       const todo: Array<{ id: string; draft: string; source: string }> = [];
       for (const id of [...new Set(cmd.ids)]) {
         const target = translationTarget(project, id);

@@ -1,6 +1,6 @@
 import {
   applyJourney, buildContext, deepPatch, digestOf, projectFieldIndex, getPath, inlineFromMarkup, isSafeUrl, projectContentDigest, richToPlain, shortDigest,
-  languageShortName, localizeProject, projectLanguages, SOURCE_LANGUAGE,
+  languageShortName, localizeProject, projectLanguages, SOURCE_LANGUAGE, sysText,
   type ContentPart, type DocNode, type FieldDef, type Predicate, type Project, type RichBlock, type RichDoc, type RichInline, type Rule,
 } from '@iss/model';
 import { formatCents, formatValue } from './format';
@@ -76,6 +76,8 @@ interface Ctx {
   locale: string;
   approvedLocale: string | null;
   fields: Map<string, FieldDef>;
+  /** Translated fixed wording for the document language. */
+  sys: Record<string, string>;
   findings: Finding[];
   parts: Map<string, ContentPart>;
   liabilityConfirmed: boolean;
@@ -98,8 +100,8 @@ function tokenInline(c: Ctx, path: string, nodeId: string, lineage: string[], ma
   const fmt = f.type === 'cents' ? 'usd-cents' : f.type === 'date' ? 'date' : f.type === 'points' ? 'int' : f.type === 'int' ? 'int' : 'text';
   if (value === null || value === '') return { kind: 'token', text: '—', path, missing: true, ...marks };
   // Domain guard: never render unconfirmed member liability as an amount.
-  if (path === 'claim.patientResponsibilityCents' && !c.liabilityConfirmed) return { kind: 'token', text: 'not yet determined', path, ...marks };
-  const out: RInline = { kind: 'token', text: formatValue(value, fmt, c.locale), path, ...marks };
+  if (path === 'claim.patientResponsibilityCents' && !c.liabilityConfirmed) return { kind: 'token', text: sysText(c.sys, 'guardNotYetDetermined'), path, ...marks };
+  const out: RInline = { kind: 'token', text: typeof value === 'boolean' ? sysText(c.sys, value ? 'valueYes' : 'valueNo') : formatValue(value, fmt, c.locale), path, ...marks };
   if (f.type === 'cents' && typeof value === 'number') out.cents = value;
   return out;
 }
@@ -297,7 +299,7 @@ export function resolve(input: ResolveInput): Resolution {
     if (localized.missing.length) findings.push({ code: 'TRANSLATION_MISSING_TEXT', severity: 'warning', locale: approvedLocale, source: 'translation', message: `${localized.missing.length} label${localized.missing.length === 1 ? '' : 's'} or other text${localized.missing.length === 1 ? ' has' : 's have'} no approved ${lang} translation; the English text is shown.`, suggestion: `Open Content & Translations and translate the remaining ${lang} texts.`, details: { ids: localized.missing } });
   }
 
-  const c: Ctx = { project: localized.project, ctx, locale: approvedLocale ?? (effective.customer?.locale as string) ?? 'en-US', approvedLocale, fields: projectFieldIndex(project), findings, parts, liabilityConfirmed };
+  const c: Ctx = { project: localized.project, ctx, locale: approvedLocale ?? (effective.customer?.locale as string) ?? 'en-US', approvedLocale, fields: projectFieldIndex(project), sys: localized.system, findings, parts, liabilityConfirmed };
   const requiredSet = new Set(mandatory);
   for (const n of project.nodes) if (n.required) requiredSet.add(n.id);
 
@@ -360,7 +362,7 @@ export function resolve(input: ResolveInput): Resolution {
         }
         if ((node.domainRole === 'member-liability' || path === 'claim.patientResponsibilityCents') && docType === 'eob' && !liabilityConfirmed) {
           guarded = true;
-          display = 'Not determined — under review';
+          display = sysText(c.sys, 'guardNotDetermined');
           reasons.push('Liability guard: member responsibility is unconfirmed, so no amount is presented as owed.');
         }
         if (docType === 'eob' && !liabilityConfirmed && DEBT_LANGUAGE.test(node.label ?? '') && f?.type === 'cents') {
@@ -382,7 +384,7 @@ export function resolve(input: ResolveInput): Resolution {
           for (const col of node.columns ?? []) {
             const raw = item?.[col.key] ?? null;
             const rowGuard = col.domainRole === 'member-liability' && docType === 'eob' && item?.liabilityConfirmed !== true;
-            cells[col.key] = rowGuard ? { raw, display: 'Under review', guarded: true } : { raw, display: formatValue(raw, col.format, c.locale), ...(col.format === 'usd-cents' && typeof raw === 'number' ? { cents: raw } : {}) };
+            cells[col.key] = rowGuard ? { raw, display: sysText(c.sys, 'guardUnderReview'), guarded: true } : { raw, display: formatValue(raw, col.format, c.locale), ...(col.format === 'usd-cents' && typeof raw === 'number' ? { cents: raw } : {}) };
           }
           const amountKey = (node.columns ?? []).find((col) => col.key === 'amountCents' || col.key === 'billedCents')?.key;
           if (amountKey && typeof item?.[amountKey] === 'number') { total += item[amountKey]; hasMoney = true; }
@@ -559,7 +561,7 @@ export function resolve(input: ResolveInput): Resolution {
     runId, projectId: project.projectId, modelVersion: project.modelVersion, projectDigest, recordId: effective.recordId, profileId, journeyCursor,
     rulesDigest, engineVersion: ENGINE_VERSION, locale: c.locale, hints, result, trace, findings, root, semanticManifest: manifest,
     contentDigest: digestOf(manifestCore), journeySteps: steps, effectiveRecord: effective,
-    channelTexts, translation: { locale: c.locale, draftsShown: localized.draftsShown, missing: localized.missing },
+    channelTexts, systemStrings: localized.system, translation: { locale: c.locale, draftsShown: localized.draftsShown, missing: localized.missing },
   };
 }
 

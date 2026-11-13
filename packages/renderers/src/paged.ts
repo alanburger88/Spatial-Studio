@@ -1,4 +1,5 @@
 import type { Project, ProfileId } from '@iss/model';
+import { sysText } from '@iss/model';
 import type { RNode, Resolution } from '@iss/resolver';
 import { DOC_FONT, esc, projectStyleCss, nodeDataAttrs, nodeInnerHtml, type RenderMode } from './html-common';
 import { PAGINATOR_JS } from './paginator-source';
@@ -106,7 +107,7 @@ export function renderPagedDocument(res: Resolution, project: Project, opts: Pag
   const leftPt = Math.round((marginMm[3] * 72) / 25.4);
   const rightPt = Math.round((marginMm[1] * 72) / 25.4);
   const widthPt = 612 - leftPt - rightPt;
-  const mode: RenderMode = { target: 'paged', project };
+  const mode: RenderMode = { target: 'paged', project, strings: res.systemStrings };
   const accent = project.issuer?.accent ?? '#277656';
 
   const renderNested = (n: RNode): string => {
@@ -136,7 +137,7 @@ export function renderPagedDocument(res: Resolution, project: Project, opts: Pag
       flowParts.push(`<div class="iss-block" ${nodeDataAttrs(n)} ${attrs} style="width:${w}%;margin-left:${ml}%">${inner}</div>`);
     }
   }
-  const layout = { firstPageTopPt: flow.firstPageTopPt, otherPagesTopPt: flow.otherPagesTopPt, bottomPt: flow.bottomPt, leftPt, widthPt, watermark: opts.watermark ?? '' };
+  const layout = { firstPageTopPt: flow.firstPageTopPt, otherPagesTopPt: flow.otherPagesTopPt, bottomPt: flow.bottomPt, leftPt, widthPt, watermark: opts.watermark ?? '', strings: { pageOf: sysText(res.systemStrings, 'pageOf'), tableContinued: sysText(res.systemStrings, 'tableContinued') } };
   const title = opts.title ?? `${project.issuer?.name ?? project.title} — ${res.recordId} (synthetic)`;
   return `<!doctype html>
 <html lang="${esc(res.locale)}" data-run-id="${esc(res.runId)}" data-profile="${esc(profileId)}" data-renderer="${PAGED_RENDERER_VERSION}">

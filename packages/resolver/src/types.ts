@@ -179,6 +179,8 @@ export interface Resolution {
   effectiveRecord: import('@iss/model').SyntheticRecord;
   /** Email and SMS wording for this customer and language. */
   channelTexts: ChannelTexts;
+  /** Translated fixed wording (system strings) for the document language; English defaults apply to missing keys. */
+  systemStrings: Record<string, string>;
   /** Which texts of the document language are drafts or still English. */
   translation: { locale: string; draftsShown: string[]; missing: string[] };
 }

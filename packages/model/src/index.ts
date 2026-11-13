@@ -9,6 +9,7 @@ export * from './seed';
 export * from './data';
 export * from './importRecords';
 export * from './languages';
+export * from './systemStrings';
 export * from './strings';
 export * from './channels';
 export * from './translations';

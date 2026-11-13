@@ -1,4 +1,4 @@
-import type { Project } from '@iss/model';
+import { sysText, type Project } from '@iss/model';
 import type { ChannelTexts, RBlock, RInline, RNode, Resolution } from '@iss/resolver';
 import { formatCents } from '@iss/resolver';
 import { esc, imageSrc } from './html-common';
@@ -29,6 +29,8 @@ export interface ChannelFacts {
   notABill: boolean; claimId?: string; dueDate?: ChannelFact;
   keyFacts: ChannelFact[]; greeting: RBlock[]; sections: ChannelSection[]; actions: ChannelAction[];
   disclosures: ChannelDisclosure[]; summaries: ChannelSummaryLine[]; tables: ChannelTable[];
+  /** Translated fixed wording (greeting fallback, footer, "under review" phrases). */
+  strings?: Record<string, string>;
   /** Editable, translated wording (subject, preview text, heading, opening, closing, SMS) and the email section choices. */
   texts?: ChannelTexts;
 }
@@ -81,7 +83,7 @@ export function extractChannelFacts(res: Resolution, project: Project): ChannelF
       const t = n.table;
       const total = t.totalCents !== undefined ? formatCents(t.totalCents, res.locale) : undefined;
       if (t.rows.length > TABLE_INLINE_MAX_ROWS) {
-        summaries.push({ nodeId: n.id, kind: 'table', text: `${t.caption}: ${t.rows.length} items${total ? `, total ${total}` : ''}. The full list is not shown in this email — open the interactive statement for every row.` });
+        summaries.push({ nodeId: n.id, kind: 'table', text: total ? sysText(res.systemStrings, 'emailTableSummaryTotal', { caption: t.caption, count: t.rows.length, total }) : sysText(res.systemStrings, 'emailTableSummary', { caption: t.caption, count: t.rows.length }) });
       } else if (t.rows.length) {
         tables.push({ nodeId: n.id, caption: t.caption, columns: t.columns.map((c) => ({ label: c.label, align: c.align })), rows: t.rows.map((r) => t.columns.map((c) => r.cells[c.key]?.display ?? '')), ...(total ? { totalDisplay: total } : {}) });
       }
@@ -101,11 +103,14 @@ export function extractChannelFacts(res: Resolution, project: Project): ChannelF
     dueDate: fact('payment-due-date'),
     keyFacts, greeting: nodes.get('greeting')?.text ?? [], sections, actions, disclosures, summaries, tables,
     ...(res.channelTexts ? { texts: res.channelTexts } : {}),
+    strings: res.systemStrings ?? {},
   };
 }
 
 /** The "label: value" list of the key figures; an unconfirmed amount is never shown as a number. */
-export const keyFactsLine = (f: ChannelFacts): string => f.keyFacts.map((k) => `${k.label}: ${k.guarded ? NOT_DETERMINED : k.display}`).join(' · ');
+/** The phrase shown instead of an unconfirmed amount, in the document language. */
+export const notDetermined = (f: ChannelFacts): string => sysText(f.strings, 'guardNotDetermined');
+export const keyFactsLine = (f: ChannelFacts): string => f.keyFacts.map((k) => `${k.label}: ${k.guarded ? notDetermined(f) : k.display}`).join(' · ');
 
 /**
  * Fills the two channel tokens the resolver leaves in place: `{{keyFacts}}` and `{{link}}` (the first https action link).
@@ -185,7 +190,7 @@ export function emailHtml(f: ChannelFacts, subject: string, preheader: string): 
     parts.push(row(`<div role="note" style="border:2px solid ${INK};padding:10px 14px;${FONT}font-size:16px;line-height:22px;font-weight:bold;color:${INK};background-color:#fff8d6;">${banner ? blocksText(banner.blocks).split('\n').map(esc).join('<br>') : 'THIS IS NOT A BILL.'}</div>`, '0 24px 16px'));
   }
   // greeting
-  parts.push(row(f.greeting.length ? blocksEmail(f.greeting, A) : `<p style="margin:0;${FONT}font-size:15px;line-height:22px;color:${INK};">Hello ${esc(f.customerName)},</p>`, '0 24px 16px'));
+  parts.push(row(f.greeting.length ? blocksEmail(f.greeting, A) : `<p style="margin:0;${FONT}font-size:15px;line-height:22px;color:${INK};">${esc(sysText(f.strings, 'emailGreeting', { name: f.customerName }))}</p>`, '0 24px 16px'));
   // optional opening text
   if (f.texts?.intro.length) parts.push(row(blocksEmail(f.texts.intro, A), '0 24px 16px'));
   // generated sections, in the order chosen for the email
@@ -193,7 +198,7 @@ export function emailHtml(f: ChannelFacts, subject: string, preheader: string): 
     if (id === 'keyFacts') {
     // key facts
     if (f.keyFacts.length) {
-      const rows = f.keyFacts.map((k) => `<tr><td style="padding:10px 0;border-top:1px solid ${LINE};${FONT}font-size:14px;line-height:20px;color:${MUTED};">${esc(k.label)}</td><td align="right" style="padding:10px 0;border-top:1px solid ${LINE};${FONT}font-size:${k.guarded ? 14 : 18}px;line-height:22px;font-weight:bold;color:${INK};" data-fact="${esc(k.nodeId)}">${esc(k.guarded ? NOT_DETERMINED : k.display)}</td></tr>`).join('');
+      const rows = f.keyFacts.map((k) => `<tr><td style="padding:10px 0;border-top:1px solid ${LINE};${FONT}font-size:14px;line-height:20px;color:${MUTED};">${esc(k.label)}</td><td align="right" style="padding:10px 0;border-top:1px solid ${LINE};${FONT}font-size:${k.guarded ? 14 : 18}px;line-height:22px;font-weight:bold;color:${INK};" data-fact="${esc(k.nodeId)}">${esc(k.guarded ? notDetermined(f) : k.display)}</td></tr>`).join('');
       parts.push(row(`${h2(f.texts?.keyFactsHeading || 'Key facts')}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-bottom:1px solid ${LINE};">${rows}</table>`));
     }
     }
@@ -258,10 +263,10 @@ export function emailText(f: ChannelFacts, subject: string): string {
   const L: string[] = [];
   L.push(f.issuer.toUpperCase(), subject, '');
   if (f.notABill) L.push(`${notABillPhrase(f)}.`, '');
-  L.push(f.greeting.length ? blocksText(f.greeting) : `Hello ${f.customerName},`, '');
+  L.push(f.greeting.length ? blocksText(f.greeting) : sysText(f.strings, 'emailGreeting', { name: f.customerName }), '');
   if (f.texts?.intro.length) L.push(blocksText(f.texts.intro), '');
   for (const id of emailSectionOrder(f)) {
-    if (id === 'keyFacts') { if (f.keyFacts.length) { L.push((f.texts?.keyFactsHeading || 'Key facts').toUpperCase()); for (const k of f.keyFacts) L.push(`${k.label}: ${k.guarded ? NOT_DETERMINED : k.display}`); L.push(''); } }
+    if (id === 'keyFacts') { if (f.keyFacts.length) { L.push((f.texts?.keyFactsHeading || 'Key facts').toUpperCase()); for (const k of f.keyFacts) L.push(`${k.label}: ${k.guarded ? notDetermined(f) : k.display}`); L.push(''); } }
     if (id === 'messages') { for (const s of f.sections) { L.push(`== ${s.title} ==`, blocksText(s.blocks), ""); } }
     if (id === 'tables') { for (const t of f.tables) { L.push(`== ${t.caption} ==`); L.push(t.columns.map((c) => c.label).join(' | ')); for (const r of t.rows) L.push(r.join(' | ')); if (t.totalDisplay) L.push(`Total ${t.totalDisplay}`); L.push(''); } }
     if (id === 'summaries') { for (const s of f.summaries) L.push(s.text); if (f.summaries.length) L.push(''); }
@@ -269,7 +274,7 @@ export function emailText(f: ChannelFacts, subject: string): string {
   }
   if (f.texts?.closing.length) L.push(blocksText(f.texts.closing), '');
   for (const d of f.disclosures.filter((x) => !x.banner)) L.push(`== ${d.title} ==`, blocksText(d.blocks), "");
-  L.push('--', `DEMO DATA. ${SYNTHETIC_CUE}`, `Sent by ${f.issuer} (fictional).`);
+  L.push('--', `${sysText(f.strings, 'emailDemoData')} ${sysText(f.strings, 'emailSyntheticCue')}`, sysText(f.strings, 'emailSentBy', { issuer: f.issuer }));
   return L.join('\n');
 }
 
