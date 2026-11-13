@@ -14,5 +14,6 @@ export * from './strings';
 export * from './channels';
 export * from './translations';
 export * from './templates';
+export * from './setupSpec';
 export * from './diff';
 export * from './collab';
