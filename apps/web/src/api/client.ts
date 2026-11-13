@@ -27,7 +27,7 @@ export interface ProjectSummary {
   projectId: string; title: string; documentType: 'credit-statement' | 'eob'; modelVersion: number; schemaVersion: string;
   issuer: Project['issuer']; contentDigest: string; modified: boolean; updatedAt: string; nodeCount: number; ruleCount: number;
   /** Approved seeded sample (restorable, not deletable) vs a user copy. */
-  sample: boolean; derivedFrom: { projectId: string; modelVersion: number } | null;
+  sample: boolean; derivedFrom: { projectId: string; modelVersion: number } | null; fromTemplate: { templateId: string; version: number; title: string } | null; importedFrom: { title: string; modelVersion: number } | null;
 }
 
 export interface TemplateVersionDto { version: number; savedAt: string; savedBy: { id: string; name: string } | null; note: string; from: { projectId: string; title: string; modelVersion: number }; counts: { components: number; rules: number; messages: number; languages: number; tests: number } }

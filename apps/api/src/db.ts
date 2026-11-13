@@ -157,7 +157,7 @@ export class Store {
   listProjects() {
     return (this.db.prepare('SELECT project_id, json, model_version, content_digest, seed_digest, updated_at FROM projects ORDER BY project_id').all() as any[]).map((r) => {
       const p = JSON.parse(r.json) as Project;
-      return { projectId: p.projectId, title: p.title, sample: this.sampleIds.has(p.projectId), derivedFrom: (p as any).derivedFrom ?? null, documentType: p.documentType, modelVersion: r.model_version, schemaVersion: p.schemaVersion, issuer: p.issuer, contentDigest: r.content_digest, modified: r.content_digest !== r.seed_digest, updatedAt: r.updated_at, nodeCount: p.nodes.length, ruleCount: p.rules.length };
+      return { projectId: p.projectId, title: p.title, sample: this.sampleIds.has(p.projectId), derivedFrom: (p as any).derivedFrom ?? null, fromTemplate: p.fromTemplate ?? null, importedFrom: p.importedFrom ? { title: p.importedFrom.title, modelVersion: p.importedFrom.modelVersion } : null, documentType: p.documentType, modelVersion: r.model_version, schemaVersion: p.schemaVersion, issuer: p.issuer, contentDigest: r.content_digest, modified: r.content_digest !== r.seed_digest, updatedAt: r.updated_at, nodeCount: p.nodes.length, ruleCount: p.rules.length };
     });
   }
 

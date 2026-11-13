@@ -12,6 +12,8 @@ export async function resetAll(request: APIRequestContext) {
     const r = await request.post(`${API}/projects/${id}/reset`, { data: { confirm: true } });
     expect(r.ok()).toBeTruthy();
   }
+  // Saved templates are studio-wide, so one spec's templates must not show up in another's "New project" list.
+  expect((await request.post(`${API}/templates/reset`, { data: { confirm: true } })).ok()).toBeTruthy();
 }
 
 export async function open(page: Page, project: string, view: string) {

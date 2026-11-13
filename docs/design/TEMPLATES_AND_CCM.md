@@ -1,6 +1,6 @@
 # Templates and working with an existing CCM
 
-Status: **design agreed in a workshop with the product owner; nothing in this document is built yet.**
+Status: **design agreed in a workshop with the product owner. Phase 1 is built (see "Phase 1 as built"); phases 2 to 7 are not.**
 Build starts after the AI assistant work is finished and verified, in the phases below, with a check-in at the start of each phase.
 
 ## Where we start from
@@ -61,6 +61,19 @@ Build starts after the AI assistant work is finished and verified, in the phases
 
 Each phase ends with tests, documentation and a demo path, and is verified before the next starts.
 
+## Phase 1 as built
+
+Decisions taken at the phase check-in (2026-11-13): approvers and admins save templates; a template carries everything but customers; saving again adds a numbered version.
+
+- **Save as template.** From a project's menu in the gallery. Taken from the document's last saved version. Carries layout, rules, wording, translations, email and SMS wording, glossary, styles, brand and pinned tests. Never carries customers, version history, review state or comments (they are stored outside the project).
+- **Versions.** Each save is a new frozen version with who saved it, when, from which document and a note. Earlier versions are never changed and stay usable. A project records the template and version it started from.
+- **Retire.** A saved template can be retired (hidden from "New project", kept for the record) and brought back. Built-in starters cannot be changed.
+- **Project file.** "Export project file" downloads the project as one JSON file (images are stored inside it). "Import project" checks a file before anything is stored — its shape, every rule, that images are inside the file, and that the studio can actually work out a document from it — shows a report, and creates a **new draft** document. It never replaces an existing one. A project records the file it came from.
+- **Who.** Saving and retiring templates: approvers and admins. Importing a project file and starting from a template: anyone who can edit.
+- **API.** `GET/POST /api/v1/templates`, `PATCH /api/v1/templates/:id`, `GET /api/v1/templates/:id/project?version=`, `POST /api/v1/projects` (`templateVersion`), `POST /api/v1/projects/import` (`dryRun`).
+
+Limits: a template version cannot be deleted or edited, only superseded or retired. Pinned tests that use customers the importing studio does not have are kept and reported, and fail until those customers exist. Templates are per studio installation; moving them between installations is phase 2 (release packages).
+
 ## The runnable package (phase 7, agreed 2026-11-13, not built)
 
 **Why.** The only way to guarantee that what an external system produces equals what was approved in the studio is to run the same engine on the same release. Rebuilding a template in a CCM's internal format is where precision is lost. The release package (phases 2–6) stays for CCMs that prefer to rebuild; this is in addition.
@@ -98,7 +111,7 @@ Each phase ends with tests, documentation and a demo path, and is verified befor
 
 These timings are single-document measurements in the development environment, not a load test. Phase 7 includes a measured throughput test.
 
-**Path to production AFP (ideas recorded, not approved work).**
+**Path to production AFP.** Direction chosen by the product owner on 2026-11-13: **PDF now, native later** — use the print side's own PDF-to-AFP transform now (step 1), and build a native AFP writer (steps 2 to 4) once a print partner is named to test against. Steps 2 to 4 are not approved work yet.
 
 1. **Now, no build:** hand print-ready PDF to the print side and use the PDF-to-AFP transform most print operations already run. The PDF is the proof of what was approved.
 2. **A browser-free page description.** Lay out pages without a browser into one neutral description (positioned text, images, lines per page). This is the prerequisite for both a fast PDF writer and a native AFP writer, so one investment serves both.

@@ -121,3 +121,9 @@ Verify with `npx tsc -p tsconfig.json --noEmit`, screenshots in light + dark (`T
 - **Never** let the assistant approve a translation, change a workflow state, export or publish.
 - **Parallel browser tests:** run them on an isolated stack (`node scripts/dev-isolated.mjs <slot>`, then `E2E_API=… E2E_WEB=…`) so runs do not reset each other's data.
 
+## Templates and project files (v0.7) — rules
+
+- **Saved templates are frozen.** `Store.addTemplateVersion` only ever adds; nothing edits a stored version. Anything that changes a template is a new version.
+- **A template is a project without identity.** Use `templateContentOf(project)` to make one and `projectFromSavedTemplate(...)` to start from one (`packages/model/src/templates.ts`). Do not copy projects by hand: these strip `derivedFrom`, `fromTemplate`, `importedFrom`, `lastSavedAt`.
+- **Anything read from a file is untrusted.** `projectFileProblems(raw)` runs before `checkDraftProject`, and the import route resolves a document before storing. New project fields that hold a URL or an image must be added to those checks.
+- **Provenance fields** (`fromTemplate`, `importedFrom`, `derivedFrom`) are ignored by the project diff and must stay out of change summaries.
