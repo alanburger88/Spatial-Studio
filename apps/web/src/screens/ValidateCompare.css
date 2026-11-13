@@ -90,3 +90,22 @@
 .vc-aff-tag, .vc-aff-msg { font-size: 11.5px; }
 .vc-aff .btn { flex: none; }
 .vc-inspector .panel-body.vc-detail { overflow: auto; }
+
+/* Suggested fix (assistant) */
+.vc-fixes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.vc-fixes .as-card + .as-card { margin-top: 0; }
+.vc-nofix { margin: 0 0 10px; font-size: 12.5px; }
+.vc-fix-wait { margin: 0; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.vc-fix-warn { margin: 0; font-size: 12px; color: var(--iss-warning-fg); }
+.vc-fix-ro { margin: 0; }
+.vc-recommended { justify-self: start; }
+.vc-fixall { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+.vc-fixall-lead { margin: 0; line-height: 1.5; }
+.vc-fixall-list { margin: 0; padding: 0; max-height: 280px; overflow: auto; }
+.vc-fixall-item { padding: 8px 4px; display: flex; flex-direction: column; gap: 4px; list-style: none; }
+.vc-fixall-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vc-fixall-sub { font-size: 11.5px; }
+.vc-fixall-skipped { border-top: 1px solid var(--iss-row-border); padding-top: 8px; }
+.vc-fixall-skipped summary { cursor: pointer; }
+.vc-fixall-skipped ul { margin: 6px 0 0; padding: 0; max-height: 200px; overflow: auto; }
+.screen-head .actions .btn .chip.count { margin-left: 6px; }

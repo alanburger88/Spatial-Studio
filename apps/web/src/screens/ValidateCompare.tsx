@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resolve } from '@iss/resolver';
-import { ScreenHeader, Loading, SeverityLabel, Proof, Tech, Named } from '../ui/common';
+import type { Finding } from '@iss/resolver';
+import { proposeFixes, fixImpact, safeFixPlan, type AssistLink, type FixImpact, type FixProposal } from '@iss/scenarios';
+import { ScreenHeader, Loading, SeverityLabel, Proof, Tech, Named, Dialog } from '../ui/common';
+import { ProposalCard, ImpactLine, applyAssistCommands } from '../assist/common';
 import { nodeTitle, ruleTitle, localeLabel } from '../ui/plain';
 import { Icon } from '../ui/icons';
-import { useStudio, useResolution, useScenarioRequest, useRecord, useScenarioEngine } from '../state/store';
+import { useStudio, useResolution, useScenarioRequest, useRecord, useScenarioEngine, editBlockedReason } from '../state/store';
 import { recordSummary } from '../shell/RecordPicker';
 import { api, ApiFailure } from '../api/client';
 import { abridge } from './RulesData';
@@ -52,6 +55,21 @@ function relAgo(ms: number): string {
 /** Plain-language headline for a check code (readable words; the code itself stays beside it as a chip). */
 const BLOCK_TITLE = (code: string): string => { const w = blockWord(code); return w.charAt(0).toUpperCase() + w.slice(1); };
 
+const RESOLVER_SOURCES: Finding['source'][] = ['resolver', 'domain', 'binding', 'composer', 'parity', 'accessibility', 'rules-static', 'translation'];
+const SUITE_SOURCE: Record<Suite, Finding['source']> = { rules: 'resolver', bindings: 'binding', pagination: 'composer', parity: 'parity', accessibility: 'accessibility' };
+/** The resolver's Finding shape for an issue this screen holds (server suites or the All customers grouping). */
+function toFinding(i: Pick<Issue, 'code' | 'severity' | 'nodeId' | 'ruleId' | 'ruleIds' | 'locale' | 'message' | 'source' | 'details' | 'suggestion' | 'page' | 'suite'>): Finding {
+  const f: Finding = { code: i.code, severity: i.severity as Finding['severity'], message: i.message, source: RESOLVER_SOURCES.includes(i.source as Finding['source']) ? (i.source as Finding['source']) : SUITE_SOURCE[i.suite] };
+  if (i.nodeId) f.nodeId = i.nodeId;
+  if (i.locale) f.locale = i.locale;
+  if (i.ruleIds?.length) f.ruleIds = i.ruleIds;
+  if (i.ruleId) f.ruleId = i.ruleId;
+  if (i.suggestion) f.suggestion = i.suggestion;
+  if (i.page !== undefined) f.page = i.page;
+  if (i.details) f.details = i.details;
+  return f;
+}
+
 const idsOf = (i: Issue) => [...(i.ruleIds ?? []), ...(i.ruleId && !(i.ruleIds ?? []).includes(i.ruleId) ? [i.ruleId] : [])];
 const sevRank = (s: Sev) => SEVS.indexOf(s);
 
@@ -93,6 +111,7 @@ export function ValidateCompare() {
   const setScope = (v: Scope) => { setScopeState(v); try { localStorage.setItem(SCOPE_KEY, v); } catch { /* storage unavailable */ } };
   const [want, setWant] = useState<{ code: string; nodeId?: string } | null>(null);
   const [bSel, setBSel] = useState<string | null>(null);
+  const [fixAll, setFixAll] = useState(false);
   const [onlyBlockingPick, setOnlyBlockingPick] = useState<boolean | null>(null);
   const blockers = useBlockers(scope === 'all');
   const seq = useRef(0);
@@ -233,6 +252,15 @@ export function ValidateCompare() {
     else if (i.suite === 'parity' && !i.nodeId) navigate(`${base}/outputs`);
     else navigate(`${base}/design`);
   };
+  const reportCurrent = !!report && upToDate;
+  const serverFindings = useMemo(() => (report && reportCurrent ? report.issues.map(toFinding) : []), [report, reportCurrent]); // eslint-disable-line react-hooks/exhaustive-deps
+  const plan = useSafePlan(serverFindings);
+  const openLink = (link: AssistLink) => {
+    const st = useStudio.getState();
+    if (link.nodeId && st.project?.nodes.some((n) => n.id === link.nodeId)) st.select(link.nodeId);
+    const rid = link.ruleId;
+    navigate(`${base}/${link.view}${link.view === 'rules-data' && rid ? `?rule=${encodeURIComponent(rid)}` : ''}`);
+  };
   const blockerIssue = (g: BGroup): Issue => ({ issueId: g.key, code: g.code, severity: g.severity, suite: g.suite, message: g.message, nodeId: g.nodeId, ruleIds: g.ruleIds, locale: g.locale, suggestion: g.suggestion });
   const sourceLabel = (i: Issue) => (idsOf(i).length ? `Rule ${idsOf(i)[0]} in Rules & Data` : i.suite === 'rules' ? 'Rules & Data' : i.suite === 'pagination' ? 'Page Composition Stack' : i.suite === 'parity' && !i.nodeId ? 'Preview & Export' : `${i.nodeId ?? 'node'} in 2D Design`);
 
@@ -254,6 +282,7 @@ export function ValidateCompare() {
                 : outdated ? (status === 'error' ? 'Out of date — re-run failed' : 'Out of date — re-running…')
                 : `Checked ${relAgo(report.ranAtMs)} · up to date`}
             </span>
+            <FixAllButton plan={plan} onOpen={() => setFixAll(true)} />
             <button className="btn primary" onClick={() => void run({ manual: true })} disabled={!req || !suites.length} aria-busy={running} data-testid="run-validation">
               {running ? <span className="spinner" /> : <Icon.validate />} {running ? `Validating… ${elapsed.toFixed(1)}s` : report ? 'Re-run' : 'Run validation'}
             </button>
@@ -352,11 +381,12 @@ export function ValidateCompare() {
         </div>
 
         <aside className="panel vc-inspector" data-side="right" data-side-title="Issue detail" data-testid="validation-inspector" aria-label="Validation detail" tabIndex={-1} ref={inspectorRef}>
-          {scope === 'all' ? <BlockerDetail group={bCurrent} data={blockers.data} loading={blockers.loading} onlyBlocking={onlyBlocking} onPreview={previewCustomer} onGo={(g) => goTo(blockerIssue(g))} sourceLabel={bCurrent ? sourceLabel(blockerIssue(bCurrent)) : ''} /> : current ? <Inspector issue={current} members={currentGroup!.members} onGo={goTo} sourceLabel={sourceLabel(current)} stale={outdated} /> : (
+          {scope === 'all' ? <BlockerDetail group={bCurrent} data={blockers.data} loading={blockers.loading} onlyBlocking={onlyBlocking} onPreview={previewCustomer} onGo={(g) => goTo(blockerIssue(g))} onOpenLink={openLink} sourceLabel={bCurrent ? sourceLabel(blockerIssue(bCurrent)) : ''} /> : current ? <Inspector issue={current} members={currentGroup!.members} onGo={goTo} onOpenLink={openLink} sourceLabel={sourceLabel(current)} stale={outdated} /> : (
             <Summary report={report} running={running || pending} who={who} recordId={record?.recordId} gCounts={gCounts} filtered={groups.length > 0} />
           )}
         </aside>
       </div>
+      {fixAll && plan.ready && plan.plan && plan.plan.batch && <FixAllDialog plan={plan.plan} onClose={() => setFixAll(false)} />}
     </section>
   );
 }
@@ -370,7 +400,7 @@ const isBlocking = (s: Sev) => s === 'blocking' || s === 'error';
 
 interface BGroup {
   key: string; code: string; severity: Sev; suite: Suite; nodeId?: string; ruleIds: string[]; locale?: string; message: string; suggestion?: string;
-  recordIds: string[]; messages: Map<string, string>;
+  recordIds: string[]; messages: Map<string, string>; source?: Finding['source']; details?: Record<string, unknown>;
 }
 interface BData { engine: unknown; cursor: number | null; profileId: string; groups: BGroup[]; total: number; affected: number; blockedIds: Set<string> }
 
@@ -399,7 +429,7 @@ function useBlockers(active: boolean): { data: BData | null; loading: boolean } 
           let g = byKey.get(key);
           if (!g) {
             const suite: Suite = f.source === 'binding' ? 'bindings' : f.source === 'accessibility' ? 'accessibility' : f.source === 'composer' ? 'pagination' : f.source === 'parity' ? 'parity' : 'rules';
-            g = { key, code: f.code, severity: sev, suite, nodeId: f.nodeId, ruleIds, locale: f.locale, message: f.message, suggestion: f.suggestion, recordIds: [], messages: new Map() };
+            g = { key, code: f.code, severity: sev, suite, nodeId: f.nodeId, ruleIds, locale: f.locale, message: f.message, suggestion: f.suggestion, source: f.source, details: f.details, recordIds: [], messages: new Map() };
             byKey.set(key, g);
           }
           if (sevRank(sev) < sevRank(g.severity)) g.severity = sev;
@@ -493,7 +523,7 @@ function BlockersAll({ state, shown, selected, onSelect, onlyBlocking, onToggle 
   );
 }
 
-function BlockerDetail({ group: g, data, loading, onlyBlocking, onPreview, onGo, sourceLabel }: { group: BGroup | null; data: BData | null; loading: boolean; onlyBlocking: boolean; onPreview: (recordId: string, g: BGroup) => void; onGo: (g: BGroup) => void; sourceLabel: string }) {
+function BlockerDetail({ group: g, data, loading, onlyBlocking, onPreview, onGo, onOpenLink, sourceLabel }: { group: BGroup | null; data: BData | null; loading: boolean; onlyBlocking: boolean; onPreview: (recordId: string, g: BGroup) => void; onGo: (g: BGroup) => void; onOpenLink: (l: AssistLink) => void; sourceLabel: string }) {
   const project = useStudio((s) => s.project)!;
   const records = useStudio((s) => s.records);
   const personas = useStudio((s) => s.personas);
@@ -515,6 +545,7 @@ function BlockerDetail({ group: g, data, loading, onlyBlocking, onPreview, onGo,
     return { id, name: sum?.name ?? id, tag: sum?.tag ?? null, message: g.messages.get(id) ?? g.message };
   });
   const differing = new Set(names.map((n) => n.message)).size > 1;
+  const finding = toFinding({ code: g.code, severity: g.severity, suite: g.suite, message: g.message, nodeId: g.nodeId, ruleIds: g.ruleIds, locale: g.locale, source: g.source, details: g.details, suggestion: g.suggestion });
   const issue: Issue = { issueId: g.key, code: g.code, severity: g.severity, suite: g.suite, message: g.message, nodeId: g.nodeId, ruleIds: g.ruleIds, locale: g.locale };
   return (
     <>
@@ -529,6 +560,8 @@ function BlockerDetail({ group: g, data, loading, onlyBlocking, onPreview, onGo,
           {g.locale && <><dt>Language</dt><dd title={g.locale}>{localeLabel(g.locale)}</dd></>}
         </dl>
         {g.suggestion && <><h3 className="section-title">Suggested correction</h3><div className="callout accent" data-testid="issue-suggestion">{g.suggestion}</div></>}
+        <h3 className="section-title">Suggested fix</h3>
+        <SuggestedFix key={g.key} finding={finding} recordId={g.recordIds[0]} onOpenLink={onOpenLink} />
         <h3 className="section-title">Affected customers</h3>
         <ul className="list-rows vc-affected" data-testid="blocker-customers" aria-label="Affected synthetic customers">
           {names.map((n) => (
@@ -609,12 +642,13 @@ function Overview({ report, running, suites, stale, gCounts }: { report: Report 
 
 /* --------------------------------------------------------------- inspector */
 
-function Inspector({ issue: i, members, onGo, sourceLabel, stale }: { issue: Issue; members: Issue[]; onGo: (i: Issue, ruleId?: string) => void; sourceLabel: string; stale: boolean }) {
+function Inspector({ issue: i, members, onGo, onOpenLink, sourceLabel, stale }: { issue: Issue; members: Issue[]; onGo: (i: Issue, ruleId?: string) => void; onOpenLink: (l: AssistLink) => void; sourceLabel: string; stale: boolean }) {
   const setRecord = useStudio((s) => s.setRecord);
   const setOverrides = useStudio((s) => s.setOverrides);
   const setJourneyCursor = useStudio((s) => s.setJourneyCursor);
   const project = useStudio((s) => s.project)!;
   const rep = i.reproduction;
+  const finding = useMemo(() => toFinding(i), [i]);
   const plain = BLOCK_TITLE(i.code);
   const suiteLabel = SUITES.find((x) => x.id === i.suite)?.label ?? i.suite;
   const reproduce = () => {
@@ -646,6 +680,8 @@ function Inspector({ issue: i, members, onGo, sourceLabel, stale }: { issue: Iss
           {i.source && <><dt>Source</dt><dd>{i.source}</dd></>}
         </dl>
         {i.suggestion && <><h3 className="section-title">Suggested correction</h3><div className="callout accent" data-testid="issue-suggestion">{i.suggestion}</div></>}
+        <h3 className="section-title">Suggested fix</h3>
+        <SuggestedFix key={i.issueId} finding={finding} scenario onOpenLink={onOpenLink} />
         <h3 className="section-title">Reproduction</h3>
         {rep ? (
           <div className="vc-repro">
@@ -699,6 +735,167 @@ function Summary({ report, running, who, recordId, gCounts, filtered }: { report
         <p className="hint">Automated checks are not WCAG or regulatory certification.</p>
       </div>
     </>
+  );
+}
+
+/* -------------------------------------------------------- suggested fixes */
+
+/** The assistant's built-in fix engine for one issue: proposals, each with its effect on every synthetic customer, applied only by a click. */
+function SuggestedFix({ finding, recordId, scenario, onOpenLink }: { finding: Finding; recordId?: string; scenario?: boolean; onOpenLink: (l: AssistLink) => void }) {
+  const project = useStudio((s) => s.project)!;
+  const records = useStudio((s) => s.records);
+  const ctx = useStudio((s) => s.ctx);
+  const session = useStudio((s) => s.session);
+  const blockedReason = editBlockedReason(session);
+  const proposals = useMemo(() => {
+    try { return proposeFixes(project, finding, { records, recordId: recordId ?? ctx.recordId, overrides: scenario ? ctx.overrides : undefined, journeyCursor: ctx.journeyCursor, profileId: ctx.profileId }); } catch { return [] as FixProposal[]; }
+  }, [project, records, finding, recordId, scenario, ctx.recordId, ctx.overrides, ctx.journeyCursor, ctx.profileId]);
+  const [impacts, setImpacts] = useState<Record<string, FixImpact>>({});
+  const [done, setDone] = useState<{ proposals: FixProposal[]; impacts: Record<string, FixImpact>; applied: string } | null>(null);
+  /* Effects are computed when a proposal is shown (not for every issue up front), one at a time so the panel stays responsive. */
+  useEffect(() => {
+    if (done) return;
+    let cancelled = false;
+    const queue = proposals.filter((p) => p.kind === 'change');
+    setImpacts({});
+    const next = (k: number) => {
+      if (cancelled || k >= queue.length) return;
+      setTimeout(() => {
+        if (cancelled) return;
+        let imp: FixImpact | null = null;
+        try { imp = fixImpact(project, queue[k], records, { finding, profileId: ctx.profileId, journeyCursor: ctx.journeyCursor }); } catch { imp = null; }
+        if (imp && !cancelled) setImpacts((cur) => ({ ...cur, [queue[k].id]: imp! }));
+        next(k + 1);
+      }, 20);
+    };
+    next(0);
+    return () => { cancelled = true; };
+  }, [proposals, done]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = done?.proposals ?? proposals;
+  const shownImpacts = done?.impacts ?? impacts;
+  const apply = (p: FixProposal) => {
+    if (!p.commands?.length) return;
+    const frozen = { proposals, impacts, applied: p.id };
+    if (applyAssistCommands(p.commands, p.title, 'fix', p.source)) setDone(frozen);
+  };
+  if (!shown.length) return <p className="vc-nofix muted" data-testid="fix-panel" data-count="0">No automatic fix for this issue; use Go to source.</p>;
+  return (
+    <div className="vc-fixes" data-testid="fix-panel" data-count={shown.length}>
+      {blockedReason && shown.some((p) => p.kind === 'change') && <p className="hint vc-fix-ro" data-testid="fix-readonly">You can see the proposals but not apply them: {blockedReason.charAt(0).toLowerCase() + blockedReason.slice(1)}.</p>}
+      {shown.map((p, k) => {
+        const imp = shownImpacts[p.id];
+        const wasApplied = done?.applied === p.id;
+        return (
+          <ProposalCard key={p.id} proposal={p} impact={p.kind === 'change' ? imp ?? null : null} applied={wasApplied}
+            busy={!!blockedReason || (p.kind === 'change' && (!imp || (!!done && !wasApplied)))}
+            onApply={() => apply(p)} onOpen={() => p.link && onOpenLink(p.link)}>
+            {shown.length > 1 && k === 0 && <span className="chip accent vc-recommended" data-testid="fix-recommended">Recommended</span>}
+            {p.kind === 'change' && !imp && !wasApplied && <p className="muted vc-fix-wait" role="status"><span className="spinner" /> Checking the effect on every synthetic customer…</p>}
+            {p.kind === 'change' && imp && !imp.resolves && !imp.newlyBlocked.length && <p className="vc-fix-warn">Not shown to fully resolve this issue; read the effect above before applying.</p>}
+          </ProposalCard>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ fix all safe */
+
+type Plan = ReturnType<typeof safeFixPlan>;
+/** The "Fix all safe issues" plan, computed after paint; only valid for the exact model and findings it was computed from. */
+function useSafePlan(extra: Finding[]): { plan: Plan | null; ready: boolean } {
+  const project = useStudio((s) => s.project);
+  const records = useStudio((s) => s.records);
+  const profileId = useStudio((s) => s.ctx.profileId);
+  const cursor = useStudio((s) => s.ctx.journeyCursor);
+  const [st, setSt] = useState<{ plan: Plan | null; project: unknown; extra: Finding[]; profileId: string; cursor: number | null } | null>(null);
+  useEffect(() => {
+    if (!project) return;
+    const h = setTimeout(() => {
+      let plan: Plan | null = null;
+      try { plan = safeFixPlan(project, records, { profileId, journeyCursor: cursor, findings: extra }); } catch { plan = null; }
+      setSt({ plan, project, extra, profileId, cursor });
+    }, 120);
+    return () => clearTimeout(h);
+  }, [project, records, profileId, cursor, extra]);
+  const ready = !!st && st.project === project && st.extra === extra && st.profileId === profileId && st.cursor === cursor;
+  return { plan: ready ? st!.plan : null, ready };
+}
+
+function FixAllButton({ plan, onOpen }: { plan: { plan: Plan | null; ready: boolean }; onOpen: () => void }) {
+  const n = plan.plan?.batch ? plan.plan.items.length : 0;
+  const why = !plan.ready ? 'Checking which fixes are low risk…' : n ? `Apply ${n} low-risk fix${n === 1 ? '' : 'es'} in one undoable step, after you confirm` : 'No low-risk fixes available; open an issue to see proposals that need review';
+  return (
+    <span title={why}>
+      <button type="button" className="btn" onClick={onOpen} disabled={!n} data-testid="fix-all-safe" aria-label={n ? `Fix all safe issues (${n})` : 'Fix all safe issues (none available)'}>
+        <Icon.validate /> Fix all safe issues{n ? <span className="chip count">{n}</span> : null}
+      </button>
+    </span>
+  );
+}
+
+function FixAllDialog({ plan, onClose }: { plan: Plan; onClose: () => void }) {
+  const project = useStudio((s) => s.project)!;
+  const records = useStudio((s) => s.records);
+  const ctx = useStudio((s) => s.ctx);
+  const session = useStudio((s) => s.session);
+  const blockedReason = editBlockedReason(session);
+  const [busy, setBusy] = useState(false);
+  const n = plan.items.length;
+  const [combined, setCombined] = useState<FixImpact | null>(null);
+  useEffect(() => {
+    if (!plan.batch) return;
+    const h = setTimeout(() => {
+      try {
+        setCombined(fixImpact(project, { id: 'fix-all', findingCode: '', title: `Fix ${n} safe issues`, explanation: '', kind: 'change', commands: [plan.batch!], risk: 'safe', source: 'builtin' }, records, { profileId: ctx.profileId, journeyCursor: ctx.journeyCursor }));
+      } catch { setCombined(null); }
+    }, 20);
+    return () => clearTimeout(h);
+  }, [plan, project, records, ctx.profileId, ctx.journeyCursor, n]);
+  const confirm = () => {
+    if (!plan.batch || busy) return;
+    setBusy(true);
+    const ok = applyAssistCommands([plan.batch], `Fix ${n} safe issue${n === 1 ? '' : 's'}`, 'fix-all', 'builtin');
+    setBusy(false);
+    if (ok) onClose();
+  };
+  const where = (nodeId?: string) => (nodeId ? nodeTitle(project, nodeId) : '');
+  return (
+    <Dialog title={`Fix ${n} safe issue${n === 1 ? '' : 's'}`} onClose={onClose} labelledBy="fix-all-title"
+      footer={<>
+        <button type="button" className="btn ghost" onClick={onClose} data-testid="fix-all-cancel">Cancel</button>
+        <button type="button" className="btn primary" onClick={confirm} disabled={busy || !!blockedReason || !plan.batch} title={blockedReason ?? undefined} data-testid="fix-all-apply">Apply {n} fix{n === 1 ? '' : 'es'}</button>
+      </>}>
+      <div className="vc-fixall" data-testid="fix-all-dialog">
+        <p className="vc-fixall-lead">These low-risk fixes are computed by the studio (Built-in; no AI model). They are applied together as <strong>one undoable step</strong>. Nothing is approved, exported or published.</p>
+        {blockedReason && <p className="hint" data-testid="fix-readonly">You cannot apply them: {blockedReason.charAt(0).toLowerCase() + blockedReason.slice(1)}.</p>}
+        <ul className="list-rows vc-fixall-list" aria-label="Fixes that will be applied" data-testid="fix-all-items">
+          {plan.items.map((it) => (
+            <li key={it.group.key + it.proposal.id} className="vc-fixall-item" data-testid="fix-all-item">
+              <div className="vc-fixall-top"><strong>{it.proposal.title}</strong><span className="chip">Built-in</span><span className="chip ok">Low risk</span></div>
+              <div className="muted vc-fixall-sub">{BLOCK_TITLE(it.group.finding.code)}{where(it.group.finding.nodeId) ? ` · ${where(it.group.finding.nodeId)}` : ''}</div>
+              <ImpactLine impact={it.impact} />
+            </li>
+          ))}
+        </ul>
+        <h3 className="section-title">Combined effect</h3>
+        {combined ? <ImpactLine impact={{ ...combined, resolves: true, summary: `Together: ${combined.unblocked.length ? `unblocks ${combined.unblocked.length} of ${combined.totalCustomers} synthetic customers; ` : ''}${combined.changedCustomers} of ${combined.totalCustomers} synthetic customers receive something different; ${combined.newlyBlocked.length ? `${combined.newlyBlocked.length} would be newly blocked.` : 'nobody is newly blocked.'}` }} />
+          : <p className="muted vc-fix-wait" role="status"><span className="spinner" /> Checking the combined effect…</p>}
+        {plan.skipped.length > 0 && (
+          <details className="vc-fixall-skipped" open={plan.skipped.length <= 3} data-testid="fix-all-skipped">
+            <summary><strong>{plan.skipped.length} issue{plan.skipped.length === 1 ? '' : 's'} not included</strong></summary>
+            <ul className="list-rows">
+              {plan.skipped.map((s) => (
+                <li key={s.group.key} className="vc-fixall-item">
+                  <div className="vc-fixall-top"><strong>{BLOCK_TITLE(s.group.finding.code)}</strong>{where(s.group.finding.nodeId) && <span className="muted">{where(s.group.finding.nodeId)}</span>}</div>
+                  <div className="muted vc-fixall-sub">{s.reason}</div>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </Dialog>
   );
 }
 
