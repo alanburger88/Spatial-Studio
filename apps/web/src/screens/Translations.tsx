@@ -6,7 +6,7 @@ import { ScreenHeader, Loading, Empty, Tech, Dialog } from '../ui/common';
 import { ResolveInBlockers } from './blockers/link';
 import { fieldLabel, localeLabel } from '../ui/plain';
 import { Icon } from '../ui/icons';
-import { editBlockedReason, useStudio, setPreviewLanguage } from '../state/store';
+import { dated, editBlockedReason, useStudio, setPreviewLanguage, usePreviewDate } from '../state/store';
 import { api } from '../api/client';
 import { checkTranslations, type TranslationFlag } from '@iss/scenarios';
 import { SourceChip } from '../assist/common';
@@ -164,12 +164,13 @@ export function Translations() {
     checkSeq.current++; setCheck(null); setChecking(false); setFlaggedOnly(false);
   }, [LOCALE]);
 
-  // What the real resolver shows each synthetic record. Drafts and approvals never change selection, so only structure invalidates this.
+  // What the real resolver shows each synthetic record ("as issued on" the preview date). Drafts and approvals never change selection, so only structure invalidates this.
+  const issueDate = usePreviewDate();
   const usage = useMemo<TranslationUsageEntry[] | undefined>(() => {
     if (!project || !records.length) return undefined;
-    return records.filter((r) => r.documentType === project.documentType).map((record) => usageEntryFromResolution(project, record, resolve({ project, record }) as any));
+    return records.filter((r) => r.documentType === project.documentType).map((record) => usageEntryFromResolution(project, record, resolve({ project, record, ...dated(issueDate) }) as any));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.rules, project?.nodes, project?.journey, project?.contentParts.length, records]);
+  }, [project?.rules, project?.nodes, project?.journey, project?.contentParts.length, records, issueDate]);
 
   const st = useMemo(() => (project && LOCALE ? translationStatus(project, LOCALE, usage) : null), [project, usage, LOCALE]);
 
