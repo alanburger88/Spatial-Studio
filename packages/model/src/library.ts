@@ -393,7 +393,7 @@ export function libraryContentFromProject(project: Project, kind: LibraryKind, r
         const mine = m && (m[1] === 'title' ? partIds.has(m[2]) : ids.includes(m[1]));
         if (mine && t.approved && Object.keys(t.approved).length) strings[id] = { approved: { ...t.approved } };
       }
-      return { content: { nodes, contentParts: contentParts as ContentPart[], ...(Object.keys(strings).length ? { strings } : {}) }, title: root.name ?? root.label ?? root.id };
+      return { content: withoutLinkPrefix({ nodes, contentParts: contentParts as ContentPart[], ...(Object.keys(strings).length ? { strings } : {}) }), title: root.name ?? root.label ?? root.id };
     }
   }
 }
@@ -427,10 +427,8 @@ export function nextLinkId(project: Project, itemId: string): string {
   }
 }
 
-/** The block's nodes, messages and translations with document ids. Styles the document does not have are dropped. */
-export function mapBlock(content: LibraryBlockContent, prefix: string, project: Project): { nodes: DocNode[]; parts: ContentPart[]; strings: Record<string, StringTranslation> } {
-  const m = (id: string) => blockId(prefix, id);
-  const styles = new Set((project.styles ?? []).map((s) => s.id));
+/** A block with every node and message id renamed (and every reference to one). */
+function renameBlock(content: LibraryBlockContent, m: (id: string) => string): LibraryBlockContent {
   const nodes = content.nodes.map((src) => {
     const n = JSON.parse(JSON.stringify(src)) as DocNode;
     n.id = m(n.id);
@@ -440,17 +438,36 @@ export function mapBlock(content: LibraryBlockContent, prefix: string, project: 
     if (n.fallbackVariantId) n.fallbackVariantId = m(n.fallbackVariantId);
     if (n.variantConditions) n.variantConditions = Object.fromEntries(Object.entries(n.variantConditions).map(([k, v]) => [m(k), v]));
     if (n.variantPeriods) n.variantPeriods = Object.fromEntries(Object.entries(n.variantPeriods).map(([k, v]) => [m(k), v]));
-    if (n.styleId && !styles.has(n.styleId)) delete n.styleId;
     return n;
   });
-  const parts = content.contentParts.map((p) => ({ ...JSON.parse(JSON.stringify(p)), id: m(p.id), version: 1 }) as ContentPart);
-  const strings: Record<string, StringTranslation> = {};
+  const contentParts = content.contentParts.map((p) => ({ ...JSON.parse(JSON.stringify(p)), id: m(p.id) }) as ContentPart);
+  const strings: NonNullable<LibraryBlockContent['strings']> = {};
   for (const [id, t] of Object.entries(content.strings ?? {})) {
     const mm = /^@([^/]+)\/(.+)$/.exec(id)!;
-    const key = mm[1] === 'title' ? `@title/${m(mm[2])}` : `@${m(mm[1])}/${mm[2]}`;
-    strings[key] = { approved: { ...t.approved } };
+    strings[mm[1] === 'title' ? `@title/${m(mm[2])}` : `@${m(mm[1])}/${mm[2]}`] = { approved: { ...t.approved } };
   }
-  return { nodes, parts, strings };
+  return { nodes, contentParts, ...(content.strings ? { strings } : {}) };
+}
+
+/** The block's nodes, messages and translations with document ids. Styles the document does not have are dropped. */
+export function mapBlock(content: LibraryBlockContent, prefix: string, project: Project): { nodes: DocNode[]; parts: ContentPart[]; strings: Record<string, StringTranslation> } {
+  const renamed = renameBlock(content, (id) => blockId(prefix, id));
+  const styles = new Set((project.styles ?? []).map((s) => s.id));
+  for (const n of renamed.nodes) if (n.styleId && !styles.has(n.styleId)) delete n.styleId;
+  return { nodes: renamed.nodes, parts: renamed.contentParts.map((p) => ({ ...p, version: 1 })), strings: renamed.strings ?? {} };
+}
+
+/**
+ * A block taken from a document that once inserted it from the library carries the link's prefix on every id. The prefix
+ * is taken off again, so a new version made from that document keeps the library's ids (and every other document's).
+ */
+function withoutLinkPrefix(content: LibraryBlockContent): LibraryBlockContent {
+  const m = /^(lk[a-z0-9]{6}-)/.exec(content.nodes[0]?.id ?? '');
+  if (!m) return content;
+  const prefix = m[1];
+  const all = [...content.nodes.map((n) => n.id), ...content.contentParts.map((p) => p.id)];
+  if (!all.every((id) => id.startsWith(prefix) && LIBRARY_ID_PATTERN.test(id.slice(prefix.length)))) return content;
+  return renameBlock(content, (id) => id.slice(prefix.length));
 }
 
 /** What a block link occupies in the document now: its nodes (root first), its messages and its translation ids. */
@@ -546,7 +563,17 @@ export function linkOfText(project: Project, id: string): LibraryLink | undefine
   if (!mm) return linkOfPart(project, id);
   return mm[1] === 'title' ? linkOfPart(project, mm[2]) : linkOfNode(project, mm[1]);
 }
-export const linkOfKind = (project: Project, kind: 'brand' | 'glossary' | 'wording-rules'): LibraryLink | undefined => (project.libraryLinks ?? []).find((l) => l.target.kind === kind);
+/** Which link owns each linked node and message, computed once (for screens that check many texts). */
+export function libraryOwnership(project: Project): { nodes: Map<string, LibraryLink>; parts: Map<string, LibraryLink>; textOf(id: string): LibraryLink | undefined } {
+  const nodes = new Map<string, LibraryLink>(), parts = new Map<string, LibraryLink>();
+  for (const l of project.libraryLinks ?? []) {
+    if (l.target.kind === 'wording') parts.set(l.target.partId, l);
+    if (l.target.kind === 'block') { const m = blockMembers(project, l.target.rootNodeId); m.nodeIds.forEach((id) => nodes.set(id, l)); m.partIds.forEach((id) => parts.set(id, l)); }
+  }
+  const textOf = (id: string) => { const mm = /^@([^/]+)\/(.+)$/.exec(id); return !mm ? parts.get(id) : mm[1] === 'title' ? parts.get(mm[2]) : nodes.get(mm[1]); };
+  return { nodes, parts, textOf };
+}
+export const linkOfKind =(project: Project, kind: 'brand' | 'glossary' | 'wording-rules'): LibraryLink | undefined => (project.libraryLinks ?? []).find((l) => l.target.kind === kind);
 export const linkOfTable = (project: Project, tableId: string): LibraryLink | undefined => (project.libraryLinks ?? []).find((l) => l.target.kind === 'lookup-table' && l.target.tableId === tableId);
 
 /** How a link stands against the library: up to date, behind a newer approved version, or naming an item this studio does not have. */

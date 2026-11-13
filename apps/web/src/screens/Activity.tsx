@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { LIBRARY_KIND_LABEL } from '@iss/model';
 import { Link } from 'react-router-dom';
 import { ROLES, ROLE_LABEL, ROLE_SUMMARY, type Project, type Role, type SyntheticRecord } from '@iss/model';
 import { parseActivityQuery, type ActivityQuery } from '@iss/scenarios';
@@ -16,6 +17,7 @@ const CATEGORIES: Array<{ id: string; label: string }> = [
   { id: '', label: 'Everything' },
   { id: 'project.', label: 'Saves & versions' },
   { id: 'template.', label: 'Templates' },
+  { id: 'library.', label: 'Shared library' },
   { id: 'testdata.', label: 'Test customers' },
   { id: 'workflow.', label: 'Review & approval' },
   { id: 'release.', label: 'Releases' },
@@ -84,6 +86,12 @@ export function auditSentence(e: AuditEventDto, project: Project | null, names: 
     case 'template.save': return d.newTemplate ? `Saved a new template “${d.title}” (v${d.version})` : `Saved version ${d.version} of the template “${d.title}”`;
     case 'template.retire': return `Retired the template “${d.title}”`;
     case 'template.unretire': return `Brought back the template “${d.title}”`;
+    // Shared library (ids and titles only)
+    case 'library.create': return `Added the ${libKind(d.kind)} “${d.title}” to the library (version 1, a draft)`;
+    case 'library.draft': return d.newVersion ? `Started version ${d.version} of the library ${libKind(d.kind)} “${d.title}” as a draft` : `Edited the draft version ${d.version} of the library ${libKind(d.kind)} “${d.title}”`;
+    case 'library.approve': return `Approved version ${d.version} of the library ${libKind(d.kind)} “${d.title}”${Number(d.documentsBehind ?? 0) ? `; ${plural(Number(d.documentsBehind), 'document')} can now update` : ''}`;
+    case 'library.discard': return `Discarded the draft version ${d.version} of the library ${libKind(d.kind)} “${d.title}”${d.itemRemoved ? ' (the item had no approved version, so it was removed)' : ''}`;
+    case 'library.reset': return `Removed ${plural(Number(d.removed ?? 0), 'library item')} (test reset)`;
     case 'template.reset': return `Removed ${plural(Number(d.removed ?? 0), 'saved template')}`;
     case 'project.duplicate': return `Created “${d.title ?? e.projectId}” as a copy of ${d.from} v${d.fromVersion}`;
     case 'project.rename': return `Renamed “${d.from}” to “${d.to}”`;
@@ -155,7 +163,8 @@ const ROUTE_WORDS: Record<string, string> = {
   '/api/v1/projects/:projectId/translate': 'Asked for translation drafts (nothing changes until they are saved)',
   '/api/v1/projects/import': 'Checked a project file before bringing it in',
 };
-const ACTION_WORDS: Record<string, string> = { 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs', 'release.create': 'New releases', 'release.promote': 'Moves to Production', 'release.withdraw': 'Withdrawn releases', 'release.handover': 'Handover entries', 'release.package': 'Release packages', 'release.runtime': 'Runnable packages', 'known-data.add': 'Known data problems set aside', 'known-data.remove': 'Known data problems removed', 'known-data.lapse': 'Known data problems that lapsed', 'proof.produce': 'Documents produced from a release', 'proof.import': 'Proof records added', 'proof.verify': 'Proof checks' };
+const libKind = (k: unknown): string => (LIBRARY_KIND_LABEL as Record<string, string>)[String(k)]?.toLowerCase() ?? 'item';
+const ACTION_WORDS: Record<string, string> = { 'library.create': 'Library items added', 'library.draft': 'Library drafts', 'library.approve': 'Library approvals', 'library.discard': 'Library drafts discarded', 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs', 'release.create': 'New releases', 'release.promote': 'Moves to Production', 'release.withdraw': 'Withdrawn releases', 'release.handover': 'Handover entries', 'release.package': 'Release packages', 'release.runtime': 'Runnable packages', 'known-data.add': 'Known data problems set aside', 'known-data.remove': 'Known data problems removed', 'known-data.lapse': 'Known data problems that lapsed', 'proof.produce': 'Documents produced from a release', 'proof.import': 'Proof records added', 'proof.verify': 'Proof checks' };
 const actionLabel = (a: string): string => ACTION_WORDS[a] ?? CATEGORIES.find((c) => c.id === a)?.label ?? a;
 
 /* ------------------------------------------------------------------ grouping */

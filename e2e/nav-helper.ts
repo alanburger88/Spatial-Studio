@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test';
  * click the screen's tab. Does nothing extra when the tab is already showing.
  */
 const SECTION_OF: Record<string, string> = {
+  S01: 'projects', S25: 'projects',
   S02: 'design', S13: 'design', S15: 'design',
   S07: 'rules-data', S16: 'rules-data', S08: 'rules-data', S22: 'rules-data', S23: 'rules-data', S24: 'rules-data',
   S03: 'explore', S04: 'explore', S05: 'explore', S06: 'explore',

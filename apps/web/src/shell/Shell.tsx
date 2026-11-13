@@ -53,6 +53,7 @@ export const SCREENS = [
   { id: 'S22', path: 'calculations', label: 'Calculations', icon: Icon.rules, group: 'build', hint: 'Values worked out from the customer\'s data, for rules and wording' },
   { id: 'S23', path: 'lookup-tables', label: 'Lookup tables', icon: Icon.rules, group: 'build', hint: 'Small tables, such as a fee by tier, that a calculation reads' },
   { id: 'S24', path: 'dates', label: 'Dates', icon: Icon.journey, group: 'build', hint: 'The document\'s date, what starts and ends when, and a timeline' },
+  { id: 'S25', path: '/library', label: 'Library', icon: Icon.list, group: 'home', hint: 'Brands, building blocks, wording and tables that many documents share' },
 ] as const;
 
 /** Overview nav icon: a gauge with a tick. */
@@ -62,7 +63,7 @@ function OverviewIcon(p: SVGProps<SVGSVGElement>) {
 
 /** The label a screen carries as a tab across the top of its section (its page heading is the screen's own `label`). */
 export const TAB_LABEL: Record<string, string> = {
-  S01: 'Projects', S19: 'Overview',
+  S01: 'Projects', S25: 'Library', S19: 'Overview',
   S02: 'Layout', S13: 'Wording & translations', S15: 'Email & SMS',
   S07: 'Rules', S16: 'Customers', S08: 'Journeys', S22: 'Calculations', S23: 'Lookup tables', S24: 'Dates',
   S03: 'Exploded', S04: 'Cube', S05: 'Landscape', S06: 'Page stack',
@@ -76,7 +77,7 @@ export const TAB_LABEL: Record<string, string> = {
  * main area (SectionTabs). Order of `screens` is the tab order; the first is the default tab.
  */
 export const SECTIONS = [
-  { id: 'projects', label: 'Projects', icon: Icon.gallery, short: 'All documents', hint: 'All projects and samples', screens: ['S01'] },
+  { id: 'projects', label: 'Projects', icon: Icon.gallery, short: 'All documents', hint: 'All projects, samples and the shared library', screens: ['S01', 'S25'] },
   { id: 'overview', label: 'Overview', icon: OverviewIcon, short: 'Status and next steps', hint: 'Where this document stands and what to do next', screens: ['S19'] },
   { id: 'design', label: 'Design', icon: Icon.design, short: 'Layout and wording', hint: 'Layout, wording and translations, email and text messages', screens: ['S02', 'S13', 'S15'] },
   { id: 'rules-data', label: 'Rules & data', icon: Icon.rules, short: 'Rules and customers', hint: 'Who sees what, the customers to test with, and how it plays out over time', screens: ['S07', 'S16', 'S08', 'S22', 'S23', 'S24'] },
@@ -95,6 +96,7 @@ const screenById = (id: string) => SCREENS.find((x) => x.id === id);
 export function screenOfPath(pathname: string): (typeof SCREENS)[number] | null {
   if (pathname === '/projects') return screenById('S01') ?? null;
   if (pathname === '/activity') return screenById('S14') ?? null;
+  if (pathname === '/library' || pathname.startsWith('/library/')) return screenById('S25') ?? null;
   const seg = pathname.match(/^\/studio\/[^/]+\/([^/]+)/)?.[1];
   return SCREENS.find((x) => !x.path.startsWith('/') && x.path === seg) ?? null;
 }
@@ -465,7 +467,7 @@ export function PlainShell({ children }: { children: ReactNode }) {
     <div className={shellClass(navCollapsed)}>
       <TopBar />
       <Nav />
-      <main className="main" id="main">{children}</main>
+      <main className="main" id="main"><SectionTabs plain />{children}</main>
       <footer className="dock">InfoSlips Spatial Studio · local proof of concept</footer>
       <Toasts />
       <Overlays />

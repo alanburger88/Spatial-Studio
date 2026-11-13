@@ -11,6 +11,7 @@ import { RuntimeSection } from './RuntimeSection';
 import { HandoverSection } from './HandoverSection';
 import { ProduceSection } from './ProduceSection';
 import { STANDING_CHIP, personName } from './format';
+import { ReleaseLibrarySection } from '../library/ReleaseLibrary';
 
 export interface DetailProps {
   detail: ReleaseDetailDto;
@@ -34,6 +35,7 @@ export function ReleaseDetail({ detail, releases, role, onChanged }: DetailProps
       <StageStates r={r} />
       {r.documentRemoved && <div className="callout warning" role="status">The document this release came from was deleted{r.documentRemovedAt ? ` on ${fmtAbs(r.documentRemovedAt)}` : ''}. The release is kept as it was.</div>}
       <Facts r={r} />
+      <ReleaseLibrarySection releaseId={r.id} />
       <StageHistory history={detail.history} />
       <Actions detail={detail} releases={releases} role={role} onChanged={onChanged} />
       <PackageSection release={r} onChanged={onChanged} />

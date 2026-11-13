@@ -196,6 +196,16 @@ describe('linking, updating and unlinking (every kind, one undoable step each)',
     expect(p.libraryLinks).toBeUndefined();
   });
 
+  it('a new version taken from a document that inserted the block (then unlinked it) keeps the library’s ids', () => {
+    const linked = run(second(), { type: 'LINK_LIBRARY_ITEM', item: BLOCK_ITEM, version: 1, content: blockV1.content, placement: { parentId: 'doc-root' } });
+    const l = linked.libraryLinks![0];
+    const own = run(linked, { type: 'UNLINK_LIBRARY_ITEM', linkId: l.linkId }, { type: 'UPDATE_NODE', nodeId: `${l.linkId}-greeting`, patch: { name: 'Warm greeting' } });
+    const again = libraryContentFromProject(own, 'block', `${l.linkId}-contact-panel`) as { content: any };
+    expect(again.content.nodes.map((n: any) => n.id)).toEqual(blockV1.content.nodes.map((n: any) => n.id));
+    expect(again.content.contentParts.map((p: any) => p.id)).toEqual(blockV1.content.contentParts.map((p: any) => p.id));
+    expect(again.content.nodes.find((n: any) => n.id === 'greeting').name).toBe('Warm greeting');
+  });
+
   it('refuses a block whose data fields or ids the document does not have', () => {
     const eob = seedProjects()[1];
     const r = refused(eob, { type: 'LINK_LIBRARY_ITEM', item: { id: 'balance-block', kind: 'block', title: 'Balance' }, version: 1, content: (libraryContentFromProject(card, 'block', 'account-summary') as any).content, placement: { parentId: 'doc-root' } });
