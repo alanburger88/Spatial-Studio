@@ -125,8 +125,8 @@ These timings are single-document measurements in the development environment, n
 ## Phase 2 check-in (2026-11-13)
 
 - **Stage names:** Test, then Production (confirmed by the product owner).
-- **Creating a release:** approving a document creates the next numbered release automatically, at stage Test. *Recommended default, not explicitly confirmed; easy to change to a separate "Create release" step.*
-- **Moving to Production:** admins only. *Recommended default, not explicitly confirmed.*
+- **Creating a release:** approving a document creates the next numbered release automatically, at stage Test (confirmed by the product owner on 2026-11-13).
+- **Moving to Production:** admins only (confirmed by the product owner on 2026-11-13).
 - **Target CCM:** none named yet, so the package stays neutral (no mapping file until phase 3).
 
 ## Needed from the product owner
