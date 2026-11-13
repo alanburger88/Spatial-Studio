@@ -1,4 +1,4 @@
-import type { Permission, Persona, Project, ProjectDiff, Role, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
+import type { DocumentType, Permission, Persona, Project, ProjectDiff, Role, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
 import type { TestResult } from '@iss/scenarios';
 
 /** Typed client for the local Spatial Studio API (/api/v1, proxied by Vite). */
@@ -24,7 +24,7 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export interface ProjectSummary {
-  projectId: string; title: string; documentType: 'credit-statement' | 'eob'; modelVersion: number; schemaVersion: string;
+  projectId: string; title: string; documentType: DocumentType; modelVersion: number; schemaVersion: string;
   issuer: Project['issuer']; contentDigest: string; modified: boolean; updatedAt: string; nodeCount: number; ruleCount: number;
   /** Approved seeded sample (restorable, not deletable) vs a user copy. */
   sample: boolean; derivedFrom: { projectId: string; modelVersion: number } | null; fromTemplate: { templateId: string; version: number; title: string } | null; importedFrom: { title: string; modelVersion: number } | null;
@@ -32,7 +32,7 @@ export interface ProjectSummary {
 
 export interface TemplateVersionDto { version: number; savedAt: string; savedBy: { id: string; name: string } | null; note: string; from: { projectId: string; title: string; modelVersion: number }; counts: { components: number; rules: number; messages: number; languages: number; tests: number } }
 /** `source: 'saved'` templates were published from a document; they have numbered, frozen versions (newest first). */
-export interface TemplateInfoDto { id: string; title: string; documentType: 'credit-statement' | 'eob'; description: string; source?: 'builtin' | 'saved'; version?: number; versions?: TemplateVersionDto[]; retired?: boolean }
+export interface TemplateInfoDto { id: string; title: string; documentType: DocumentType; description: string; source?: 'builtin' | 'saved'; version?: number; versions?: TemplateVersionDto[]; retired?: boolean }
 /** One thing the generated customers should exercise. `recordId` is the generated customer that does (null = nothing reaches it; `reason` says why). */
 export interface TestDataTargetDto { id: string; kind: 'rule' | 'variant' | 'section-shown' | 'section-hidden' | 'language' | 'edge' | 'empty'; targetId: string; title: string; customer: number | null; recordId: string | null; reason?: string; observed?: string }
 export interface TestDataResult {
@@ -44,10 +44,14 @@ export interface TestDataResult {
 export interface RecordProblem { path: string | null; message: string }
 /** What the document does for a customer as issued. */
 export interface RecordOutcome { messages: Array<{ nodeId: string; node: string; variantId: string | null; variant: string | null }>; blocking: Array<{ code: string; message: string }> }
+/** What removing a project's generated or supplied customers answers. A `custom` project also says how many customers it has left, and which one was created to keep it previewable. */
+export interface RemovalResult { removed: number; remaining?: number; kept?: { recordId: string; name: string; label: string } | null; note?: string }
 export interface ProjectImportReport { from: { projectId: string; title: string; modelVersion: number }; counts: TemplateVersionDto['counts']; warnings: string[]; notImported: string[] }
 
 export interface ImportResult {
-  documentType: 'credit-statement' | 'eob'; dryRun: boolean; total: number;
+  documentType: DocumentType; dryRun: boolean; total: number;
+  /** Set when the rows are (or would be) stored as the project's own customers. */
+  projectId?: string; scope?: 'project';
   imported: Array<{ recordId: string; sourceId: string | null; name: string }>;
   rejected: Array<{ row: number; sourceId: string | null; errors: string[] }>;
 }
@@ -166,7 +170,7 @@ export const api = {
   generateTestData: (projectId: string, body: { project?: Project; outcomes: boolean; edges: boolean }) => json<TestDataResult & { generated: number; replaced: number }>(`/api/v1/projects/${projectId}/test-data`, { method: 'POST', body: JSON.stringify(body) }),
   /** The project's current generated customers and what the last generation covered. `stale` = the saved document changed since. */
   testData: (projectId: string) => json<TestDataResult & { count: number; generatedAt: string | null; options: { outcomes: boolean; edges: boolean } | null; forModelVersion: number | null; stale: boolean }>(`/api/v1/projects/${projectId}/test-data`),
-  clearTestData: (projectId: string) => json<{ removed: number }>(`/api/v1/projects/${projectId}/test-data`, { method: 'DELETE' }),
+  clearTestData: (projectId: string) => json<RemovalResult>(`/api/v1/projects/${projectId}/test-data`, { method: 'DELETE' }),
   /** Built-in starters, then saved templates. `canSave` = this user may save a document as a template (approvers and admins). */
   templates: (includeRetired = false) => json<{ templates: TemplateInfoDto[]; canSave: boolean }>(`/api/v1/templates${includeRetired ? '?includeRetired=true' : ''}`),
   /** Saves the document's LAST SAVED version as a template. With `templateId` it adds the next version to that saved template. Errors: 403, 409 TEMPLATE_NAME_TAKEN, 400 DOCUMENT_TYPE_MISMATCH. */
@@ -174,10 +178,15 @@ export const api = {
   setTemplateRetired: (templateId: string, retired: boolean) => json<{ template: TemplateInfoDto }>(`/api/v1/templates/${templateId}`, { method: 'PATCH', body: JSON.stringify({ retired }) }),
   /** Checks a studio project file and (unless `dryRun`) stores it as a NEW draft document. A 422 failure is an `ApiFailure` whose `body.error.problems` is `[{ code, message }]`. */
   importProject: (file: unknown, opts: { title?: string; dryRun?: boolean } = {}) => json<{ project?: Project; dryRun?: boolean; wouldCreate?: { projectId: string; title: string }; report: ProjectImportReport }>('/api/v1/projects/import', { method: 'POST', body: JSON.stringify({ file, ...opts }) }),
-  templateProject: (templateId: string, documentType?: string, version?: number) => json<{ template: TemplateInfoDto; project: Project; version?: number }>(`/api/v1/templates/${templateId}/project?${new URLSearchParams({ ...(documentType ? { documentType } : {}), ...(version ? { version: String(version) } : {}) })}`),
-  createProject: (body: { templateId: string; title: string; documentType?: string; templateVersion?: number }) => json<{ project: Project; createdFrom: string; templateVersion: number | null }>('/api/v1/projects', { method: 'POST', body: JSON.stringify(body) }),
+  /** `previewRecord` comes with a document that has its own data (there is no stored customer to draw it with). */
+  templateProject: (templateId: string, documentType?: string, version?: number) => json<{ template: TemplateInfoDto; project: Project; version?: number; previewRecord?: SyntheticRecord }>(`/api/v1/templates/${templateId}/project?${new URLSearchParams({ ...(documentType ? { documentType } : {}), ...(version ? { version: String(version) } : {}) })}`),
+  /** `issuerName` (2-60 characters) and `accent` (#rrggbb) apply to the Blank project only. A document with its own data answers `customers`: how many it was given. */
+  createProject: (body: { templateId: string; title: string; documentType?: string; templateVersion?: number; issuerName?: string; accent?: string }) => json<{ project: Project; createdFrom: string; templateVersion: number | null; customers?: number }>('/api/v1/projects', { method: 'POST', body: JSON.stringify(body) }),
   deleteProject: (id: string) => json<{ deleted: boolean }>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
-  importRecords: (body: { documentType: string; format: 'json' | 'csv'; data: string; dryRun?: boolean; projectId?: string }) => json<ImportResult>('/api/v1/records/import', { method: 'POST', body: JSON.stringify(body) }),
+  /** `documentType` may be left out when `projectId` is sent. For a `custom` project `projectId` is required and the rows become that project's own customers; for the built-in kinds `scope: 'project'` does the same. */
+  importRecords: (body: { documentType?: string; format: 'json' | 'csv'; data: string; dryRun?: boolean; projectId?: string; scope?: 'project' | 'shared' }) => json<ImportResult>('/api/v1/records/import', { method: 'POST', body: JSON.stringify(body) }),
+  /** Removes the customers that were supplied (imported) for this project. Generated customers stay. A `custom` project keeps one customer at least. */
+  deleteSuppliedRecords: (projectId: string) => json<RemovalResult>(`/api/v1/projects/${projectId}/records/supplied`, { method: 'DELETE' }),
   clearImportedRecords: (documentType?: string) => json<{ removed: number }>(`/api/v1/records/imported${documentType ? `?documentType=${documentType}` : ''}`, { method: 'DELETE' }),
   /** Tell the activity log that a person applied an assistant proposal (label and counts only). Never blocks the UI. */
   assistApplied: (body: { projectId: string; feature: string; label: string; source: 'builtin' | 'ai'; changes?: number; modelVersion?: number }) => json<{ recorded: boolean }>('/api/v1/assist/applied', { method: 'POST', body: JSON.stringify(body) }).catch(() => ({ recorded: false })),
@@ -195,7 +204,7 @@ export const api = {
   importTranslations: (id: string, body: { locale: string; csv: string; project?: Project }) => json<{ locale: string; drafts: Array<{ partId: string; text: string }>; errors: Array<{ row: number; partId: string; code: string; message: string }>; skipped: number; rows: number }>(`/api/v1/projects/${id}/translations/import`, { method: 'POST', body: JSON.stringify(body) }),
   schemas: (id: string) => json<{ fields: any[]; dimensions: any[]; edgeCasePresets: Array<{ id: string; label: string; description: string }> }>(`/api/v1/projects/${id}/schemas`),
   /** Customers for one kind of document. With a project id, also that project's own customers (generated test customers have `generated.label`). */
-  records: (documentType: string, projectId?: string) => json<{ records: SyntheticRecord[]; seed: string }>(`/api/v1/records?documentType=${documentType}&full=1${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ''}`),
+  records: (documentType: DocumentType | string, projectId?: string) => json<{ records: SyntheticRecord[]; seed: string }>(`/api/v1/records?documentType=${documentType}&full=1${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ''}`),
   personas: () => json<{ personas: Persona[] }>('/api/v1/personas'),
   resolve: (req: ScenarioRequest) => json<any>('/api/v1/resolve', { method: 'POST', body: JSON.stringify(req) }),
   composePdf: (req: ScenarioRequest) => binary('/api/v1/compose/pdf', req),

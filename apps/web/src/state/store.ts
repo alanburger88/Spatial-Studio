@@ -115,24 +115,39 @@ applyDocAttrs(initialViewMode, initialTheme);
 const HISTORY_LIMIT = 50;
 let toastSeq = 0;
 
-function defaultCtx(project: Project): StudioContext {
+/** The customer a project opens on: the first of the shared samples for the two built-in kinds; a document with its own data has only its own customers, so its first one ('' when it has none). */
+export function defaultRecordId(project: Project, records: SyntheticRecord[] = []): string {
+  if (project.documentType === 'custom') return records.find((r) => r.documentType === 'custom' && r.projectId === project.projectId)?.recordId ?? records.find((r) => r.documentType === 'custom')?.recordId ?? '';
+  return project.documentType === 'eob' ? 'EOB-0001' : 'CARD-0001';
+}
+
+/** Cube axes that exist for the kind of document: a document with its own data has no persona or claim status, so it starts on its language. */
+export function defaultCubeAxes(project: Project): StudioContext['cubeAxes'] {
+  if (project.documentType === 'custom') {
+    const own = (project.customFields ?? []).find((f) => f.dimension && f.type !== 'list');
+    return [own ? (`custom.${own.key}` as DimensionId) : 'locale', 'output', 'journey'] as StudioContext['cubeAxes'];
+  }
+  return project.documentType === 'eob' ? ['claimStatus', 'output', 'journey'] : ['persona', 'output', 'journey'];
+}
+
+function defaultCtx(project: Project, records: SyntheticRecord[] = []): StudioContext {
   return {
-    recordId: project.documentType === 'eob' ? 'EOB-0001' : 'CARD-0001',
+    recordId: defaultRecordId(project, records),
     overrides: {},
     journeyCursor: null,
     profileId: 'paged-pdf',
     selectedNodeId: project.nodes.find((n) => n.type === 'variant-set')?.id ?? null,
     selectedVariantId: null,
     activeValidationIssue: null,
-    cubeAxes: project.documentType === 'eob' ? ['claimStatus', 'output', 'journey'] : ['persona', 'output', 'journey'],
+    cubeAxes: defaultCubeAxes(project),
     spatialFilters: {},
     activeScenarioId: null,
   };
 }
 
 const ctxKey = (projectId: string) => `iss.ctx.${projectId}`;
-function loadCtx(project: Project): StudioContext {
-  const base = defaultCtx(project);
+function loadCtx(project: Project, records: SyntheticRecord[]): StudioContext {
+  const base = defaultCtx(project, records);
   try {
     const raw = localStorage.getItem(ctxKey(project.projectId));
     if (!raw) return base;
@@ -215,8 +230,8 @@ export const useStudio = create<StudioState>((set, get) => ({
         api.records(project.documentType, project.projectId),
         get().personas.length ? Promise.resolve({ personas: get().personas }) : api.personas(),
       ]);
-      const ctx = loadCtx(project);
-      if (!recs.records.some((r) => r.recordId === ctx.recordId)) ctx.recordId = defaultCtx(project).recordId;
+      const ctx = loadCtx(project, recs.records);
+      if (!recs.records.some((r) => r.recordId === ctx.recordId)) ctx.recordId = defaultRecordId(project, recs.records);
       set({ project, projectStatus: 'ready', serverVersion: project.modelVersion, savedDigest: projectContentDigest(project), past: [], future: [], records: recs.records, recordsStatus: 'ready', personas: personas.personas, ctx });
     } catch (e: any) {
       set({ projectStatus: 'error', projectError: e instanceof ApiFailure ? `${e.code}: ${e.message}` : String(e.message ?? e) });
@@ -298,7 +313,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     const { records } = await api.records(project.documentType, project.projectId);
     const ctx = get().ctx;
     set({ records });
-    if (!records.some((r) => r.recordId === ctx.recordId)) get().setCtx({ recordId: defaultCtx(project).recordId, overrides: {}, journeyCursor: null });
+    if (!records.some((r) => r.recordId === ctx.recordId)) get().setCtx({ recordId: defaultRecordId(project, records), overrides: {}, journeyCursor: null });
   },
 
   setRecord(recordId) { get().setCtx({ recordId, overrides: {}, journeyCursor: null }); },
