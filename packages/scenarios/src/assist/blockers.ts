@@ -1,7 +1,8 @@
-import { languageShortName, type ProfileId, type Project, type SyntheticRecord, type TestCase } from '@iss/model';
+import { SOURCE_LANGUAGE, languageShortName, type ProfileId, type Project, type SyntheticRecord, type TestCase } from '@iss/model';
 import { resolve, type Finding } from '@iss/resolver';
 import { captureExpectation, nextTestId } from '../testCases';
-import { groupFindings, proposeFixes } from './fixes';
+import { groupFindings, proposeFixes, readersOf } from './fixes';
+import { isWordingCode, wordingFindings } from './wordingRules';
 import type { Blocker, BlockerAbout, BlockerKind, BlockerLink, DocumentBlockers, FixProposal } from './types';
 
 /**
@@ -34,6 +35,8 @@ const KIND_BY_CODE: Record<string, BlockerKind> = {
   // the customer's own data
   RECORD_TYPE_MISMATCH: 'customer-data', INCONSISTENT_PAYMENT_STATE: 'customer-data', BALANCE_RECONCILIATION_FAILED: 'customer-data',
   UNCONFIRMED_MEMBER_LIABILITY: 'customer-data', CLAIM_RECONCILIATION_FAILED: 'customer-data', NULL_BINDING: 'customer-data',
+  // wording rules (wave 2): a "must" rule broken in a text a customer reads
+  WORDING_BANNED: 'wording', WORDING_REQUIRED: 'wording', WORDING_PREFERRED: 'wording', WORDING_READING_LEVEL: 'wording', WORDING_SENTENCE_LENGTH: 'wording', WORDING_TONE: 'wording',
   // calculated values and the document's date
   CALCULATION_MISSING: 'customer-data', DOCUMENT_DATE_MISSING: 'customer-data', ISSUE_DATE_INVALID: 'customer-data',
 };
@@ -130,6 +133,15 @@ function wordsFor(project: Project, f: Finding, about: BlockerAbout, n: number):
   const lang = about.language?.name ?? 'the other language';
   const ruleNames = (about.rules ?? []).map((r) => q(r.name));
   const who = n === 0 ? 'No sample customer reaches this today, but any customer who does will be stopped.' : n === 1 ? 'It stops 1 customer.' : `It stops ${n} customers.`;
+  if (isWordingCode(f.code)) {
+    // Wording rules: one rule in one text (or a required phrase missing from the document). Named by the rule and the text.
+    const d = f.details ?? {};
+    const text = typeof d.textTitle === 'string' ? d.textTitle : null;
+    const rule = typeof d.ruleLabel === 'string' ? d.ruleLabel : 'A wording rule';
+    const from = d.origin === 'house' ? 'a house rule' : 'one of this document’s own rules';
+    const readers = n === 0 ? 'No synthetic customer reads it today' : n === 1 ? '1 synthetic customer reads it' : `${n} synthetic customers read it`;
+    return { title: text ? `${q(text)} breaks a wording rule: ${rule}` : `Missing required wording: ${rule.replace(/^Required: /, '')}`, explanation: `${f.message} This is ${from} that must be met (a “must”), so the document cannot be approved until it is. ${readers}.` };
+  }
   if (f.code.startsWith(PDF_A11Y_PREFIX)) {
     // The PDF checks word their own title; a blocker only because the document requires an accessible PDF.
     const title = typeof f.details?.title === 'string' && f.details.title ? f.details.title : 'The PDF is not accessible';
@@ -254,6 +266,12 @@ export function documentBlockers(project: Project, records: SyntheticRecord[], o
     for (const r of recordIds) a.recordIds.add(r);
   };
   for (const g of groupFindings(project, records, opts)) if (g.finding.severity === 'blocking') add(g.finding, g.recordIds, true);
+  // Wording rules (wave 2): checked on the model, so current; a "must" stops the customers who read the text.
+  for (const f of wordingFindings(project)) {
+    if (f.severity !== 'blocking') continue;
+    const readBy = Array.isArray(f.details?.readBy) ? (f.details!.readBy as string[]) : [];
+    add(f, readersOf(project, records, readBy, { locale: f.locale ?? SOURCE_LANGUAGE, profileId: opts?.profileId, journeyCursor: opts?.journeyCursor, issueDate: opts?.issueDate }), true);
+  }
   for (const x of opts?.extraFindings ?? []) {
     if (x.finding.severity !== 'blocking') continue;
     add(x.finding, x.recordId && known.has(x.recordId) ? [x.recordId] : [], x.speed === 'fast');

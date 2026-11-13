@@ -312,6 +312,69 @@ export function validateWordingRules(raw: unknown): string[] {
   return out.slice(0, 20);
 }
 
+/* ------------------------------------------------------------------ house rules and the document's own (section 4) */
+
+/** Where a rule applies, in words ("Messages", "Anywhere a customer reads"). */
+export const WORDING_RULE_SCOPE_LABEL: Record<WordingRuleScope, string> = {
+  anywhere: 'Anywhere a customer reads', messages: 'Messages and alternatives', disclosures: 'Notices and disclosures', labels: 'Labels and headings', email: 'Email', sms: 'Text message',
+};
+export const WORDING_RULE_KINDS_LIST = WORDING_RULE_KINDS;
+export const WORDING_RULE_SCOPES_LIST = WORDING_RULE_SCOPES;
+
+/** What makes two rules "the same rule": the kind, the phrase (ignoring case and spacing) and the language. */
+export function wordingRuleKey(r: Pick<WordingRule, 'kind' | 'phrase' | 'language'>): string {
+  return [r.kind, (r.phrase ?? '').trim().replace(/\s+/g, ' ').toLowerCase(), r.language ?? ''].join('|');
+}
+
+/** The house rule an own rule would weaken: a "must" with the same kind and phrase that the own rule makes a "should". */
+export function weakenedHouseRule(project: Pick<Project, 'houseWordingRules'>, rule: Pick<WordingRule, 'kind' | 'phrase' | 'language' | 'severity'>): WordingRule | null {
+  if (rule.severity !== 'should') return null;
+  const key = wordingRuleKey(rule);
+  return (project.houseWordingRules ?? []).find((h) => h.severity === 'must' && wordingRuleKey(h) === key) ?? null;
+}
+
+/**
+ * Why an own wording rule cannot be added (or replace the own rule `replacing`), in plain words, or null. Checks the
+ * rule itself, a unique id (among the house rules too), and that it does not weaken a house "must" rule.
+ */
+export function ownWordingRuleProblem(project: Pick<Project, 'houseWordingRules' | 'wordingRules'>, raw: unknown, replacing?: string): string | null {
+  const c = checkWordingRule(raw);
+  if (!c.rule) return c.problems[0];
+  const rule = c.rule;
+  const own = project.wordingRules ?? [];
+  if (own.some((r) => r.id === rule.id && r.id !== replacing)) return `This document already has a wording rule with the id ${q(rule.id)}.`;
+  if ((project.houseWordingRules ?? []).some((r) => r.id === rule.id)) return `The id ${q(rule.id)} is used by a house rule. Give this rule another id.`;
+  if (replacing === undefined && own.length >= WORDING_RULES_MAX) return `A document can have at most ${WORDING_RULES_MAX} wording rules of its own.`;
+  const weak = weakenedHouseRule(project, rule);
+  if (weak) {
+    const what = weak.phrase ? `${q(weak.phrase)} (${WORDING_RULE_KIND_LABEL[weak.kind].toLowerCase()})` : `the ${WORDING_RULE_KIND_LABEL[weak.kind].toLowerCase()} rule`;
+    return `The house rules make ${what} a “must”. A document’s own rule can add to the house rules but cannot weaken them, so it cannot make this a “should”.`;
+  }
+  return null;
+}
+
+/** A free id for a new own rule of this kind ("banned-2"), never one a house rule uses. */
+export function nextWordingRuleId(project: Pick<Project, 'houseWordingRules' | 'wordingRules'>, kind: WordingRuleKind): string {
+  const used = new Set([...(project.houseWordingRules ?? []), ...(project.wordingRules ?? [])].map((r) => r.id));
+  for (let i = 1; ; i++) { const id = `${kind}-${i}`; if (!used.has(id)) return id; }
+}
+
+/**
+ * Only an admin sets whether a house rule is a "must" or a "should". For anyone else, every rule that was already in
+ * `base` (the latest approved version, or the draft being edited) keeps its severity, and a new rule must be a "should"
+ * (an admin can raise it). Null when the change is allowed. The server enforces it; the Library screen explains it.
+ */
+export function wordingSeverityProblem(base: readonly WordingRule[] | null, next: readonly WordingRule[], isAdmin: boolean): string | null {
+  if (isAdmin) return null;
+  const before = new Map((base ?? []).map((r) => [r.id, r.severity]));
+  for (const r of next) {
+    const was = before.get(r.id);
+    if (was !== undefined && was !== r.severity) return `Only an admin can change whether a rule is a “must” or a “should” (${q(r.phrase ?? r.id)} was a “${was}”).`;
+    if (was === undefined && r.severity === 'must') return `Only an admin can make a rule a “must” (${q(r.phrase ?? r.id)}). Save it as a “should”; an admin can raise it.`;
+  }
+  return null;
+}
+
 function checkWordingRules(raw: unknown, problems: string[]): LibraryWordingRulesContent | null {
   if (!isObj(raw)) { problems.push('The wording rules cannot be read.'); return null; }
   const errs = validateWordingRules(raw.rules);
@@ -361,8 +424,11 @@ export function libraryContentFromProject(project: Project, kind: LibraryKind, r
       const entries = project.glossary ?? {};
       return Object.values(entries).some((l) => l?.length) ? { content: { entries: JSON.parse(JSON.stringify(entries)) }, title: `${project.title} glossary` } : { error: 'This document’s glossary is empty.' };
     }
-    case 'wording-rules':
-      return project.houseWordingRules?.length ? { content: { rules: JSON.parse(JSON.stringify(project.houseWordingRules)) }, title: 'House wording rules' } : { error: 'This document has no wording rules.' };
+    case 'wording-rules': {
+      // The rules in force: the house rules the document follows, then its own (an own rule never shares a house rule's id).
+      const rules = [...(project.houseWordingRules ?? []), ...(project.wordingRules ?? [])];
+      return rules.length ? { content: { rules: JSON.parse(JSON.stringify(rules)) }, title: 'House wording rules' } : { error: 'This document has no wording rules.' };
+    }
     case 'lookup-table': return lookupTableLibraryContent(project, ref ?? '');
     case 'wording': {
       const part = project.contentParts.find((c) => c.id === ref);
@@ -616,6 +682,14 @@ export function libraryLinkProblems(raw: unknown): string[] {
   const p = raw as Project & Record<string, any>;
   const out: string[] = [];
   if (p.houseWordingRules !== undefined) for (const e of validateWordingRules(p.houseWordingRules).slice(0, 3)) out.push(`The house wording rules are not valid: ${e}`);
+  if (p.wordingRules !== undefined) {
+    for (const e of validateWordingRules(p.wordingRules).slice(0, 3)) out.push(`The document’s own wording rules are not valid: ${e}`);
+    if (Array.isArray(p.wordingRules) && Array.isArray(p.houseWordingRules)) {
+      const house = new Set((p.houseWordingRules as WordingRule[]).map((r) => r?.id));
+      const clash = (p.wordingRules as WordingRule[]).find((r) => house.has(r?.id));
+      if (clash) out.push(`The document’s own wording rule ${q(String(clash.id))} has the id of a house rule.`);
+    }
+  }
   if (p.libraryLinks === undefined) return out;
   if (!Array.isArray(p.libraryLinks)) return [...out, 'The list of library links cannot be read.'];
   if (p.libraryLinks.length > LIBRARY_LINKS_MAX) return [...out, `A document can have at most ${LIBRARY_LINKS_MAX} library links.`];

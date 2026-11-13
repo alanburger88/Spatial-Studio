@@ -11,6 +11,7 @@ import { Dialog, ErrorState, Loading, Named, ScreenHeader, Tech } from '../ui/co
 import { Icon } from '../ui/icons';
 import { fitSms, smsEncoding } from '@iss/renderers';
 import { NeedsAi, useBusy } from '../assist/common';
+import { WordingFindings } from './wording/WordingFindings';
 import { GuardedSuggestion, WritingHelp, lengthChange, recordAssist, useReadOnlyReason } from '../assist/WritingHelp';
 import './EmailSms.css';
 
@@ -224,6 +225,8 @@ function TextField(p: TextFieldProps) {
       )}
       {p.error && <div className="callout error chx-note" role="alert" data-testid={`${p.testId}-error`}>{p.error}</div>}
       {p.extra}
+      {/* Wording rules: findings as the person types; a replacement goes into this field like typing does. */}
+      <WordingFindings text={p.value} scope={p.field === 'sms' ? 'sms' : 'email'} onApply={p.onChange} blockedReason={p.disabled ? 'The wording cannot be changed here right now.' : null} testId={`${p.testId}-wording`} />
       <TranslationStatus project={p.project} field={p.field} text={p.value} statuses={p.statuses} />
     </div>
   );

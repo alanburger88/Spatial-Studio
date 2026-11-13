@@ -15,3 +15,4 @@ export * from './ruleDraft';
 export * from './ruleReview';
 export * from './setupFromData';
 export * from './setupOutline';
+export * from './wordingRules';

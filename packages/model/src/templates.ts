@@ -318,7 +318,7 @@ export function projectFileProblems(raw: unknown): ProjectFileProblem[] {
   }
   // Shared library: the links and the house wording rules are checked like the rest. A link to an item this studio does not
   // have is not a problem: the content is in the file, and the studio shows the link as "not in this library".
-  if (p.libraryLinks !== undefined || p.houseWordingRules !== undefined) for (const m of libraryLinkProblems(p).slice(0, 5)) bad('LIBRARY', m);
+  if (p.libraryLinks !== undefined || p.houseWordingRules !== undefined || p.wordingRules !== undefined) for (const m of libraryLinkProblems(p).slice(0, 5)) bad('LIBRARY', m);
   return out.slice(0, 20);
 }
 

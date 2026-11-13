@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  LIBRARY_KINDS, LIBRARY_KIND_HINT, LIBRARY_KIND_LABEL, SOURCE_LANGUAGE, WORDING_RULE_KIND_LABEL, checkLibraryContent, languageName, partRefsOf,
-  type BrandKit, type LibraryContent, type LibraryGlossaryContent, type LibraryKind, type LibraryWordingContent, type LibraryWordingRulesContent, type Project, type WordingRule,
+  LIBRARY_KINDS, LIBRARY_KIND_HINT, LIBRARY_KIND_LABEL, SOURCE_LANGUAGE, checkLibraryContent, languageName, partRefsOf,
+  type BrandKit, type LibraryContent, type LibraryGlossaryContent, type LibraryKind, type LibraryWordingContent, type LibraryWordingRulesContent, type Project,
 } from '@iss/model';
 import { api, type LibraryItemDto, type ProjectSummary } from '../../api/client';
 import { Dialog } from '../../ui/common';
+import { useCan } from '../../state/store';
+import { RuleListEditor } from '../wording/RuleEditor';
 import { errorText, useLibrary } from './libraryData';
 
 /** Kinds whose content can be typed here; the others are always taken from a document. */
@@ -153,30 +155,12 @@ function ContentEditor({ kind, content, onChange }: { kind: LibraryKind; content
       </div>
     );
   }
-  const r = content as LibraryWordingRulesContent;
-  const setRule = (i: number, p: Partial<WordingRule>) => onChange({ rules: r.rules.map((x, j) => (j === i ? clean({ ...x, ...p }) : x)) });
-  return (
-    <div className="lib-editor" data-testid="lib-edit-rules">
-      <ul className="list-rows">
-        {r.rules.map((x, i) => (
-          <li key={i} className="row wrap" style={{ gap: 6, alignItems: 'flex-end' }}>
-            <label className="field">Rule<select className="select" value={x.kind} onChange={(e) => setRule(i, { kind: e.target.value as WordingRule['kind'] })}>{Object.entries(WORDING_RULE_KIND_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
-            <label className="field">Must or should<select className="select" value={x.severity} onChange={(e) => setRule(i, { severity: e.target.value as 'must' | 'should' })}><option value="must">Must (a blocker)</option><option value="should">Should (a warning)</option></select></label>
-            {(x.kind === 'banned' || x.kind === 'required' || x.kind === 'preferred') && <label className="field">Phrase<input className="input" value={x.phrase ?? ''} onChange={(e) => setRule(i, { phrase: e.target.value })} /></label>}
-            {(x.kind === 'banned' || x.kind === 'preferred') && <label className="field">{x.kind === 'preferred' ? 'Write instead' : 'Replacement (optional)'}<input className="input" value={x.replacement ?? ''} onChange={(e) => setRule(i, { replacement: e.target.value || undefined })} /></label>}
-            {(x.kind === 'reading-level' || x.kind === 'sentence-length') && <label className="field">{x.kind === 'reading-level' ? 'Grade at most' : 'Words at most'}<input className="input" type="number" value={x.limit ?? ''} onChange={(e) => setRule(i, { limit: e.target.value === '' ? undefined : Number(e.target.value) })} style={{ width: 90 }} /></label>}
-            <button type="button" className="btn sm ghost" onClick={() => onChange({ rules: r.rules.filter((_, j) => j !== i) })}>Remove</button>
-          </li>
-        ))}
-      </ul>
-      <button type="button" className="btn sm" onClick={() => onChange({ rules: [...r.rules, { id: `rule-${r.rules.length + 1}`, kind: 'banned', severity: 'should', phrase: '' }] })} data-testid="lib-edit-rules-add">Add a rule</button>
-    </div>
-  );
+  // The house wording rules: a proper rule editor (screens/wording). Only an admin sets "must" or "should".
+  return <RulesContentEditor content={content as LibraryWordingRulesContent} onChange={onChange} />;
 }
 
-/** Keeps only the fields a rule of its kind takes (the validator refuses the others). */
-function clean(x: WordingRule): WordingRule {
-  const phrase = x.kind === 'banned' || x.kind === 'required' || x.kind === 'preferred';
-  const limit = x.kind === 'reading-level' || x.kind === 'sentence-length';
-  return { id: x.id, kind: x.kind, severity: x.severity, ...(phrase ? { phrase: x.phrase ?? '' } : {}), ...((x.kind === 'banned' || x.kind === 'preferred') && x.replacement !== undefined ? { replacement: x.replacement } : {}), ...(limit ? { limit: x.limit ?? (x.kind === 'reading-level' ? 8 : 25) } : {}), ...(x.appliesTo ? { appliesTo: x.appliesTo } : {}) };
+function RulesContentEditor({ content, onChange }: { content: LibraryWordingRulesContent; onChange: (c: LibraryContent) => void }) {
+  const server = useLibrary((s) => s.can);
+  const admin = useCan('manage_users');
+  return <RuleListEditor rules={content.rules} onChange={(rules) => onChange({ rules })} canSetSeverity={!!server.setSeverity && admin} />;
 }

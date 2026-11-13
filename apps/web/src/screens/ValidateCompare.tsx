@@ -59,6 +59,8 @@ function relAgo(ms: number): string {
 const BLOCK_TITLE = (code: string, details?: Record<string, unknown>): string => {
   // The PDF accessibility checks word their own titles.
   if (code.startsWith('PDF_A11Y_') && typeof details?.title === 'string') return `PDF: ${details.title}`;
+  // Wording rules name the rule, and whether it is a "must" or a "should".
+  if (code.startsWith('WORDING_') && typeof details?.ruleLabel === 'string') return `Wording rule (${details.mustOrShould === 'must' ? 'must' : 'should'}): ${details.ruleLabel}`;
   const w = blockWord(code); return w.charAt(0).toUpperCase() + w.slice(1);
 };
 
@@ -254,6 +256,8 @@ export function ValidateCompare() {
     const st = useStudio.getState();
     if (i.nodeId && project?.nodes.some((n) => n.id === i.nodeId)) st.select(i.nodeId);
     const rid = ruleId ?? idsOf(i)[0];
+    // Wording rules (the rules suite runs them): open the Wording rules panel of Content & Translations.
+    if (i.code.startsWith('WORDING_')) { navigate(`${base}/content?wording=open`); return; }
     if (rid) navigate(`${base}/rules-data?rule=${encodeURIComponent(rid)}`);
     else if (i.suite === 'rules') navigate(`${base}/rules-data`);
     else if (i.suite === 'pagination') navigate(`${base}/page-stack`);

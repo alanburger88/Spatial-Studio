@@ -4,6 +4,7 @@ import {
 } from '@iss/model';
 import { evaluatePredicate, resolve, type Finding, type RNode, type Resolution } from '@iss/resolver';
 import type { AssistLink, FindingGroup, FixImpact, FixProposal } from './types';
+import { checkWording, isWordingCode, wordingEditEffect, wordingFindings, wordingFixFor } from './wordingRules';
 
 /**
  * Built-in "Suggest a fix" engine. Pure and deterministic: it reads the project, a finding and the synthetic records,
@@ -48,7 +49,9 @@ function pathOf(f: Pick<Finding, 'code' | 'message' | 'details'>): string | unde
 }
 
 function findingKey(f: Finding): string {
-  return [f.code, f.nodeId ?? '', f.locale ?? '', f.ruleId ?? '', (f.ruleIds ?? []).join('+'), pathOf(f) ?? ''].join('|');
+  // A wording finding is one rule in one text: several can sit on the same component.
+  const wording = isWordingCode(f.code) && typeof f.details?.check === 'string' ? [f.details.check] : [];
+  return [f.code, f.nodeId ?? '', f.locale ?? '', f.ruleId ?? '', (f.ruleIds ?? []).join('+'), pathOf(f) ?? '', ...wording].join('|');
 }
 
 /** The same issue on another customer or after a change: code, place and language agree (and the field, when one is named). */
@@ -62,18 +65,20 @@ function sameIssue(a: Pick<Finding, 'code' | 'nodeId' | 'locale' | 'message' | '
 
 /* ------------------------------------------------------------------ resolved population (memoised per project object) */
 
-interface Snap { recordId: string; findings: Finding[]; blocked: boolean; matched: string[]; print: string }
+interface Snap { recordId: string; findings: Finding[]; blocked: boolean; matched: string[]; print: string; locale: string; /** Visible components and the messages chosen for this customer. */ seen: Set<string> }
 
 function snapOf(res: Resolution): Snap {
   const bits: string[] = [res.locale, res.contentDigest];
+  const seen = new Set<string>();
   const walk = (n: RNode): void => {
     if (n.variants) bits.push(`${n.id}=${[...n.variants.selected].sort().join('+')}${n.variants.unresolved ? '!' : ''}`);
     bits.push(`${n.id}:${n.visible ? 1 : 0}`);
+    if (n.visible) { seen.add(n.id); for (const v of n.variants?.selected ?? []) seen.add(v); }
     n.children.forEach(walk);
   };
   walk(res.root);
   bits.push(...res.findings.map((f) => `${f.severity}:${findingKey(f)}`).sort());
-  return { recordId: res.recordId, findings: res.findings, blocked: res.findings.some((f) => f.severity === 'blocking'), matched: res.result.matchedRuleIds, print: bits.join('\n') };
+  return { recordId: res.recordId, findings: res.findings, blocked: res.findings.some((f) => f.severity === 'blocking'), matched: res.result.matchedRuleIds, print: bits.join('\n'), locale: res.locale, seen };
 }
 
 const ofType = (project: Project, records: SyntheticRecord[]): SyntheticRecord[] => records.filter((r) => r.documentType === project.documentType);
@@ -93,6 +98,17 @@ function population(project: Project, records: SyntheticRecord[], profileId: Pro
   let snaps = byKey.get(key);
   if (!snaps) { snaps = snapshots(project, records, profileId, journeyCursor ?? null, issueDate); byKey.set(key, snaps); }
   return snaps;
+}
+
+/**
+ * Which synthetic customers read a component or message (visible, or the chosen alternative), optionally only those who
+ * read the document in `locale`. `ids` empty = every customer (the email and SMS, a whole-document rule). Uses the same
+ * remembered resolutions as the fixes, so it costs nothing extra once the blockers are worked out.
+ */
+export function readersOf(project: Project, records: SyntheticRecord[], ids: string[], opts?: { locale?: string; profileId?: ProfileId; journeyCursor?: number | null; issueDate?: string | null }): string[] {
+  return population(project, records, opts?.profileId, opts?.journeyCursor, opts?.issueDate)
+    .filter((s) => (!opts?.locale || s.locale === opts.locale) && (!ids.length || ids.some((id) => s.seen.has(id))))
+    .map((s) => s.recordId);
 }
 
 /* ------------------------------------------------------------------ closeness */
@@ -738,8 +754,59 @@ function draftsFor(project: Project, f: Finding, ctx: FixCtx): Draft[] {
     case 'ISSUE_DATE_INVALID': return scenarioFixes(project, f, ctx);
     case 'LOOKUP_NO_MATCH': return [linkDraft('Add a row that covers this customer', `${f.message} Add a row to the lookup table, or give the table a default row, in Rules & data.`, { view: 'rules-data', label: 'Open the lookup tables' })];
     case 'FALLBACK_SELECTED': return [];
+    case 'WORDING_BANNED':
+    case 'WORDING_PREFERRED':
+    case 'WORDING_REQUIRED':
+    case 'WORDING_READING_LEVEL':
+    case 'WORDING_SENTENCE_LENGTH':
+    case 'WORDING_TONE': return wordingFixes(project, f);
     default: return personFixes(project, f);
   }
+}
+
+/* ------------------------------------------------------------------ wording rules (wave 2) */
+
+/** Where a wording finding's text is edited by hand. */
+function wordingLink(project: Project, f: Finding): AssistLink {
+  const textId = typeof f.details?.textId === 'string' ? f.details.textId : undefined;
+  if (f.locale) return { view: 'content', locale: f.locale, ...(textId ? { textId } : {}), label: 'Open Content & Translations' };
+  if (textId?.startsWith('@email/') || textId?.startsWith('@sms/')) return { view: 'channels', label: 'Open Email & SMS' };
+  if (!textId) return { view: 'content', label: 'Open the wording rules' };
+  return designLink(project, f.nodeId && project.nodes.some((n) => n.id === f.nodeId) ? f.nodeId : project.nodes.find((n) => (n.variantIds ?? []).includes(f.nodeId ?? '') || n.contentPartId === f.nodeId)?.id, 'Edit the wording', textId);
+}
+
+/**
+ * A wording finding: the rule's replacement when it gives one (in this text, or everywhere the rule is broken), otherwise
+ * a person rewords it. Only a preferred spelling or term is "safe" (it cannot change what the wording means); a banned
+ * word's replacement is reviewed, and rewrites are never proposed here. A text from the library points to the library.
+ */
+function wordingFixes(project: Project, f: Finding): Draft[] {
+  const link = wordingLink(project, f);
+  const lib = typeof f.details?.libraryTitle === 'string' ? f.details.libraryTitle : null;
+  if (lib) return [linkDraft(`Change ${q(String(f.details?.textTitle ?? 'this text'))} in the library`, `This text comes from the library (${q(lib)}, version ${String(f.details?.libraryVersion ?? '?')}), so it cannot be changed in this document. Change it in the library and approve a new version, or unlink it to make it this document’s own.`, { view: 'content', label: 'Open Content & Translations' })];
+  const id = typeof f.details?.findingId === 'string' ? f.details.findingId : '';
+  const drafts: Draft[] = [];
+  if (f.details?.replacement && id) {
+    const check = checkWording(project);
+    const safe = f.code === 'WORDING_PREFERRED';
+    for (const scope of ['text', 'all'] as const) {
+      const fix = wordingFixFor(project, id, scope, check);
+      if (!fix) continue;
+      if ('reason' in fix) { if (scope === 'text') drafts.push(linkDraft('Reword it by hand', `The replacement cannot be made for you: ${fix.reason}`, link)); continue; }
+      if (scope === 'all' && fix.texts < 2) continue;
+      const translation = !!f.locale;
+      drafts.push(changeDraft(project, {
+        title: fix.title,
+        explanation: `Replaces ${plural(fix.occurrences, 'occurrence')} in ${plural(fix.texts, 'text')}${translation ? ' as a draft translation for a person to approve' : ''}. The rest of the wording is unchanged.`,
+        commands: fix.commands,
+        risk: safe && !translation ? 'safe' : 'review',
+        ...(safe && !translation ? {} : { riskReason: translation ? 'A translation is changed as a draft; a person approves it.' : 'Replacing a banned word can change what the sentence says: read it before applying.' }),
+      }, link));
+    }
+  }
+  const what = f.code === 'WORDING_REQUIRED' ? 'Add the required wording' : f.code === 'WORDING_READING_LEVEL' ? 'Make it easier to read' : f.code === 'WORDING_SENTENCE_LENGTH' ? 'Split the long sentence' : f.code === 'WORDING_TONE' ? 'Make the wording neutral' : 'Reword it';
+  drafts.push(linkDraft(what, `${f.code === 'WORDING_REQUIRED' ? 'Type the required phrase into the right text.' : 'This needs a person: the meaning must stay the same.'} Under the field, “Suggest compliant wording” can propose a rewrite when an AI key is set.`, link));
+  return drafts;
 }
 
 /** Proposals for one finding, best first. Never applies anything; an empty list means there is nothing to do (information only). */
@@ -802,7 +869,11 @@ function resolvedInModel(after: Project, f: Pick<Finding, 'code' | 'nodeId' | 'r
     case 'UNKNOWN_VARIANT': return rulesOf().every((r) => r.enabled === false || (r.then.op === 'selectVariant' && (node?.variantIds ?? []).includes(r.then.variantId)));
     case 'UNKNOWN_SECTION': return rulesOf().every((r) => r.enabled === false || (r.then.op === 'showSection' && (after.nodes.some((n) => n.id === (r.then as { targetNodeId: string }).targetNodeId) || after.contentParts.some((c) => c.id === (r.then as { targetNodeId: string }).targetNodeId))));
     case 'MISSING_CONTENT_PART': return !!node && (node.type === 'disclosure' ? after.contentParts.some((c) => c.id === (node.contentPartId ?? node.id)) : (node.variantIds ?? []).every((v) => after.contentParts.some((c) => c.id === v)));
-    default: return null;
+    default: {
+      // A wording finding is gone when the checker no longer reports it.
+      const id = f.details?.findingId;
+      return isWordingCode(f.code) && typeof id === 'string' ? !checkWording(after).findings.some((x) => x.id === id) : null;
+    }
   }
 }
 
@@ -837,6 +908,18 @@ export function fixImpact(project: Project, proposal: FixProposal, records: Synt
   else { const m = resolvedInModel(applied.project, issue); resolves = m === true; how = m === null ? 'unknown' : 'model'; }
 
   const others = changed - unblocked.length;
+  const check = (issue as Finding).details?.check;
+  if (isWordingCode(issue.code) && typeof check === 'string' && !newlyBlocked.length) {
+    // "Replaces 3 occurrences in 2 texts; changes what 41 of 70 synthetic customers read."
+    const e = wordingEditEffect(project, applied.project, check.split('@')[0]);
+    // Who reads a changed text: the customers who get that message (or see that component), in its language.
+    const readers = new Set<string>();
+    for (const t of e.read) for (const r of readersOf(project, records, t.ids, { locale: t.locale, profileId: opts?.profileId, journeyCursor: cursor, issueDate: opts?.issueDate })) readers.add(r);
+    const read = Math.max(changed, readers.size);
+    const what = e.occurrences ? `Replaces ${plural(e.occurrences, 'occurrence')} in ${plural(e.texts, 'text')}` : 'Changes the wording';
+    const summary = `${what}; changes what ${read} of ${total} synthetic customers read${resolves ? '' : how === 'unknown' ? ', but it could not be confirmed that the rule is met' : ', but the rule is still broken there'}.`;
+    return { resolves, unblocked, newlyBlocked, changedCustomers: read, totalCustomers: total, summary };
+  }
   const composer = ['FLOW_OVERFLOW_NO_CONTINUATION', 'TABLE_TOTAL_CLIPPED', 'ORPHANED_HEADING', 'KEEP_TOGETHER_CANNOT_FIT'].includes(issue.code) || issue.code.startsWith('PDF_A11Y_');
   let summary: string;
   if (newlyBlocked.length) summary = `This would block ${customers(newlyBlocked.length)} who ${newlyBlocked.length === 1 ? 'is' : 'are'} fine today${unblocked.length ? `, while unblocking ${unblocked.length}` : ''}; review it before applying.`;
@@ -873,7 +956,8 @@ export function groupFindings(project: Project, records: SyntheticRecord[], opts
 export function safeFixPlan(project: Project, records: SyntheticRecord[], opts?: { profileId?: ProfileId; journeyCursor?: number | null; findings?: Finding[] }): { items: Array<{ group: FindingGroup; proposal: FixProposal; impact: FixImpact }>; batch: Command | null; skipped: Array<{ group: FindingGroup; reason: string }> } {
   const groups = groupFindings(project, records, opts);
   const known = new Set(groups.map((g) => g.key));
-  for (const f of opts?.findings ?? []) {
+  // Wording rules are checked on the model itself, so their findings are always current (only mechanical, safe fixes are taken).
+  for (const f of [...(opts?.findings ?? []), ...wordingFindings(project)]) {
     if (f.severity === 'info' || known.has(findingKey(f))) continue;
     known.add(findingKey(f));
     groups.push({ key: findingKey(f), finding: f, recordIds: [] });
@@ -900,7 +984,10 @@ export function safeFixPlan(project: Project, records: SyntheticRecord[], opts?:
         : `Needs your review: ${first.riskReason ?? first.title}` });
       continue;
     }
-    const fresh = (chosen.proposal.commands ?? []).filter((c) => !taken.has(shortDigest(c, 24)));
+    // Two wording replacements can touch the same message (its text and its heading): each is made again on the wording as the earlier fixes left it.
+    const wid = isWordingCode(group.finding.code) ? group.finding.details?.findingId : undefined;
+    const again = typeof wid === 'string' ? wordingFixFor(running, wid, chosen.proposal.title.includes(' texts') ? 'all' : 'text') : null;
+    const fresh = (again && 'commands' in again ? again.commands : again === null && typeof wid === 'string' ? [] : chosen.proposal.commands ?? []).filter((c) => !taken.has(shortDigest(c, 24)));
     if (fresh.length) {
       const r = applyCommand(running, { type: 'BATCH', label: chosen.proposal.title, commands: fresh });
       if (!r.ok) { skipped.push({ group, reason: 'This fix cannot be combined with the other safe fixes; apply it on its own.' }); continue; }

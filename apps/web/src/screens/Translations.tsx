@@ -13,6 +13,8 @@ import { dated, editBlockedReason, useStudio, setPreviewLanguage, usePreviewDate
 import { api } from '../api/client';
 import { checkTranslations, type TranslationFlag } from '@iss/scenarios';
 import { SourceChip } from '../assist/common';
+import { WordingRulesPanel } from './wording/WordingRulesPanel';
+import { WordingFindings } from './wording/WordingFindings';
 import './Translations.css';
 
 type StatusFilter = 'all' | 'missing' | 'draft' | 'approved';
@@ -233,6 +235,7 @@ export function Translations() {
         <div className="screen-body tr-body">
           {languageBar}
           {langError && <div className="callout warning" role="alert" data-testid="tr-language-error">{langError}</div>}
+          {project && <WordingRulesPanel project={project} />}
           <Empty title="No target language yet" message="Add a language to start translating the English text." />
         </div>
         {dialogs}
@@ -280,6 +283,12 @@ export function Translations() {
     return true;
   };
   /** Autosave: when the box loses focus or typing pauses for ~1 s, store the text as a draft (same command as the old Save draft). */
+  /** The person typed (or a wording replacement was put) into a translation field: kept as an edit and saved after a pause. */
+  const typeInto = (r: TranslationRow, v: string) => {
+    setEdits((x) => ({ ...x, [r.partId]: v })); setErr(r.partId, null); setSaved((x) => ({ ...x, [r.partId]: false }));
+    stopTimer(r.partId);
+    timers.current[r.partId] = setTimeout(() => autosave(r, v), 1000);
+  };
   const autosave = (r: TranslationRow, text: string) => {
     if (text === (r.status.draftText ?? r.status.approvedText ?? '')) { stopTimer(r.partId); clearEdit(r.partId); return; }
     saveDraft(r, false, text);
@@ -494,6 +503,8 @@ export function Translations() {
           </div>
         )}
 
+        <WordingRulesPanel project={project} />
+
         <div className="tr-filters" role="group" aria-label="Translation filters">
           <span className="segmented" role="group" aria-label="Kind of text">
             <button aria-pressed={group === 'all'} onClick={() => setGroup('all')} data-testid="tr-group-all">All {st.rows.length}</button>
@@ -556,12 +567,9 @@ export function Translations() {
                           <textarea className="textarea tr-input" lang={LOCALE} rows={lines} value={val} placeholder="Type the translation…" aria-label={`${langLabel(LOCALE)} translation of ${r.title}`} data-testid="tr-draft-input" readOnly={!!libOwn?.textOf(r.partId)} title={libOwn?.textOf(r.partId) ? 'Comes from the library: read-only here. Change it in the library, or unlink it.' : undefined}
                             onFocus={() => setFocusId(r.partId)}
                             onBlur={(e) => { setFocusId((f) => (f === r.partId ? null : f)); autosave(r, e.target.value); }}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setEdits((x) => ({ ...x, [r.partId]: v })); setErr(r.partId, null); setSaved((x) => ({ ...x, [r.partId]: false }));
-                              stopTimer(r.partId);
-                              timers.current[r.partId] = setTimeout(() => autosave(r, v), 1000);
-                            }} />
+                            onChange={(e) => typeInto(r, e.target.value)} />
+                          {/* Wording rules that name this language: findings as the person types (a replacement goes into the field). */}
+                          <WordingFindings text={val} scope={wordingScopeOf(r)} locale={LOCALE} onApply={(v) => typeInto(r, v)} blockedReason={libOwn?.textOf(r.partId) ? 'This text comes from the library: change it there, or unlink it.' : null} testId="tr-wording-findings" />
                           {r.origin && !d && (
                             <div className="tr-originline">
                               <span className="chip info tr-origin" data-testid="tr-origin" data-origin={r.origin}>{r.origin === 'ai' ? 'AI draft' : 'Sample draft'} · not reviewed</span>
@@ -627,4 +635,12 @@ export function Translations() {
       )}
     </section>
   );
+}
+
+/** The kind of text a translation row is, for the wording rules. */
+function wordingScopeOf(r: TranslationRow): 'messages' | 'disclosures' | 'labels' | 'email' | 'sms' {
+  if (r.partId.startsWith('@sms/')) return 'sms';
+  if (r.partId.startsWith('@email/')) return 'email';
+  if (r.kind === 'string') return /\/content$|explanation\.(summary|details)$|action\.fallback$/.test(r.partId) ? 'messages' : 'labels';
+  return r.usedAs.includes('disclosure') ? 'disclosures' : 'messages';
 }

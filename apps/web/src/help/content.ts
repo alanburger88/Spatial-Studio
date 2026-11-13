@@ -54,6 +54,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
       'Choose an item to see its versions, a preview of each and every document that uses it, with those that are behind.',
       'Start a new version as a draft, or edit the draft, by typing it or taking it from a document (authors).',
       'Approve a draft to freeze it, or discard it (approvers and admins).',
+      'Keep the house wording rules as an item: add, change, reorder and remove rules, and try a sentence to see which rules it breaks. Only an admin decides whether a rule is a “must” (a blocker) or a “should” (a warning).',
       'Add the first item with “Add to library” in a document, or with New item here.',
     ],
     next: [
@@ -94,13 +95,13 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S13: {
-    purpose: 'Every text a customer reads, with its translation status in each language. Only approved wording is ever shown to customers; a person approves it.',
+    purpose: 'Every text a customer reads, with its translation status in each language and the wording rules it must meet. Only approved wording is ever shown to customers; a person approves it.',
     actions: [
-      'Search the texts and filter them by status.',
-      'Add a language, then edit and approve each translation.',
-      'Ask for a first-pass draft. An AI or sample draft is only ever a draft until a person approves it.',
+      'Search the texts and filter them by status, and open a text in context to see where the customer reads it.',
+      'Add a language, then edit and approve each translation. Ask for a first-pass draft; an AI or sample draft stays a draft until a person approves it.',
       'Import translations from a CSV file, or keep a glossary of terms to translate the same way every time.',
-      'Open a text in context to see where the customer reads it.',
+      'Open Wording rules to see the house rules the document follows (from the library, read-only), add rules of its own, and check the wording: findings are counted by rule, a “must” is a blocker and a “should” a warning.',
+      'As you type a message, a translation or the email and text message wording, the rules it breaks show under the field, with a one-click replacement where the rule gives one and “Suggest compliant wording” when an AI key is set.',
     ],
     next: [
       { screen: 'S17', why: 'see customers blocked until wording is approved' },

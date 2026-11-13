@@ -42,7 +42,7 @@ describe('the shared library (sign-in off: the local admin)', () => {
   const CARD = 'aster-card-demo', EOB = 'harborcare-demo';
 
   it('starts empty; an item is created with its first version as a draft, from content or from a saved document', async () => {
-    expect(await json('GET', '/api/v1/library')).toEqual({ items: [], can: { create: true, approve: true } });
+    expect(await json('GET', '/api/v1/library')).toEqual({ items: [], can: { create: true, approve: true, setSeverity: true } });
     const r = await inj('POST', '/api/v1/library', { kind: 'brand', title: '  House   brand ', description: 'Colours for every statement', content: BRAND });
     expect(r.statusCode).toBe(201);
     expect(r.json().item).toMatchObject({ id: 'house-brand', kind: 'brand', title: 'House brand', latest: null, draft: 1, usage: { documents: 0, behind: 0 }, versions: [{ version: 1, state: 'draft', note: 'First version', createdBy: { name: 'Local admin' } }] });
@@ -251,9 +251,9 @@ describe('the shared library with sign-in on: who may do what', () => {
   it('anyone signed in reads; authors create and draft; approvers and admins approve; refusals are in plain words', async () => {
     expect((await inj('GET', '/api/v1/library', undefined, null)).statusCode).toBe(401);
     for (const r of ['author', 'reviewer', 'approver', 'admin']) expect((await inj('GET', '/api/v1/library', undefined, r)).statusCode, r).toBe(200);
-    expect((await inj('GET', '/api/v1/library', undefined, 'reviewer')).json().can).toEqual({ create: false, approve: false });
-    expect((await inj('GET', '/api/v1/library', undefined, 'author')).json().can).toEqual({ create: true, approve: false });
-    expect((await inj('GET', '/api/v1/library', undefined, 'approver')).json().can).toEqual({ create: false, approve: true });
+    expect((await inj('GET', '/api/v1/library', undefined, 'reviewer')).json().can).toEqual({ create: false, approve: false, setSeverity: false });
+    expect((await inj('GET', '/api/v1/library', undefined, 'author')).json().can).toEqual({ create: true, approve: false, setSeverity: false });
+    expect((await inj('GET', '/api/v1/library', undefined, 'approver')).json().can).toEqual({ create: false, approve: true, setSeverity: false });
     const rev = await inj('POST', '/api/v1/library', { kind: 'brand', title: 'House brand', content: BRAND }, 'reviewer');
     expect(rev.statusCode).toBe(403);
     expect(rev.json().error.message).toBe('Reviewers cannot add to the library or draft a new version; ask an author.');

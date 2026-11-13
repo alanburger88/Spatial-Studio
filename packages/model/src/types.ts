@@ -438,6 +438,11 @@ export interface Project {
   libraryLinks?: LibraryLink[];
   /** The house wording rules, placed here by a link to a library item of kind "Wording rules" (read-only while linked). */
   houseWordingRules?: WordingRule[];
+  /**
+   * The document's own wording rules (wave 2, section 4), checked after the house rules. Absent = none. An own rule can add
+   * to the house rules but never weaken one (`ownWordingRuleProblem`). Changed only by the wording-rule commands.
+   */
+  wordingRules?: WordingRule[];
 }
 
 /** One preferred term: the English `source` should be rendered as `target` in that language. */
@@ -651,8 +656,9 @@ export type WordingRuleKind = 'banned' | 'required' | 'preferred' | 'reading-lev
 export type WordingRuleScope = 'anywhere' | 'messages' | 'disclosures' | 'labels' | 'email' | 'sms';
 
 /**
- * One house wording rule (section 4 of the wave 2 design). Only the shape and its validator (`validateWordingRules`)
- * exist so far; the checker is built on top. `must` = breaking it is a blocker; `should` = a warning.
+ * One wording rule (section 4 of the wave 2 design): a house rule from the library or one of the document's own. The
+ * validator is `validateWordingRules`; the checker is `checkWording` in `@iss/scenarios`. `must` = breaking it is a
+ * blocker; `should` = a warning.
  *  - banned: `phrase` must not appear; `replacement` is offered when given.
  *  - required: `phrase` must appear (in `appliesTo`, default anywhere).
  *  - preferred: write `replacement` instead of `phrase` (both required).

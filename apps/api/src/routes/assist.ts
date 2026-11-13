@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { isSupportedLanguage, projectLanguages } from '@iss/model';
 import { providerConfig } from '../assistant';
-import { describeImage, draftNewVersion, draftRule, externalAssist, meaningCheck, rewriteText, subjectLines, type RewriteKind, type RewriteStyle } from '../assistAi';
+import { compliantRewrite, describeImage, draftNewVersion, draftRule, externalAssist, meaningCheck, rewriteText, subjectLines, type RewriteKind, type RewriteStyle } from '../assistAi';
+import type { WordingTextScope } from '@iss/scenarios';
 import type { RouteDeps } from './deps';
 
 const STYLES: RewriteStyle[] = ['shorter', 'plainer', 'warmer', 'formal', 'one-sms'];
 const KINDS: RewriteKind[] = ['message', 'label', 'email', 'sms'];
+const SCOPES: WordingTextScope[] = ['messages', 'disclosures', 'labels', 'email', 'sms'];
 
 /**
  * Model-backed assistant routes. Each returns suggestions only (see assistAi.ts); none changes a project.
@@ -25,6 +27,14 @@ export function registerAssistRoutes(app: FastifyInstance, deps: RouteDeps): voi
   app.post('/api/v1/projects/:projectId/assist/rewrite', async (req) => {
     const b = (req.body ?? {}) as Record<string, unknown>;
     const project = projectOf((req.params as any).projectId, b);
+    // "Suggest compliant wording" (wave 2): the rules in force are the constraints, and the answer is checked by the same checker.
+    if (b.style === 'compliant') {
+      const scope = SCOPES.includes(b.scope as WordingTextScope) ? (b.scope as WordingTextScope) : null;
+      if (!scope) throw new ApiError(400, 'INVALID', `"scope" must be one of ${SCOPES.join(', ')}.`);
+      const loc = typeof b.locale === 'string' ? b.locale : 'en-US';
+      if (!isSupportedLanguage(loc) || (loc !== 'en-US' && !projectLanguages(project).includes(loc))) throw new ApiError(400, 'INVALID_LOCALE', `Unsupported language ${loc}.`);
+      return compliantRewrite(cfgOf(b), model, project, { text: text(b.text, 'The text', 4000), scope, locale: loc });
+    }
     const style = STYLES.includes(b.style as RewriteStyle) ? (b.style as RewriteStyle) : null;
     const kind = KINDS.includes(b.kind as RewriteKind) ? (b.kind as RewriteKind) : null;
     if (!style || !kind) throw new ApiError(400, 'INVALID', `"style" must be one of ${STYLES.join(', ')} and "kind" one of ${KINDS.join(', ')}.`);

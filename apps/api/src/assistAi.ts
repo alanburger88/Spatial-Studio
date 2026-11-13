@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { CHANNEL_TEXT_LIMITS, CHANNEL_TOKENS, checkTokens, languageName, projectFieldIndex, tokensOfText, translationStatus, type DocumentType, type Project, type TokenCheck } from '@iss/model';
-import { draftRuleFromSentence, ruleVocabulary, validateRuleDraft, type RuleDraft } from '@iss/scenarios';
+import { checkWording, draftRuleFromSentence, ruleVocabulary, validateRuleDraft, wordingRulesInForce, type RuleDraft, type WordingTextScope } from '@iss/scenarios';
 import { providerStatus, type ProviderConfig } from './assistant';
 
 /**
@@ -117,6 +117,59 @@ export async function rewriteText(cfg: ProviderConfig, model: AssistModel, input
   }
   if (!options.length) return { mode: 'unavailable', providerStatus: providerStatus(cfg).label, message: 'The AI suggestions changed a data field or added markup, so none can be offered. Try again or edit by hand.', options: [] };
   return { mode: 'ai', providerStatus: providerStatus(cfg).label, message: `${options.length} suggestion${options.length === 1 ? '' : 's'}. Data fields are unchanged; read each one before accepting.`, options };
+}
+
+/* ------------------------------------------------------------------ wording that meets the wording rules (wave 2) */
+
+export interface CompliantOption extends RewriteOption { /** "should" rules the option still breaks (it breaks no "must" rule). */ warnings: string[] }
+
+/** One wording rule as a plain instruction for the model. Only the rule's own words: never a customer's data. */
+function ruleInstruction(r: ReturnType<typeof wordingRulesInForce>[number]): string {
+  const x = r.rule, must = x.severity === 'must' ? 'must' : 'should';
+  switch (x.kind) {
+    case 'banned': return `The text ${must} not use “${x.phrase}”${x.replacement ? ` (write “${x.replacement}” instead)` : ''}.`;
+    case 'preferred': return `Write “${x.replacement}”, not “${x.phrase}” (${must}).`;
+    case 'required': return `The document ${must} include “${x.phrase}”; keep it if the text has it.`;
+    case 'reading-level': return `It ${must} read at grade ${x.limit} or easier: short sentences, plain words.`;
+    case 'sentence-length': return `No sentence ${must === 'must' ? 'may' : 'should'} have more than ${x.limit} words.`;
+    case 'tone': return `It ${must} not read as a demand for money (no “you owe”, “amount due”, “balance due”).`;
+  }
+}
+
+/**
+ * "Suggest compliant wording": a rewrite of ONE text that meets the wording rules in force. The model gets only the text
+ * and the rules. Its answer is checked with the SAME checker as the studio (`checkWording`): an option that still breaks a
+ * "must" rule is dropped, and when none is left the reply says it could not, and why. Data fields must stay the same.
+ */
+export async function compliantRewrite(cfg: ProviderConfig, model: AssistModel, project: Project, input: { text: string; scope: WordingTextScope; locale: string }): Promise<AssistReply & { options: CompliantOption[]; refused?: string[] }> {
+  const rules = wordingRulesInForce(project).filter((r) => (r.rule.appliesTo ?? 'anywhere') === 'anywhere' || r.rule.appliesTo === input.scope).filter((r) => (r.rule.language ?? 'en-US') === input.locale);
+  if (!rules.length) return { mode: 'unavailable', providerStatus: providerStatus(cfg).label, message: 'No wording rule applies to this text, so there is nothing to meet.', options: [] };
+  if (!live(cfg)) return { ...off(cfg), options: [] };
+  const kind: RewriteKind = input.scope === 'sms' ? 'sms' : input.scope === 'email' ? 'email' : input.scope === 'labels' ? 'label' : 'message';
+  const out = await model(cfg, {
+    system: [...commonFor(project.documentType), `Language of the text: ${languageName(input.locale)}. Answer in the same language.`, 'Rewrite the text so that it meets every house wording rule listed, changing as little as possible.', 'Call submit_rewrites exactly once with two or three alternatives, best first.'].join('\n'),
+    user: `House wording rules:\n${rules.map((r) => `- ${ruleInstruction(r)}`).join('\n')}\nKind of text: ${kind}.\nText:\n${input.text}`,
+    tool: strictTool('submit_rewrites', 'Return the rewritten alternatives.', { options: { type: 'array', items: { type: 'string' } } }, ['options']),
+  });
+  const list = (out as { options?: unknown } | null)?.options;
+  if (!Array.isArray(list)) return { ...noAnswer(cfg), options: [] };
+  const seen = new Set<string>([input.text.trim()]);
+  const options: CompliantOption[] = [];
+  const refused: string[] = [];
+  for (const c of list.slice(0, 4)) {
+    const ok = acceptText(input.text, c, LIMIT[kind], true);
+    if (!ok || seen.has(ok.text)) continue;
+    seen.add(ok.text);
+    const found = checkWording(project, { rules, text: { text: ok.text, scope: input.scope, locale: input.locale } }).findings;
+    const must = found.filter((f) => f.severity === 'must');
+    if (must.length) { refused.push(...must.map((f) => f.ruleLabel)); continue; }
+    options.push({ ...ok, warnings: [...new Set(found.map((f) => f.ruleLabel))] });
+  }
+  if (!options.length) {
+    const why = [...new Set(refused)];
+    return { mode: 'unavailable', providerStatus: providerStatus(cfg).label, message: why.length ? `The AI suggestions still broke a “must” rule (${why.slice(0, 3).join('; ')}), so none is offered. Reword it by hand.` : 'The AI suggestions changed a data field or added markup, so none can be offered. Reword it by hand.', options: [], refused: why };
+  }
+  return { mode: 'ai', providerStatus: providerStatus(cfg).label, message: `${options.length} suggestion${options.length === 1 ? '' : 's'} checked against the wording rules: none breaks a “must” rule. Data fields are unchanged; read each one before using it.`, options };
 }
 
 /* ------------------------------------------------------------------ new version of a message */

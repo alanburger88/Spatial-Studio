@@ -17,10 +17,11 @@ import { LOOKUP_TABLES_MAX, validateLookupTable } from './lookup';
 import type { BrandKit, ContentPart, CustomField, DocNode, Locale, TestCase, TextStyle, JourneyEvent, NodeLayout, PagedLayout, Predicate, PresentationProfile, Project, ResponsiveLayout, Rule } from './types';
 import { validatePredicate, validateRule } from './validate';
 import { applyPageDesignPatch, pagedFlowProblems, pagedProfileOf, pageDesignLabel, pageDesignProblems, pageSizePt, refitFixedLayouts, type PageDesignPatch } from './pageDesign';
-import type { LibraryKind, LibraryLink, LibraryTarget } from './types';
+import type { LibraryKind, LibraryLink, LibraryTarget, WordingRule } from './types';
 import {
   LIBRARY_ID_PATTERN, LIBRARY_LINK_ID_PATTERN, LIBRARY_LINKS_MAX, LIBRARY_TITLE_MAX, blockId, blockMembers, blockPrefixFor, changedLink, checkLibraryContent,
   isLibraryKind, libraryContentFingerprint, linkedContentMessage, linkFor, linkNodeId, linkOfPart, mapBlock, nextLinkId,
+  WORDING_RULE_KIND_LABEL, checkWordingRule, ownWordingRuleProblem,
   type LibraryContentByKind, type LibraryWordingContent,
 } from './library';
 
@@ -88,7 +89,12 @@ export type Command =
   /** Replaces a link's content in place with another approved version (position and what the document adds around it are kept). */
   | { type: 'UPDATE_LIBRARY_LINK'; linkId: string; version: number; content: unknown; title?: string }
   /** Removes the link; the content stays and becomes the document's own. */
-  | { type: 'UNLINK_LIBRARY_ITEM'; linkId: string };
+  | { type: 'UNLINK_LIBRARY_ITEM'; linkId: string }
+  // The document's own wording rules (wave 2, section 4): each change is one undoable step, checked by `ownWordingRuleProblem`.
+  | { type: 'ADD_WORDING_RULE'; rule: WordingRule; index?: number }
+  | { type: 'UPDATE_WORDING_RULE'; ruleId: string; rule: WordingRule }
+  | { type: 'REMOVE_WORDING_RULE'; ruleId: string }
+  | { type: 'MOVE_WORDING_RULE'; ruleId: string; index: number };
 
 /**
  * Where a linked item's content goes. A block is inserted into `parentId` (at `index`) or replaces the component
@@ -700,7 +706,74 @@ function applyOne(project: Project, cmd: Command): CommandResult {
     case 'UPDATE_LIBRARY_LINK':
     case 'UNLINK_LIBRARY_ITEM':
       return applyLibraryCommand(project, cmd);
+    case 'ADD_WORDING_RULE':
+    case 'UPDATE_WORDING_RULE':
+    case 'REMOVE_WORDING_RULE':
+    case 'MOVE_WORDING_RULE':
+      return applyWordingRuleCommand(project, cmd);
   }
+}
+
+/* ------------------------------------------------------------ the document's own wording rules */
+
+type WordingRuleCommand = Extract<Command, { type: 'ADD_WORDING_RULE' | 'UPDATE_WORDING_RULE' | 'REMOVE_WORDING_RULE' | 'MOVE_WORDING_RULE' }>;
+const ruleWords = (r: WordingRule): string => (r.phrase ? `“${r.phrase}”` : WORDING_RULE_KIND_LABEL[r.kind].toLowerCase());
+
+function applyWordingRuleCommand(project: Project, cmd: WordingRuleCommand): CommandResult {
+  const own = project.wordingRules ?? [];
+  const set = (rules: WordingRule[]) => (d: Project) => { if (rules.length) d.wordingRules = rules; else delete d.wordingRules; };
+  switch (cmd.type) {
+    case 'ADD_WORDING_RULE': {
+      const why = ownWordingRuleProblem(project, cmd.rule);
+      if (why) return reject('INVALID_WORDING_RULE', why);
+      const rule = checkWordingRule(cmd.rule).rule!;
+      const at = cmd.index === undefined ? own.length : Math.max(0, Math.min(own.length, Math.floor(cmd.index)));
+      return { ok: true, label: `Add the wording rule ${ruleWords(rule)}`, project: bump(project, set([...own.slice(0, at), rule, ...own.slice(at)])) };
+    }
+    case 'UPDATE_WORDING_RULE': {
+      const i = own.findIndex((r) => r.id === cmd.ruleId);
+      if (i < 0) return reject('NOT_FOUND', (project.houseWordingRules ?? []).some((r) => r.id === cmd.ruleId) ? 'That is a house rule: it comes from the library and is changed there.' : 'This document has no such wording rule.');
+      const why = ownWordingRuleProblem(project, cmd.rule, cmd.ruleId);
+      if (why) return reject('INVALID_WORDING_RULE', why);
+      const rule = checkWordingRule(cmd.rule).rule!;
+      if (digestOf(rule) === digestOf(own[i])) return reject('NO_CHANGE', 'The rule is unchanged.');
+      return { ok: true, label: `Change the wording rule ${ruleWords(rule)}`, project: bump(project, set(own.map((r, j) => (j === i ? rule : r)))) };
+    }
+    case 'REMOVE_WORDING_RULE': {
+      const r = own.find((x) => x.id === cmd.ruleId);
+      if (!r) return reject('NOT_FOUND', (project.houseWordingRules ?? []).some((x) => x.id === cmd.ruleId) ? 'That is a house rule: it comes from the library. Unlink the house rules to make them this document’s own.' : 'This document has no such wording rule.');
+      return { ok: true, label: `Remove the wording rule ${ruleWords(r)}`, project: bump(project, set(own.filter((x) => x.id !== cmd.ruleId))) };
+    }
+    case 'MOVE_WORDING_RULE': {
+      const i = own.findIndex((r) => r.id === cmd.ruleId);
+      if (i < 0) return reject('NOT_FOUND', 'This document has no such wording rule.');
+      if (!Number.isInteger(cmd.index)) return reject('INVALID', 'Say where the rule goes.');
+      const to = Math.max(0, Math.min(own.length - 1, cmd.index));
+      if (to === i) return reject('NO_CHANGE', 'The rule is already there.');
+      const next = own.filter((_, j) => j !== i);
+      next.splice(to, 0, own[i]);
+      return { ok: true, label: `Move the wording rule ${ruleWords(own[i])}`, project: bump(project, set(next)) };
+    }
+  }
+}
+
+/**
+ * The house rules arriving in a document (a link or an update): an own rule that is the same as a house rule is dropped
+ * (it is now a house rule), and an own rule that has a house rule's id gets a free id. The order of the rest is kept.
+ */
+function ownRulesBeside(house: readonly WordingRule[], own: readonly WordingRule[] | undefined): WordingRule[] | undefined {
+  if (!own?.length) return undefined;
+  const same = new Set(house.map((r) => digestOf(r)));
+  const ids = new Set(house.map((r) => r.id));
+  const kept: WordingRule[] = [];
+  for (const r of own) {
+    if (same.has(digestOf(r))) continue;
+    let id = r.id;
+    for (let n = 2; ids.has(id); n++) id = `${r.id.slice(0, 36)}-${n}`;
+    ids.add(id);
+    kept.push(id === r.id ? r : { ...r, id });
+  }
+  return kept.length ? kept : undefined;
 }
 
 /* ------------------------------------------------------------ shared library */
@@ -715,6 +788,12 @@ function applyLibraryCommand(project: Project, cmd: LibraryCommand): CommandResu
     return { ok: true, label: `Unlink “${link.title}” from the library`, project: bump(project, (d) => {
       const rest = (d.libraryLinks ?? []).filter((l) => l.linkId !== cmd.linkId);
       if (rest.length) d.libraryLinks = rest; else delete d.libraryLinks;
+      // Unlinked house wording rules become the document's own (first, in their order), so they can be edited here.
+      if (link.kind === 'wording-rules' && d.houseWordingRules) {
+        const all = [...d.houseWordingRules, ...(d.wordingRules ?? [])];
+        delete d.houseWordingRules;
+        if (all.length) d.wordingRules = JSON.parse(JSON.stringify(all)); else delete d.wordingRules;
+      }
     }) };
   }
   if (!Number.isInteger(cmd.version) || cmd.version < 1) return reject('INVALID_LIBRARY_LINK', 'Say which approved version of the library item to use.');
@@ -763,7 +842,8 @@ function applyLibraryCommand(project: Project, cmd: LibraryCommand): CommandResu
       const other = taken((l) => l.target.kind === 'wording-rules');
       if (other) return reject('ALREADY_LINKED', `The house wording rules already come from the library (“${other.title}”). Update or unlink them first.`);
       const rules = (content as LibraryContentByKind['wording-rules']).rules;
-      return { ok: true, label: verb, project: bump(project, (d) => { d.houseWordingRules = JSON.parse(JSON.stringify(rules)); withLink(d); }) };
+      const own = ownRulesBeside(rules, project.wordingRules);
+      return { ok: true, label: verb, project: bump(project, (d) => { d.houseWordingRules = JSON.parse(JSON.stringify(rules)); if (own) d.wordingRules = own; else delete d.wordingRules; withLink(d); }) };
     }
     case 'lookup-table': {
       const other = taken((l) => l.target.kind === 'lookup-table' && l.target.tableId === t.tableId);
