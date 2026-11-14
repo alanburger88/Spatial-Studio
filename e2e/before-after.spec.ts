@@ -194,7 +194,7 @@ test('B06 a release side is the frozen release, whatever happens to the working 
   await openCompare(page, '?before=r1&after=working&output=web');
   const pane = (side: 'before' | 'after') => page.getByTestId(`cmp-pane-${side}`).locator('iframe');
   await expect(pane('before')).toBeVisible();
-  const text = (side: 'before' | 'after') => page.evaluate((side) => (document.querySelector(`[data-testid="cmp-pane-${side}"] iframe`) as HTMLIFrameElement).contentDocument?.body.innerText ?? '', side);
+  const text = (side: 'before' | 'after') => page.evaluate((side) => (document.querySelector(`[data-testid="cmp-pane-${side}"] iframe`) as HTMLIFrameElement).contentDocument?.body?.innerText ?? '', side);
   await expect.poll(async () => (await text('before')).length).toBeGreaterThan(50);
   const beforeText = await text('before');
   expect(beforeText).not.toContain('Thank you.');

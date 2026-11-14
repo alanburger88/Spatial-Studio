@@ -79,7 +79,7 @@ export function WorkPanel({ blockerId, status, item, data, frozen }: { blockerId
         Status: <strong>{STATUS_LABEL[status]}</strong>
         {status === 'fixed' ? '. Worked out by the studio: no customer is stopped by it any more.'
           : status === 'known-data-problem' ? '. Every customer it stops is set aside by an approver.'
-          : item?.statusBy && item.statusAt ? <> · set by {item.statusBy.name}, <When iso={item.statusAt} /></> : null}
+          : item?.statusBy && item.statusAt ? <> · set by {item.statusBy.name}, <When iso={item.statusAt} />.</> : '.'}
         {status !== 'fixed' && <span className="muted"> “Fixed” is set by the studio when no customer is stopped any more.</span>}
       </p>
       {!authEnabled && data && <p className="hint bl-work-local" data-testid="bl-work-local">Sign-in is off, so the only possible owner is the local admin; giving blockers to people becomes useful with sign-in on.</p>}
