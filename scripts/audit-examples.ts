@@ -525,7 +525,8 @@ export const CHECKS: AuditCheck[] = [
         const lastTemplate = comp.metrics.pages[comp.metrics.pages.length - 1]?.template;
         if (ex.pages?.lastPageText && lastTemplate !== 'last' && lastTemplate !== 'first+last') problems.push(`the last page uses the ${lastTemplate} template`);
         const parity = compareManifests(res.semanticManifest, comp.extracted, html.extracted);
-        if (!parity.ok) problems.push(`parity: ${parity.checks.filter((c: any) => !c.ok && c.blocking !== false).map((c: any) => c.label ?? c.id).join(', ')}`);
+        const mismatched = parity.checks.filter((c) => c.status !== 'match' && c.blocking);
+        if (mismatched.length) problems.push(`parity: ${mismatched.map((c) => `${c.label} (PDF ${JSON.stringify(c.pdf)}, web page ${JSON.stringify(c.html)})`.slice(0, 300)).join('; ')}`);
         for (const v of rawValues(text.join('\n').replace(/https:\/\/\S+/g, '').replace(/example\.com\S*/g, ''))) problems.push(`the PDF contains “${v}”`);
         for (const p of problems) (blocked && /“—”|null|parity/.test(p) ? intended : f).push(`${nameOf(r)}: ${p}`);
       }

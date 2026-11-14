@@ -188,7 +188,7 @@ export function buildNorthwind(stage: NorthwindStage = 'working', plan: HouseLin
   const hdr = (span: number) => ({ area: 'header' as const, span });
   b.insert({ id: 'issuer-logo', type: 'image', name: 'Northwind Energy logo', image: { src: 'asset:northwind-mark', alt: 'Northwind Energy (fictional utility) logo', fit: 'contain' }, layout: fixed(40, 34, 176, 40, 'first', hdr(4)) });
   b.insert({ id: 'document-header', type: 'header-footer', name: 'Synthetic data notice', headerFooter: { role: 'document-header', text: 'SYNTHETIC DEMO DATA · Northwind Energy is fictional · Not a real bill', repeat: false }, layout: fixed(300, 44, 272, 20, 'first', hdr(8)) });
-  b.insert(text('bill-title', 'Bill title', '# Your energy bill\nBill date {{custom.billDate}} · Account **{{custom.accountNumber}}**\nService address: {{calc.serviceAddress}}\nBilling period {{custom.periodStart}} to {{custom.periodEnd}} ({{calc.billingDays}} days)', fixed(40, 86, 318, 86, 'first', hdr(7))));
+  b.insert(text('bill-title', 'Bill title', '# Your energy bill\n**{{customer.givenName}} {{customer.familyName}}** · Account **{{custom.accountNumber}}**\nService address: {{calc.serviceAddress}}\nBill date {{custom.billDate}} · Billing period {{custom.periodStart}} to {{custom.periodEnd}} ({{calc.billingDays}} days)', fixed(40, 86, 318, 86, 'first', hdr(7))));
   b.insert(metric('amount-due', 'Total amount due', 'calc.totalDue', 'usd-cents', 'primary', fixed(380, 86, 192, 58, 'first', hdr(5))));
   b.insert({ id: 'due-date', type: 'bound-field', name: 'Payment due date', label: 'Please pay by', binding: 'custom.dueDate', formatter: 'date', nullPolicy: 'error', layout: fixed(380, 150, 192, 20, 'first', hdr(5)) });
   b.insert({ id: 'header-rule', type: 'shape', name: 'Header rule', decorative: true, shape: { kind: 'line', stroke: NORTHWIND_ACCENT, strokeWidthPt: 2 }, layout: fixed(40, 178, 532, 3, 'first', { area: 'header', span: 12, hidden: true }) });
@@ -294,9 +294,12 @@ export function buildNorthwind(stage: NorthwindStage = 'working', plan: HouseLin
   const slip = (id: string, name: string, x: number, y: number, w: number, h: number, markup: string) => b.insert(text(id, name, markup, fixed(x, y, w, h, 'last', { area: 'footer', span: 12, hidden: true })));
   slip('slip-cut', 'Payment slip: detach line', 40, 628, 532, 14, '*Please detach and return this portion with your payment.*');
   b.insert({ id: 'slip-rule', type: 'shape', name: 'Payment slip: tear-off line', decorative: true, shape: { kind: 'line', stroke: '#64748B', strokeWidthPt: 1 }, layout: fixed(40, 644, 532, 2, 'last', { area: 'footer', span: 12, hidden: true }) });
-  b.insert({ id: 'slip-logo', type: 'image', name: 'Payment slip: logo', image: { src: 'asset:northwind-mark', alt: 'Northwind Energy (fictional utility) logo', fit: 'contain' }, layout: fixed(40, 654, 140, 30, 'last', { area: 'footer', span: 12, hidden: true }) });
-  slip('slip-remit', 'Payment slip: where to send it', 40, 690, 284, 56, '**Make checks payable to Northwind Energy**\nPayment Center (fictional), PO Box 2041, Calder Bay, MI 49012');
+  b.insert({ id: 'slip-logo', type: 'image', name: 'Payment slip: logo', image: { src: 'asset:northwind-mark', alt: 'Northwind Energy (fictional utility) logo', fit: 'contain' }, layout: fixed(40, 652, 140, 30, 'last', { area: 'footer', span: 12, hidden: true }) });
   slip('slip-account', 'Payment slip: account and amount', 330, 652, 242, 96, '**Payment slip** · Account **{{custom.accountNumber}}**\n{{customer.givenName}} {{customer.familyName}}\nAmount due **{{calc.totalDue}}** by {{custom.dueDate}}\nAmount enclosed: $ ______________');
+  slip('slip-remit', 'Payment slip: where to send it', 40, 690, 284, 56, '**Make checks payable to Northwind Energy**\nPayment Center (fictional), PO Box 2041, Calder Bay, MI 49012');
+
+  // The page footer is read after everything else on a page, the payment slip included.
+  b.run({ type: 'MOVE_NODE', nodeId: 'page-footer', parentId: b.project.rootNodeId, index: b.project.nodes.find((n) => n.id === b.project.rootNodeId)!.children!.length - 1 });
 
   /* ---- email and SMS wording, with calculated values */
   const ch = channelConfig(b.project);
