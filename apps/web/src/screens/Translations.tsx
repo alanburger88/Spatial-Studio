@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { AVAILABLE_LANGUAGES, checkTokens, languageName, languageShortName, projectLanguages, toTranslationCsv, translationStatus, usageEntryFromResolution, type TranslationRow, type TranslationUsageEntry } from '@iss/model';
 import { resolve } from '@iss/resolver';
 import { ScreenHeader, Loading, Empty, Tech, Dialog } from '../ui/common';
+import { ImportWording } from './wording/ImportWording';
 import { ResolveInBlockers } from './blockers/link';
 import { fieldLabel, localeLabel } from '../ui/plain';
 import { Icon } from '../ui/icons';
@@ -155,6 +156,7 @@ export function Translations() {
   const [aiStatus, setAiStatus] = useState<{ mode: 'external' | 'offline'; label: string; model?: string } | null>(null);
   const [lastProvider, setLastProvider] = useState<string | null>(null);
   const [dialog, setDialog] = useState<null | 'add' | 'remove' | 'approve' | 'glossary'>(null);
+  const [importingWording, setImportingWording] = useState(false);
   const [check, setCheck] = useState<CheckResult | null>(null);
   const [checking, setChecking] = useState(false);
   const [flaggedOnly, setFlaggedOnly] = useState(false);
@@ -236,8 +238,11 @@ export function Translations() {
           {languageBar}
           {langError && <div className="callout warning" role="alert" data-testid="tr-language-error">{langError}</div>}
           {project && <WordingRulesPanel project={project} />}
-          <Empty title="No target language yet" message="Add a language to start translating the English text." />
+          <Empty title="No target language yet" message="Add a language to start translating the English text, or import a wording table: a language column in it is added with its translations as drafts.">
+            <button className="btn" onClick={() => setImportingWording(true)} data-testid="tr-import-wording">Import wording…</button>
+          </Empty>
         </div>
+        {importingWording && <ImportWording onClose={() => setImportingWording(false)} />}
         {dialogs}
       </section>
     );
@@ -427,6 +432,7 @@ export function Translations() {
         title="Content & Translations"
         subtitle="Every text a customer reads, with its translation status per language. An AI first pass or the bundled sample drafts only ever create drafts: a person edits and approves them. Only approved translations are shown to customers; runtime machine translation is not permitted."
       />
+      {importingWording && <ImportWording onClose={() => setImportingWording(false)} onApplied={() => setEdits({})} />}
       <input ref={fileRef} type="file" accept=".csv,text/csv" hidden data-testid="tr-import-file" aria-label="Choose a translations CSV file" onChange={(e) => onFile(e.target.files?.[0])} />
       <div className="screen-body tr-body">
         {languageBar}
@@ -523,6 +529,7 @@ export function Translations() {
           <span className="tr-io">
             <button className="btn sm" onClick={exportCsv} data-testid="tr-export"><Icon.download width={14} height={14} /> Export for translators (CSV)</button>
             <button className="btn sm" onClick={() => fileRef.current?.click()} disabled={busy} data-testid="tr-import">Import translations (CSV)</button>
+            <button className="btn sm" onClick={() => setImportingWording(true)} data-testid="tr-import-wording">Import wording…</button>
           </span>
           <span className="muted tr-count">{rows.length} of {s.total} texts</span>
         </div>
@@ -572,8 +579,8 @@ export function Translations() {
                           <WordingFindings text={val} scope={wordingScopeOf(r)} locale={LOCALE} onApply={(v) => typeInto(r, v)} blockedReason={libOwn?.textOf(r.partId) ? 'This text comes from the library: change it there, or unlink it.' : null} testId="tr-wording-findings" />
                           {r.origin && !d && (
                             <div className="tr-originline">
-                              <span className="chip info tr-origin" data-testid="tr-origin" data-origin={r.origin}>{r.origin === 'ai' ? 'AI draft' : 'Sample draft'} · not reviewed</span>
-                              <span className="muted">{r.origin === 'ai' ? 'Written by AI.' : 'From the bundled sample set.'} Read it, edit if needed, then approve.</span>
+                              <span className="chip info tr-origin" data-testid="tr-origin" data-origin={r.origin}>{r.origin === 'ai' ? 'AI draft' : r.origin === 'imported' ? 'Imported draft' : 'Sample draft'} · not reviewed</span>
+                              <span className="muted">{r.origin === 'ai' ? 'Written by AI.' : r.origin === 'imported' ? 'Brought in by “Import wording”.' : 'From the bundled sample set.'} Read it, edit if needed, then approve.</span>
                             </div>
                           )}
                           {!tc.ok && (

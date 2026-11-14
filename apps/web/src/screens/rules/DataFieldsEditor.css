@@ -30,3 +30,15 @@
 .df-hint-count { font-size: 11.5px; }
 .df-getting-started { margin: 0; }
 @media (max-width: 720px) { .df-row { grid-template-columns: 1fr 1fr; } .df-col { grid-template-columns: 1fr 1fr; } .df-row-end { grid-column: 2; } }
+/* Import fields (wave 3): the entry point and its dialog. */
+.df-import-refused { font-size: 12px; max-width: 520px; }
+.if { display: flex; flex-direction: column; gap: 10px; min-width: min(860px, 88vw); }
+.if-text { width: 100%; font-family: var(--iss-font-mono, monospace); margin-top: 6px; }
+.if-rows { max-height: 40vh; overflow: auto; border: 1px solid var(--iss-border); border-radius: 10px; }
+.if-table { width: 100%; font-size: 12.5px; }
+.if-table td { vertical-align: top; }
+.if-table thead th { position: sticky; top: 0; background: var(--iss-surface-sunken); }
+.if-small { font-size: 12px; }
+.if-note { color: var(--iss-warning-fg, var(--iss-text-muted)); }
+.if-problems { margin: 0; padding-left: 24px; font-size: 12.5px; }
+.if-cust { display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; flex-wrap: wrap; }
