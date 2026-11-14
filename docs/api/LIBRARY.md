@@ -2,7 +2,7 @@
 
 Status: **built and tested (wave 2, phase 4 of the template work). The Library screen (S25, `/library`) and the library entry points in documents use it.**
 Design: `docs/design/WAVE2B_PAGES_LIBRARY_WORDING.md` section 3, `docs/design/TEMPLATES_AND_CCM.md` decision 3.
-Code: `apps/api/src/routes/library.ts` (routes), `apps/api/src/library.ts` (the store, where used, the impact of an update), `packages/model/src/library.ts` (kinds, validators, placing content, the read-only rule's helpers), the link commands in `packages/model/src/commands.ts`. Tests: `apps/api/test/library.test.ts`, `packages/model/test/library.test.ts`, `e2e/library.spec.ts`.
+Code: `apps/api/src/routes/library.ts` (routes), `apps/api/src/library.ts` (the store, where used, the impact of an update), `packages/model/src/library.ts` (kinds, validators, placing content, the read-only rule's helpers), the link commands in `packages/model/src/commands.ts`. Tests: `apps/api/test/library.test.ts`, `apps/api/test/library-duplicates.test.ts`, `packages/scenarios/test/assist-duplicates.test.ts`, `e2e/library-duplicates.spec.ts`, `packages/model/test/library.test.ts`, `e2e/library.spec.ts`.
 
 ## What the library is
 
@@ -79,12 +79,28 @@ A dry run. Body `{ projectId, version?, linkId?, project? }` (`version` defaults
 ### `GET /api/v1/releases/:releaseId/library`
 What a release took from the library, from its frozen content: `{ library: [{ itemId, title, kind, version, inLibrary }], wordingRules }`. `wordingRules` is the wording rules in force when it was approved and what the checker found in the frozen content (the same record as the package manifest's `wordingRules`), or null.
 
+### `GET /api/v1/library/duplicates?threshold=&kinds=&language=&minWords=` (anyone signed in)
+Duplicate wording (wave 3, section 2): every saved document and the library's wording items, grouped by texts that are the same or nearly the same. It reads and changes nothing. The comparison is the pure `findDuplicateWording` in `packages/scenarios/src/assist/duplicates.ts`.
+- `threshold` 0.5–1 (default 0.85): word-level similarity, `2 × (words in common, in order) / (words in both)`. `kinds`: comma list of `messages, disclosures, labels, email, sms` (default `messages,disclosures`). `language`: one supported language (default all). `minWords` 1–50 (default 4; shorter texts are skipped and counted).
+- Answers the `DuplicateScan` (`threshold, minWords, kinds, language, groups, coverage: { documents, libraryItems, texts, skippedShort, languages, pairsCompared }`) plus `documents: [{ projectId, title, documentType, modelVersion, workflowState }]`, `tookMs` (the scan), `cached`, `servedInMs` and `can: { create, approve, setSeverity, link }`.
+- A group: `{ id, locale, match: 'exact'|'near', placeholderNamesOnly, documents, forms, lowestSimilarity, kinds, members, suggested, library, allLinked }`. A member: where the text is used (`projectId`/`projectTitle` or `itemId`/`itemTitle`/`itemVersion`/`itemState`, `textId`, `title`, `kind`, `locale`, `nodeId`, `partId`), the text and its plain form, `form` (0 = the most used wording), `similarity`, `pieces` (the plain text with the words that differ from the suggested text marked) and `missing`, `placeholderNamesDiffer`, `linked` (the library link it comes from) and `linkable` (a message or notice itself, so a wording item can be linked in its place).
+- Only ids, titles and wording are returned; no customer record is read. Cached (the last 8 scans) by each document's id, version, content digest and title, each wording item's versions, and the query.
+
+### `POST /api/v1/library/duplicates/keep` (authors, admins)
+"Keep this wording in the library". Body `{ title, text, type: 'text'|'disclosure', heading?, description?, note?, members: [{ projectId, textId } | { itemId }], source?: { projectId, ref } }`. Creates a **wording item as a draft** (approved in the usual way). Its heading is the members' own heading (so linking does not change it) unless `heading` is given. A translation is carried only when every member has the same approved one, and only when `text` is the wording of every member (an edited text carries none). `201 { item, translations, notCarried, edited }`. Audited as `library.create` with `fromDuplicates`, `members`, `documents` and `languages`.
+
+### `POST /api/v1/library/:itemId/link-preview` (anyone signed in)
+Dry run of "Link here". Body `{ projectId, partId, project? }`. Linking the message `partId` to the latest approved version of a wording item: `{ itemId, title, partId, identical, difference, before, after, comparison, changes, content, version }` (`comparison` is `compareVersions` over the document's synthetic customers, as for an update). Nothing is stored. `409 NO_APPROVED_VERSION`, `409 CANNOT_LINK`.
+
+### `POST /api/v1/library/:itemId/link-drafts` (authors, admins)
+"Link in all draft documents". Body `{ targets: [{ projectId, partId, modelVersion? }] }` (up to 100). For each document: refused unless its workflow state is draft (`NOT_DRAFT`, with the state), its saved version is still `modelVersion` (`VERSION_CONFLICT`), and its message is **exactly** the library's (text, every translation, heading and kind) and no synthetic customer would read anything different (`NOT_EXACT`; a disclosure always is, because linking raises the version number its readers see). Otherwise `LINK_LIBRARY_ITEM` is applied with the pure command, the result checked as a save is (`checkDraftProject`), stored as a new version with its history label, and audited per document as `library.link` (`itemId, title, kind, version, partId, linkId, fromVersion, toVersion, bulk`). It never approves anything and changes no workflow state. `{ item, linked, refused }`.
+
 ### `POST /api/v1/library/reset` (admins; tests and demos only)
 Body `{ "confirm": true }`. Refused with `403 RESET_DISABLED` unless the server runs with `LIBRARY_RESET=allow`.
 
 ## Audit
 
-Every write is audited with ids and titles only: `library.create`, `library.draft` (`newVersion`), `library.approve` (`documentsBehind`), `library.discard` (`itemRemoved`), `library.reset`; each with `itemId`, `title`, `kind`, `version`. Activity words them in plain sentences under "Shared library".
+Every write is audited with ids and titles only: `library.create` (with `fromDuplicates` when kept from duplicate wording), `library.link` (a document linked by “Link in all draft documents”), `library.draft` (`newVersion`), `library.approve` (`documentsBehind`), `library.discard` (`itemRemoved`), `library.reset`; each with `itemId`, `title`, `kind`, `version`. Activity words them in plain sentences under "Shared library".
 
 ## Releases and files
 

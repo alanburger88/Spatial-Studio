@@ -33,6 +33,18 @@ Decisions by the product owner on 2026-11-14 (D100): **no target system is named
 
 **Limit.** It compares wording, not meaning: two sentences that say the same thing in different words are not found.
 
+### As built (duplicate wording)
+
+Routes and shapes: [`docs/api/LIBRARY.md`](../api/LIBRARY.md) ("duplicates", "link-preview", "link-drafts"). Engine: `packages/scenarios/src/assist/duplicates.ts`. Screen: the Library's **Duplicate wording** view (`/library?view=duplicates`, `screens/library/Duplicates.tsx`); no new menu entry or route.
+
+- **Texts.** The wording checker's texts (`wordingTexts`): messages and their alternatives and notices/disclosures by default; labels and headings, email and SMS wording when asked. Texts under 4 words are skipped and counted. English with English; each approved translation with its own language. Library wording items take part with their latest approved version (or their draft).
+- **Comparison.** Words in order after removing case, spacing, punctuation, quote style and rich-text formatting; a placeholder is a slot, and a group whose texts differ only in placeholder names says so. Similarity is `2 × (words in common, in order) / (words in both)`, default 0.85, changeable (0.5–1). Identical texts collapse first; near pairs come from a length filter and an index of each text's rarest words (prefix filtering, exact: a unit test compares it with comparing every pair). 5,000 texts take about 0.3 seconds in the unit test (15 pairs compared of 12.5 million).
+- **Groups.** A group is the set of wordings joined by near pairs; "exact" when it has one wording, "near" otherwise, so an exact sub-group and its near copies are shown together as wordings side by side. A group needs two different places (documents or library items). The suggested text: the wording used in most places, then most texts, then one already in the library, then the alphabetically first; within it a library item's text, then the placeholder names most texts use, then by id.
+- **Keeping.** A draft wording item with the members' own heading and only the translations every member shares exactly (none when the text was edited). Approved in the usual way (an approver can do it from the view).
+- **Link here** opens the document and applies `LINK_LIBRARY_ITEM` with `{ partId }` as one undoable, unsaved change, after a dry run that shows the wording before and after, word by word, and who would read something different (`compareVersions`). If another document is open with unsaved changes, it says so and does nothing. Only texts that are messages or notices themselves can be linked (a label or an email line says to change it in the document).
+- **Link in all draft documents** exists: it uses the same pure command and the same checks and store call as a save (as restoring a version does), only for draft documents whose message is exactly the library's and for which no synthetic customer would read anything different; it never approves, is audited per document (`library.link`) and reports what it linked and what it refused, with links. **A disclosure is never linked in bulk:** linking raises the disclosure's version number, which its readers see, so it is refused and linked in the document instead.
+- **Limit.** It compares words, not meaning (stated on the screen).
+
 ## 3. Mapping to the system that produces the documents
 
 **What it is.** A document's data dictionary (every field it reads, with type, format and an example from a synthetic customer) and, per target system, a **mapping**: for each field, the target system's name for it, its type and format there, and any note. No target system is named yet, so the mapping is neutral: a named profile ("Mapping for <system>") that a person fills in or imports.
