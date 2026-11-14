@@ -92,14 +92,14 @@ Decided by the product owner on 2026-11-13: record these four, do not add them t
 
 ## Where the roadmap is paused (2026-11-14)
 
-Paused by the product owner before wave 4, to work on the example documents first (decision D105).
+Paused by the product owner before wave 4, to work on the example documents first (decision D105). **That work is done (v0.14, decisions D106–D110): four example documents and an accuracy check of them, verified on 2026-11-14 (1,117 unit tests, 358 browser tests).** The roadmap resumes at wave 4 when the product owner says so.
 
 | Wave | State |
 |---|---|
 | 1 — Trust, proof and finding your way | Built and verified (v0.11) |
 | 2 — Real documents | Built and verified (v0.12) |
 | 3 — Bringing documents in, and handing them over | Built and verified (v0.13), except the first adapter, which waits for a named target system |
-| 4 — Teams | **Not started. Resume here.** |
+| 4 — Teams | **Resumed on 2026-11-14 at the product owner's instruction. Check-in done (D111), design written (`docs/design/WAVE4_TEAMS.md`), build in progress; nothing in it is verified yet.** |
 | 5 — Reach and depth | Not started |
 
 **To resume wave 4**, start with its check-in. Two questions are still open:
