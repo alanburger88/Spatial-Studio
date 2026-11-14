@@ -145,6 +145,8 @@ class Namer {
   part(id: string) { for (const p of this.projects) { const c = p.contentParts.find((x) => x.id === id); if (c) return c.title; } return id; }
   rule(id: string) { for (const p of this.projects) { const r = p.rules.find((x) => x.id === id); if (r) return r.title ? `Rule ${id} “${r.title}”` : `Rule ${id}`; } return `Rule ${id}`; }
   table(id: string) { for (const p of this.projects) { const t = p.lookupTables?.find((x) => x.id === id); if (t) return t.title; } return id; }
+  link(id: string) { for (const p of this.projects) { const l = p.libraryLinks?.find((x) => x.linkId === id); if (l) return `“${l.title}”`; } return id; }
+  test(id: string) { for (const p of this.projects) { const t = p.testCases?.find((x) => x.id === id); if (t) return `${id} “${t.name}”`; } return id; }
   text(id: string) {
     if (!this.strings) { this.strings = new Map(); for (const p of [...this.projects].reverse()) for (const s of translatableStrings(p)) this.strings.set(s.id, s.title); }
     return this.strings.get(id) ?? id;
@@ -214,6 +216,8 @@ function labelOf(path: VariantPathStep[], names: Namer): string {
     return what;
   }
   if (root === 'brand' && typeof path[1] === 'string') return `Brand: ${BRAND_WORDS[path[1]] ?? humanize(path[1])}`;
+  if (root === 'libraryLinks' && item) return `Library link ${names.link(item)}${rest.length ? `: ${rest.map(humanize).join(' › ')}` : ''}`;
+  if (root === 'testCases' && item) return `Pinned test ${names.test(item)}${rest.length ? `: ${rest.map(humanize).join(' › ')}` : ''}`;
   if (root === 'channels') return `${path[1] === 'sms' ? 'SMS' : 'Email'}: ${path.slice(2).map((s) => (typeof s === 'string' ? humanize(s) : s.id)).join(' › ') || 'wording'}`;
   const head = TOP_WORDS[root] ?? humanize(root);
   const tail = path.slice(1).map((s) => (typeof s === 'string' ? (s === '#order' ? 'order' : humanize(s)) : s.id));
@@ -317,6 +321,8 @@ export interface UpdateEntry {
   /** Why it is in this group, in plain words (kept as yours and needs a look). */
   note?: string;
   nodeId?: string;
+  /** What the base did: added it, removed it, or changed it. */
+  change: 'added' | 'removed' | 'changed';
 }
 
 export interface VariantUpdate {
@@ -345,7 +351,8 @@ interface MergeCtx {
 
 function entry(ctx: MergeCtx, path: VariantPathStep[], o: unknown, t: unknown, v: unknown, note?: string): UpdateEntry {
   const nodeId = nodeOf(path);
-  return { id: variantPathId(path), group: groupOf(path), label: labelOf(path, ctx.names), baseBefore: valueText(path, o), baseNow: valueText(path, t), yours: valueText(path, v), ...(note ? { note } : {}), ...(nodeId ? { nodeId } : {}) };
+  const change = o === undefined && t !== undefined ? 'added' : t === undefined && o !== undefined ? 'removed' : 'changed';
+  return { id: variantPathId(path), group: groupOf(path), label: labelOf(path, ctx.names), baseBefore: valueText(path, o), baseNow: valueText(path, t), yours: valueText(path, v), ...(note ? { note } : {}), ...(nodeId ? { nodeId } : {}), change };
 }
 /** What the base changed at `path` comes in, reported change by change (the variant's value there is the base's old one, or `v` when given). */
 const comeIn = (ctx: MergeCtx, path: VariantPathStep[], o: unknown, t: unknown, v: unknown, note?: string) => {

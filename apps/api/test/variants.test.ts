@@ -262,9 +262,34 @@ describe('variants with sign-in on: who may do what', () => {
     expect((await json('GET', `/api/v1/projects/${id}/variant`, undefined, cookies.reviewer)).variant).toBe(true);
     const ev = (await json('GET', `/api/v1/audit?projectId=${id}&action=project.variant.create`, undefined, cookies.admin)).events[0];
     expect(ev.userName).toBe('Olive Author');
+    // (the seeded example's update is checked in the last block of this file)
     // a reviewer cannot detach (it is a save)
     const p = await project(id, cookies.reviewer);
     const { variantOf: _v, ...plain } = p;
     expect((await put(id, plain as Project, p.modelVersion, cookies.reviewer)).statusCode).toBe(403);
+  });
+});
+
+describe('the seeded example: Northwind Energy — Lakeshore', () => {
+  let ctx: Ctx;
+  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, auth: false, releasePackage: { composer: stubComposer() } }); });
+  afterAll(async () => { await ctx.app.close(); });
+  const { json } = helpers(() => ctx);
+  const LAKE = 'northwind-energy-lakeshore', NW = 'northwind-energy-demo';
+
+  it('follows Northwind one version behind, so a real update is available: some comes in, some is kept as Lakeshore’s', async () => {
+    const info = await json('GET', `/api/v1/projects/${LAKE}/variant`);
+    expect(info.base).toMatchObject({ found: true, projectId: NW, follows: 1, latestVersion: 2, behind: true });
+    expect(info.differences.map((d: any) => d.id)).toEqual(expect.arrayContaining(['brand.accent', 'nodes[greeting].content', 'contentParts[pay-standard].approvedLocales.es-US', 'lookupTables[lateFees].rows', 'rules[R05]', 'nodes[dual-fuel-note]', 'nodes[lakeshore-outage]', 'channels.sms.text']));
+    const ids = (l: any[]) => l.map((e) => e.id);
+    expect(ids(info.update.comesIn)).toEqual(expect.arrayContaining(['rules[R02]', 'contentParts[pay-credit]', 'nodes[payment-message].variantIds', 'testCases[T8]']));
+    expect(ids(info.update.kept)).toEqual(expect.arrayContaining(['contentParts[pay-standard].approvedLocales.en-US']));
+    expect(info.update.needsLook).toEqual([]);
+    // the new pinned test uses Lakeshore's own copy of the customer
+    expect(info.customers['NWE-60016']).toBe('NWL-60016');
+    const fam = await json('GET', `/api/v1/projects/${NW}/family`);
+    expect(fam.variants).toEqual([expect.objectContaining({ projectId: LAKE, variant: expect.objectContaining({ label: 'Lakeshore region', behind: true, rulesDiffer: true }) })]);
+    // a sample: it cannot be deleted
+    expect((await ctx.app.inject({ method: 'DELETE', url: `/api/v1/projects/${LAKE}` })).json().error.code).toBe('SAMPLE_PROJECT');
   });
 });

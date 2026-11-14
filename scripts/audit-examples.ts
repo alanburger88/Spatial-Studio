@@ -230,11 +230,18 @@ function meridianRecompute(r: SyntheticRecord): Record<string, unknown> {
   return out;
 }
 
+/** The Lakeshore variant (wave 5) charges its own late fees; everything else is worked out as for Northwind. */
+function lakeshoreRecompute(r: SyntheticRecord): Record<string, unknown> {
+  const c = custom(r);
+  return { ...northwindRecompute(r), lateFee: c.paymentStatus === 'overdue' ? ({ standard: 1200, 'time-of-use': 1000, budget: 800 } as Record<string, number>)[c.plan] : 0 };
+}
+
 for (const s of EXTRA_SAMPLES()) {
   const nw = s.project.projectId.startsWith('northwind');
+  const lake = s.project.projectId === 'northwind-energy-lakeshore';
   registerExample({
     id: s.project.projectId, title: s.notes.title, kind: s.notes.kind, project: s.project, customers: s.customers, notes: s.notes,
-    domain: nw ? northwindDomain : meridianDomain, recompute: nw ? northwindRecompute : meridianRecompute,
+    domain: nw ? northwindDomain : meridianDomain, recompute: lake ? lakeshoreRecompute : nw ? northwindRecompute : meridianRecompute,
     pages: nw ? { min: 2, max: 4, lastPageText: /Payment slip|Talón de pago/ } : { min: 2, max: 3 },
     release: s.release?.project,
   });

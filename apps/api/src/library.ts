@@ -219,7 +219,8 @@ export function duplicateSources(store: Store, library: LibraryStore): { key: st
   });
   return {
     key, summaries,
-    documents: () => summaries.flatMap((s) => { const p = store.getProject(s.projectId); return p ? [{ projectId: p.projectId, title: p.title, project: p }] : []; }),
+    // A variant (wave 5) shares its base's wording on purpose, so it is not scanned: the base is, and a variant's own wording is its own.
+    documents: () => summaries.flatMap((s) => { const p = store.getProject(s.projectId); return p && !p.variantOf ? [{ projectId: p.projectId, title: p.title, project: p }] : []; }),
     items: () => wording.flatMap((i) => {
       const n = i.latest ?? i.draft;
       const got = n === null ? undefined : library.content(i.id, n);

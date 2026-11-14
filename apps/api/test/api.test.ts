@@ -16,7 +16,8 @@ describe('API contract', () => {
     expect((await inj('GET', '/api/v1/health')).json()).toMatchObject({ status: 'ok', schemaVersion: '1.0.0' });
     const ids = (await inj('GET', '/api/v1/projects')).json().projects.map((p: any) => p.projectId);
     // The two fixture samples and the two example documents with their own data (Northwind Energy, Meridian Wealth).
-    expect(ids).toEqual(['aster-card-demo', 'harborcare-demo', 'meridian-wealth-demo', 'northwind-energy-demo']);
+    // …and (wave 5) the Lakeshore variant of Northwind.
+    expect(ids).toEqual(['aster-card-demo', 'harborcare-demo', 'meridian-wealth-demo', 'northwind-energy-demo', 'northwind-energy-lakeshore']);
   });
 
   it('optimistic concurrency: If-Match required, stale version → 409, success bumps version', async () => {
