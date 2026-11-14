@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyCommand, type Command, type Project } from '@iss/model';
 import { resolve } from '@iss/resolver';
 import { RECORDS, seedProjects } from '../../model/src/fixtures';
-import { COMPARISON_OUTCOMES, compareVersions, outcomeOf, visibleChanges } from '../src/compareVersions';
+import { COMPARISON_OUTCOMES, compareVersions, outcomeOf, visibleChanges, type VisibleChange } from '../src/compareVersions';
 
 const [card, eob] = seedProjects();
 const run = (p: Project, c: Command): Project => { const r = applyCommand(p, c); if (!r.ok) throw new Error(`${c.type}: ${r.message}`); return r.project; };
@@ -91,5 +91,24 @@ describe('before and after', () => {
     expect(outcomeOf([])).toBe('same');
     expect(outcomeOf([{ kind: 'layout', nodeId: 'x', name: 'X', before: '', after: '' }])).toBe('layout');
     expect(outcomeOf([{ kind: 'email-sms', nodeId: '@sms', name: 'Text message', before: 'a', after: 'b' }])).toBe('wording');
+  });
+});
+
+describe('a part replaced by an identical one under another id', () => {
+  const change = (kind: VisibleChange['kind'], nodeId: string, name: string, before: string, after: string): VisibleChange => ({ kind, nodeId, name, before, after });
+  // Two resolutions built by hand: the same text in a part with a new id (as when a block is linked again to the library).
+  const res = (id: string, text: string, layout: unknown) => ({
+    locale: 'en-US', findings: [], channelTexts: { subject: '', preheader: '', title: '', intro: [], closing: [], sections: [], sms: '' },
+    root: { id: 'root', name: 'Page', type: 'container', visible: true, children: [{ id, name: 'Rights notice', type: 'rich-text', visible: true, children: [], text: [{ inlines: [{ kind: 'text', text }] }], layout }] },
+  }) as never;
+
+  it('is not a visible difference when the words and the layout are the same', () => {
+    expect(visibleChanges(res('notice', 'You have the right to a paper copy.', { mode: 'flow' }), res('notice-2', 'You have the right to a paper copy.', { mode: 'flow' }))).toEqual([]);
+    // (with different words the same pair is two differences, so the parts are being read)
+    expect(visibleChanges(res('notice', 'A.', { mode: 'flow' }), res('notice-2', 'B.', { mode: 'flow' }))).toHaveLength(2);
+  });
+  it('is one layout difference when only its layout differs, and stays two differences when the words differ', () => {
+    expect(visibleChanges(res('notice', 'Same words.', { mode: 'flow' }), res('notice-2', 'Same words.', { mode: 'flow', widthPt: 200 }))).toEqual([change('layout', 'notice-2', 'Rights notice', '', '')]);
+    expect(visibleChanges(res('notice', 'Old words.', { mode: 'flow' }), res('notice-2', 'New words.', { mode: 'flow' })).map((c) => c.kind).sort()).toEqual(['appears', 'disappears']);
   });
 });

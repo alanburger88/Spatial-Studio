@@ -142,6 +142,17 @@ export function visibleChanges(before: Resolution, after: Resolution): VisibleCh
     if (x!.text !== y!.text) { changes.push({ kind: 'wording', nodeId: id, name, before: x!.text, after: y!.text }); continue; }
     if (x!.layout !== y!.layout) changes.push({ kind: 'layout', nodeId: id, name, before: '', after: '' });
   }
+  // A part taken out and an identical one put in under another id (a block linked again to the shared library, for
+  // example) reads the same to the customer: it is not a visible difference. If only its layout differs, it is one
+  // layout difference, not something that disappears and something that appears.
+  for (const gone of changes.filter((c) => c.kind === 'disappears')) {
+    const back = changes.find((c) => c.kind === 'appears' && c.name === gone.name && c.after === gone.before);
+    if (!back) continue;
+    const sameLayout = b.get(gone.nodeId)!.layout === a.get(back.nodeId)!.layout;
+    changes.splice(changes.indexOf(back), 1);
+    if (sameLayout) changes.splice(changes.indexOf(gone), 1);
+    else changes[changes.indexOf(gone)] = { kind: 'layout', nodeId: back.nodeId, name: gone.name, before: '', after: '' };
+  }
   for (const c of CHANNEL_PARTS) {
     const x = c.get(before), y = c.get(after);
     if (x !== y) changes.push({ kind: 'email-sms', nodeId: c.id, name: c.name, before: x, after: y });
