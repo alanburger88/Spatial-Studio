@@ -57,7 +57,28 @@ export function validateRecordShape(raw: unknown, documentType: DocumentType, ex
       if (own && v.length > LIST_ROW_LIMIT) { errors.push(`${f.label} (${f.path}) has ${v.length} rows; a list can have at most ${LIST_ROW_LIMIT}.`); continue; }
       v.forEach((item: any, i: number) => {
         if (own && (!item || typeof item !== 'object' || Array.isArray(item))) { errors.push(`${f.label} (${f.path}): row ${i + 1} must be an object with the list's columns.`); return; }
-        for (const it of f.itemFields ?? []) { const e = checkType({ ...it, enumValues: undefined }, item?.[it.key], `${f.path}[${i}].${it.key}`); if (e) errors.push(e); }
+        // A group in the row (wave 5) is read by its dotted key (`holder.name`) and must be an object of its fields.
+        const groups = new Set((f.itemFields ?? []).filter((it) => it.key.includes('.')).map((it) => it.key.split('.')[0]));
+        const badGroup = new Set([...groups].filter((g) => item?.[g] !== undefined && item[g] !== null && (typeof item[g] !== 'object' || Array.isArray(item[g]))));
+        for (const g of badGroup) errors.push(`${f.path}[${i}].${g}: expected a group of fields (an object), got ${JSON.stringify(item[g]).slice(0, 60)}.`);
+        for (const it of f.itemFields ?? []) {
+          if (it.key.includes('.') && badGroup.has(it.key.split('.')[0])) continue;
+          const e = checkType({ ...it, enumValues: undefined }, it.key.includes('.') ? getPath(item, it.key) : item?.[it.key], `${f.path}[${i}].${it.key}`);
+          if (e) errors.push(e);
+        }
+        // A list inside the row (wave 5): an array of rows of its own columns, checked the same way.
+        for (const inner of f.innerLists ?? []) {
+          const rows = item?.[inner.key];
+          const at = `${f.path}[${i}].${inner.key}`;
+          if (rows === undefined || rows === null) continue;
+          if (!Array.isArray(rows)) { errors.push(`${at}: expected a list (an array of rows), got ${JSON.stringify(rows).slice(0, 60)}.`); continue; }
+          if (rows.length > LIST_ROW_LIMIT) { errors.push(`${at} has ${rows.length} rows; a list can have at most ${LIST_ROW_LIMIT}.`); continue; }
+          rows.forEach((row: any, k: number) => {
+            if (!row || typeof row !== 'object' || Array.isArray(row)) { errors.push(`${at}[${k}] must be an object with the list's columns.`); return; }
+            for (const col of inner.itemFields) { const e = checkType({ ...col, enumValues: undefined }, row[col.key], `${at}[${k}].${col.key}`); if (e) errors.push(e); }
+            for (const [key, val] of Object.entries(row)) if (Array.isArray(val)) errors.push(`${at}[${k}].${key}: a list inside a list cannot hold another list (lists go at most two levels deep).`);
+          });
+        }
       });
       continue;
     }
@@ -113,11 +134,16 @@ export function csvToRecords(text: string, documentType: DocumentType, extra: Fi
   const header = rows[0].map((h) => h.trim().replace(/^﻿/, ''));
   const fields = new Map(contract(documentType, extra).map((f) => [f.path, f]));
   const example = documentType === 'eob' ? 'claim.status' : documentType === 'custom' ? (extra.find((f) => !f.derived && f.type !== 'array')?.path ?? 'customer.givenName') : 'card.paymentStatus';
+  // A CSV line is flat (wave 5): it can hold a group's fields (custom.mailing.city) but never a list inside a list.
+  const nested = header.filter((h) => h.includes('[]'));
+  if (nested.length) return { records: [], headerErrors: nested.map((h) => `Column “${h}” is a field of the items of a list. A CSV file is flat: it cannot hold a list, let alone a list inside a list. Supply these customers as a JSON file instead, where each record carries its lists (and the lists inside their items) as arrays of rows.`) };
   const headerErrors = header.filter((h) => h && h !== 'recordId' && h !== 'personaId' && !fields.has(h)).map((h) => `Unknown column “${h}” — use a data-contract path such as ${example}.`);
   const derived = header.filter((h) => fields.get(h)?.derived);
   derived.forEach((h) => headerErrors.push(`Column “${h}” is calculated by the engine and cannot be imported.`));
   // A project's own list has one row per item, which a CSV line cannot hold: such records come as JSON.
-  header.filter((h) => h.startsWith('custom.') && fields.get(h)?.type === 'array').forEach((h) => headerErrors.push(`Column “${h}” is a list (${fields.get(h)!.label}), and a CSV row cannot hold a list. Leave the column out, or supply these customers as a JSON file, where each record carries the list as an array of rows.`));
+  header.filter((h) => h.startsWith('custom.') && fields.get(h)?.type === 'array').forEach((h) => headerErrors.push(fields.get(h)!.innerLists?.length
+    ? `Column “${h}” is a list (${fields.get(h)!.label}) whose items hold lists of their own (${fields.get(h)!.innerLists!.map((x) => x.label).join(', ')}). A CSV file is flat and cannot hold a list inside a list. Supply these customers as a JSON file instead, where each record carries its lists as arrays of rows.`
+    : `Column “${h}” is a list (${fields.get(h)!.label}), and a CSV row cannot hold a list. Leave the column out, or supply these customers as a JSON file, where each record carries the list as an array of rows.`));
   if (headerErrors.length) return { records: [], headerErrors };
   const records = rows.slice(1).map((cells) => {
     const o: Record<string, any> = {};

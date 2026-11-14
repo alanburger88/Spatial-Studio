@@ -28,6 +28,8 @@ export interface FieldDef {
   group?: string;
   /** Richer data shapes (wave 5): the list (`custom.<key>`) whose items have this field; it is read inside a repeating section of that list. */
   item?: string;
+  /** A list whose items hold lists of their own (wave 5): each such inner list with its columns. Absent otherwise. */
+  innerLists?: Array<{ key: string; label: string; itemFields: NonNullable<FieldDef['itemFields']> }>;
 }
 
 const common: FieldDef[] = [
@@ -192,7 +194,7 @@ export function customFieldDefs(custom: CustomField[] | undefined): FieldDef[] {
   return (custom ?? []).flatMap((c): FieldDef[] => {
     if (c.type === 'list') {
       return [
-        { path: `custom.${c.key}`, type: 'array', label: c.label, required: !!c.required, itemFields: rowColumns(c.itemFields) },
+        { path: `custom.${c.key}`, type: 'array', label: c.label, required: !!c.required, itemFields: rowColumns(c.itemFields), ...innerListsOf(c.itemFields) },
         { path: `custom.${c.key}.count`, type: 'int', label: `${c.label} count`, derived: true },
       ];
     }
@@ -227,6 +229,11 @@ function rowColumns(cols: CustomListColumn[] | undefined): NonNullable<FieldDef[
     if (it.type === 'group') return (it.fields ?? []).map((m) => ({ key: `${it.key}.${m.key}`, type: m.type, label: groupMemberLabel(it.label, m.label) }));
     return [{ key: it.key, type: it.type, label: it.label }];
   });
+}
+
+function innerListsOf(cols: CustomListColumn[] | undefined): Pick<FieldDef, 'innerLists'> {
+  const inner = (Array.isArray(cols) ? cols : []).filter((it) => it.type === 'list').map((it) => ({ key: it.key, label: it.label, itemFields: rowColumns(it.itemFields) }));
+  return inner.length ? { innerLists: inner } : {};
 }
 
 /** `custom.accounts` → `custom.accounts[]`: the prefix of the paths of one item of a list. */

@@ -71,15 +71,24 @@ function setField(record: Record<string, unknown>, path: string, value: unknown)
 }
 
 /** Three rows for a list field, built from its columns. */
-function sampleRows(f: FieldDef, fields: Map<string, FieldDef>): Array<Record<string, unknown>> {
-  return [1, 2, 3].map((n) => Object.fromEntries((f.itemFields ?? []).map((it) => {
-    // A claim row shares its allowed values with the single-claim field of the same name.
-    const twin = f.path === 'claims' ? fields.get(`claim.${it.key}`) : undefined;
-    const value = it.type === 'string' ? `Sample ${plain(it.label).toLowerCase()} ${n}`
-      : it.type === 'date' ? shiftDay(FIRST_DATE, n - 1)
-      : fallbackValue({ type: it.type, label: it.label, enumValues: twin?.enumValues }, 0);
-    return [it.key, value];
-  })));
+function sampleRows(f: Pick<FieldDef, 'path' | 'itemFields' | 'innerLists'>, fields: Map<string, FieldDef>, count = 3): Array<Record<string, unknown>> {
+  return Array.from({ length: count }, (_, k) => k + 1).map((n) => {
+    const row = Object.fromEntries((f.itemFields ?? []).map((it) => {
+      // A claim row shares its allowed values with the single-claim field of the same name.
+      const twin = f.path === 'claims' ? fields.get(`claim.${it.key}`) : undefined;
+      const value = it.type === 'string' ? `Sample ${plain(it.label).toLowerCase()} ${n}`
+        : it.type === 'date' ? shiftDay(FIRST_DATE, n - 1)
+        : fallbackValue({ type: it.type, label: it.label, enumValues: twin?.enumValues }, 0);
+      return [it.key, value];
+    }));
+    // Richer data shapes (wave 5): a group in the row is an object of its fields; a list inside the row gets one row,
+    // none and four rows in the first three items (none, one and many).
+    if (!f.innerLists && !(f.itemFields ?? []).some((it) => it.key.includes('.'))) return row;
+    const shaped: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(row)) setField(shaped, key, value);
+    for (const inner of f.innerLists ?? []) shaped[inner.key] = sampleRows({ path: `${f.path}[].${inner.key}`, itemFields: inner.itemFields }, fields, [1, 0, 4][(n - 1) % 3]);
+    return shaped;
+  });
 }
 
 /**

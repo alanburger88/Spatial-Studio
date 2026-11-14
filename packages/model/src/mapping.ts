@@ -111,6 +111,12 @@ export function mappablePaths(project: Pick<Project, 'documentType' | 'customFie
   for (const f of projectFields(project)) {
     out.set(f.path, { type: f.type, label: f.label });
     for (const c of f.itemFields ?? []) out.set(`${f.path}${LIST_COLUMN_MARK}${c.key}`, { type: c.type, label: `${f.label} · ${c.label}` });
+    // Richer data shapes (wave 5): a list inside the items, and its columns (`custom.accounts[].transactions[].amountCents`).
+    for (const inner of f.innerLists ?? []) {
+      const at = `${f.path}${LIST_COLUMN_MARK}${inner.key}`;
+      out.set(at, { type: 'array', label: `${f.label} · ${inner.label}` });
+      for (const c of inner.itemFields) out.set(`${at}${LIST_COLUMN_MARK}${c.key}`, { type: c.type, label: `${f.label} · ${inner.label} · ${c.label}` });
+    }
   }
   return out;
 }
@@ -156,6 +162,8 @@ export function targetFieldsProblems(fields: unknown): string[] {
 }
 
 const PATH_SHAPE = /^[A-Za-z][A-Za-z0-9_.]{0,150}(\[\]\.[A-Za-z][A-Za-z0-9_]{0,40})?$/;
+/** A field of a group in a list's items, or a column of a list inside the items (wave 5). */
+const NESTED_PATH_SHAPE = /^[A-Za-z][A-Za-z0-9_.]{0,150}\[\]\.[A-Za-z][A-Za-z0-9_]{0,40}(\.[A-Za-z][A-Za-z0-9_]{0,40}|\[\]\.[A-Za-z][A-Za-z0-9_]{0,40})$/;
 
 /**
  * Problems with one entry (null = fine). With `paths` (the commands), the entry must name a field the document has now.
@@ -165,7 +173,7 @@ const PATH_SHAPE = /^[A-Za-z][A-Za-z0-9_.]{0,150}(\[\]\.[A-Za-z][A-Za-z0-9_]{0,4
 export function entryProblem(e: unknown, paths: Map<string, { type: FieldType; label: string }> | null): string | null {
   if (!e || typeof e !== 'object') return 'A mapping entry cannot be read.';
   const x = e as MappingEntry;
-  if (!str(x.path) || !PATH_SHAPE.test(x.path)) return `A mapping entry names “${String(x.path).slice(0, 80)}”, which is not a field path.`;
+  if (!str(x.path) || !(PATH_SHAPE.test(x.path) || NESTED_PATH_SHAPE.test(x.path))) return `A mapping entry names “${String(x.path).slice(0, 80)}”, which is not a field path.`;
   if (paths && !paths.has(x.path)) return `“${x.path}” is not a data field of this document.`;
   const name = paths?.get(x.path)?.label ?? x.path;
   const t = textProblem(x.target, `The target field for “${name}”`, TARGET_NAME_MAX, false) ?? textProblem(x.targetType, `The target type for “${name}”`, TARGET_TYPE_MAX, false)

@@ -1,6 +1,6 @@
 import {
   DERIVED_FIELDS_VERSION, RECORD_ID_PREFIX, SOURCE_LANGUAGE, buildContext, dateBoundaries, defaultFormatterFor, evaluateCalculations, exprDependencies,
-  formulaInWords, getPath, lookupTableProblems, printFormula, projectFieldIndex, projectFields, tokensIn, tokensInText, translatableStrings, translationStatus, wordsScopeOf,
+  formulaInWords, getPath, itemFieldDefs, scopeFieldIndex, lookupTableProblems, printFormula, projectFieldIndex, projectFields, tokensIn, tokensInText, translatableStrings, translationStatus, wordsScopeOf,
   type DocNode, type FieldDef, type Predicate, type Project, type SyntheticRecord,
 } from '@iss/model';
 import { predicatePaths } from '@iss/resolver';
@@ -86,6 +86,7 @@ export function dataDictionary(project: Project) {
   if (project.documentDate) sample.document = { date: exampleDate };
   if (project.calculatedFields?.length) evaluateCalculations(project, sample, exampleDate);
   const fields = projectFields(project);
+  const itemDefs = itemFieldDefs(project.customFields, project.calculatedFields);
   const calcs = new Map((project.calculatedFields ?? []).map((c) => [`calc.${c.key}`, c]));
   const words = wordsScopeOf(project, projectFieldIndex(project));
   // A calculated field needs the fields it is calculated from (a row count needs its list; the document's date its source field).
@@ -114,6 +115,8 @@ export function dataDictionary(project: Project) {
       ...(f.documentDate ? { documentDate: project.documentDate?.source === 'run' ? 'given for each run (--issue-date, or "issueDate" with a customer)' : `taken from ${project.documentDate?.source === 'field' ? project.documentDate.path : 'the data'}, unless a date is given for the run` } : {}),
       ...(f.enumValues?.length ? { allowedValues: f.enumValues } : {}),
       ...(f.itemFields?.length ? { columns: f.itemFields.map((c) => ({ key: c.key, label: c.label, type: c.type, format: FORMAT_OF[c.type], used: !!u?.columns.has(c.key) })) } : {}),
+      // Richer data shapes (wave 5): lists inside the items of this list, each with its columns.
+      ...(f.innerLists?.length ? { innerLists: f.innerLists.map((l) => ({ key: l.key, label: l.label, columns: l.itemFields.map((c) => ({ key: c.key, label: c.label, type: c.type, format: FORMAT_OF[c.type] })) })) } : {}),
       example,
       /** The template reads it, the data contract requires it, or a calculated field the template reads is worked out from it. */
       needed: !!u || !!f.required || neededFor.has(f.path),
@@ -135,6 +138,8 @@ export function dataDictionary(project: Project) {
     fields: out,
     /** Tokens in the wording that are not data fields of this document (none in a document that passed the studio's checks). */
     unknownReferences: unknown,
+    // Richer data shapes (wave 5): every field of the items of the lists, as read inside a repeating section (absent otherwise).
+    ...(itemDefs.length ? { itemFields: itemDefs.map((f) => ({ path: f.path, label: f.label, type: f.type, format: FORMAT_OF[f.type], list: f.item, calculated: !!f.derived, ...(calcs.has(f.path) ? { calculation: { gives: calcs.get(f.path)!.type, formula: printFormula(calcs.get(f.path)!.expr, scopeFieldIndex(project, f.item)), inWords: formulaInWords(calcs.get(f.path)!.expr, wordsScopeOf(project, scopeFieldIndex(project, f.item))) } } : {}) })) } : {}),
     // Additions for documents with calculations, lookup tables or dates (absent otherwise; older readers ignore them).
     ...(project.documentDate ? { documentDate: project.documentDate.source === 'run' ? { source: 'run', note: 'The document’s date is given for each run: --issue-date, or "issueDate" next to a customer’s "data". A document that needs it and has none is stopped.' } : { source: 'field', path: project.documentDate.path, note: 'The document’s date is taken from this field of each customer, unless a date is given for the run.' } } : {}),
     ...(project.lookupTables?.length ? { lookupTables: project.lookupTables.map((t) => ({
