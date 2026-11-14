@@ -6,6 +6,7 @@ import { validateCalculatedFields } from './expressions';
 import { periodProblem } from './effective';
 import { LOOKUP_TABLES_MAX, validateLookupTable } from './lookup';
 import { libraryLinkProblems } from './library';
+import { projectMappingProblems } from './mapping';
 import { SCHEMA_VERSION, isDocumentType } from './types';
 import type { DocNode, DocumentType, PresentationProfile, Project } from './types';
 
@@ -319,6 +320,8 @@ export function projectFileProblems(raw: unknown): ProjectFileProblem[] {
   // Shared library: the links and the house wording rules are checked like the rest. A link to an item this studio does not
   // have is not a problem: the content is in the file, and the studio shows the link as "not in this library".
   if (p.libraryLinks !== undefined || p.houseWordingRules !== undefined || p.wordingRules !== undefined) for (const m of libraryLinkProblems(p).slice(0, 5)) bad('LIBRARY', m);
+  // Mappings to a production system (wave 3): text only, checked for shape, length and characters like the rest.
+  if (p.mappings !== undefined) for (const m of projectMappingProblems(p).slice(0, 5)) bad('MAPPING', `A mapping in the file cannot be used: ${m}`);
   return out.slice(0, 20);
 }
 

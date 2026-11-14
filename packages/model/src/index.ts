@@ -27,3 +27,4 @@ export * from './lookup';
 export * from './lookupPaste';
 export * from './effective';
 export * from './library';
+export * from './mapping';

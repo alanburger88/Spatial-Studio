@@ -22,3 +22,7 @@ export * from './alignSamples';
 export * from './setupFromFile';
 export * from './wordingRules';
 export * from './duplicates';
+export * from './dataDictionary';
+export * from './mappingChecks';
+export * from './wordingImport';
+export * from './fieldsImport';

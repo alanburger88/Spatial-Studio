@@ -3,6 +3,8 @@ import { CUSTOM_FIELD_KEY, CUSTOM_LIST_MAX_COLUMNS, customFieldUsage, fieldsFor,
 import { useStudio } from '../../state/store';
 import { Dialog, Tech } from '../../ui/common';
 import { Icon } from '../../ui/icons';
+import { fieldsImportRefusal } from '@iss/scenarios';
+import { ImportFields } from './ImportFields';
 import './DataFieldsEditor.css';
 
 const TYPE_LABEL: Record<string, string> = { string: 'Text', int: 'Whole number', cents: 'Amount', points: 'Points', bool: 'Yes / no', date: 'Date', enum: 'Choice', array: 'List', list: 'List' };
@@ -67,6 +69,7 @@ export function DataFieldsEditor({ onClose }: { onClose: () => void }) {
   const set = (i: number, patch: Partial<Row>) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const setCol = (i: number, c: number, patch: Partial<ColRow>) => setRows((r) => r.map((x, j) => (j === i ? { ...x, _cols: (x._cols ?? []).map((y, k) => (k === c ? { ...y, ...patch } : y)) } : x)));
   const move = <T,>(list: T[], from: number, to: number): T[] => { if (to < 0 || to >= list.length) return list; const next = [...list]; const [it] = next.splice(from, 1); next.splice(to, 0, it); return next; };
+  const [importing, setImporting] = useState(false);
   const save = () => {
     setError(null);
     const res = useStudio.getState().dispatch({ type: 'SET_CUSTOM_FIELDS', fields: toFields() });
@@ -75,6 +78,7 @@ export function DataFieldsEditor({ onClose }: { onClose: () => void }) {
   };
 
   return (
+    <>
     <Dialog title="Data fields" onClose={onClose} labelledBy="data-fields-title"
       footer={tab === 'custom' ? <>
         <span className="muted df-foot-note">Changes apply to the model (undoable). Use <strong>Save</strong> in the top bar to keep them.{own && ' Then generate test customers again so they carry the new fields.'}</span>
@@ -192,11 +196,18 @@ export function DataFieldsEditor({ onClose }: { onClose: () => void }) {
                 );
               })}
             </ul>
-            <button className="btn sm" onClick={() => setRows((r) => [...r, blank()])} data-testid="df-add"><Icon.plus /> Add field</button>
+            <div className="row">
+              <button className="btn sm" onClick={() => setRows((r) => [...r, blank()])} data-testid="df-add"><Icon.plus /> Add field</button>
+              {own
+                ? <button className="btn sm" onClick={() => setImporting(true)} disabled={dirty} title={dirty ? 'Save or undo the changes here first.' : undefined} data-testid="df-import">Import fields…</button>
+                : <span className="muted df-import-refused" data-testid="df-import-refused">{fieldsImportRefusal(project)}</span>}
+            </div>
             {error && <p className="callout error" role="alert" data-testid="df-error">{error}</p>}
           </>
         )}
       </div>
     </Dialog>
+    {importing && <ImportFields onClose={() => setImporting(false)} onApplied={() => { const p = useStudio.getState().project; setRows((p?.customFields ?? []).map((f) => ({ ...f, _values: (f.enumValues ?? []).join(', '), _cols: (f.itemFields ?? []).map((c) => ({ ...c })) }))); }} />}
+    </>
   );
 }

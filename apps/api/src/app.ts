@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { canonicalJson, customFieldDefs, fieldsFor, projectFields, projectContentDigest, validateRule, validateCustomFields, isDocumentType, csvToRecords, prepareImport, IMPORT_ID_BASE, IMPORT_LIMIT, RECORD_ID_PREFIX, SCHEMA_VERSION, RECORD_ID_PATTERN, DOCUMENT_TYPE_LABEL, type DocumentType, type Project, type ProfileId, type SyntheticRecord } from '@iss/model';
 import { isIsoDay, projectFileProblems, diffProjects, sanitizeCommentBody, transitionProblem, roleCan, COMMENT_MAX, WORKFLOW_ACTIONS, WORKFLOW_LABEL, WORKFLOW_TRANSITIONS, ACTION_LABEL, type WorkflowAction } from '@iss/model';
 import { libraryLinkProblems } from '@iss/model';
+import { projectMappingProblems } from '@iss/model';
 import { RECORDS, PERSONAS, FIXTURE_SEED } from '@iss/model/fixtures';
 import { resolve, ENGINE_VERSION, type Resolution } from '@iss/resolver';
 import { renderPagedDocument, renderInteractiveHtml, compareManifests, afpSimulation, pageDesignFindings, AFP_SIMULATION_LABEL, PAGED_RENDERER_VERSION, HTML_RENDERER_VERSION } from '@iss/renderers';
@@ -84,6 +85,11 @@ function checkDraftProject(p: any, projectId: string): Project {
   // Shared library: the links and the house wording rules a client sends are checked like the rest (absent = nothing to check).
   if (p.libraryLinks !== undefined || p.houseWordingRules !== undefined || p.wordingRules !== undefined) {
     const problems = libraryLinkProblems(p);
+    if (problems.length) throw new ApiError(422, 'INVALID_PROJECT', problems.slice(0, 3).join(' '));
+  }
+  // Mappings to a production system (wave 3): checked like the rest (absent = nothing to check).
+  if (p.mappings !== undefined) {
+    const problems = projectMappingProblems(p);
     if (problems.length) throw new ApiError(422, 'INVALID_PROJECT', problems.slice(0, 3).join(' '));
   }
   return p as Project;

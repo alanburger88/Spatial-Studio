@@ -95,7 +95,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S13: {
-    purpose: 'Every text a customer reads, with its translation status in each language and the wording rules it must meet. Only approved wording is ever shown to customers; a person approves it.',
+    purpose: 'Every text a customer reads, with its translation status in each language and the wording rules it must meet. Only approved wording is ever shown to customers; a person approves it. “Import wording” brings in a wording table (the studio\'s own XLIFF or CSV files, or a plain spreadsheet), shows exactly what will change first, and adds translations as drafts in one step that Undo takes back.',
     actions: [
       'Search the texts and filter them by status, and open a text in context to see where the customer reads it.',
       'Add a language, then edit and approve each translation. Ask for a first-pass draft; an AI or sample draft stays a draft until a person approves it.',
@@ -122,7 +122,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S07: {
-    purpose: 'Decide who sees what. A rule says "when this is true for a customer, show this version of a message". Write the rules, test them against every customer, and see the exact inputs behind the current scenario. When the document uses dates, a rule can also be in effect from or until a day; a rule that is not in effect on the preview date is marked "Not in effect", never hidden.',
+    purpose: 'Decide who sees what. A rule says "when this is true for a customer, show this version of a message". Write the rules, test them against every customer, and see the exact inputs behind the current scenario. When the document uses dates, a rule can also be in effect from or until a day; a rule that is not in effect on the preview date is marked "Not in effect", never hidden. For a document with its own data, “Import fields” in the data fields editor adds fields from a data dictionary file and can make a first customer from its examples.',
     actions: [
       'Add a rule, or describe one in words and review the draft.',
       'Switch between the rule Editor, the Table of all rules and the Tests.',
@@ -326,6 +326,20 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     next: [
       { screen: 'S18', why: 'open the release a record came from' },
       { screen: 'S20', why: 'compare releases' },
+    ],
+  },
+  S26: {
+    purpose: 'The document\'s data dictionary (every field it reads, its type, an example from a synthetic customer and where it is used) and, for each system that produces the document, a mapping of each field to that system\'s own field. No system is built in: a mapping is a named profile you fill in or import.',
+    actions: [
+      'Read the data dictionary: calculated fields say how they are worked out, because the producing system must supply or compute them.',
+      'Add a mapping for a system, then choose the target field for each document field, or mark it not needed with a reason.',
+      'Import the target system\'s field list from a CSV file: exact and likely matches are chosen for you, guesses are only offered.',
+      'Fix what the checks find: fields not mapped, a target field mapped twice, and types that do not agree. Each check links to its row.',
+      'Download a mapping as JSON or CSV. A mapping that is complete when a release is made goes into the release package.',
+    ],
+    next: [
+      { screen: 'S18', why: 'see which mappings a release carries' },
+      { screen: 'S07', why: 'change the document\'s data fields' },
     ],
   },
   S22: {

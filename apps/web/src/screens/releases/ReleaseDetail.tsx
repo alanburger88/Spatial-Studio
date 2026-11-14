@@ -36,6 +36,7 @@ export function ReleaseDetail({ detail, releases, role, onChanged }: DetailProps
       {r.documentRemoved && <div className="callout warning" role="status">The document this release came from was deleted{r.documentRemovedAt ? ` on ${fmtAbs(r.documentRemovedAt)}` : ''}. The release is kept as it was.</div>}
       <Facts r={r} />
       <ReleaseLibrarySection releaseId={r.id} />
+      <ReleaseMappings detail={detail} />
       <StageHistory history={detail.history} />
       <Actions detail={detail} releases={releases} role={role} onChanged={onChanged} />
       <PackageSection release={r} onChanged={onChanged} />
@@ -263,6 +264,29 @@ function PdfAccessibilitySection({ releaseId }: { releaseId: string }) {
       )}
       {error && <p className="callout warning" role="alert">{error}</p>}
       <button type="button" className="btn sm" onClick={() => void check()} disabled={busy} aria-busy={busy} data-testid="rel-pdf-a11y-check">{busy ? 'Checking the PDF…' : rec ? 'Check the PDF again' : 'Check the PDF'}</button>
+    </section>
+  );
+}
+
+/** Mappings to production systems (wave 3): which ones this release carries, and which were left out because they were not complete. */
+function ReleaseMappings({ detail }: { detail: ReleaseDetailDto }) {
+  const list = detail.mappings ?? [];
+  if (!list.length) return null;
+  const r = detail.release;
+  return (
+    <section className="rel-section" aria-labelledby="rel-mappings-h" data-testid="rel-mappings">
+      <h3 className="section-title" id="rel-mappings-h">Mappings to production systems</h3>
+      <ul className="rel-mapping-list">
+        {list.map((m) => (
+          <li key={m.id} data-testid="rel-mapping" data-complete={m.complete ? 'yes' : 'no'}>
+            <strong>{m.name}</strong> <span className="muted">for {m.system}</span>{' '}
+            {m.complete
+              ? <><span className="chip accent">In the package</span> <Tech><span className="chip code">{m.file}</span></Tech></>
+              : <><span className="chip warning">Left out</span> <span className="muted">Not complete when the release was made ({m.counts.unmapped} not mapped{m.counts.clashes ? `, ${m.counts.clashes} type clashes` : ''}{m.counts.mappedTwice ? `, ${m.counts.mappedTwice} mapped twice` : ''}).</span></>}
+          </li>
+        ))}
+      </ul>
+      <p className="muted"><Link to={`/studio/${r.documentId}/mapping`} data-testid="rel-mappings-open">Open Mapping</Link> to see or change the working version’s mappings. A change goes into the next release.</p>
     </section>
   );
 }

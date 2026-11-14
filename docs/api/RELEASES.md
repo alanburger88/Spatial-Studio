@@ -186,9 +186,17 @@ The approval and its release are stored together or not at all. Other workflow a
     { "action": "handover", "kind": "received",    "label": "Mark as received",         "allowed": true,  "reason": null },
     { "action": "handover", "kind": "live",        "label": "Mark as live",             "allowed": true,  "reason": null }
   ],
-  "document": { "id": "harborcare-demo", "exists": true, "title": "…", "modelVersion": 3, "workflowState": "draft" }   // title, modelVersion, workflowState are null when it was deleted
+  "document": { "id": "harborcare-demo", "exists": true, "title": "…", "modelVersion": 3, "workflowState": "draft" },   // title, modelVersion, workflowState are null when it was deleted
+  "mappings": [   // wave 3: the release's mappings to production systems, from its frozen content (empty when it has none)
+    { "id": "map-mapping-for-core", "name": "Mapping for Core", "system": "Core Banking", "complete": true,
+      "file": "data/mapping-mapping-for-core.json", "csv": "data/mapping-mapping-for-core.csv",
+      "counts": { "required": 26, "mapped": 25, "notNeeded": 1, "unmapped": 0, "clashes": 0, "mappedTwice": 0, "optionalMapped": 0 } },
+    { "id": "map-mapping-for-print-house", "name": "Mapping for Print House", "system": "Print House", "complete": false, "file": null, "csv": null, "counts": { "…": "…" } }
+  ]
 }
 ```
+
+`mappings` lists every mapping the approved version held. A complete one is in the package as `file` and `csv`; an incomplete one (`file` null) was left out, and the package's README says so. See `docs/design/RELEASE_PACKAGE.md` ("Additions for mappings").
 
 History `kind` is one of `created`, `reapproved`, `promoted`, `superseded`, `withdrawn`, `document-removed`. `stage` is null for events about the release as a whole. `note` holds the reason or note a person gave, or what the studio recorded.
 
@@ -329,6 +337,7 @@ Reasons and notes a person typed are kept on the release (history and handover l
 - New documents (create, import, duplicate, set up) never get the id of a deleted document that has releases.
 - `GET /api/v1/session`: admins have the extra permission `promote_release`.
 - Approving (and creating a release from the approved version) records the known data problems in force for that version on the release, frozen like the rest (`knownDataProblems`).
+- Saving a project (and any route that takes a draft project) checks its `mappings` (wave 3): shape, lengths, no `<` or `>`, unique ids. A problem is `422 INVALID_PROJECT`. A mapping entry that names a field the document no longer has is kept and reported by the Mapping screen's checks, never refused.
 
 ## The document's date and calculated fields
 

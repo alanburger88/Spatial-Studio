@@ -404,6 +404,22 @@ export function summarizeChanges(before: Project, after: Project, records: Synth
     for (const r of d.wordingRules.removed) add('wording', `Wording rule removed: ${rw(r)}`);
     for (const r of d.wordingRules.changed) add('wording', `Wording rule changed: ${rw(r)}${r.severityChange ? `, now a “${r.severityChange.to}” (was a “${r.severityChange.from}”)` : ''}`);
   }
+  // Mappings to a production system (wave 3): never change what a customer gets, only what is handed over.
+  if (d.mappings) {
+    for (const m of d.mappings.added) add('settings', `Mapping ${q(m.name)} added, for ${q(m.system)}`);
+    for (const m of d.mappings.removed) add('settings', `Mapping ${q(m.name)} removed`);
+    for (const m of d.mappings.changed) {
+      const parts: string[] = [];
+      if (m.renamed) parts.push(`renamed from ${q(m.renamed.from)}`);
+      if (m.systemChange) parts.push(`now for ${q(m.systemChange.to)}`);
+      if (m.description) parts.push('its description changed');
+      if (m.targetFields) parts.push(`the target’s field list now has ${countWords(m.targetFields.to, 'field')}`);
+      const e = m.entries;
+      const decided = [e.added ? `${countWords(e.added, 'field')} mapped` : '', e.changed ? `${countWords(e.changed, 'field')} changed` : '', e.removed ? `${countWords(e.removed, 'field')} cleared` : ''].filter(Boolean);
+      if (decided.length) parts.push(decided.join(', '));
+      add('settings', `Mapping ${q(m.name)}: ${parts.join('; ')}`);
+    }
+  }
   if (d.title) add('settings', `The project was renamed from ${q(d.title.from)} to ${q(d.title.to)}`);
   const langsBefore = projectLanguages(before), langsAfter = projectLanguages(after);
   for (const l of langsAfter) if (!langsBefore.includes(l)) add('settings', `Language added: ${languageName(l)}`);

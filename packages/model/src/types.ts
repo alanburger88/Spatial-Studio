@@ -443,12 +443,61 @@ export interface Project {
    * to the house rules but never weaken one (`ownWordingRuleProblem`). Changed only by the wording-rule commands.
    */
   wordingRules?: WordingRule[];
+  /**
+   * Mappings of the document's data fields to the systems that produce it (wave 3, section 3). Absent = none: the document
+   * behaves exactly as before. Neutral: each is a named profile a person fills in or imports; no target system is built
+   * in. Changed only by the mapping commands (`mapping.ts`). Never read by the engine.
+   */
+  mappings?: TargetMapping[];
+}
+
+/* ------------------------------------------------------------- Mapping to a production system (wave 3) */
+
+/** One field of the target system, as its own field list names it (typed in, or imported from a CSV). */
+export interface TargetField { name: string; type?: string; description?: string }
+
+/**
+ * What the target system does with one of the document's data fields. `path` is a field path (`card.newBalanceCents`),
+ * or a column of a list (`card.transactions[].amountCents`). Either `target` (the target's name for it) or `notNeeded`.
+ */
+export interface MappingEntry {
+  path: string;
+  /** The target system's field name. */
+  target?: string;
+  /** The target's type for it, in the target's own words (`DECIMAL(10,2)`, `string`); read by `targetTypeKind`. */
+  targetType?: string;
+  /** How the value is written there (for example "divide by 100", "DD/MM/YYYY"). */
+  format?: string;
+  note?: string;
+  /** The target does not need this field, and why. */
+  notNeeded?: { reason: string };
+}
+
+/** Who made a change to a mapping, and when (the client supplies both; commands stay pure). Names of studio users only. */
+export interface MappingStamp { by: string; at: string }
+
+/** A named mapping of the document's data fields to one target system. */
+export interface TargetMapping {
+  /** Unique in the document: lower-case letters, digits and dashes. */
+  id: string;
+  /** "Mapping for <system>". */
+  name: string;
+  /** The target system, as free text (no system is built in). */
+  system: string;
+  description?: string;
+  created?: MappingStamp;
+  changed?: MappingStamp;
+  /** The target's own field list, when one was typed or imported. */
+  targetFields?: TargetField[];
+  /** One entry per document field the person has decided on, in no particular order (the file sorts them). */
+  entries: MappingEntry[];
 }
 
 /** One preferred term: the English `source` should be rendered as `target` in that language. */
 export interface GlossaryEntry { source: string; target: string; note?: string }
 
-export type TranslationOrigin = 'ai' | 'sample';
+/** `imported`: brought in by "Import wording" from a file (wave 3); like the others it is a draft until a person approves it. */
+export type TranslationOrigin = 'ai' | 'sample' | 'imported';
 
 export interface StringTranslation {
   approved?: Record<Locale, string>;

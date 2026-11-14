@@ -12,7 +12,7 @@ const SECTIONS: Array<{ id: string; label: string; tabs: string[]; ids: string[]
   { id: 'rules-data', label: 'Rules & data', tabs: ['Rules', 'Customers', 'Journeys', 'Calculations', 'Lookup tables', 'Dates'], ids: ['S07', 'S16', 'S08', 'S22', 'S23', 'S24'] },
   { id: 'explore', label: 'Explore', tabs: ['Exploded', 'Cube', 'Landscape', 'Page stack'], ids: ['S03', 'S04', 'S05', 'S06'] },
   { id: 'check', label: 'Check', tabs: ['Blockers', 'Validate & compare', 'Preview & export'], ids: ['S17', 'S09', 'S10'] },
-  { id: 'releases', label: 'Releases', tabs: ['Releases', 'Before & after', 'Proof'], ids: ['S18', 'S20', 'S21'] },
+  { id: 'releases', label: 'Releases', tabs: ['Releases', 'Before & after', 'Proof', 'Mapping'], ids: ['S18', 'S20', 'S21', 'S26'] },
   { id: 'help', label: 'Help & activity', tabs: ['Guided demo', 'Assistant', 'Activity'], ids: ['S11', 'S12', 'S14'] },
 ];
 
@@ -37,6 +37,7 @@ const ROUTES: Array<{ id: string; path: RegExp; heading: string }> = [
   { id: 'S18', path: /\/releases$/, heading: 'Releases' },
   { id: 'S20', path: /\/compare$/, heading: 'Before & after' },
   { id: 'S21', path: /\/proof$/, heading: 'Proof' },
+  { id: 'S26', path: /\/mapping$/, heading: 'Mapping' },
   { id: 'S11', path: /\/demo$/, heading: 'Guided Demo' },
   { id: 'S12', path: /\/assistant$/, heading: 'AI Assistant' },
   { id: 'S14', path: /\/activity$/, heading: 'Activity' },
@@ -211,7 +212,7 @@ test('NV09 the collapsed menu still names every entry, navigates and shows the t
   await expect(nav(page).getByRole('link', { name: 'Releases' })).toBeVisible();
   await page.getByTestId('nav-section-releases').click();
   await expect(page).toHaveURL(/\/releases$/);
-  await expect(page.getByRole('navigation', { name: 'Releases screens' }).getByRole('link')).toHaveCount(3);
+  await expect(page.getByRole('navigation', { name: 'Releases screens' }).getByRole('link')).toHaveCount(4);
   await page.getByTestId('nav-section-check').focus();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/blockers$/);

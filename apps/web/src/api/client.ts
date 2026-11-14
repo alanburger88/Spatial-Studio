@@ -191,7 +191,9 @@ export interface AuditQuery { projectId?: string; user?: string; action?: string
 /** One document's releases, newest first. `create` says whether the caller may make a release from the approved version now, and if not why. */
 export interface ProjectReleasesDto { documentId: string; documentExists: boolean; title: string; releases: ReleaseInfo[]; production: string | null; test: string | null; create: { allowed: boolean; reason: string | null } }
 export interface ReleaseActionDto { action: 'promote' | 'withdraw' | 'handover'; stage?: ReleaseStage; kind?: HandoverKind; label: string; allowed: boolean; reason: string | null }
-export interface ReleaseDetailDto { release: ReleaseInfo; history: ReleaseEvent[]; handover: HandoverEntry[]; actions: ReleaseActionDto[]; document: { id: string; exists: boolean; title: string | null; modelVersion: number | null; workflowState: WorkflowState | null } }
+export interface ReleaseDetailDto { release: ReleaseInfo; history: ReleaseEvent[]; handover: HandoverEntry[]; actions: ReleaseActionDto[]; document: { id: string; exists: boolean; title: string | null; modelVersion: number | null; workflowState: WorkflowState | null };
+  /** Mappings to production systems (wave 3): the ones the release carries (complete when it was made) and the ones it left out. Absent from older servers. */
+  mappings?: Array<{ id: string; name: string; system: string; complete: boolean; file: string | null; csv: string | null; counts: { required: number; mapped: number; notNeeded: number; unmapped: number; clashes: number; mappedTwice: number } }> }
 export interface ReleaseCreateResult { created: boolean; reason: string | null; message: string; release: ReleaseInfo }
 export interface ReleasePackageFileDto { path: string; sha256: string; bytes: number; role: string; contentType: string }
 /** The parts of a package manifest the studio reads (`manifest.json`; format in docs/design/RELEASE_PACKAGE.md). */

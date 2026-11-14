@@ -10,7 +10,7 @@ const SECTION_OF: Record<string, string> = {
   S07: 'rules-data', S16: 'rules-data', S08: 'rules-data', S22: 'rules-data', S23: 'rules-data', S24: 'rules-data',
   S03: 'explore', S04: 'explore', S05: 'explore', S06: 'explore',
   S17: 'check', S09: 'check', S10: 'check',
-  S18: 'releases', S20: 'releases', S21: 'releases',
+  S18: 'releases', S20: 'releases', S21: 'releases', S26: 'releases',
   S11: 'help', S12: 'help', S14: 'help',
 };
 export async function gotoScreen(page: Page, screenId: string) {

@@ -95,19 +95,22 @@ interface Target { path: string; label: string; field?: FieldDef; keys: Map<stri
 /** How sure a name is: the path itself, its last part or the field label, then the other names people use. */
 const WEIGHT = { path: 4, leaf: 3, label: 3, alias: 2 } as const;
 
+/** The names a field is known by, weighted: its path, the last part of it, its label, and the other names people use. */
+function targetOf(path: string, label: string, field?: FieldDef): Target {
+  const keys = new Map<string, number>();
+  const put = (ts: string[], w: number) => { const k = key(ts); if (k && (keys.get(k) ?? 0) < w) keys.set(k, w); };
+  put(tokens(path), WEIGHT.path);
+  put(tokens(path.split('.').slice(-1)[0] ?? path), WEIGHT.leaf);
+  if (path.startsWith('custom.')) put(tokens(path.slice('custom.'.length)), WEIGHT.leaf);
+  put(tokens(label.replace(/\([^)]*\)/g, ' ')), WEIGHT.label);
+  for (const a of ALIASES[path] ?? []) put(tokens(a), WEIGHT.alias);
+  return { path, label, field, keys };
+}
+
 function targetsFor(project: Pick<Project, 'documentType' | 'customFields'>): { targets: Target[]; derived: FieldDef[] } {
   const fields = projectFields(project);
   const targets: Target[] = [];
-  const add = (path: string, label: string, field?: FieldDef) => {
-    const keys = new Map<string, number>();
-    const put = (ts: string[], w: number) => { const k = key(ts); if (k && (keys.get(k) ?? 0) < w) keys.set(k, w); };
-    put(tokens(path), WEIGHT.path);
-    put(tokens(path.split('.').slice(-1)[0] ?? path), WEIGHT.leaf);
-    if (path.startsWith('custom.')) put(tokens(path.slice('custom.'.length)), WEIGHT.leaf);
-    put(tokens(label.replace(/\([^)]*\)/g, ' ')), WEIGHT.label);
-    for (const a of ALIASES[path] ?? []) put(tokens(a), WEIGHT.alias);
-    targets.push({ path, label, field, keys });
-  };
+  const add = (path: string, label: string, field?: FieldDef) => { targets.push(targetOf(path, label, field)); };
   add('recordId', 'Your own record ID');
   add('personaId', 'Persona');
   for (const f of fields) {
@@ -286,6 +289,19 @@ const RANK: Record<ColumnMatch['confidence'], number> = { exact: 3, likely: 2, g
 
 export function matchColumns(headers: string[], sampleRows: string[][], project: Pick<Project, 'documentType' | 'customFields'>): ColumnMatch[] {
   const { targets, derived } = targetsFor(project);
+  return decide(headers, targets, derived, sampleRows);
+}
+
+/**
+ * The same matching against any list of named fields (`path` and `label`): used by the Mapping screen to match a target
+ * system's field names to the document's fields. Each name gets at most one field and each field at most one name; a
+ * guess is offered, never applied (the caller pre-selects exact and likely matches only).
+ */
+export function matchNames(names: string[], candidates: ReadonlyArray<{ path: string; label: string }>): ColumnMatch[] {
+  return decide(names, candidates.map((c) => targetOf(c.path, c.label)), [], []);
+}
+
+function decide(headers: string[], targets: Target[], derived: FieldDef[], sampleRows: string[][]): ColumnMatch[] {
   const found = headers.map((h) => matchOne(String(h ?? ''), targets, derived));
 
   // One column per field: the better match keeps it.

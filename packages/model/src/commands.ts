@@ -18,6 +18,8 @@ import type { BrandKit, ContentPart, CustomField, DocNode, Locale, TestCase, Tex
 import { validatePredicate, validateRule } from './validate';
 import { applyPageDesignPatch, pagedFlowProblems, pagedProfileOf, pageDesignLabel, pageDesignProblems, pageSizePt, refitFixedLayouts, type PageDesignPatch } from './pageDesign';
 import type { LibraryKind, LibraryLink, LibraryTarget, WordingRule } from './types';
+import type { MappingEntry, MappingStamp, TargetField, TargetMapping } from './types';
+import { MAPPINGS_MAX, cleanEntry, cleanTargetFields, entryProblem, mappablePaths, mappingProblems, stampProblem, targetFieldsProblems } from './mapping';
 import {
   LIBRARY_ID_PATTERN, LIBRARY_LINK_ID_PATTERN, LIBRARY_LINKS_MAX, LIBRARY_TITLE_MAX, blockId, blockMembers, blockPrefixFor, changedLink, checkLibraryContent,
   isLibraryKind, libraryContentFingerprint, linkedContentMessage, linkFor, linkNodeId, linkOfPart, mapBlock, nextLinkId,
@@ -94,7 +96,20 @@ export type Command =
   | { type: 'ADD_WORDING_RULE'; rule: WordingRule; index?: number }
   | { type: 'UPDATE_WORDING_RULE'; ruleId: string; rule: WordingRule }
   | { type: 'REMOVE_WORDING_RULE'; ruleId: string }
-  | { type: 'MOVE_WORDING_RULE'; ruleId: string; index: number };
+  | { type: 'MOVE_WORDING_RULE'; ruleId: string; index: number }
+  // Mappings to the system that produces the document (wave 3, section 3): each change is one undoable step. `stamp` says
+  // who made it and when (supplied by the caller, so the commands stay pure). The engine never reads a mapping.
+  | { type: 'ADD_MAPPING'; mapping: { id: string; name: string; system: string; description?: string }; stamp?: MappingStamp }
+  /** Changes a mapping's name, target system or description (an empty description removes it). */
+  | { type: 'RENAME_MAPPING'; mappingId: string; name?: string; system?: string; description?: string; stamp?: MappingStamp }
+  | { type: 'REMOVE_MAPPING'; mappingId: string }
+  /** Replaces the target's field list (as typed or imported). Entries are kept: a target name no longer in the list is reported by the checks. */
+  | { type: 'IMPORT_TARGET_FIELDS'; mappingId: string; fields: TargetField[]; stamp?: MappingStamp }
+  /** Sets what the target does with one document field (replacing what was there). */
+  | { type: 'SET_MAPPING_ENTRY'; mappingId: string; entry: MappingEntry; stamp?: MappingStamp }
+  | { type: 'CLEAR_MAPPING_ENTRY'; mappingId: string; path: string; stamp?: MappingStamp }
+  /** Sets several entries at once (accepted suggestions, a pasted list): each replaces the entry for its field. */
+  | { type: 'SET_MAPPING_ENTRIES'; mappingId: string; entries: MappingEntry[]; stamp?: MappingStamp };
 
 /**
  * Where a linked item's content goes. A block is inserted into `parentId` (at `index`) or replaces the component
@@ -462,7 +477,7 @@ function applyOne(project: Project, cmd: Command): CommandResult {
         if (!translationTarget(project, it.id)) return reject('NOT_FOUND', `Unknown text ${it.id}.`);
         if (it.text.length > 4000) return reject('TOO_LONG', 'Translations are limited to 4,000 characters.');
       }
-      return { ok: true, label: `${cmd.items.length} ${languageShortName(cmd.locale)} draft${cmd.items.length === 1 ? '' : 's'}${cmd.origin === 'ai' ? ' from AI' : cmd.origin === 'sample' ? ' from the sample set' : ''}`, project: bump(project, (d) => { for (const it of cmd.items) writeDraft(d, it.id, cmd.locale, it.text, cmd.origin); }) };
+      return { ok: true, label: `${cmd.items.length} ${languageShortName(cmd.locale)} draft${cmd.items.length === 1 ? '' : 's'}${cmd.origin === 'ai' ? ' from AI' : cmd.origin === 'sample' ? ' from the sample set' : cmd.origin === 'imported' ? ' imported from a file' : ''}`, project: bump(project, (d) => { for (const it of cmd.items) writeDraft(d, it.id, cmd.locale, it.text, cmd.origin); }) };
     }
     case 'APPROVE_TRANSLATION': {
       const target = translationTarget(project, cmd.partId);
@@ -711,6 +726,87 @@ function applyOne(project: Project, cmd: Command): CommandResult {
     case 'REMOVE_WORDING_RULE':
     case 'MOVE_WORDING_RULE':
       return applyWordingRuleCommand(project, cmd);
+    case 'ADD_MAPPING':
+    case 'RENAME_MAPPING':
+    case 'REMOVE_MAPPING':
+    case 'IMPORT_TARGET_FIELDS':
+    case 'SET_MAPPING_ENTRY':
+    case 'CLEAR_MAPPING_ENTRY':
+    case 'SET_MAPPING_ENTRIES':
+      return applyMappingCommand(project, cmd);
+  }
+}
+
+/* ------------------------------------------------------------ mappings to a production system (wave 3) */
+
+type MappingCommand = Extract<Command, { type: 'ADD_MAPPING' | 'RENAME_MAPPING' | 'REMOVE_MAPPING' | 'IMPORT_TARGET_FIELDS' | 'SET_MAPPING_ENTRY' | 'CLEAR_MAPPING_ENTRY' | 'SET_MAPPING_ENTRIES' }>;
+
+function applyMappingCommand(project: Project, cmd: MappingCommand): CommandResult {
+  const all = project.mappings ?? [];
+  const stampBad = 'stamp' in cmd ? stampProblem(cmd.stamp) : null;
+  if (stampBad) return reject('INVALID_MAPPING', stampBad);
+  const stamp = 'stamp' in cmd && cmd.stamp ? { by: cmd.stamp.by.trim(), at: cmd.stamp.at } : undefined;
+  if (cmd.type === 'ADD_MAPPING') {
+    if (all.length >= MAPPINGS_MAX) return reject('TOO_MANY', `A document can have at most ${MAPPINGS_MAX} mappings.`);
+    const m: TargetMapping = { id: cmd.mapping?.id, name: cmd.mapping?.name?.trim(), system: cmd.mapping?.system?.trim(), ...(cmd.mapping?.description?.trim() ? { description: cmd.mapping.description.trim() } : {}), ...(stamp ? { created: stamp } : {}), entries: [] };
+    const bad = mappingProblems(m);
+    if (bad.length) return reject('INVALID_MAPPING', bad[0]);
+    if (all.some((x) => x.id === m.id)) return reject('DUPLICATE_ID', `A mapping with the id “${m.id}” already exists.`);
+    if (all.some((x) => x.name.toLowerCase() === m.name.toLowerCase())) return reject('DUPLICATE', `This document already has a mapping called “${m.name}”.`);
+    return { ok: true, label: `Add the mapping “${m.name}”`, project: bump(project, (d) => { d.mappings = [...all, m]; }) };
+  }
+  const i = all.findIndex((x) => x.id === cmd.mappingId);
+  if (i < 0) return reject('NOT_FOUND', 'This document has no such mapping.');
+  const before = all[i];
+  const put = (next: TargetMapping) => (d: Project) => { d.mappings = all.map((x, j) => (j === i ? { ...next, ...(stamp ? { changed: stamp } : {}) } : x)); };
+  switch (cmd.type) {
+    case 'REMOVE_MAPPING':
+      return { ok: true, label: `Remove the mapping “${before.name}”`, project: bump(project, (d) => { const rest = all.filter((_, j) => j !== i); if (rest.length) d.mappings = rest; else delete d.mappings; }) };
+    case 'RENAME_MAPPING': {
+      const next: TargetMapping = { ...before };
+      if (cmd.name !== undefined) next.name = String(cmd.name).trim();
+      if (cmd.system !== undefined) next.system = String(cmd.system).trim();
+      if (cmd.description !== undefined) { if (String(cmd.description).trim()) next.description = String(cmd.description).trim(); else delete next.description; }
+      const bad = mappingProblems(next);
+      if (bad.length) return reject('INVALID_MAPPING', bad[0]);
+      if (all.some((x, j) => j !== i && x.name.toLowerCase() === next.name.toLowerCase())) return reject('DUPLICATE', `This document already has a mapping called “${next.name}”.`);
+      if (next.name === before.name && next.system === before.system && next.description === before.description) return reject('NO_CHANGE', 'Nothing changed.');
+      return { ok: true, label: next.name !== before.name ? `Rename the mapping “${before.name}” to “${next.name}”` : `Change the details of the mapping “${next.name}”`, project: bump(project, put(next)) };
+    }
+    case 'IMPORT_TARGET_FIELDS': {
+      const bad = targetFieldsProblems(cmd.fields);
+      if (bad.length) return reject('INVALID_TARGET_FIELDS', bad[0]);
+      const fields = cleanTargetFields(cmd.fields);
+      const next: TargetMapping = { ...before };
+      if (fields.length) next.targetFields = fields; else delete next.targetFields;
+      return { ok: true, label: `${fields.length ? `${fields.length} target field${fields.length === 1 ? '' : 's'} for` : 'Clear the target field list of'} “${before.name}”`, project: bump(project, put(next)) };
+    }
+    case 'SET_MAPPING_ENTRY':
+    case 'SET_MAPPING_ENTRIES': {
+      const list = cmd.type === 'SET_MAPPING_ENTRY' ? [cmd.entry] : cmd.entries;
+      if (!Array.isArray(list) || !list.length) return reject('EMPTY', 'There is nothing to set.');
+      if (list.length > 5000) return reject('TOO_LONG', 'Too many entries in one step.');
+      const paths = mappablePaths(project);
+      const byPath = new Map(before.entries.map((e) => [e.path, e]));
+      const seen = new Set<string>();
+      for (const e of list) {
+        const bad = entryProblem(e, paths);
+        if (bad) return reject('INVALID_MAPPING_ENTRY', bad);
+        if (seen.has(e.path)) return reject('INVALID_MAPPING_ENTRY', `“${paths.get(e.path)!.label}” is set twice in one step.`);
+        seen.add(e.path);
+        const c = cleanEntry(e);
+        if (c) byPath.set(e.path, c); else byPath.delete(e.path);
+      }
+      const entries = [...byPath.values()];
+      if (digestOf(entries) === digestOf(before.entries)) return reject('NO_CHANGE', 'Nothing changed.');
+      const one = list.length === 1 ? paths.get(list[0].path)!.label : null;
+      return { ok: true, label: one ? `Map “${one}” in “${before.name}”` : `Map ${list.length} fields in “${before.name}”`, project: bump(project, put({ ...before, entries })) };
+    }
+    case 'CLEAR_MAPPING_ENTRY': {
+      if (!before.entries.some((e) => e.path === cmd.path)) return reject('NOT_FOUND', 'That field has nothing to clear in this mapping.');
+      const label = mappablePaths(project).get(cmd.path)?.label ?? cmd.path;
+      return { ok: true, label: `Clear “${label}” in “${before.name}”`, project: bump(project, put({ ...before, entries: before.entries.filter((e) => e.path !== cmd.path) })) };
+    }
   }
 }
 

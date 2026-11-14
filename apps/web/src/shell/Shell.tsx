@@ -54,6 +54,7 @@ export const SCREENS = [
   { id: 'S23', path: 'lookup-tables', label: 'Lookup tables', icon: Icon.rules, group: 'build', hint: 'Small tables, such as a fee by tier, that a calculation reads' },
   { id: 'S24', path: 'dates', label: 'Dates', icon: Icon.journey, group: 'build', hint: 'The document\'s date, what starts and ends when, and a timeline' },
   { id: 'S25', path: '/library', label: 'Library', icon: Icon.list, group: 'home', hint: 'Brands, building blocks, wording and tables that many documents share' },
+  { id: 'S26', path: 'mapping', label: 'Mapping', icon: ReleaseIcon, group: 'check', hint: 'The data dictionary, and how each field maps to the system that produces the document' },
 ] as const;
 
 /** Overview nav icon: a gauge with a tick. */
@@ -68,7 +69,7 @@ export const TAB_LABEL: Record<string, string> = {
   S07: 'Rules', S16: 'Customers', S08: 'Journeys', S22: 'Calculations', S23: 'Lookup tables', S24: 'Dates',
   S03: 'Exploded', S04: 'Cube', S05: 'Landscape', S06: 'Page stack',
   S17: 'Blockers', S09: 'Validate & compare', S10: 'Preview & export',
-  S18: 'Releases', S20: 'Before & after', S21: 'Proof',
+  S18: 'Releases', S20: 'Before & after', S21: 'Proof', S26: 'Mapping',
   S11: 'Guided demo', S12: 'Assistant', S14: 'Activity',
 } as const;
 
@@ -83,7 +84,7 @@ export const SECTIONS = [
   { id: 'rules-data', label: 'Rules & data', icon: Icon.rules, short: 'Rules and customers', hint: 'Who sees what, the customers to test with, and how it plays out over time', screens: ['S07', 'S16', 'S08', 'S22', 'S23', 'S24'] },
   { id: 'explore', label: 'Explore', icon: Icon.exploded, short: 'Every angle', hint: 'See the document from different angles', screens: ['S03', 'S04', 'S05', 'S06'] },
   { id: 'check', label: 'Check', icon: Icon.validate, short: 'Blockers and previews', hint: 'What stops this document going out, and what it looks like', screens: ['S17', 'S09', 'S10'] },
-  { id: 'releases', label: 'Releases', icon: ReleaseIcon, short: 'Versions and proof', hint: 'Approved versions, what changed, and proof of what customers got', screens: ['S18', 'S20', 'S21'] },
+  { id: 'releases', label: 'Releases', icon: ReleaseIcon, short: 'Versions and proof', hint: 'Approved versions, what changed, and proof of what customers got', screens: ['S18', 'S20', 'S21', 'S26'] },
   { id: 'help', label: 'Help & activity', icon: Icon.info, short: 'Tour, demo and history', hint: 'Take the tour, watch the guided demo, ask the assistant, see who changed what', screens: ['S11', 'S12', 'S14'] },
 ] as const;
 export type SectionId = (typeof SECTIONS)[number]['id'];

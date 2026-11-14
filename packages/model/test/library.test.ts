@@ -317,6 +317,14 @@ const PROBES: Record<Command['type'], Probe[]> = {
   UPDATE_WORDING_RULE: [],
   REMOVE_WORDING_RULE: [],
   MOVE_WORDING_RULE: [],
+  // Mappings to a production system (wave 3) describe the data, never linked content.
+  ADD_MAPPING: [{ what: 'a mapping beside linked content', cmd: () => ({ type: 'ADD_MAPPING', mapping: { id: 'map-core', name: 'Mapping for Core', system: 'Core' } }), allowed: true }],
+  RENAME_MAPPING: [],
+  REMOVE_MAPPING: [],
+  IMPORT_TARGET_FIELDS: [],
+  SET_MAPPING_ENTRY: [],
+  CLEAR_MAPPING_ENTRY: [],
+  SET_MAPPING_ENTRIES: [],
 };
 
 describe('linked content is read-only in the document', () => {
