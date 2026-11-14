@@ -1,7 +1,7 @@
 import { canonicalJson } from './digest';
 import { richToPlain } from './rich';
 import { effectivePageDesign, PAGE_TEMPLATE_LABEL, PAPER_SIZES } from './pageDesign';
-import type { LibraryKind, LibraryLink, WordingRule } from './types';
+import type { LibraryKind, LibraryLink, TargetMapping, WordingRule } from './types';
 import type { BrandKit, CalculatedField, ContentPart, CustomField, DocNode, DocumentDateSource, JourneyEvent, LookupTable, NodeLayout, Predicate, PresentationProfile, Project, Rule, RuleAction, TestCase, TextStyle } from './types';
 import { printFormula } from './formula';
 import { periodInWords } from './formulaWords';
@@ -65,7 +65,46 @@ export interface ProjectDiff {
   library?: { linked: LibraryLinkRef[]; updated: Array<LibraryLinkRef & { from: number }>; unlinked: LibraryLinkRef[] };
   /** The document's own wording rules added, removed and changed, by id (only present when one of them changed). */
   wordingRules?: { added: WordingRuleRef[]; removed: WordingRuleRef[]; changed: Array<WordingRuleRef & { fields: string[]; severityChange?: { from: string; to: string } }> };
-  summary: { counts: Record<'title' | 'components' | 'rules' | 'content' | 'customFields' | 'styles' | 'brand' | 'testCases' | 'journey' | 'profiles' | 'calculations' | 'lookupTables' | 'documentDate' | 'other', number> & { library?: number; wordingRules?: number }; total: number; identical: boolean };
+  /** Mappings to a production system (wave 3) added, removed and changed, by id (only present when one of them changed). */
+  mappings?: { added: MappingRef[]; removed: MappingRef[]; changed: MappingChange[] };
+  summary: { counts: Record<'title' | 'components' | 'rules' | 'content' | 'customFields' | 'styles' | 'brand' | 'testCases' | 'journey' | 'profiles' | 'calculations' | 'lookupTables' | 'documentDate' | 'other', number> & { library?: number; wordingRules?: number; mappings?: number }; total: number; identical: boolean };
+}
+
+/** A mapping in a diff: its id, name and target system (after the change, or before a removal). */
+export interface MappingRef { id: string; name: string; system: string }
+/** What changed in one mapping: its details, the target's field list, and how many field decisions were added, removed or changed. */
+export interface MappingChange extends MappingRef {
+  renamed?: { from: string; to: string };
+  systemChange?: { from: string; to: string };
+  description?: boolean;
+  targetFields?: { from: number; to: number };
+  entries: { added: number; removed: number; changed: number };
+}
+
+/** The mappings added, removed and changed between two versions (null when none). Who changed them and when is not a change. */
+export function diffMappings(a: Project, b: Project): ProjectDiff['mappings'] | null {
+  if (!a.mappings?.length && !b.mappings?.length) return null;
+  const ref = (m: TargetMapping): MappingRef => ({ id: m.id, name: m.name, system: m.system });
+  const A = byId(a.mappings, (m) => m.id), B = byId(b.mappings, (m) => m.id);
+  const changed: MappingChange[] = [];
+  for (const m of b.mappings ?? []) {
+    const o = A.get(m.id);
+    if (!o) continue;
+    const ea = byId(o.entries, (e) => e.path), eb = byId(m.entries, (e) => e.path);
+    const entries = {
+      added: m.entries.filter((e) => !ea.has(e.path)).length,
+      removed: o.entries.filter((e) => !eb.has(e.path)).length,
+      changed: m.entries.filter((e) => ea.has(e.path) && !same(ea.get(e.path), e)).length,
+    };
+    const c: MappingChange = { ...ref(m), entries };
+    if (o.name !== m.name) c.renamed = { from: o.name, to: m.name };
+    if (o.system !== m.system) c.systemChange = { from: o.system, to: m.system };
+    if ((o.description ?? '') !== (m.description ?? '')) c.description = true;
+    if (!same(o.targetFields, m.targetFields)) c.targetFields = { from: o.targetFields?.length ?? 0, to: m.targetFields?.length ?? 0 };
+    if (c.renamed || c.systemChange || c.description || c.targetFields || entries.added + entries.removed + entries.changed) changed.push(c);
+  }
+  const out = { added: (b.mappings ?? []).filter((m) => !A.has(m.id)).map(ref), removed: (a.mappings ?? []).filter((m) => !B.has(m.id)).map(ref), changed };
+  return out.added.length + out.removed.length + out.changed.length ? out : null;
 }
 
 /** One of the document's own wording rules in a diff: its id, kind, must/should and phrase (when it has one). */
@@ -267,7 +306,7 @@ function diffBrand(a: BrandKit | undefined, b: BrandKit | undefined): ValueChang
     : { field: k, from: scalarText((a as any)?.[k]), to: scalarText((b as any)?.[k]) });
 }
 
-const KNOWN = new Set(['schemaVersion', 'projectId', 'title', 'modelVersion', 'lastSavedAt', 'nodes', 'rules', 'contentParts', 'customFields', 'styles', 'brand', 'testCases', 'journey', 'presentationProfiles', 'derivedFrom', 'fromTemplate', 'importedFrom', 'calculatedFields', 'lookupTables', 'documentDate', 'libraryLinks', 'houseWordingRules', 'wordingRules']);
+const KNOWN = new Set(['schemaVersion', 'projectId', 'title', 'modelVersion', 'lastSavedAt', 'nodes', 'rules', 'contentParts', 'customFields', 'styles', 'brand', 'testCases', 'journey', 'presentationProfiles', 'derivedFrom', 'fromTemplate', 'importedFrom', 'calculatedFields', 'lookupTables', 'documentDate', 'libraryLinks', 'houseWordingRules', 'wordingRules', 'mappings']);
 
 /** Where the document's date comes from, in plain words. */
 export function documentDateWords(src: DocumentDateSource | undefined, fieldLabel?: (path: string) => string): string | null {
@@ -335,7 +374,9 @@ export function diffProjects(a: Project, b: Project): ProjectDiff {
   const libraryCount = library ? library.linked.length + library.updated.length + library.unlinked.length : 0;
   const wording = diffWordingRules(a, b);
   const wordingCount = wording ? wording.added.length + wording.removed.length + wording.changed.length : 0;
-  const total = Object.values(counts).reduce((s, n) => s + n, 0) + libraryCount + wordingCount;
+  const mappings = diffMappings(a, b);
+  const mappingCount = mappings ? mappings.added.length + mappings.removed.length + mappings.changed.length : 0;
+  const total = Object.values(counts).reduce((s, n) => s + n, 0) + libraryCount + wordingCount + mappingCount;
   return {
     ...(a.title !== b.title ? { title: { from: a.title, to: b.title } } : {}),
     components, rules, content, customFields, styles, brand, testCases, journey, profiles, calculations, lookupTables,
@@ -343,7 +384,8 @@ export function diffProjects(a: Project, b: Project): ProjectDiff {
     other,
     ...(library ? { library } : {}),
     ...(wording ? { wordingRules: wording } : {}),
-    summary: { counts: { ...counts, ...(library ? { library: libraryCount } : {}), ...(wording ? { wordingRules: wordingCount } : {}) }, total, identical: total === 0 },
+    ...(mappings ? { mappings } : {}),
+    summary: { counts: { ...counts, ...(library ? { library: libraryCount } : {}), ...(wording ? { wordingRules: wordingCount } : {}), ...(mappings ? { mappings: mappingCount } : {}) }, total, identical: total === 0 },
   };
 }
 

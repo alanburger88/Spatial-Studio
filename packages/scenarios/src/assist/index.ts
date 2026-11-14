@@ -16,3 +16,7 @@ export * from './ruleReview';
 export * from './setupFromData';
 export * from './setupOutline';
 export * from './wordingRules';
+export * from './dataDictionary';
+export * from './mappingChecks';
+export * from './wordingImport';
+export * from './fieldsImport';

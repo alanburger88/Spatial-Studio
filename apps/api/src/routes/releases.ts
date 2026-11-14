@@ -8,7 +8,7 @@ import {
 import { audit } from '../auth';
 import type { StoredRelease } from '../db';
 import { createRelease, liveReleases, promoteRelease, releaseInfo, withdrawRelease, type PackageBuildOutcome } from '../releases';
-import { packageContentType, releaseTemplate } from '../releasePackage';
+import { packageContentType, releaseMappings, releaseTemplate } from '../releasePackage';
 import type { RouteDeps } from './deps';
 
 /**
@@ -34,6 +34,11 @@ export function registerReleaseRoutes(app: FastifyInstance, deps: RouteDeps): vo
     const s = cleanReleaseNote(v);
     if (s.length > RELEASE_NOTE_MAX) throw new ApiError(400, 'NOTE_TOO_LONG', `${what} is limited to ${RELEASE_NOTE_MAX} characters.`);
     return s || null;
+  };
+  /** The mappings a release carries (complete when it was made) and the ones it left out. */
+  const releaseMappingsOf = (r: StoredRelease) => {
+    const frozen = store.releaseProject(r.id);
+    return frozen ? releaseMappings(frozen).map((m) => ({ id: m.id, name: m.name, system: m.system, complete: m.complete, file: m.file, csv: m.csv, counts: m.counts })) : [];
   };
   /** What an audit entry says about a release: names and numbers. */
   const named = (r: StoredRelease) => ({ releaseId: r.id, number: r.number, title: r.title });
@@ -161,6 +166,8 @@ export function registerReleaseRoutes(app: FastifyInstance, deps: RouteDeps): vo
         ...HANDOVER_KINDS.map((kind) => ({ action: 'handover' as const, kind, label: `Mark as ${HANDOVER_LABEL[kind].toLowerCase()}`, allowed: !releaseRoleProblem(role, 'handover'), reason: releaseRoleProblem(role, 'handover') })),
       ],
       document: { id: r.documentId, exists: !!project, title: project?.title ?? null, modelVersion: project?.modelVersion ?? null, workflowState: project ? store.getWorkflow(r.documentId).state : null },
+      /** Mappings of the data fields to production systems (wave 3): which ones the release carries, from its frozen content. */
+      mappings: releaseMappingsOf(r),
     };
   });
 

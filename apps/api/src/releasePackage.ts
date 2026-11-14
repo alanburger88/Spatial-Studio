@@ -1,14 +1,13 @@
 import { createHash } from 'node:crypto';
 import {
-  DERIVED_FIELDS_VERSION, DOCUMENT_TYPE_LABEL, LIBRARY_KIND_LABEL, libraryListOf, RECORD_ID_PREFIX, SOURCE_LANGUAGE, addDaysToIso, buildContext, dateBoundaries, dayWords, defaultFormatterFor, digestOf, evaluateCalculations, exprDependencies,
-  formulaInWords, getPath, languageName, lookupTableProblems, printFormula, projectFieldIndex, wordsScopeOf,
-  projectContentDigest, projectFields, projectFileContentOf, projectLanguages, releaseId, releasePackageName, tokensIn, tokensInText, translatableStrings, translationStatus,
-  type DocNode, type FieldDef, type Predicate, type Project, type ReleasePackageSummary, type SyntheticRecord, type TestCase,
+  DOCUMENT_TYPE_LABEL, LIBRARY_KIND_LABEL, libraryListOf, RECORD_ID_PREFIX, SOURCE_LANGUAGE, addDaysToIso, dayWords, digestOf, languageName,
+  projectContentDigest, projectFileContentOf, projectLanguages, releaseId, releasePackageName, translationStatus,
+  type DocNode, type Project, type ReleasePackageSummary, type SyntheticRecord, type TestCase,
 } from '@iss/model';
 import { RECORDS } from '@iss/model/fixtures';
-import { indexTree, predicatePaths, resolve, type Resolution } from '@iss/resolver';
+import { indexTree, resolve, type Resolution } from '@iss/resolver';
 import { BRAND_FONTS, DOC_FONT, SCREEN_FONT, checkChannelParity, compareManifests, imageSrc, renderEmail, renderInteractiveHtml, renderPagedDocument, renderSms, type ExtractedManifest } from '@iss/renderers';
-import { baselineCustomer, documentDateBoundaries, documentTimeline, planTestData, runTestCase, wordingReleaseRecord, wordingRuleLabel } from '@iss/scenarios';
+import { baselineCustomer, dataDictionary, documentDateBoundaries, mappingChecks, mappingCsv, mappingFile, mappingFileNames, documentTimeline, planTestData, runTestCase, wordingReleaseRecord, wordingRuleLabel } from '@iss/scenarios';
 import type { Composer } from './composer';
 import type { PinnedCustomerRef, StoredRelease } from './db';
 import { ZIP_FIXED_DATE, zipFiles } from './zip';
@@ -119,7 +118,32 @@ export function releaseTemplate(frozen: Project): Project {
   }
   // Only ever describes drafts (who produced one that nobody has edited or approved yet).
   delete t.translationOrigins;
+  // Mappings (wave 3) are handed over as data/mapping-<slug>.json, complete ones only; template.json never carries them.
+  delete t.mappings;
   return t;
+}
+
+/* ------------------------------------------------------------------ mappings to production systems (wave 3) */
+
+/**
+ * The mappings of a release: each with whether it was complete when the release was made. A function of the frozen
+ * project alone (the checks are pure), so the release detail and the package always agree. Empty for a document without
+ * mappings.
+ */
+export function releaseMappings(frozen: Project) {
+  if (!frozen.mappings?.length) return [];
+  const template = releaseTemplate(frozen);
+  const dict = dataDictionary(template);
+  const names = mappingFileNames(frozen.mappings);
+  return frozen.mappings.map((m) => {
+    const check = mappingChecks(template, m, dict);
+    const base = names.get(m.id)!;
+    return {
+      id: m.id, name: m.name, system: m.system, complete: check.complete, counts: check.counts,
+      file: check.complete ? `data/${base}.json` : null, csv: check.complete ? `data/${base}.csv` : null,
+      mapping: m, check, dict, template,
+    };
+  });
 }
 
 /* ------------------------------------------------------------------ wording */
@@ -168,140 +192,9 @@ export function wordingXliff(rows: WordingRow[], locale: string, about: string):
   ].join('\n');
 }
 
-/* ------------------------------------------------------------------ data dictionary */
+/* ------------------------------------------------------------------ data dictionary (in @iss/scenarios, shared with the Mapping screen) */
 
-/** What each calculated field of the built-in kinds is worked out from (see `buildContext`); a row count comes from its list. */
-const CALCULATED_FROM: Record<string, string[]> = {
-  'card.availableCreditCents': ['card.creditLimitCents', 'card.newBalanceCents'],
-  'card.transactionsTotalCents': ['card.transactions'],
-};
-
-const FORMAT_OF: Record<FieldDef['type'], string> = {
-  string: 'Text',
-  cents: 'Whole number of cents (integer, never a decimal amount)',
-  date: 'ISO 8601 date, YYYY-MM-DD',
-  int: 'Whole number',
-  bool: 'true or false',
-  enum: 'One of the allowed values',
-  array: 'List of rows',
-  points: 'Whole number of points',
-  number: 'Number (may have decimals; calculated fields only)',
-};
-
-interface FieldUse { rules: Map<string, string>; conditions: Set<string>; bindings: Set<string>; tokens: Set<string>; journey: Set<string>; columns: Set<string> }
-
-/** Where every data field is read: rule conditions, conditions on components, bindings, text tokens and journey steps. */
-function fieldUsage(project: Project): { used: Map<string, FieldUse>; unknown: Array<{ path: string; where: string }> } {
-  const known = new Set(projectFields(project).map((f) => f.path));
-  const used = new Map<string, FieldUse>();
-  const unknown: Array<{ path: string; where: string }> = [];
-  const at = (path: string, where: string): FieldUse | null => {
-    if (!known.has(path)) { if (!unknown.some((u) => u.path === path && u.where === where)) unknown.push({ path, where }); return null; }
-    let u = used.get(path);
-    if (!u) { u = { rules: new Map(), conditions: new Set(), bindings: new Set(), tokens: new Set(), journey: new Set(), columns: new Set() }; used.set(path, u); }
-    return u;
-  };
-  const called = (n: DocNode): string => n.name ?? n.label ?? n.id;
-  const condition = (p: Predicate | undefined, where: string) => { for (const path of predicatePaths(p)) at(path, where)?.conditions.add(where); };
-  for (const r of project.rules) for (const path of predicatePaths(r.when)) at(path, `rule ${r.id}`)?.rules.set(r.id, r.title ?? `Rule ${r.id}`);
-  for (const n of project.nodes) {
-    condition(n.visibleWhen, called(n));
-    for (const p of Object.values(n.variantConditions ?? {})) condition(p, called(n));
-    if (n.binding) {
-      const u = at(n.binding, called(n));
-      u?.bindings.add(called(n));
-      for (const c of n.columns ?? []) u?.columns.add(c.key);
-      for (const k of [n.chart?.groupBy, n.chart?.valueKey]) if (k) u?.columns.add(k);
-    }
-    for (const s of n.chart?.series ?? []) at(s.path, called(n))?.bindings.add(called(n));
-    for (const path of tokensIn(n.content)) at(path, called(n))?.tokens.add(called(n));
-    for (const text of [n.action?.url, n.qr?.url]) for (const path of tokensInText(text ?? '')) at(path, called(n))?.tokens.add(called(n));
-  }
-  // Every other text a customer reads (labels, table titles, email and SMS wording) and every message, in every approved language.
-  const channelOnly = new Set(['issuer.name', 'issuer.product', 'keyFacts', 'link']);
-  const byNode = new Map(project.nodes.map((n) => [n.id, called(n)]));
-  for (const s of translatableStrings(project)) {
-    const where = (s.nodeId && byNode.get(s.nodeId)) || s.title;
-    for (const path of tokensInText(s.source)) if (!channelOnly.has(path)) at(path, where)?.tokens.add(where);
-  }
-  // Messages and notices the document actually uses (a project may carry others it never shows).
-  const usedParts = new Set(translationStatus(project, SOURCE_LANGUAGE).rows.filter((r) => r.kind === 'part').map((r) => r.partId));
-  for (const c of project.contentParts) if (usedParts.has(c.id)) for (const text of Object.values(c.approvedLocales)) for (const path of tokensInText(text ?? '')) at(path, c.title)?.tokens.add(c.title);
-  for (const e of project.journey?.events ?? []) {
-    const step = e.label ?? e.eventType;
-    for (const x of e.effects ?? []) at(x.path, step)?.journey.add(step);
-    for (const x of e.preconditions ?? []) at(x.path, step)?.journey.add(step);
-  }
-  return { used, unknown };
-}
-
-export function dataDictionary(project: Project) {
-  const { used, unknown } = fieldUsage(project);
-  const sample = buildContext({ ...baselineCustomer(project).record, recordId: `${RECORD_ID_PREFIX[project.documentType] ?? 'REC'}-0000` } as SyntheticRecord) as Record<string, unknown>;
-  // The document's date and calculated values of the synthetic example customer (as issued on the first boundary, when the date is given for the run).
-  const exampleDate = project.documentDate ? (project.documentDate.source === 'field' ? (getPath(sample, project.documentDate.path) as string | null) : dateBoundaries(project)[0]?.date ?? null) : null;
-  if (project.documentDate) sample.document = { date: exampleDate };
-  if (project.calculatedFields?.length) evaluateCalculations(project, sample, exampleDate);
-  const fields = projectFields(project);
-  const calcs = new Map((project.calculatedFields ?? []).map((c) => [`calc.${c.key}`, c]));
-  const words = wordsScopeOf(project, projectFieldIndex(project));
-  // A calculated field needs the fields it is calculated from (a row count needs its list; the document's date its source field).
-  const sourcesOf = (f: FieldDef): string[] => {
-    if (!f.derived) return [];
-    const calc = calcs.get(f.path);
-    if (calc) { const d = exprDependencies(calc.expr); return [...d.fields, ...d.lists, ...d.calcs.map((k) => `calc.${k}`), ...(d.usesIssueDate ? ['document.date'] : [])]; }
-    if (f.documentDate) return project.documentDate?.source === 'field' ? [project.documentDate.path] : [];
-    return CALCULATED_FROM[f.path] ?? (f.path.endsWith('.count') ? [f.path.slice(0, -'.count'.length)] : []);
-  };
-  const neededFor = new Map<string, string[]>();
-  // Needed through a chain of calculations too (a calculation used by the template needs what its inputs need).
-  const need = (f: FieldDef, seen = new Set<string>()) => { for (const src of sourcesOf(f)) { if (seen.has(src)) continue; seen.add(src); neededFor.set(src, [...new Set([...(neededFor.get(src) ?? []), f.path])]); const g = fields.find((x) => x.path === src); if (g?.derived) need(g, seen); } };
-  for (const f of fields) if (used.has(f.path)) need(f);
-  const out = fields.map((f) => {
-    const u = used.get(f.path);
-    const example = f.type === 'array' ? ((getPath(sample, f.path) as unknown[] | null) ?? []).slice(0, 1) : f.example ?? (getPath(sample, f.path) as unknown) ?? null;
-    return {
-      path: f.path, label: f.label, type: f.type, format: FORMAT_OF[f.type], formatter: defaultFormatterFor(f.type),
-      required: !!f.required,
-      /** Calculated by the engine from other fields; never supplied. */
-      calculated: !!f.derived,
-      ...(f.derived ? { calculatedFrom: sourcesOf(f) } : {}),
-      // One of the template's own calculated fields: what it gives and how, as a formula and in plain words (studio English).
-      ...(calcs.has(f.path) ? { calculation: { gives: calcs.get(f.path)!.type, formula: printFormula(calcs.get(f.path)!.expr, projectFieldIndex(project)), inWords: formulaInWords(calcs.get(f.path)!.expr, words), ...(calcs.get(f.path)!.description ? { description: calcs.get(f.path)!.description } : {}) } } : {}),
-      ...(f.documentDate ? { documentDate: project.documentDate?.source === 'run' ? 'given for each run (--issue-date, or "issueDate" with a customer)' : `taken from ${project.documentDate?.source === 'field' ? project.documentDate.path : 'the data'}, unless a date is given for the run` } : {}),
-      ...(f.enumValues?.length ? { allowedValues: f.enumValues } : {}),
-      ...(f.itemFields?.length ? { columns: f.itemFields.map((c) => ({ key: c.key, label: c.label, type: c.type, format: FORMAT_OF[c.type], used: !!u?.columns.has(c.key) })) } : {}),
-      example,
-      /** The template reads it, the data contract requires it, or a calculated field the template reads is worked out from it. */
-      needed: !!u || !!f.required || neededFor.has(f.path),
-      usedIn: {
-        rules: [...(u?.rules ?? [])].map(([id, title]) => ({ id, title })),
-        conditions: [...(u?.conditions ?? [])],
-        bindings: [...(u?.bindings ?? [])],
-        tokens: [...(u?.tokens ?? [])],
-        journey: [...(u?.journey ?? [])],
-        ...(neededFor.has(f.path) ? { calculatedFields: neededFor.get(f.path)! } : {}),
-      },
-    };
-  });
-  return {
-    formatVersion: 1,
-    documentKind: project.documentType,
-    calculatedFieldsVersion: DERIVED_FIELDS_VERSION,
-    note: `Every field a customer record of this document may carry. "needed" marks the ones this template reads or the data contract requires. Amounts are integer cents; dates are ISO 8601. Examples are synthetic.${project.documentType === 'eob' ? ' Fields that start with "claim." describe the claim the document is about: the first row of "claims".' : ''}`,
-    fields: out,
-    /** Tokens in the wording that are not data fields of this document (none in a document that passed the studio's checks). */
-    unknownReferences: unknown,
-    // Additions for documents with calculations, lookup tables or dates (absent otherwise; older readers ignore them).
-    ...(project.documentDate ? { documentDate: project.documentDate.source === 'run' ? { source: 'run', note: 'The document’s date is given for each run: --issue-date, or "issueDate" next to a customer’s "data". A document that needs it and has none is stopped.' } : { source: 'field', path: project.documentDate.path, note: 'The document’s date is taken from this field of each customer, unless a date is given for the run.' } } : {}),
-    ...(project.lookupTables?.length ? { lookupTables: project.lookupTables.map((t) => ({
-      id: t.id, title: t.title, ...(t.description ? { description: t.description } : {}),
-      keys: t.keys, columns: t.columns, rows: t.rows, whenNoRowMatches: t.defaultRow ? { defaultRow: t.defaultRow } : 'the value is missing',
-      problems: lookupTableProblems(t).map((x) => x.message),
-      usedBy: (project.calculatedFields ?? []).filter((c) => exprDependencies(c.expr).tables.includes(t.id)).map((c) => `calc.${c.key}`),
-    })) } : {}),
-  };
-}
+export { dataDictionary };
 
 /* ------------------------------------------------------------------ assets and fonts */
 
@@ -554,7 +447,21 @@ export function expectedOutcome(project: Project, res: Resolution) {
 
 /* ------------------------------------------------------------------ README */
 
-function readmeHtml(a: { title: string; kind: string; number: number; approver: string | null; approvedAt: string; fileName: string; languages: ReleasePackageSummary['languages']; plan: ScenarioPlan; references: PlannedScenario[]; known?: StoredRelease['knownDataProblems']; dates?: string; library?: string }): string {
+/** README section for a document's mappings: which are in the package, and which were left out and why. */
+function mappingsHtml(mappings: ReturnType<typeof releaseMappings>): string {
+  const row = (cells: string[]) => `<tr>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
+  const left = mappings.filter((m) => !m.complete);
+  return `<h2>Mappings to production systems</h2>
+<p>A mapping says, for each data field of this document, what a production system calls it, its type there and how it is written. Complete mappings are in <code>data/</code> as JSON (for an adapter) and CSV (for people). A mapping is complete when every field the document reads is mapped or marked “not needed by the target”, no target field is mapped from two fields, and no type clashes.${left.length ? ` ${left.length === 1 ? 'One mapping was' : `${left.length} mappings were`} not complete when the release was made, so ${left.length === 1 ? 'it is' : 'they are'} not in this package.` : ''}</p>
+<table>
+<tr><th>Mapping</th><th>Target system</th><th>In this package</th></tr>
+${mappings.map((m) => row([escHtml(m.name), escHtml(m.system), m.complete ? `<code>${escHtml(m.file)}</code>, <code>${escHtml(m.csv)}</code>` : `Left out: not complete (${[m.counts.unmapped ? `${m.counts.unmapped} field${m.counts.unmapped === 1 ? '' : 's'} not mapped` : '', m.counts.clashes ? `${m.counts.clashes} type clash${m.counts.clashes === 1 ? '' : 'es'}` : '', m.counts.mappedTwice ? `${m.counts.mappedTwice} target field${m.counts.mappedTwice === 1 ? '' : 's'} mapped twice` : ''].filter(Boolean).join(', ')})`])).join('\n')}
+</table>
+
+`;
+}
+
+function readmeHtml(a: { title: string; kind: string; number: number; approver: string | null; approvedAt: string; fileName: string; languages: ReleasePackageSummary['languages']; plan: ScenarioPlan; references: PlannedScenario[]; known?: StoredRelease['knownDataProblems']; dates?: string; library?: string; mappings?: string; mappingsLeftOut?: boolean }): string {
   const row = (cells: string[]) => `<tr>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
   const knownRows = (a.known ?? []).map((k) => row([escHtml(k.blocker), 'id' in k.customer ? `${k.customer.kind === 'sample' ? 'Sample customer' : 'Generated customer'} <code>${escHtml(k.customer.id)}</code>` : 'One customer who is not synthetic (no id or name recorded)', escHtml(k.reason), escHtml(k.markedBy ?? '—')])).join('\n');
   const scenarioRows = a.plan.scenarios.map((s) => row([
@@ -608,7 +515,7 @@ ${knownRows ? `<h2>Known data problems</h2>
 ${knownRows}
 </table>
 
-` : ''}${a.dates ?? ''}${a.library ?? ''}<h2>Languages</h2>
+` : ''}${a.dates ?? ''}${a.library ?? ''}${a.mappings ?? ''}<h2>Languages</h2>
 ${a.languages.length ? `<table>
 <tr><th>Language</th><th>Texts</th><th>Approved</th><th>Not translated</th><th>File</th></tr>
 ${languageRows}
@@ -642,7 +549,7 @@ ${languageRows}
 <li>Customer data of any kind.</li>
 <li>Draft wording and unapproved translations.</li>
 <li>Which stage the release is at (Test or Production) and who received it: the studio keeps that record, because it changes while the release does not.</li>
-<li>A mapping of the data fields to a particular system’s field names.</li>
+${a.mappings === undefined ? '<li>A mapping of the data fields to a particular system’s field names.</li>' : a.mappingsLeftOut ? '<li>Mappings that were not complete when the release was made (see “Mappings to production systems”).</li>' : ''}
 <li>A shared library. Everything the template uses is inside <code>template.json</code>.</li>
 <li>Font files. <code>assets/fonts.json</code> names the fonts.</li>
 <li>An AFP print stream. The studio’s AFP output is a simulation and is not part of a release.</li>
@@ -693,6 +600,12 @@ export async function buildReleasePackage(release: StoredRelease, frozen: Projec
 
   /* data and assets */
   add('data/dictionary.json', 'data-dictionary', json(dataDictionary(template)));
+  // Mappings (wave 3): each complete one as JSON and CSV; an incomplete one is left out and the README says so.
+  const mappings = releaseMappings(frozen);
+  for (const m of mappings) if (m.complete) {
+    add(m.file!, 'mapping', json(mappingFile(m.template, m.mapping, m.dict, m.check)));
+    add(m.csv!, 'mapping-csv', mappingCsv(m.template, m.mapping, m.dict, m.check));
+  }
   const { assets, index } = packageAssets(template);
   for (const a of assets) add(a.path, 'asset', a.data);
   add('assets/index.json', 'asset-index', json(index));
@@ -806,7 +719,7 @@ ${fromLibrary.map((l) => `<tr><td>${escHtml(l.title)}</td><td>${escHtml(LIBRARY_
 ${wording.own.length ? `<ul>${wording.own.map((r) => `<li>${escHtml(wordingRuleLabel(r))} (${r.severity})</li>`).join('')}</ul>` : ''}
 
 ` : '';
-  add('README.html', 'readme', readmeHtml({ title: release.title, kind: DOCUMENT_TYPE_LABEL[release.documentType], number: release.number, approver: release.approvedBy?.name ?? null, approvedAt: release.approvedAt, fileName, languages, plan, references, known: release.knownDataProblems, dates: datesHtml, library: libraryHtml + wordingHtml }));
+  add('README.html', 'readme', readmeHtml({ title: release.title, kind: DOCUMENT_TYPE_LABEL[release.documentType], number: release.number, approver: release.approvedBy?.name ?? null, approvedAt: release.approvedAt, fileName, languages, plan, references, known: release.knownDataProblems, dates: datesHtml, library: libraryHtml + wordingHtml, ...(mappings.length ? { mappings: mappingsHtml(mappings), mappingsLeftOut: mappings.some((m) => !m.complete) } : {}) }));
 
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const contents: PackageFile[] = files.map((f) => ({ path: f.path, sha256: sha256(f.data), bytes: f.data.length, role: f.role }));
@@ -847,8 +760,15 @@ ${wording.own.length ? `<ul>${wording.own.map((r) => `<li>${escHtml(wordingRuleL
      * the document has no wording rules.
      */
     ...(wording ? { wordingRules: wording } : {}),
+    /**
+     * Mappings of the data fields to production systems (an addition to format 1: readers that do not know it ignore it):
+     * each complete one with its files, each incomplete one left out with what was missing. Absent when the document has none.
+     */
+    ...(mappings.length ? { mappings: mappings.map((m) => (m.complete
+      ? { id: m.id, name: m.name, system: m.system, included: true, file: m.file, csv: m.csv, fields: m.counts.required, mapped: m.counts.mapped, notNeeded: m.counts.notNeeded }
+      : { id: m.id, name: m.name, system: m.system, included: false, reason: 'not complete when the release was made', unmapped: m.counts.unmapped, typeClashes: m.counts.clashes, mappedTwice: m.counts.mappedTwice })) } : {}),
     syntheticOnly: true,
-    notIncluded: ['customer data', 'draft wording and unapproved translations', 'stage and handover record', 'data/mapping-<ccm>.json', 'library/', 'font files', 'AFP print stream', 'the engine'],
+    notIncluded: ['customer data', 'draft wording and unapproved translations', 'stage and handover record', ...(mappings.length ? (mappings.some((m) => !m.complete) ? ['mappings that were not complete'] : []) : ['data/mapping-<ccm>.json']), 'library/', 'font files', 'AFP print stream', 'the engine'],
     /** Every file in the package except this one. A reader must ignore roles and paths it does not know. */
     contents,
   };
