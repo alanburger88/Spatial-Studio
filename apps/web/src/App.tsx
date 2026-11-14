@@ -37,6 +37,7 @@ const loaders = {
   LookupTables: () => import('./screens/LookupTables'),
   Dates: () => import('./screens/Dates'),
   Library: () => import('./screens/Library'),
+  Mapping: () => import('./screens/Mapping'),
 };
 const screen = <K extends keyof typeof loaders>(name: K) => lazy(() => (loaders[name]() as Promise<Record<string, ComponentType<any>>>).then((m) => ({ default: m[name] })));
 const DesignStudio = screen('DesignStudio');
@@ -61,6 +62,7 @@ const Calculations = screen('Calculations');
 const LookupTables = screen('LookupTables');
 const Dates = screen('Dates');
 const Library = screen('Library');
+const Mapping = screen('Mapping');
 const Activity = screen('Activity') as ComponentType<{ global?: boolean }>;
 
 function usePrefetchScreens() {
@@ -132,6 +134,7 @@ export function App() {
         <Route path="/studio/:project/data" element={S(<DataExplorer />)} />
         <Route path="/studio/:project/blockers" element={S(<Blockers />)} />
         <Route path="/studio/:project/releases" element={S(<Releases />)} />
+        <Route path="/studio/:project/mapping" element={S(<Mapping />)} />
         <Route path="/studio/:project/activity" element={S(<Activity />)} />
         <Route path="*" element={<PlainShell><div className="empty"><strong>Page not found</strong><a href="/projects">Back to Project Gallery</a></div></PlainShell>} />
       </Routes>
