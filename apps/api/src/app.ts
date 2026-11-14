@@ -36,6 +36,9 @@ import { registerLibraryRoutes } from './routes/library';
 import { registerReviewLinkRoutes, reviewLinkCommentInfo } from './routes/reviewLinks';
 // Wave 4 (blocker owners, status and notes; notifications and My work): begin
 import { notifyReply, notifyWorkflow, registerWorkRoutes } from './routes/work';
+// Wave 4 (who else is editing): in-memory presence, never stored.
+import { Presence } from './presence';
+import { registerPresenceRoutes } from './routes/presence';
 // Wave 4 (blocker owners, status and notes; notifications and My work): end
 import { seedHouseLibrary } from './library';
 import { restoreExtraSample, seedExtraSamples, seedSampleProofs } from './samples';
@@ -104,7 +107,7 @@ function checkDraftProject(p: any, projectId: string): Project {
 
 export { approvalDays } from './issueDate';
 
-export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides env AUTH=on (tests). */ auth?: boolean; /** Replaces the AI translation call (tests). */ translator?: import('./translate').Translator; /** Replaces the assistant's model call (tests). */ assistModel?: import('./assistAi').AssistModel; /** Release packages: replaces the browser composition and lowers the scenario caps (tests). */ releasePackage?: { composer?: PackageComposer; scenarioCap?: number; referenceCap?: number }; /** Seed the example documents beyond the two fixture samples and the house library on the first start (default true; tests of an empty studio turn it off). */ extraSamples?: boolean }
+export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides env AUTH=on (tests). */ auth?: boolean; /** Replaces the AI translation call (tests). */ translator?: import('./translate').Translator; /** Replaces the assistant's model call (tests). */ assistModel?: import('./assistAi').AssistModel; /** Release packages: replaces the browser composition and lowers the scenario caps (tests). */ releasePackage?: { composer?: PackageComposer; scenarioCap?: number; referenceCap?: number }; /** Seed the example documents beyond the two fixture samples and the house library on the first start (default true; tests of an empty studio turn it off). */ extraSamples?: boolean; /** Wave 4: who else is editing (tests pass one with a fake clock). */ presence?: Presence }
 
 export async function buildApp(opts: AppOptions = {}) {
   const store = new Store(opts.dataDir ?? process.env.DATA_DIR ?? path.resolve(here, '../../../.data'));
@@ -203,7 +206,11 @@ export async function buildApp(opts: AppOptions = {}) {
     const ifMatch = req.headers['if-match'];
     const expected = Number(String(ifMatch ?? '').replace(/"/g, ''));
     if (!ifMatch || !Number.isInteger(expected)) throw new ApiError(428, 'PRECONDITION_REQUIRED', 'Save requires If-Match with the project model version you loaded.');
-    if (expected !== current.modelVersion) throw new ApiError(409, 'VERSION_CONFLICT', `Project is at version ${current.modelVersion}; you edited version ${expected}.`, { currentVersion: current.modelVersion });
+    if (expected !== current.modelVersion) {
+      // Wave 4 (who else is editing): say who saved the newer version and when, from the version history (a name and a time, never content).
+      const newer = store.getVersion(current.projectId, current.modelVersion);
+      throw new ApiError(409, 'VERSION_CONFLICT', `Project is at version ${current.modelVersion}; you edited version ${expected}.`, { currentVersion: current.modelVersion, savedBy: newer?.savedBy ?? null, savedAt: newer?.savedAt ?? null });
+    }
     const incoming = checkDraftProject((req.body as any)?.project ?? req.body, req.params.projectId);
     // The kind decides which customers a document has (a document with its own data has only its own), so it is fixed at creation.
     if ((incoming.documentType === 'custom') !== (current.documentType === 'custom')) throw new ApiError(400, 'DOCUMENT_TYPE_FIXED', 'The kind of document cannot be changed after it is created. Start a new project instead.');
@@ -293,6 +300,8 @@ export async function buildApp(opts: AppOptions = {}) {
   registerReviewLinkRoutes(app, deps, { composer: opts.releasePackage?.composer ?? chromiumPackageComposer(composer) });
   // Wave 4 (blocker owners, status and notes; notifications and My work)
   registerWorkRoutes(app, deps, { authEnabled });
+  // Wave 4 (who else is editing): kept in memory only.
+  registerPresenceRoutes(app, deps, { presence: opts.presence ?? new Presence() });
 
   /* ------------------------------------------------ version history, review workflow, comments, audit */
 

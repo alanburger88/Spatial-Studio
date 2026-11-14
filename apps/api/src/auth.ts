@@ -171,6 +171,10 @@ const ROUTES: Record<string, Need> = {
   'POST /api/v1/notifications/:id/read': 'any',
   'POST /api/v1/notifications/read-all': 'any',
   // Wave 4: end
+  /* ---- who else is editing (wave 4, docs/api/PRESENCE.md): any signed-in user; read-like, so never audited ---- */
+  'POST /api/v1/projects/:projectId/presence': 'any',
+  'POST /api/v1/presence/leave': 'any',
+  /* ---- end who else is editing ---- */
 };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Routes not listed above: reads need a session; anything that writes needs edit rights (safe default for new modules). */
