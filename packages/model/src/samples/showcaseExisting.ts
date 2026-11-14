@@ -16,7 +16,6 @@
  */
 import { applyCommand, type Command } from '../commands';
 import { mappablePaths, LIST_COLUMN_MARK } from '../mapping';
-import { richFromMarkup } from '../rich';
 import type { CalculatedField, ChannelConfig, DocNode, LookupTable, MappingEntry, Predicate, Project, TestCase, WordingRule } from '../types';
 import { channelConfig } from '../channels';
 
@@ -44,6 +43,13 @@ function insertAt(project: Project, node: DocNode, where: { after: string } | { 
   return { type: 'INSERT_NODE', node, parentId: project.rootNodeId, index: 'after' in where ? anchor + 1 : anchor };
 }
 
+/** A new conditional section with one alternative chosen by an inline condition (never a rule). */
+function conditionalSection(project: Project, where: { after: string } | { before: string }, node: { id: string; name: string; spaceBeforePt: number }, alt: { variantId: string; title: string; when: Predicate; text: string }): Project {
+  const section: DocNode = { id: node.id, type: 'conditional-region', name: node.name, policy: 'exclusive', variantIds: [], layout: flow(node.spaceBeforePt) };
+  const p = run(project, insertAt(project, section, where));
+  return run(p, { type: 'ADD_VARIANT', nodeId: node.id, variantId: alt.variantId, title: alt.title, when: alt.when, text: alt.text });
+}
+
 /**
  * A complete mapping: every data field and list column the document has (calculated values and the document's date
  * are worked out by the studio and are left to the checks' notes). Target names are given per path; amounts say they
@@ -59,7 +65,7 @@ function completeMapping(project: Project, targets: Record<string, string>): Map
     if (info.type === 'cents') { entry.targetType = 'DECIMAL(11,2)'; entry.format = 'Divide by 100 (the document holds whole cents).'; }
     else if (info.type === 'date') { entry.targetType = 'DATE'; entry.format = 'YYYY-MM-DD'; }
     else if (info.type === 'int' || info.type === 'points') entry.targetType = 'INTEGER';
-    else if (info.type === 'bool') entry.targetType = 'CHAR(1)';
+    else if (info.type === 'bool') entry.targetType = 'BOOLEAN';
     else if (info.type === 'array') entry.targetType = 'RECORD GROUP';
     else entry.targetType = 'VARCHAR(80)';
     if (path.includes(LIST_COLUMN_MARK) && info.type === 'cents') entry.format = 'Divide by 100 (whole cents in the document).';
@@ -150,10 +156,10 @@ const CARD_MAPPING_TARGETS: Record<string, string> = {
 /** The document's own wording rules: one "must" the wording already satisfies, three "should" (one deliberately not met). */
 export const CARD_WORDING_RULES: WordingRule[] = [
   { id: 'aster-not-legal', kind: 'required', severity: 'must', phrase: 'not a legal statement', appliesTo: 'anywhere', note: 'Every synthetic statement says it is not a legal statement.' },
-  { id: 'aster-no-kindly', kind: 'banned', severity: 'should', phrase: 'kindly', replacement: 'please', appliesTo: 'anywhere', note: 'House style: plain “please”.' },
-  { id: 'aster-online', kind: 'preferred', severity: 'should', phrase: 'on-line', replacement: 'online', appliesTo: 'anywhere', note: 'One spelling across statements.' },
-  // Deliberately not met by one existing text (the minimum payment explainer's 26-word sentence): the example's one "should" finding.
-  { id: 'aster-short-sentences', kind: 'sentence-length', severity: 'should', limit: 22, appliesTo: 'messages', note: 'Short sentences read better on a statement; the explainer is due a rewrite.' },
+  { id: 'aster-no-kindly', kind: 'banned', severity: 'should', phrase: 'kindly', replacement: 'please', appliesTo: 'anywhere', note: 'House style: a plain “please”.' },
+  { id: 'aster-short-sentences', kind: 'sentence-length', severity: 'should', limit: 25, appliesTo: 'messages', note: 'Short sentences read better on a statement.' },
+  // Deliberately not met by one existing message (the relationship team message says "relationship specialist"): the example's one "should" finding.
+  { id: 'aster-relationship-team', kind: 'preferred', severity: 'should', phrase: 'relationship specialist', replacement: 'relationship team', appliesTo: 'messages', note: 'Premium customers have a team, as the section title says, not one specialist.' },
 ];
 
 export const CARD_TEST_IDS = ['aster-standard-on-time', 'aster-premium-team', 'aster-arrangement-no-fee', 'aster-spanish-blocked', 'aster-long-list', 'aster-issued-december', 'aster-issued-january'] as const;
@@ -165,7 +171,7 @@ function cardTests(): TestCase[] {
     { id: 'aster-premium-team', name: 'Premium customer asking for help: assistance message and the relationship team', recordId: 'CARD-0002', expect: { selectedVariants: { 'payment-guidance': 'payment-assistance-requested' }, visibleNodeIds: [...always, 'relationship-manager', 'high-volume-note'], noBlocking: true } },
     { id: 'aster-arrangement-no-fee', name: 'Approved arrangement: arrangement message, no late fee', recordId: 'CARD-0001', overrides: { card: { missedPayments: 2, paymentStatus: 'overdue', assistanceRequested: true, arrangementStatus: 'approved' } }, expect: { selectedVariants: { 'payment-guidance': 'payment-arrangement-active' }, visibleNodeIds: always, noBlocking: true } },
     { id: 'aster-spanish-blocked', name: 'Spanish-speaking customer stays blocked until the required Spanish is approved', recordId: 'CARD-0005', expect: { selectedVariants: { 'payment-guidance': 'payment-standard' }, approvedLocale: 'es-US' } },
-    { id: 'aster-long-list', name: 'Long transaction list: high-volume help and the spending summary', recordId: 'CARD-0008', expect: { visibleNodeIds: ['high-volume-note', 'spending-summary', 'transaction-table'], noBlocking: true } },
+    { id: 'aster-long-list', name: 'Long transaction list: high-volume help and the spending summary', recordId: 'CARD-0008', expect: { visibleNodeIds: ['high-volume-note', 'spending-summary', 'notice-holiday-posting'], noBlocking: true } },
     { id: 'aster-issued-december', name: 'As issued on 15 Dec 2026: the agreement notice starts, the holiday notice still shows', recordId: 'CARD-0001', issueDate: '2026-12-15', expect: { visibleNodeIds: ['notice-agreement-update', 'notice-holiday-posting'], noBlocking: true } },
     { id: 'aster-issued-january', name: 'As issued on 10 Jan 2027: the holiday notice has ended', recordId: 'CARD-0001', issueDate: '2027-01-10', expect: { visibleNodeIds: ['notice-agreement-update'], hiddenNodeIds: ['notice-holiday-posting'], noBlocking: true } },
   ];
@@ -179,31 +185,27 @@ export function enrichCard(project: Project): Project {
   p = run(p, { type: 'UPSERT_LOOKUP_TABLE', table: CARD_LATE_FEES });
   for (const f of CARD_CALCULATIONS) p = run(p, { type: 'UPSERT_CALCULATED_FIELD', field: f });
 
-  // Payment timing, after the payment guidance: an inline choice between two alternatives (not a rule, not a Variant Set).
+  // Payment timing, after the payment guidance: an inline choice between two alternatives (not a rule, not a Variant
+  // Set), shown only when a minimum payment is due.
+  const owing: Predicate = { op: 'gt', path: 'card.minimumDueCents', value: 0 };
   const timing: DocNode = { id: 'payment-timing', type: 'conditional-region', name: 'Payment timing', policy: 'exclusive', variantIds: [], layout: flow(8) };
   p = run(p, insertAt(p, timing, { after: 'payment-guidance' }));
-  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-late-fee', title: 'Payment timing — late fee', when: { op: 'gt', path: 'calc.lateFee', value: 0 }, text: 'Your payment is due in **{{calc.daysUntilDue}} days**, on {{card.dueDate}}. If the minimum payment arrives after that date, a late fee of up to {{calc.lateFee}} may apply.' });
-  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-arrangement', title: 'Payment timing — arrangement', when: { op: 'eq', path: 'calc.lateFee', value: 0 }, text: 'Your payment is due in **{{calc.daysUntilDue}} days**, on {{card.dueDate}}. While your payment arrangement is in place, no late fee is charged.' });
-  // A spending summary just before the transactions, shown when there is at least one transaction.
-  const summary: DocNode = {
-    id: 'spending-summary', type: 'rich-text', name: 'Spending summary', layout: flow(14),
-    visibleWhen: { op: 'gt', path: 'card.transactions.count', value: 0 },
-    content: richFromMarkup('**This period at a glance.** The {{card.transactions.count}} transactions listed below total {{calc.listedTotal}}. The largest was {{calc.largestTransaction}}. {{calc.availableCreditPct}}% of your credit limit is available.'),
-  };
-  p = run(p, insertAt(p, summary, { before: 'transaction-table' }));
-  // Two dated notices before the disclosures.
-  const holiday: DocNode = {
-    id: 'notice-holiday-posting', type: 'rich-text', name: 'Holiday posting notice', layout: flow(12),
-    visibleWhen: { op: 'gt', path: 'card.newBalanceCents', value: 0 },
-    content: richFromMarkup('**Holiday payment posting.** Payments made between 24 December and 1 January may take one extra business day to post. Pay early to be sure your payment arrives by {{card.dueDate}}.'),
-  };
-  const agreement: DocNode = {
-    id: 'notice-agreement-update', type: 'rich-text', name: 'Cardholder agreement update', layout: flow(8),
-    visibleWhen: { op: 'gt', path: 'card.creditLimitCents', value: 0 },
-    content: richFromMarkup('**Your cardholder agreement is changing.** From 1 December 2026 it includes a section on paying with a digital wallet. You can read it at example.com/aster/agreement.'),
-  };
-  p = run(p, insertAt(p, holiday, { before: 'sample-disclosure-set' }));
-  p = run(p, insertAt(p, agreement, { before: 'sample-disclosure-set' }));
+  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-late-fee', title: 'Payment timing — late fee', when: { op: 'and', args: [owing, { op: 'gt', path: 'calc.lateFee', value: 0 }] }, text: 'Your payment is due in **{{calc.daysUntilDue}} days**, on {{card.dueDate}}. If the minimum payment arrives after that date, a late fee of up to {{calc.lateFee}} may apply.' });
+  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-arrangement', title: 'Payment timing — arrangement', when: { op: 'and', args: [owing, { op: 'eq', path: 'card.arrangementStatus', value: 'approved' }] }, text: 'Your payment is due in **{{calc.daysUntilDue}} days**, on {{card.dueDate}}. While your payment arrangement is in place, no late fee is charged.' });
+  // A spending summary just before the transactions, shown when at least one transaction is listed.
+  p = conditionalSection(p, { before: 'transaction-table' }, { id: 'spending-summary', name: 'Spending summary', spaceBeforePt: 14 }, {
+    variantId: 'spending-at-a-glance', title: 'This period at a glance', when: { op: 'gt', path: 'card.transactions.count', value: 0 },
+    text: '**This period at a glance.** The {{card.transactions.count}} transactions listed below total {{calc.listedTotal}}. The largest was {{calc.largestTransaction}}. {{calc.availableCreditPct}}% of your credit limit is available.',
+  });
+  // Two dated notices before the disclosures: one in effect until a date, one from a date.
+  p = conditionalSection(p, { before: 'sample-disclosure-set' }, { id: 'notice-holiday-posting', name: 'Holiday posting notice', spaceBeforePt: 12 }, {
+    variantId: 'holiday-posting', title: 'Holiday payment posting', when: { op: 'gt', path: 'card.newBalanceCents', value: 0 },
+    text: '**Holiday payment posting.** Payments made between 24 December and 1 January may take one extra business day to post. Pay early to be sure your payment arrives by {{card.dueDate}}.',
+  });
+  p = conditionalSection(p, { before: 'sample-disclosure-set' }, { id: 'notice-agreement-update', name: 'Cardholder agreement update', spaceBeforePt: 8 }, {
+    variantId: 'agreement-update', title: 'Cardholder agreement update', when: { op: 'gt', path: 'card.creditLimitCents', value: 0 },
+    text: '**Your cardholder agreement is changing.** From 1 December 2026 it includes a section on paying with a digital wallet. You can read it at example.com/aster/agreement.',
+  });
   p = run(p, { type: 'SET_SECTION_PERIOD', nodeId: 'notice-holiday-posting', period: CARD_PERIODS.holidayPosting });
   p = run(p, { type: 'SET_SECTION_PERIOD', nodeId: 'notice-agreement-update', period: CARD_PERIODS.agreementUpdate });
   // The transaction table's footer shows the calculated total (the same sum as its amount column, named).
@@ -287,10 +289,11 @@ const EOB_MAPPING_TARGETS: Record<string, string> = {
 /** One "must" the wording already satisfies, three "should" (one deliberately not met). */
 export const EOB_WORDING_RULES: WordingRule[] = [
   { id: 'harbor-not-a-bill', kind: 'required', severity: 'must', phrase: 'this is not a bill', appliesTo: 'anywhere', note: 'Every explanation of benefits says plainly that it is not a bill.' },
+  // Deliberately not met by one existing text (the approved "Claim totals" disclosure says "patient responsibility"; a
+  // disclosure's wording is changed by a person, never by a fix): the example's one "should" finding.
   { id: 'harbor-no-patient', kind: 'preferred', severity: 'should', phrase: 'patient responsibility', replacement: 'member responsibility', appliesTo: 'anywhere', note: 'We speak to members, not patients.' },
   { id: 'harbor-no-insurance-company', kind: 'banned', severity: 'should', phrase: 'insurance company', replacement: 'your plan', appliesTo: 'anywhere', note: 'Name the plan, not “the insurance company”.' },
-  // Deliberately not met by one existing text (the terms explanation is above grade 8): the example's one "should" finding.
-  { id: 'harbor-plain-labels', kind: 'sentence-length', severity: 'should', limit: 20, appliesTo: 'messages', note: 'Explanations of benefits are read by everyone: keep sentences short.' },
+  { id: 'harbor-short-sentences', kind: 'sentence-length', severity: 'should', limit: 25, appliesTo: 'messages', note: 'Explanations of benefits are read by everyone: keep sentences short.' },
 ];
 
 export const EOB_TEST_IDS = ['harbor-covered', 'harbor-under-review', 'harbor-out-of-network', 'harbor-deductible', 'harbor-appeal'] as const;
@@ -315,7 +318,7 @@ export function enrichEob(project: Project): Project {
   for (const f of EOB_CALCULATIONS) p = run(p, { type: 'UPSERT_CALCULATED_FIELD', field: f });
 
   const confirmed: Predicate = { op: 'eq', path: 'claim.liabilityConfirmed', value: true };
-  const notConfirmed: Predicate = { op: 'ne', path: 'claim.liabilityConfirmed', value: true };
+  const notConfirmed: Predicate = { op: 'eq', path: 'claim.liabilityConfirmed', value: false };
   const summary: DocNode = { id: 'claim-summary', type: 'conditional-region', name: 'Claim summary', policy: 'exclusive', variantIds: [], layout: flow(8) };
   p = run(p, insertAt(p, summary, { after: 'eob-claim-message' }));
   p = run(p, { type: 'ADD_VARIANT', nodeId: 'claim-summary', variantId: 'summary-confirmed', title: 'Claim summary — processed', when: confirmed, text: 'Claims in this explanation: {{calc.claimCount}}. Your plan paid {{calc.totalPlanPaid}} in total. Your share is {{calc.memberSharePct}}% of the amount the provider billed.' });
