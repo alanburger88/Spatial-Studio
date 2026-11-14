@@ -227,13 +227,23 @@ function Strip({ entries, issueDate }: { entries: TimelineEntry[]; issueDate: st
   const span = Math.max(1, last - first);
   const pos = (d: string) => (entries.length === 1 ? 50 : 6 + (88 * (n(d) - first)) / span);
   const inRange = issueDate && n(issueDate) >= first - span * 0.06 && n(issueDate) <= last + span * 0.06;
+  // Days close together would print their labels over each other: the second goes on a lower row, and a third in the
+  // same place gets no label here (the list below names every day).
+  const LABEL_WIDTH = 15; // per cent of the strip a label needs
+  const lastAt = [-100, -100];
+  const rows = entries.map((e) => {
+    const at = pos(e.date);
+    const row = at - lastAt[0] >= LABEL_WIDTH ? 0 : at - lastAt[1] >= LABEL_WIDTH ? 1 : -1;
+    if (row >= 0) lastAt[row] = at;
+    return row;
+  });
   return (
     <div className="dt-strip" aria-hidden="true" data-testid="dates-strip">
       <div className="dt-strip-line" />
-      {entries.map((e) => (
-        <div key={e.date} className={`dt-strip-mark ${issueDate === e.date ? 'on' : ''}`} style={{ left: `${pos(e.date)}%` }}>
+      {entries.map((e, i) => (
+        <div key={e.date} className={`dt-strip-mark ${issueDate === e.date ? 'on' : ''} ${rows[i] === 1 ? 'low' : ''}`} style={{ left: `${pos(e.date)}%` }}>
           <span className="dt-strip-dot" />
-          <span className="dt-strip-label">{dayWords(e.date)}</span>
+          {rows[i] >= 0 && <span className="dt-strip-label">{dayWords(e.date)}</span>}
         </div>
       ))}
       {issueDate && inRange && entries.every((e) => e.date !== issueDate) && <div className="dt-strip-preview" style={{ left: `${Math.min(100, Math.max(0, pos(issueDate)))}%` }} />}
