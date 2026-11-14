@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CUSTOMER_PLACEHOLDER, READER_FORMS, answerBaseQuestion, checkBaseQuestion, exampleQuestions, readBaseQuestion, scrubCustomers,
@@ -45,6 +45,9 @@ export function AskAllCustomers({ inPanel = true }: { inPanel?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [all, setAll] = useState(false);
   const pid = project.projectId;
+  const answerRef = useRef<HTMLElement>(null);
+  // A new answer (not the same one worked out again after an edit) is brought into view.
+  useEffect(() => { if (asked) answerRef.current?.scrollIntoView?.({ block: 'nearest', behavior: useStudio.getState().reducedMotion ? 'auto' : 'smooth' }); }, [asked]);
 
   const blockerList = data?.result.blockers;
   const examples = useMemo(() => { try { return exampleQuestions(project, records, { issueDate, engine: engine ?? undefined }); } catch { return []; } }, [project, records, issueDate, engine]);
@@ -110,7 +113,7 @@ export function AskAllCustomers({ inPanel = true }: { inPanel?: boolean }) {
       <p className="ask-lead muted">The studio checks every synthetic customer of this document and answers from the engine. {live ? 'A sentence the built-in reader cannot read is read by AI, which is given only the document’s names, never a customer’s data or name.' : 'Without an AI key, use one of the forms below; free sentences need an AI key.'}</p>
       <form className="ask-form" onSubmit={(e) => { e.preventDefault(); void run(text); }}>
         <label htmlFor={inputId} className="sr-only">Your question about all customers</label>
-        <input id={inputId} className="input" value={text} onChange={(e) => setText(e.target.value)} maxLength={300} placeholder="Who gets …? How many get …? Who is stopped?" data-testid="ask-input" autoComplete="off" />
+        <input id={inputId} className="input" value={text} onChange={(e) => setText(e.target.value)} maxLength={300} placeholder="Who gets …? Who is stopped?" data-testid="ask-input" autoComplete="off" />
         <button type="submit" className="btn primary sm" disabled={!text.trim() || busy} aria-busy={busy} data-testid="ask-submit">{busy ? 'Reading…' : 'Ask'}</button>
       </form>
       {examples.length > 0 && (
@@ -139,7 +142,7 @@ export function AskAllCustomers({ inPanel = true }: { inPanel?: boolean }) {
       {gone && <p className="callout warning" role="status" data-testid="ask-gone">The document has changed and no longer has what this question named. Ask again.</p>}
 
       {answer && asked && (
-        <article className="ask-answer" data-testid="ask-answer" data-count={answer.count} data-total={answer.total} aria-live="polite">
+        <article ref={answerRef} className="ask-answer" data-testid="ask-answer" data-count={answer.count} data-total={answer.total} aria-live="polite">
           <p className="ask-understood" data-testid="ask-understood">
             <span className="ask-label">Understood as</span> {answer.understood}
             <span className={`chip ${asked.source === 'ai' ? 'info' : ''} ask-src`} data-testid="ask-read-by" data-source={asked.source} title={asked.source === 'ai' ? 'An AI model read your sentence into this question; check that it is what you meant.' : 'Read by the studio’s built-in reader; no AI model was used.'}>{asked.source === 'ai' ? 'Read by AI' : 'Read by the built-in reader'}</span>
@@ -152,17 +155,18 @@ export function AskAllCustomers({ inPanel = true }: { inPanel?: boolean }) {
           ) : (
             <>
               <p className="ask-count" data-testid="ask-count" data-n={answer.count}><strong>{answer.count} of {answer.total} synthetic customers</strong></p>
-              <p className="ask-headline" data-testid="ask-headline">{answer.headline}</p>
-              {answer.reasons.length > 0 && (
+              {/* The headline without its count, which is just above: "get the section “Winter heating help”." */}
+              <p className="ask-headline" data-testid="ask-headline" title={answer.headline}>{answer.headline.replace(/^\d+ of \d+ synthetic customers? /, '')}</p>
+              {answer.byBlocker ? (answer.byBlocker.length > 0 && (
+                // By what: each blocker with how many of these customers it stops, opening it on the Blockers screen.
+                <div className="ask-reasons">
+                  <div className="ask-sub">Stopped by</div>
+                  <ul>{answer.byBlocker.map((b) => <li key={b.id} data-testid="ask-reason" data-n={b.count}><span className="chip count">{b.count}</span> <button type="button" className="linkbtn" onClick={() => openBlocker(b.id)} data-testid="ask-open-blocker" data-blocker={b.id} title="Open this blocker">{b.title}</button></li>)}</ul>
+                </div>
+              )) : answer.reasons.length > 0 && (
                 <div className="ask-reasons">
                   <div className="ask-sub">Why, in words</div>
                   <ul>{answer.reasons.map((r, i) => <li key={i} data-testid="ask-reason" data-n={r.count}><span className="chip count">{r.count}</span> <span>{r.text}</span></li>)}</ul>
-                </div>
-              )}
-              {answer.byBlocker && answer.byBlocker.length > 0 && (
-                <div className="ask-blockers">
-                  <div className="ask-sub">Open each in Blockers</div>
-                  <ul>{answer.byBlocker.map((b) => <li key={b.id}><button type="button" className="linkbtn" onClick={() => openBlocker(b.id)} data-testid="ask-open-blocker" data-blocker={b.id}>{b.title}</button></li>)}</ul>
                 </div>
               )}
             </>

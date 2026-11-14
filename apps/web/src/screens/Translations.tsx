@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { libraryOwnership } from '@iss/model';
 import { LibraryChip } from './library/LinkUI';
 import { WholeDocumentLibrary } from './library/DocumentLibrary';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AVAILABLE_LANGUAGES, checkTokens, languageName, languageShortName, projectLanguages, toTranslationCsv, translationStatus, usageEntryFromResolution, type TranslationRow, type TranslationUsageEntry } from '@iss/model';
 import { resolve } from '@iss/resolver';
 import { ScreenHeader, Loading, Empty, Tech, Dialog } from '../ui/common';
@@ -166,6 +166,13 @@ export function Translations() {
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => () => { Object.values(timers.current).forEach(clearTimeout); }, []);
   useEffect(() => { api.assistantStatus().then(setAiStatus).catch(() => setAiStatus(null)); }, []);
+  // Opened at one text (from a blocker, wave 4): `?lang=<code>&text=<id>` chooses the language and finds that text.
+  const [atParams] = useSearchParams();
+  const atLang = atParams.get('lang'), atText = atParams.get('text');
+  useEffect(() => {
+    if (atLang && projectId && langs.includes(atLang)) { setPref(atLang); writeLang(projectId, atLang); }
+    if (atText) setQ(atText);
+  }, [atLang, atText]); // eslint-disable-line react-hooks/exhaustive-deps
   // Switching language: nothing typed for the previous language may leak into the next one.
   useEffect(() => {
     Object.values(timers.current).forEach(clearTimeout); timers.current = {};
