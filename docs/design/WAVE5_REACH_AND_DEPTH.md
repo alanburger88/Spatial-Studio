@@ -147,8 +147,8 @@ and paginated, every place that walks the field tree) and the contracts are in `
 - **Not changed**: "Rebuild from a file" and "Describe a template" keep producing flat shapes (their proposals still
   validate); rules that choose a message are decided once per document (per item: use a component's condition).
 - **Example**: "Household accounts statement" (`packages/model/src/samples/household.ts`, 20 synthetic customers) is
-  used by tests only. It is not a seeded sample (that would change sample counts everywhere) and not offered under
-  "New project", because that list is built from the gallery's samples.
+  used by tests only. It is not a seeded sample (that would change sample counts everywhere) and is not offered under
+  "New project → start from an example"; it is kept test-only.
 
 ---
 
