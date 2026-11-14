@@ -6,10 +6,13 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { buildContext, evaluateCalculations, lookupRowFor, type CalculatedField, type LookupTable, type Project, type SyntheticRecord } from '../packages/model/src';
-import { open, resetAll } from './helpers';
+import { API, open, plainCopy, resetAll } from './helpers';
 
-test.beforeEach(async ({ request }) => { await resetAll(request); });
-test.afterEach(async ({ request }) => { await resetAll(request); });
+// The stored card sample has a lookup table of its own since D106: every test here starts from a document made from the
+// built-in card starter (the sample as the fixtures build it, with no table yet).
+let CARD = '';
+test.beforeEach(async ({ request }) => { await resetAll(request); CARD = (await plainCopy(request, 'aster-card-demo', 'Lookup tables card')).projectId; });
+test.afterEach(async ({ request }) => { await request.delete(`${API}/projects/${CARD}`); await resetAll(request); });
 
 const store = (page: Page) => page.evaluate(() => {
   const s = (window as any).__iss.store.getState();
@@ -32,7 +35,7 @@ async function addTable(page: Page, title: string, match: 'text' | 'number-range
 }
 
 test('LT01 a table of each kind of key can be built: exact text by typing, a range of numbers by typing, a range of dates by pasting', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'lookup-tables');
+  await open(page, CARD, 'lookup-tables');
   await expect(page.getByTestId('lk-empty')).toBeVisible();
 
   // Exact text: the rows start from the values of a data field of the document.
@@ -91,7 +94,7 @@ test('LT01 a table of each kind of key can be built: exact text by typing, a ran
 });
 
 test('LT02 duplicate keys, overlaps and gaps are shown as you edit, on the row and in the summary; what the engine refuses is said in its words', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'lookup-tables');
+  await open(page, CARD, 'lookup-tables');
   const table: LookupTable = {
     id: 'bands', title: 'Bands',
     keys: [{ key: 'balance', label: 'Balance', match: 'number-range' }],
@@ -153,7 +156,7 @@ test('LT02 duplicate keys, overlaps and gaps are shown as you edit, on the row a
 });
 
 test('LT03 paste from a spreadsheet shows what will be added and each problem by row and column before anything is applied', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'lookup-tables');
+  await open(page, CARD, 'lookup-tables');
   await addTable(page, 'Notice by date', 'date-range', 'number');
   await page.getByTestId('lk-paste').click();
   const text = ['In effect from\tIn effect until\tValue', '2026-01-01\t2027-01-01\t30', '2027-01-01\t2028-01-01\t45', '2028-13-45\t\t60', '2029-01-01\t\tsoon'].join('\n');
@@ -191,7 +194,7 @@ test('LT03 paste from a spreadsheet shows what will be added and each problem by
 });
 
 test('LT04 Try it: which row matches and what each value column gives, with a default row and with the current customer', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'lookup-tables');
+  await open(page, CARD, 'lookup-tables');
   const fees: LookupTable = {
     id: 'feeByTier', title: 'Late fee by tier',
     keys: [{ key: 'tier', label: 'Account tier', match: 'text' }],
@@ -231,7 +234,7 @@ test('LT04 Try it: which row matches and what each value column gives, with a de
 });
 
 test('LT05 a calculation that reads the table gets the right value; the table lists it; a table in use cannot be removed', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'lookup-tables');
+  await open(page, CARD, 'lookup-tables');
   const fees: LookupTable = {
     id: 'feeByTier', title: 'Late fee by tier',
     keys: [{ key: 'tier', label: 'Account tier', match: 'text' }],
@@ -270,7 +273,7 @@ test('LT05 a calculation that reads the table gets the right value; the table li
 
   // Once nothing reads the table, it can be removed (and undone).
   await dispatch(page, { type: 'DELETE_CALCULATED_FIELD', key: 'lateFee' });
-  await goTo(page, '/studio/aster-card-demo/lookup-tables');
+  await goTo(page, `/studio/${CARD}/lookup-tables`);
   await page.getByTestId('lk-remove').click();
   await expect(page.getByTestId('lk-empty')).toBeVisible();
   await page.getByTestId('undo').click();
@@ -278,7 +281,7 @@ test('LT05 a calculation that reads the table gets the right value; the table li
 });
 
 test('LT06 the grid is fully keyboard-operable', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'lookup-tables');
+  await open(page, CARD, 'lookup-tables');
   const table: LookupTable = {
     id: 'fees', title: 'Fees',
     keys: [{ key: 'tier', label: 'Tier', match: 'text' }],
@@ -342,7 +345,7 @@ test('LT06 the grid is fully keyboard-operable', async ({ page }) => {
 });
 
 test('LT07 a table of 2,000 rows renders only the rows in view and stays responsive', async ({ page }, info) => {
-  await open(page, 'aster-card-demo', 'lookup-tables');
+  await open(page, CARD, 'lookup-tables');
   const rows = Array.from({ length: 2000 }, (_, i) => ({ keys: { code: `K${String(i + 1).padStart(4, '0')}` }, values: { fee: (i + 1) * 100, note: `Row ${i + 1}` } }));
   const big: LookupTable = { id: 'big', title: 'Big table', keys: [{ key: 'code', label: 'Code', match: 'text' }], columns: [{ key: 'fee', label: 'Fee', type: 'money' }, { key: 'note', label: 'Note', type: 'text' }], rows };
   const small: LookupTable = { id: 'small', title: 'Small table', keys: [{ key: 'code', label: 'Code', match: 'text' }], columns: [{ key: 'fee', label: 'Fee', type: 'money' }], rows: [{ keys: { code: 'a' }, values: { fee: 1 } }] };

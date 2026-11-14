@@ -98,7 +98,10 @@ test('BR01 a guided pass: most customers first, fixes side by side, Apply is one
   const offer = page.getByTestId('bl-pin-offer');
   await expect(offer).toContainText('Pin a test so this problem cannot come back unnoticed');
   await expect(page.getByTestId(`bl-pin-${TIE}`)).toBeChecked();
-  expect(await tests(page)).toEqual([]);
+  // the card sample's own pinned tests (D106) are there before; nothing is added without choosing it
+  const own = await tests(page);
+  expect(own.length).toBeGreaterThan(0);
+  expect(own.some((t) => t.name.startsWith('Stays fixed: '))).toBe(false);
   // untick and tick again: still the person's choice
   await page.getByTestId(`bl-pin-${TIE}`).uncheck();
   await expect(page.getByTestId('bl-pin-confirm')).toBeDisabled();
@@ -106,7 +109,7 @@ test('BR01 a guided pass: most customers first, fixes side by side, Apply is one
   const beforePin = await past(page);
   await page.getByTestId('bl-pin-confirm').click();
   await expect(page.getByTestId('bl-pass-pinned')).toContainText('1 test pinned');
-  const pinned = await tests(page);
+  const pinned = (await tests(page)).filter((t) => !own.some((o) => o.id === t.id));
   expect(pinned).toHaveLength(1);
   expect(pinned[0].name).toMatch(/^Stays fixed: .+ tie/);
   expect(await past(page)).toBe(beforePin + 1);
@@ -114,7 +117,7 @@ test('BR01 a guided pass: most customers first, fixes side by side, Apply is one
   await page.getByTestId('bl-pass-finish').click();
   await expect(page.getByTestId('bl-pass')).toHaveCount(0);
   await page.getByTestId('undo').click(); // the pinned test goes with one undo, like any edit
-  expect(await tests(page)).toEqual([]);
+  expect(await tests(page)).toEqual(own);
 });
 
 test('BR02 the pass can be left and resumed where it was; leaving loses nothing', async ({ page }) => {
@@ -167,10 +170,11 @@ test('BR04 a blocker fixed outside the pass is offered a pinned test too; nothin
   await expect(page.getByTestId('bl-resolved')).toContainText('no longer a blocker', { timeout: 30_000 });
   await expect(page.getByTestId('bl-resolved').getByTestId('bl-pin-offer')).toBeVisible();
   await expect(page.getByTestId(`bl-pin-${TIE}`)).toBeChecked();
-  expect(await tests(page)).toEqual([]);
+  const own = await tests(page); // the card sample's own pinned tests (D106)
+  expect(own.some((t) => t.name.startsWith('Stays fixed: '))).toBe(false);
   await page.getByTestId('bl-pin-confirm').click();
   await expect(page.getByTestId('bl-pinned')).toBeVisible();
-  expect((await tests(page)).map((t) => t.name)).toEqual([expect.stringMatching(/^Stays fixed: /)]);
+  expect((await tests(page)).filter((t) => !own.some((o) => o.id === t.id)).map((t) => t.name)).toEqual([expect.stringMatching(/^Stays fixed: /)]);
 });
 
 test('BR05 a layout blocker from the last full check says so in the pass and offers to run the full check', async ({ page, request }) => {

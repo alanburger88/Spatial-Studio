@@ -8,7 +8,7 @@
  * so every run uses names of its own and its own copies of the sample document.
  */
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
-import { API, open } from './helpers';
+import { API, open, plainCopy } from './helpers';
 
 const stamp = Date.now().toString(36);
 const HOUSE = `House rules ${stamp}`;
@@ -18,9 +18,8 @@ const project = (page: Page) => page.evaluate(() => (window as any).__iss.store.
 const select = (page: Page, id: string) => page.evaluate((nid) => (window as any).__iss.store.getState().select(nid), id);
 const save = async (page: Page) => { await page.getByTestId('save-project').click(); await expect(page.getByTestId('save-state')).toContainText('Saved', { timeout: 30_000 }); };
 const duplicate = async (request: APIRequestContext, title: string) => {
-  const r = await request.post(`${API}/projects/aster-card-demo/duplicate`, { data: { title } });
-  expect(r.ok()).toBeTruthy();
-  return (await r.json()).project.projectId as string;
+  // The stored card sample has wording rules of its own since D106: start from the card as the fixtures build it.
+  return (await plainCopy(request, 'aster-card-demo', title)).projectId;
 };
 /** Opens the alternatives editor of the payment guidance on one alternative's text. */
 const editAlternative = async (page: Page, vid: string) => {

@@ -1,12 +1,13 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { API, open, resetAll, state } from './helpers';
+import { API, open, plainCopy, resetAll, state } from './helpers';
 import { gotoScreen } from './nav-helper';
 import { resolve, type RNode } from '../packages/resolver/src/index';
 import type { Project, SyntheticRecord } from '../packages/model/src/index';
 
 /**
  * The document's date, effective periods and the timeline (S24 Dates and everywhere the preview date reaches).
- * The samples use no dates, so every test works on its own duplicate of the card sample and deletes it afterwards;
+ * Every test works on its own copy of the card as the fixtures build it (no dates; the stored sample has one since D106)
+ * and deletes it afterwards;
  * date sources and periods are set through the screens (or, for the set-up of a check, the store's command bus).
  */
 
@@ -17,7 +18,10 @@ const UNDER_REVIEW = 'EOB-0002'; // HarborCare: rule R14 chooses "under review"
 
 let pid = '';
 const made: string[] = [];
-async function duplicate(request: APIRequestContext, sample: string): Promise<string> {
+async function duplicate(request: APIRequestContext, sample: 'aster-card-demo' | 'harborcare-demo'): Promise<string> {
+  // The stored card sample has the statement issue date as its date since D106: card tests start from the built-in card
+  // starter (the sample as the fixtures build it, without dates). The explanation of benefits still has no date.
+  if (sample === 'aster-card-demo') { const { projectId } = await plainCopy(request, sample, `Dates E2E ${Date.now().toString(36)}`); made.push(projectId); return projectId; }
   const r = await request.post(`${API}/projects/${sample}/duplicate`, { data: { title: `Dates E2E ${Date.now().toString(36)}` } });
   expect(r.ok()).toBeTruthy();
   const id = (await r.json()).project.projectId as string;

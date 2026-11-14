@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { applyCommand, defaultNode, richFromMarkup, type Command, type Project } from '../packages/model/src/index';
-import { API, open } from './helpers';
+import { API, open, plainCopy } from './helpers';
 
 /**
  * The join-up of roadmap wave 2: the studio's one preview date on Calculations and Lookup tables, the links between
@@ -17,9 +17,8 @@ const ok = (p: Project, c: Command): Project => { const r = applyCommand(p, c); 
 
 /** A duplicate of the card sample, changed by `commands` and saved. */
 async function documentWith(request: APIRequestContext, title: string, commands: (p: Project) => Command[]): Promise<string> {
-  const r = await request.post(`${API}/projects/aster-card-demo/duplicate`, { data: { title: `${title} ${Date.now().toString(36)}` } });
-  expect(r.ok()).toBeTruthy();
-  const start = (await r.json()).project as Project;
+  // The card as the fixtures build it (the stored sample has its own calculations, table and date since D106).
+  const start = (await plainCopy(request, 'aster-card-demo', `${title} ${Date.now().toString(36)}`)).project as Project;
   made.push(start.projectId);
   let p = start;
   for (const c of commands(p)) p = ok(p, c);

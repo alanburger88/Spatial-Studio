@@ -1,8 +1,10 @@
 /** Rules & Data: decision-table view (gap/overlap analysis) and pinned regression tests. */
 import { test, expect } from '@playwright/test';
-import { demoTool, open, pickRecord, resetAll } from './helpers';
+import { API, demoTool, open, pickRecord, plainCopy, resetAll } from './helpers';
 
 test.beforeEach(async ({ request }) => { await resetAll(request); });
+const plain: string[] = [];
+test.afterEach(async ({ request }) => { while (plain.length) await request.delete(`${API}/projects/${plain.pop()}`); });
 
 test('decision table lists Payment guidance rules in priority order and flags an injected tie', async ({ page }) => {
   await open(page, 'aster-card-demo', 'rules-data');
@@ -33,8 +35,11 @@ test('decision table lists Payment guidance rules in priority order and flags an
   await expect(page.getByTestId('rule-row-R03')).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('pin CARD-0002 as a test; disabling R04 fails it in plain language and undo passes it again', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'rules-data');
+test('pin CARD-0002 as a test; disabling R04 fails it in plain language and undo passes it again', async ({ page, request }) => {
+  // The stored card sample has pinned tests of its own since D106: start from the card as the fixtures build it (none yet).
+  const { projectId } = await plainCopy(request, 'aster-card-demo', 'Pinned tests E2E');
+  plain.push(projectId);
+  await open(page, projectId, 'rules-data');
   await expect(page.getByTestId('tests-summary')).toContainText('No tests');
   await pickRecord(page, 'CARD-0002');
   await page.getByTestId('rules-view-tests').click();

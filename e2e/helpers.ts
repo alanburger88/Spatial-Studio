@@ -83,3 +83,18 @@ export async function pickRecord(page: Page, recordId: string) {
   await page.getByTestId(`record-option-${recordId}`).click();
   await expect(page.getByTestId('record-selector')).toHaveAttribute('data-value', recordId);
 }
+
+/**
+ * A new document made from the built-in starter of a sample's kind: the sample exactly as the fixtures build it, without
+ * the showcase additions the stored samples have since D106 (calculations, lookup tables, the document's date, page
+ * design, own wording rules, a mapping, email wording, pinned tests). For tests whose subject is a document that does not
+ * have those yet. The caller deletes it (`DELETE /projects/:id`).
+ */
+export async function plainCopy(request: APIRequestContext, sample: 'aster-card-demo' | 'harborcare-demo', title = `Plain ${sample} ${Date.now().toString(36)}`): Promise<{ projectId: string; project: any }> {
+  const templateId = sample === 'aster-card-demo' ? 'credit-card-statement' : 'explanation-of-benefits';
+  const r = await request.post(`${API}/projects`, { data: { templateId, title } });
+  expect(r.status(), await r.text()).toBe(201);
+  const project = (await r.json()).project;
+  expect(project.calculatedFields ?? []).toEqual([]);
+  return { projectId: project.projectId as string, project };
+}

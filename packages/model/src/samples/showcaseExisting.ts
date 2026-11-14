@@ -193,7 +193,7 @@ export function enrichCard(project: Project): Project {
   // least one transaction is listed.
   p = run(p, insertAt(p, {
     id: 'spending-summary', type: 'rich-text', name: 'Spending summary', layout: flow(6),
-    visibleWhen: { op: 'gt', path: 'card.transactions.count', value: 0 },
+    visibleWhen: { op: 'gte', path: 'card.transactions.count', value: 1 },
     content: richFromMarkup('The {{card.transactions.count}} transactions on this statement total {{calc.listedTotal}}; the largest was {{calc.largestTransaction}}. {{calc.availableCreditPct}}% of your credit limit is available.'),
   }, { after: 'transaction-table' }));
   // Payment timing: an inline choice between two alternatives (not a rule, not a Variant Set), shown only when a minimum
@@ -201,7 +201,7 @@ export function enrichCard(project: Project): Project {
   const owing: Predicate = { op: 'gt', path: 'card.minimumDueCents', value: 0 };
   const timing: DocNode = { id: 'payment-timing', type: 'conditional-region', name: 'Payment timing', policy: 'exclusive', variantIds: [], layout: flow(8) };
   p = run(p, insertAt(p, timing, { after: 'spending-summary' }));
-  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-late-fee', title: 'When to pay', when: { op: 'and', args: [owing, { op: 'gt', path: 'calc.lateFee', value: 0 }] }, text: 'You have **{{calc.daysUntilDue}} days** to pay. If the minimum payment is late, a late fee of up to {{calc.lateFee}} may apply.' });
+  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-late-fee', title: 'When to pay', when: { op: 'and', args: [owing, { op: 'ne', path: 'card.arrangementStatus', value: 'approved' }] }, text: 'You have **{{calc.daysUntilDue}} days** to pay. If the minimum payment is late, a late fee of up to {{calc.lateFee}} may apply.' });
   p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-arrangement', title: 'When to pay — arrangement in place', when: { op: 'and', args: [owing, { op: 'eq', path: 'card.arrangementStatus', value: 'approved' }] }, text: 'You have **{{calc.daysUntilDue}} days** to pay. While your arrangement is in place, no late fee is charged.' });
   // Two dated notices before the disclosures: one in effect until a date, one from a date.
   p = conditionalSection(p, { before: 'sample-disclosure-set' }, { id: 'notice-holiday-posting', name: 'Holiday mail notice', spaceBeforePt: 12 }, {
