@@ -28,3 +28,7 @@ export * from './lookupPaste';
 export * from './effective';
 export * from './library';
 export * from './mapping';
+// Variants by brand or region (wave 5, section 1). The comparison and update (`variants.ts`) are exported here too;
+// the web imports them only from screens that load on demand, so they stay out of the first download.
+export * from './variantLock';
+export * from './variants';

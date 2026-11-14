@@ -453,6 +453,40 @@ export interface Project {
    * in. Changed only by the mapping commands (`mapping.ts`). Never read by the engine.
    */
   mappings?: TargetMapping[];
+  // Variants by brand or region (wave 5, section 1): begin
+  /**
+   * Set on a variant only: the base document it follows and the saved version of it it follows. Absent = an ordinary
+   * document (or a base). Never read by the resolver, the renderers or the package: a variant is a complete document.
+   * Changed only by the variant commands (`DETACH_VARIANT`, `UPDATE_FROM_BASE`, `USE_BASE_AGAIN`). See `variants.ts`.
+   */
+  variantOf?: VariantOf;
+  // Variants by brand or region (wave 5, section 1): end
+}
+
+/* ------------------------------------------------------------- Variants by brand or region (wave 5, section 1) */
+
+export type VariantPurpose = 'brand' | 'region' | 'other';
+export const VARIANT_PURPOSE_LABEL: Record<VariantPurpose, string> = { brand: 'A brand', region: 'A region', other: 'Other' };
+
+/** What makes a document a variant: which base document, at which saved version, and what it is for. */
+export interface VariantOf {
+  /** The base document's id. */
+  projectId: string;
+  /** The base's saved version this variant follows. */
+  modelVersion: number;
+  /** That saved version's content digest (`projectContentDigest`), so a changed or replaced version is noticed. */
+  contentDigest: string;
+  purpose: VariantPurpose;
+  /** What it is for, in a few words ("Lakeshore region", "Brand: Bright Saver"). */
+  label: string;
+  /** The base's title at the followed version (named in messages without fetching the base). */
+  baseTitle: string;
+  /**
+   * The base's components at the followed version, as this variant holds them. Their position, size and order stay the
+   * base's; anything not listed is the variant's own and free. Derived from the base version (so `applyCommand` can keep
+   * the lock without fetching the base); the server checks it against the base on every save.
+   */
+  baseNodeIds: string[];
 }
 
 /* ------------------------------------------------------------- Mapping to a production system (wave 3) */

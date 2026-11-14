@@ -26,6 +26,8 @@ import {
   WORDING_RULE_KIND_LABEL, checkWordingRule, ownWordingRuleProblem,
   type LibraryContentByKind, type LibraryWordingContent,
 } from './library';
+// Variants by brand or region (wave 5, section 1)
+import { variantLockProblem, variantOfProblems } from './variantLock';
 
 /**
  * Unified typed command bus. Every authoring mutation is one of these commands.
@@ -109,7 +111,17 @@ export type Command =
   | { type: 'SET_MAPPING_ENTRY'; mappingId: string; entry: MappingEntry; stamp?: MappingStamp }
   | { type: 'CLEAR_MAPPING_ENTRY'; mappingId: string; path: string; stamp?: MappingStamp }
   /** Sets several entries at once (accepted suggestions, a pasted list): each replaces the entry for its field. */
-  | { type: 'SET_MAPPING_ENTRIES'; mappingId: string; entries: MappingEntry[]; stamp?: MappingStamp };
+  | { type: 'SET_MAPPING_ENTRIES'; mappingId: string; entries: MappingEntry[]; stamp?: MappingStamp }
+  // Variants by brand or region (wave 5, section 1): begin. The two that carry a project carry the result worked out by
+  // the pure functions in `variants.ts` (as an undo carries a snapshot); the server checks the lock again on save.
+  /** Turns the variant into an ordinary document for good. Its content does not change. */
+  | { type: 'DETACH_VARIANT' }
+  /** Applies an update from the base: `project` is the merged variant (`mergeVariantUpdate`), following the newer base version. */
+  | { type: 'UPDATE_FROM_BASE'; project: Project; label?: string }
+  /** Drops one difference from the base: `project` is the variant with the base's value back (`useBaseAgain`). */
+  | { type: 'USE_BASE_AGAIN'; project: Project; label: string }
+  // Variants by brand or region (wave 5, section 1): end
+  ;
 
 /**
  * Where a linked item's content goes. A block is inserted into `parentId` (at `index`) or replaces the component
@@ -119,6 +131,10 @@ export type Command =
 export type LibraryPlacement = { parentId: string; index?: number } | { replaceNodeId: string } | { partId: string } | { tableId: string };
 
 const LIBRARY_COMMANDS = new Set<Command['type']>(['LINK_LIBRARY_ITEM', 'UPDATE_LIBRARY_LINK', 'UNLINK_LIBRARY_ITEM', 'BATCH', 'RESTORE_SNAPSHOT']);
+// Variants (wave 5): the variant commands carry the base's own content (an update, or one value back), so neither the
+// library's read-only rule nor the lock applies to them; a batch checks each step and an undo restores an earlier state.
+const VARIANT_COMMANDS = new Set<Command['type']>(['DETACH_VARIANT', 'UPDATE_FROM_BASE', 'USE_BASE_AGAIN']);
+const VARIANT_UNLOCKED = new Set<Command['type']>([...VARIANT_COMMANDS, 'BATCH', 'RESTORE_SNAPSHOT']);
 
 export type CommandResult =
   | { ok: true; project: Project; label: string }
@@ -205,7 +221,12 @@ function validateNodeShape(node: DocNode, project: Project): string | null {
  */
 export function applyCommand(project: Project, cmd: Command): CommandResult {
   const res = applyOne(project, cmd);
-  if (!res.ok || !project.libraryLinks?.length || LIBRARY_COMMANDS.has(cmd.type)) return res;
+  // Variants (wave 5): the base's locked parts stay the base's, whatever the command (checked by result, as the library's rule is).
+  if (res.ok && project.variantOf && !VARIANT_UNLOCKED.has(cmd.type)) {
+    const hit = variantLockProblem(project, res.project, project.variantOf);
+    if (hit) return reject('VARIANT_LOCKED', hit.message, hit.nodeId);
+  }
+  if (!res.ok || !project.libraryLinks?.length || LIBRARY_COMMANDS.has(cmd.type) || VARIANT_COMMANDS.has(cmd.type)) return res;
   const hit = changedLink(project, res.project);
   return hit ? reject('LIBRARY_READ_ONLY', linkedContentMessage(hit), linkNodeId(hit)) : res;
 }
@@ -734,7 +755,37 @@ function applyOne(project: Project, cmd: Command): CommandResult {
     case 'CLEAR_MAPPING_ENTRY':
     case 'SET_MAPPING_ENTRIES':
       return applyMappingCommand(project, cmd);
+    // Variants by brand or region (wave 5, section 1)
+    case 'DETACH_VARIANT':
+    case 'UPDATE_FROM_BASE':
+    case 'USE_BASE_AGAIN':
+      return applyVariantCommand(project, cmd);
   }
+}
+
+/* ------------------------------------------------------------ variants by brand or region (wave 5, section 1) */
+
+type VariantCommand = Extract<Command, { type: 'DETACH_VARIANT' | 'UPDATE_FROM_BASE' | 'USE_BASE_AGAIN' }>;
+
+function applyVariantCommand(project: Project, cmd: VariantCommand): CommandResult {
+  const v = project.variantOf;
+  if (!v) return reject('NOT_A_VARIANT', 'This document is not a variant of another document.');
+  if (cmd.type === 'DETACH_VARIANT') {
+    return { ok: true, label: `Detach from “${v.baseTitle}”`, project: bump(project, (d) => { delete d.variantOf; }) };
+  }
+  const next = cmd.project;
+  if (!next || typeof next !== 'object' || next.projectId !== project.projectId || !Array.isArray(next.nodes)) return reject('INVALID', 'The changed variant cannot be read.');
+  const nv = next.variantOf;
+  const shape = variantOfProblems(next);
+  if (!nv || shape.length) return reject('INVALID', shape[0] ?? 'The changed document is no longer a variant. Use “Detach from the base” for that.');
+  if (nv.projectId !== v.projectId) return reject('INVALID', `This variant follows “${v.baseTitle}”, not another document.`);
+  if (cmd.type === 'UPDATE_FROM_BASE') {
+    if (nv.modelVersion === v.modelVersion && nv.contentDigest === v.contentDigest) return reject('UNCHANGED', `This variant already follows version ${v.modelVersion} of “${v.baseTitle}”.`);
+    const label = typeof cmd.label === 'string' && cmd.label.trim() ? cmd.label.trim().slice(0, 160) : `Update from “${nv.baseTitle}” (version ${v.modelVersion} to ${nv.modelVersion})`;
+    return { ok: true, label, project: { ...next, modelVersion: project.modelVersion + 1 } };
+  }
+  if (digestOf(nv) !== digestOf(v)) return reject('INVALID', 'Using the base’s value again does not change which version of the base this variant follows.');
+  return { ok: true, label: String(cmd.label ?? '').trim().slice(0, 160) || 'Use the base’s value again', project: { ...next, modelVersion: project.modelVersion + 1 } };
 }
 
 /* ------------------------------------------------------------ mappings to a production system (wave 3) */

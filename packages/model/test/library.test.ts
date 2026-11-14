@@ -325,6 +325,10 @@ const PROBES: Record<Command['type'], Probe[]> = {
   SET_MAPPING_ENTRY: [],
   CLEAR_MAPPING_ENTRY: [],
   SET_MAPPING_ENTRIES: [],
+  // Variants (wave 5): only a variant takes these, and they carry the base's own content (see variants.test.ts).
+  DETACH_VARIANT: [],
+  UPDATE_FROM_BASE: [],
+  USE_BASE_AGAIN: [],
 };
 
 describe('linked content is read-only in the document', () => {
