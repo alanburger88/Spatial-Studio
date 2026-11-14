@@ -6,7 +6,8 @@ import {
 } from '@iss/model';
 import { ANY_OVERDRAWN, EVERY_ACTIVE, buildHousehold, householdCustomers } from '@iss/model/samples/index';
 import { evaluatePredicate, indexTree, resolve } from '@iss/resolver';
-import { baselineCustomer, coverageGaps, planTestData } from '@iss/scenarios';
+import { baselineCustomer, coverageGaps, dataDictionary, planTestData } from '@iss/scenarios';
+import { bindingAnalysis, staticRuleAnalysis } from '@iss/validation';
 
 /** Richer data shapes (wave 5, section 2): the engine, the document side and test customers. */
 const project = buildHousehold();
@@ -156,6 +157,12 @@ describe('the repeating section', () => {
     const s = indexTree(res.root).get('accounts-section')!;
     expect([s.visible, s.hiddenReason]).toEqual([false, 'No items in “Accounts” for this customer.']);
     expect(res.findings.filter((f) => f.severity === 'blocking')).toEqual([]);
+  });
+
+  it('passes the rule and binding checks and the dictionary knows every path it reads', () => {
+    expect(bindingAnalysis(project)).toEqual([]);
+    expect(staticRuleAnalysis(project, customers).filter((f) => f.severity === 'blocking')).toEqual([]);
+    expect(dataDictionary(project).unknownReferences).toEqual([]);
   });
 
   it('is refused inside another section, as a fixed item, for a list the document does not have; an item field cannot leave its section', () => {

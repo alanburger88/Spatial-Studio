@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { repeatListAt, scopeFieldIndex } from '@iss/model';
+import { buildContext, itemContexts, repeatListAt, scopeFieldIndex } from '@iss/model';
 import { CATALOG_BY_TYPE, libraryOwnership, isConditionalSection, projectFields, tableColumnsFor, defaultFormatterFor, getPath, nodeMap, requiredNodeIds, applyCommand, effectivePageDesign, pagedProfileOf, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
 import { useScenarioEngine, useStudio } from '../../state/store';
@@ -383,6 +383,9 @@ function ChartDataEditor({ node, project }: { node: DocNode; project: Project })
 function TokenPicker({ project, res, nodeId }: { project: Project; res: Resolution; nodeId?: string }) {
   const [q, setQ] = useState('');
   const ctx = { ...res.effectiveRecord, claim: (res.effectiveRecord as any).claims?.[0] };
+  // Inside a repeating section (wave 5): examples come from the customer's first item of the list.
+  const sectionList = nodeId && project.nodes.some((n) => n.repeat) ? repeatListAt(project, nodeId) : null;
+  const firstItem = sectionList ? itemContexts(buildContext(res.effectiveRecord) as Record<string, unknown>, sectionList)[0] ?? null : null;
   const fields = fieldsAt(project, nodeId).filter((f) => f.type !== 'array' && (!q || f.path.toLowerCase().includes(q.toLowerCase()) || f.label.toLowerCase().includes(q.toLowerCase())));
   return (
     <div data-testid="token-picker">
@@ -391,8 +394,8 @@ function TokenPicker({ project, res, nodeId }: { project: Project; res: Resoluti
       <div className="token-list">
         {fields.map((f) => (
           <button key={f.path} className="token-item" onMouseDown={(e) => e.preventDefault()} onClick={() => { if (!insertToken(f.path)) useStudio.getState().toast({ kind: 'warning', title: 'Open the text editor first', message: 'Double-click the rich text on the page, then pick a field.' }); }} data-testid={`token-${f.path}`}>
-            <span className="mono">{`{{${f.path}}}`}</span>
-            <span className="muted">{f.type}{f.derived ? ' · derived' : ''} · e.g. {JSON.stringify(getPath(ctx, f.path))?.slice(0, 24)}</span>
+            {f.item ? <span>{f.label}</span> : <span className="mono">{`{{${f.path}}}`}</span>}
+            <span className="muted">{f.item ? 'each item · ' : ''}{f.type}{f.derived ? ' · derived' : ''} · e.g. {JSON.stringify(getPath(f.item && firstItem ? firstItem : ctx, f.path))?.slice(0, 24)}</span>
           </button>
         ))}
       </div>

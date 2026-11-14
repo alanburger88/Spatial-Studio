@@ -49,4 +49,6 @@
 .df-tree { margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--iss-border); border-radius: 6px; background: var(--iss-surface-2); }
 .df-tree summary { cursor: pointer; font-weight: 600; }
 .df-tree ul { margin: 4px 0 0; padding-left: 18px; }
+.df-tree > ul { columns: 2 220px; column-gap: 24px; }
+.df-tree > ul > li { break-inside: avoid; }
 .df-tree li { margin: 1px 0; }

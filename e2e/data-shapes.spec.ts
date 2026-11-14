@@ -84,7 +84,10 @@ test('DS02 a repeating section with an inner table and a subtotal, seen for a cu
   // The example's section repeats for each of the four accounts; later items are marked as repeats on the canvas.
   await expect(page.getByTestId('repeat-accounts-section')).toBeVisible();
   await expect(page.locator('[data-repeat-item]')).toHaveCount(4);
-  await expect(page.getByTestId('node-account-transactions~4')).toBeVisible();
+  // The first account is laid out in full; later ones show their heading and how much more they repeat.
+  await expect(page.getByTestId('node-account-transactions')).toBeVisible();
+  await expect(page.getByTestId('node-account-heading~4')).toBeVisible();
+  await expect(page.locator('[data-repeat-item="4"]')).toContainText('repeated (+3 more components)');
   // Clicking a repeat selects the component of the document (its Inspector, not a copy).
   await page.getByTestId('node-account-heading~3').click();
   await expect(page.getByTestId('node-account-heading')).toHaveClass(/is-selected/);
@@ -109,12 +112,15 @@ test('DS02 a repeating section with an inner table and a subtotal, seen for a cu
   const after = await project(page);
   expect(after.nodes.find((n: any) => n.id === section.id).repeat).toEqual({ list: 'custom.accounts', keepHeading: true });
   expect(after.nodes.find((n: any) => n.id === metric.id).binding).toBe('calc.accountSubtotal');
-  // For this customer: four tables, each with its own rows, and four subtotals.
+  // For this customer: the first account's table and subtotal on the canvas; four of each in the document.
   const tableId = inside.find((n: any) => n.type === 'repeating-table').id;
-  await expect(page.getByTestId(`node-${tableId}~4`)).toBeVisible();
+  await expect(page.getByTestId(`node-${tableId}`)).toBeVisible();
   const accounts = householdCustomers()[4].custom.accounts as Array<{ transactions: Array<{ amountCents: number }> }>;
-  const last = accounts[3].transactions.reduce((s, t) => s + t.amountCents, 0);
-  await expect(page.getByTestId(`node-${metric.id}~4`)).toContainText(`$${(Math.abs(last) / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
+  const first = accounts[0].transactions.reduce((s, t) => s + t.amountCents, 0);
+  await expect(page.getByTestId(`node-${metric.id}`)).toContainText(`$${(Math.abs(first) / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
+  const res = await request.post(`${API}/resolve`, { data: { projectId, recordId: four, project: after, includeTree: true } });
+  const tree = JSON.stringify((await res.json()).tree);
+  for (const k of [2, 3, 4]) { expect(tree).toContain(`"${tableId}~${k}"`); expect(tree).toContain(`"${metric.id}~${k}"`); }
 });
 
 test('DS03 Data Explorer edits a value inside a list of a list, adds and removes an inner row', async ({ page, request }) => {

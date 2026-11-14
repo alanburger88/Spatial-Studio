@@ -119,12 +119,19 @@ function NodeBox({ n, mode, ia, depth, inRow }: { n: RNode; mode: RenderMode; ia
     // A repeating section: its content once per item, each item marked (studio marks, never in the outputs).
     const items = new Map<number, RNode[]>();
     for (const c of n.children) { const i = c.repeatItem?.index ?? 1; items.set(i, [...(items.get(i) ?? []), c]); }
-    inner = <div className="iss-container pv-repeat" data-testid={`repeat-${n.id}`}>{[...items.keys()].sort((a, b) => a - b).map((i) => (
-      <div key={i} className="pv-repeat-item" data-repeat-item={i}>
-        <div className="pv-repeat-label" aria-hidden="true">{n.repeat!.label} · item {i} of {n.repeat!.count}{i > 1 ? ' · repeated' : ' · laid out here'}</div>
-        {renderNodes(items.get(i)!, mode, ia, depth + 1, false)}
-      </div>
-    ))}{!n.children.length && <div className="pv-empty-container">Empty repeating section — drop components here</div>}</div>;
+    // The first item is shown in full (it is where the layout is edited); each later item shows its first component
+    // and how many more it repeats, so the page stays readable. The PDF and the web page show every item in full.
+    inner = <div className="iss-container pv-repeat" data-testid={`repeat-${n.id}`}>{[...items.keys()].sort((a, b) => a - b).map((i) => {
+      const kids = items.get(i)!;
+      const shown = i === 1 ? kids : kids.slice(0, 1);
+      const more = kids.length - shown.length;
+      return (
+        <div key={i} className={`pv-repeat-item${i > 1 ? ' is-repeat' : ''}`} data-repeat-item={i}>
+          <div className="pv-repeat-label" aria-hidden="true">{n.repeat!.label} · item {i} of {n.repeat!.count}{i > 1 ? ` · repeated${more ? ` (+${more} more component${more === 1 ? '' : 's'})` : ''}` : ' · laid out here'}</div>
+          {renderNodes(shown, mode, ia, depth + 1, false)}
+        </div>
+      );
+    })}{!n.children.length && <div className="pv-empty-container">Empty repeating section — drop components here</div>}</div>;
   } else if (n.type === 'container') {
     const row = pl?.direction === 'row';
     inner = <div className={`iss-container${row ? ' iss-row' : ''}`}>{renderNodes(n.children, mode, ia, depth + 1, row)}{!n.children.length && <div className="pv-empty-container">Empty section — drop components here</div>}</div>;
