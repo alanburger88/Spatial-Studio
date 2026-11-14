@@ -49,6 +49,7 @@ export function MERIDIAN_ES(): Record<string, string> {
     '@fees-income/content': '## Ingresos y comisiones\nEste trimestre recibió {{calc.totalIncome}} en dividendos e intereses y pagó {{calc.totalFees}} en comisiones de administración. Su comisión de administración anual es del {{calc.feeRatePct}}% del valor de su cartera, lo que equivale a {{calc.quarterlyFee}} este trimestre.',
     '@title/tax-documents': 'Sus documentos fiscales de 2026',
     'tax-documents': 'El Formulario 1099 de esta cuenta estará listo a más tardar el 16 de febrero de 2027. Lo encontrará en Documentos al iniciar sesión, y le enviaremos una copia por correo si pidió papel.',
+    '@fee-waived-note/content': '**Su comisión de administración no se cobró este trimestre**, porque no hubo movimientos en su cuenta.',
     '@title/fee-unchanged': 'Su comisión de administración',
     'fee-unchanged': 'Su comisión de administración anual se mantiene en el {{calc.feeRatePct}}% del valor de su cartera. Le avisaremos al menos 30 días antes de cualquier cambio.',
     '@portal-link/action.label': 'Vea su cuenta en línea',

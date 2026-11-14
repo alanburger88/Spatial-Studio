@@ -42,6 +42,7 @@ export const MERIDIAN_FIELDS: CustomField[] = [
   { key: 'realisedGainCents', label: 'Realized gain or loss this quarter', type: 'cents', required: true },
   { key: 'unrealisedGainCents', label: 'Unrealized gain or loss', type: 'cents', required: true },
   { key: 'previousQuarterReturnBps', label: 'Return last quarter (hundredths of a percent)', type: 'int', required: true },
+  { key: 'feeWaived', label: 'Management fee waived this quarter', type: 'bool' },
   {
     key: 'holdings', label: 'Holdings', type: 'list',
     itemFields: [
@@ -136,7 +137,7 @@ export const MERIDIAN_CALCS: CalculatedField[] = [
   { key: 'holdingCount', label: 'Number of holdings', type: 'number', expr: { op: 'count', list: 'custom.holdings', where: { op: 'gt', path: 'valueCents', value: 0 } } },
   { key: 'feeRateBps', label: 'Annual management fee (bp)', type: 'number', expr: { op: 'lookup', table: 'managementFees', column: 'rateBps', keys: [f('custom.openingValueCents'), { op: 'issueDate' }] } },
   { key: 'feeRatePct', label: 'Annual management fee (%)', type: 'number', expr: { op: 'round', places: 2, arg: { op: 'div', a: f('calc.feeRateBps'), b: n(100) } } },
-  { key: 'quarterlyFee', label: 'Management fee for the quarter', type: 'money', description: 'Opening value times the annual fee, divided by four, to the cent.', expr: { op: 'round', places: 2, arg: { op: 'div', a: { op: 'mul', a: f('custom.openingValueCents'), b: f('calc.feeRateBps') }, b: n(40000) } } },
+  { key: 'quarterlyFee', label: 'Management fee for the quarter', type: 'money', description: 'Opening value times the annual fee, divided by four, to the cent; nothing when the fee is waived.', expr: { op: 'if', when: { op: 'eq', path: 'custom.feeWaived', value: true }, then: { op: 'money', cents: 0 }, else: { op: 'round', places: 2, arg: { op: 'div', a: { op: 'mul', a: f('custom.openingValueCents'), b: f('calc.feeRateBps') }, b: n(40000) } } } },
   { key: 'adviserLine', label: 'Adviser line', type: 'text', expr: { op: 'join', sep: ' · ', parts: [f('custom.adviserName'), f('custom.adviserPhone')] } },
   { key: 'modelPortfolio', label: 'Model portfolio', type: 'text', expr: { op: 'lookup', table: 'riskWording', column: 'model', keys: [f('custom.riskProfile')] } },
   { key: 'equityTarget', label: 'Target in shares (%)', type: 'number', expr: { op: 'lookup', table: 'riskWording', column: 'equityTarget', keys: [f('custom.riskProfile')] } },
@@ -244,6 +245,7 @@ export function buildMeridian(): Project {
 
   /* ---- the fee change: the announcement until the day it changes, the confirmation from that day */
   const affected = { op: 'or' as const, args: [{ op: 'lt' as const, path: 'custom.openingValueCents', value: M(250_000) }, { op: 'gte' as const, path: 'custom.openingValueCents', value: M(1_000_000) }] };
+  b.insert(text('fee-waived-note', 'Fee waived note', '**Your management fee was waived this quarter**, because there was no activity in your account.', flow({ spaceBeforePt: 6, spanColumns: true }), { visibleWhen: eq('custom.feeWaived', true) }));
   b.message({ id: 'fee-notice', name: 'Fee notice', layout: flow({ spaceBeforePt: 10, keepTogether: true, spanColumns: true }) }, [
     { id: 'fee-unchanged', title: 'Your management fee', text: 'Your annual management fee stays at {{calc.feeRatePct}}% of your portfolio’s value. We will tell you at least 30 days before any change.', fallback: true },
     { id: 'fee-upcoming', title: 'Your management fee is going down', text: 'From December 1, 2026, the annual management fee for portfolios under $250,000 falls from 0.85% to 0.80%, and for portfolios of $1,000,000 or more from 0.45% to 0.40%. You do not need to do anything.' },
@@ -318,6 +320,7 @@ const STAMP = { by: 'Sample author', at: '2026-11-03T10:00:00.000Z' };
 function mappings(b: SampleBuilder): void {
   b.run({ type: 'ADD_MAPPING', mapping: { id: 'print-house', name: 'Mapping for the print house', system: 'Calder Print & Mail (fictional)', description: 'The quarterly statement file the print house receives.' }, stamp: STAMP });
   const out: Array<[string, string, string, string?]> = [
+    ['recordId', 'CUST_REF', 'CHAR(10)'], ['customer.givenName', 'FIRST_NAME', 'VARCHAR(40)'], ['customer.familyName', 'LAST_NAME', 'VARCHAR(40)'], ['customer.locale', 'LANG', 'CHAR(5)'], ['custom.feeWaived', 'FEE_WAIVED', 'BOOLEAN'],
     ['custom.accountNumber', 'ACCT_ID', 'CHAR(12)'], ['custom.accountType', 'ACCT_TYPE', 'VARCHAR(10)'], ['custom.adviserName', 'ADV_NAME', 'VARCHAR(60)'], ['custom.adviserPhone', 'ADV_PHONE', 'CHAR(14)'],
     ['custom.periodStart', 'PER_START', 'DATE', 'MM/DD/YYYY'], ['custom.periodEnd', 'PER_END', 'DATE', 'MM/DD/YYYY'], ['custom.riskProfile', 'RISK_PROF', 'VARCHAR(12)'],
     ['custom.openingValueCents', 'OPEN_VAL', 'DECIMAL(13,2)', 'divide by 100'], ['custom.closingValueCents', 'CLOSE_VAL', 'DECIMAL(13,2)', 'divide by 100'], ['custom.previousQuarterCloseCents', 'PRIOR_CLOSE', 'DECIMAL(13,2)', 'divide by 100'],
@@ -325,10 +328,10 @@ function mappings(b: SampleBuilder): void {
     ['custom.feesCents', 'FEES', 'DECIMAL(11,2)', 'divide by 100'], ['custom.marketChangeCents', 'MKT_CHG', 'DECIMAL(13,2)', 'divide by 100'], ['custom.realisedGainCents', 'REAL_GL', 'DECIMAL(13,2)', 'divide by 100'],
     ['custom.unrealisedGainCents', 'UNREAL_GL', 'DECIMAL(13,2)', 'divide by 100'], ['custom.previousQuarterReturnBps', 'PRIOR_RET_BP', 'INTEGER'],
     ['custom.holdings', 'HOLD_REC', 'REPEATING GROUP'], ['custom.holdings[].assetClass', 'HOLD_CLASS', 'VARCHAR(30)'], ['custom.holdings[].fund', 'HOLD_NAME', 'VARCHAR(60)'], ['custom.holdings[].code', 'HOLD_CODE', 'CHAR(10)'],
-    ['custom.holdings[].units', 'HOLD_UNITS', 'DECIMAL(15,3)'], ['custom.holdings[].priceCents', 'HOLD_PRICE', 'DECIMAL(11,2)', 'divide by 100'], ['custom.holdings[].valueCents', 'HOLD_VAL', 'DECIMAL(13,2)', 'divide by 100'],
+    ['custom.holdings[].units', 'HOLD_UNITS_TXT', 'VARCHAR(18)', 'three decimals, with thousands separators'], ['custom.holdings[].priceCents', 'HOLD_PRICE', 'DECIMAL(11,2)', 'divide by 100'], ['custom.holdings[].valueCents', 'HOLD_VAL', 'DECIMAL(13,2)', 'divide by 100'],
     ['custom.holdings[].costCents', 'HOLD_COST', 'DECIMAL(13,2)', 'divide by 100'], ['custom.holdings[].weight', 'HOLD_WT', 'CHAR(6)'],
     ['custom.transactions', 'TXN_REC', 'REPEATING GROUP'], ['custom.transactions[].date', 'TXN_DT', 'DATE', 'MM/DD/YYYY'], ['custom.transactions[].type', 'TXN_TYPE', 'VARCHAR(20)'], ['custom.transactions[].fund', 'TXN_FUND', 'VARCHAR(60)'],
-    ['custom.transactions[].units', 'TXN_UNITS', 'DECIMAL(15,3)'], ['custom.transactions[].amountCents', 'TXN_AMT', 'DECIMAL(13,2)', 'divide by 100'],
+    ['custom.transactions[].units', 'TXN_UNITS_TXT', 'VARCHAR(18)', 'three decimals, with thousands separators; empty for income and fees'], ['custom.transactions[].amountCents', 'TXN_AMT', 'DECIMAL(13,2)', 'divide by 100'],
     ['custom.assetAllocation', 'ALLOC_REC', 'REPEATING GROUP'], ['custom.assetAllocation[].assetClass', 'ALLOC_CLASS', 'VARCHAR(30)'], ['custom.assetAllocation[].valueCents', 'ALLOC_VAL', 'DECIMAL(13,2)', 'divide by 100'], ['custom.assetAllocation[].weight', 'ALLOC_WT', 'CHAR(6)'],
   ];
   b.run({ type: 'SET_MAPPING_ENTRIES', mappingId: 'print-house', stamp: STAMP, entries: out.map(([path, target, targetType, format]) => ({ path, target, targetType, ...(format ? { format } : {}) })) });
@@ -481,7 +484,8 @@ export function meridianCustomers(): SampleCustomer[] {
     const contributions = (s.contrib ?? 0) * 100;
     const withdrawals = (s.withdraw ?? 0) * 100;
     const opening = s.newAccount ? 0 : roundHalfUp((closing - contributions + withdrawals) / (1 + s.ret / 100), 0);
-    const fees = s.newAccount ? 0 : roundHalfUp((opening * feeBps(opening, q.end)) / 40000, 0);
+    // A quiet account (no transactions this quarter) has its fee waived; a new account pays none in its first quarter.
+    const fees = s.newAccount || s.noTransactions ? 0 : roundHalfUp((opening * feeBps(opening, q.end)) / 40000, 0);
     const income = s.noTransactions ? 0 : roundHalfUp(opening * (s.risk === 'conservative' ? 0.0085 : s.risk === 'balanced' ? 0.0062 : 0.0041), 0);
     const marketChange = closing - opening - contributions + withdrawals - income + fees;
     // Transactions in the period (dated inside it).
@@ -510,6 +514,7 @@ export function meridianCustomers(): SampleCustomer[] {
       openingValueCents: opening, closingValueCents: closing, previousQuarterCloseCents: opening,
       contributionsCents: contributions, withdrawalsCents: withdrawals, incomeCents: income, feesCents: fees, marketChangeCents: marketChange,
       realisedGainCents: realised, unrealisedGainCents: unrealised, previousQuarterReturnBps: Math.round(s.prevRet * 100),
+      ...(s.noTransactions ? { feeWaived: true } : {}),
       holdings: holdings.map((h) => ({ assetClass: w.classes[h.assetClass], fund: h.fund, code: h.code, units: unitsText(h.unitsK), priceCents: h.priceCents, valueCents: h.valueCents, costCents: h.costCents, weight: pct1(h.valueCents, closing) })),
       transactions: tx,
       assetAllocation: alloc.map((a) => ({ ...a, assetClass: w.classes[a.assetClass], weight: pct1(a.valueCents, closing) })),
@@ -533,7 +538,6 @@ export const MERIDIAN_NOTES_BASE: Omit<SampleNotes, 'translations'> = {
   ],
   intendedShould: [{ ruleId: 'mw-no-risk-free', reason: 'Demonstration of a “should” wording rule: the fall notice says “No investment is risk-free”, which the house style would rather avoid even in a denial.' }],
   unusedFields: [
-    { path: 'custom.previousQuarterCloseCents', reason: 'Carried for the print house; the accuracy check confirms it equals the opening value.' },
     { path: 'custom.holdings[].costCents', reason: 'Carried for the unrealized gain; the accuracy check adds it up.' },
     { path: 'custom.assetAllocation[].weight', reason: 'Carried for the client portal; the chart shows amounts.' },
   ],
