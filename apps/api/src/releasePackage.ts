@@ -729,7 +729,17 @@ ${fromLibrary.map((l) => `<tr><td>${escHtml(l.title)}</td><td>${escHtml(LIBRARY_
 ${wording.own.length ? `<ul>${wording.own.map((r) => `<li>${escHtml(wordingRuleLabel(r))} (${r.severity})</li>`).join('')}</ul>` : ''}
 
 ` : '';
-  add('README.html', 'readme', readmeHtml({ title: release.title, kind: DOCUMENT_TYPE_LABEL[release.documentType], number: release.number, approver: release.approvedBy?.name ?? null, approvedAt: release.approvedAt, fileName, languages, plan, references, known: release.knownDataProblems, dates: datesHtml, library: libraryHtml + wordingHtml, ...(mappings.length ? { mappings: mappingsHtml(mappings), mappingsLeftOut: mappings.some((m) => !m.complete) } : {}) }));
+  // Variants (wave 5): a release of a variant says which base it follows, at which version, and how it differs. Absent otherwise.
+  const vr = release.variant;
+  const variantHtml = vr ? `<h2>A variant of another document</h2>
+<p>This document is a variant (${escHtml(vr.purpose === 'brand' ? 'for a brand' : vr.purpose === 'region' ? 'for a region' : 'other')}: ${escHtml(vr.label)}) of “${escHtml(vr.baseTitle)}” (<code>${escHtml(vr.baseId)}</code>), following its version ${vr.baseVersion}. It is a complete document: this package does not need the base, and nothing in it is taken from the base when a document is produced.${vr.baseFound ? '' : ' The base was not in the studio when this release was made, so its differences could not be listed.'}</p>
+${vr.differences.length ? `<table>
+<tr><th>Difference from the base</th><th>Kind</th></tr>
+${vr.differences.map((d) => `<tr><td>${escHtml(d.label)}</td><td>${d.kind === 'added' ? 'Its own' : d.kind === 'removed' ? 'Hidden or removed' : 'Changed'}</td></tr>`).join('\n')}
+</table>` : vr.baseFound ? '<p>It has no differences from that version of the base.</p>' : ''}
+
+` : '';
+  add('README.html', 'readme', readmeHtml({ title: release.title, kind: DOCUMENT_TYPE_LABEL[release.documentType], number: release.number, approver: release.approvedBy?.name ?? null, approvedAt: release.approvedAt, fileName, languages, plan, references, known: release.knownDataProblems, dates: datesHtml, library: libraryHtml + wordingHtml + variantHtml, ...(mappings.length ? { mappings: mappingsHtml(mappings), mappingsLeftOut: mappings.some((m) => !m.complete) } : {}) }));
 
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const contents: PackageFile[] = files.map((f) => ({ path: f.path, sha256: sha256(f.data), bytes: f.data.length, role: f.role }));
@@ -777,6 +787,11 @@ ${wording.own.length ? `<ul>${wording.own.map((r) => `<li>${escHtml(wordingRuleL
     ...(mappings.length ? { mappings: mappings.map((m) => (m.complete
       ? { id: m.id, name: m.name, system: m.system, included: true, file: m.file, csv: m.csv, fields: m.counts.required, mapped: m.counts.mapped, notNeeded: m.counts.notNeeded }
       : { id: m.id, name: m.name, system: m.system, included: false, reason: 'not complete when the release was made', unmapped: m.counts.unmapped, typeClashes: m.counts.clashes, mappedTwice: m.counts.mappedTwice })) } : {}),
+    /**
+     * Variants (wave 5; an addition to format 1: readers that do not know it ignore it): for a release of a variant, the
+     * base document, the base version it follows and its differences from that version. Absent for any other document.
+     */
+    ...(vr ? { variant: { baseId: vr.baseId, baseTitle: vr.baseTitle, baseVersion: vr.baseVersion, baseDigest: vr.baseDigest, purpose: vr.purpose, label: vr.label, baseFound: vr.baseFound, differences: vr.differences } } : {}),
     syntheticOnly: true,
     notIncluded: ['customer data', 'draft wording and unapproved translations', 'stage and handover record', ...(mappings.length ? (mappings.some((m) => !m.complete) ? ['mappings that were not complete'] : []) : ['data/mapping-<ccm>.json']), 'library/', 'font files', 'AFP print stream', 'the engine'],
     /** Every file in the package except this one. A reader must ignore roles and paths it does not know. */
