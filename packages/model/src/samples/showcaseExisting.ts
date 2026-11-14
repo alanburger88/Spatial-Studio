@@ -16,9 +16,13 @@
  */
 import { applyCommand, type Command } from '../commands';
 import { mappablePaths, LIST_COLUMN_MARK } from '../mapping';
-import type { CalculatedField, ChannelConfig, DocNode, LookupTable, MappingEntry, Predicate, Project, TestCase, WordingRule } from '../types';
+import type { CalculatedField, ChannelConfig, DocNode, MappingEntry, Predicate, Project, TestCase, WordingRule } from '../types';
 import { channelConfig } from '../channels';
 import { richFromMarkup } from '../rich';
+import { CARD_LATE_FEES, EOB_REVIEW_TIMES, HOUSE, houseContent, type HouseItemId } from './houseLibrary';
+
+/** The tables live in the house library (both examples link to them); re-exported where they were first defined. */
+export { CARD_LATE_FEES, EOB_REVIEW_TIMES };
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -34,6 +38,17 @@ const flow = (spaceBeforePt = 10, html: NonNullable<DocNode['layout']>['html'] =
 });
 
 const field = (path: string) => ({ op: 'field' as const, path });
+
+/**
+ * Links one house library item at the version the examples use, with exactly the library's content (as the Northwind
+ * and Meridian builders do). Each link leaves every fixture customer's resolved document as it was: the glossary and
+ * the house wording rules are not part of a resolution, and a linked table is the same table.
+ */
+function linkHouse(project: Project, itemId: HouseItemId): Project {
+  const item = HOUSE.items[itemId];
+  const version = HOUSE.linkPlan[itemId];
+  return run(project, { type: 'LINK_LIBRARY_ITEM', item: { id: item.id, kind: item.kind, title: item.title }, version, content: houseContent(itemId, version) });
+}
 
 /** Inserts `node` into the root container right after `afterId` (or before `beforeId`). */
 function insertAt(project: Project, node: DocNode, where: { after: string } | { before: string }): Command {
@@ -77,17 +92,6 @@ function completeMapping(project: Project, targets: Record<string, string>): Map
 
 /* ------------------------------------------------------------------ Aster Card (credit-card statement) */
 
-export const CARD_LATE_FEES: LookupTable = {
-  id: 'lateFeeByTier',
-  title: 'Late fee by account tier',
-  description: 'The most a late payment can cost, by account tier (fictional amounts for the synthetic demonstration).',
-  keys: [{ key: 'tier', label: 'Account tier', match: 'text' }],
-  columns: [{ key: 'lateFee', label: 'Late fee', type: 'money' }, { key: 'returnedPayment', label: 'Returned payment fee', type: 'money' }],
-  rows: [
-    { keys: { tier: 'standard' }, values: { lateFee: 2900, returnedPayment: 2900 } },
-    { keys: { tier: 'premium' }, values: { lateFee: 2500, returnedPayment: 2500 } },
-  ],
-};
 
 export const CARD_CALCULATIONS: CalculatedField[] = [
   { key: 'daysUntilDue', label: 'Days until the payment is due', type: 'number', description: 'From the statement’s issue date to the payment due date.', expr: { op: 'days', from: { op: 'issueDate' }, to: field('card.dueDate') } },
@@ -184,7 +188,8 @@ export function enrichCard(project: Project): Project {
   let p = project;
   // The document's date: the statement's issue date, which every sample customer has.
   p = run(p, { type: 'SET_DOCUMENT_DATE', source: { source: 'field', path: 'card.issuedAt' } });
-  p = run(p, { type: 'UPSERT_LOOKUP_TABLE', table: CARD_LATE_FEES });
+  // The late-fee table comes from the house library (the same table, linked: read-only here, "where used" lists the card).
+  p = linkHouse(p, 'card-late-fees');
   for (const f of CARD_CALCULATIONS) p = run(p, { type: 'UPSERT_CALCULATED_FIELD', field: f });
 
   // Everything new goes after the transaction table, so the first page and the table's pages stay exactly as they were
@@ -222,6 +227,11 @@ export function enrichCard(project: Project): Project {
   p = run(p, { type: 'SET_CHANNELS', channels: { ...ch, email: { ...ch.email, intro: 'You have {{calc.daysUntilDue}} days to pay. Every transaction is in your full statement.' } } });
 
   for (const rule of CARD_WORDING_RULES) p = run(p, { type: 'ADD_WORDING_RULE', rule });
+  // The house wording rules from the library: the approved fixture wording meets every house "must" rule (it names
+  // Aster Card as fictional, never says "click here" or "guaranteed"), so no customer gains a finding. The card keeps a
+  // glossary of its own (empty): it is where the studio shows a document's own glossary being edited (a linked
+  // glossary is read-only), so the library glossary is linked to HarborCare only.
+  p = linkHouse(p, 'house-wording-rules');
   p = run(p, { type: 'ADD_MAPPING', mapping: { id: 'print-house', name: 'Mapping for the print house', system: 'the print house', description: 'Field names of the print house’s statement data file (fictional).' } });
   p = run(p, { type: 'SET_MAPPING_ENTRIES', mappingId: 'print-house', entries: completeMapping(p, CARD_MAPPING_TARGETS) });
   for (const t of cardTests()) p = run(p, { type: 'UPSERT_TEST_CASE', testCase: t });
@@ -230,18 +240,6 @@ export function enrichCard(project: Project): Project {
 
 /* ------------------------------------------------------------------ HarborCare (explanation of benefits) */
 
-export const EOB_REVIEW_TIMES: LookupTable = {
-  id: 'reviewTimeByAmount',
-  title: 'Review time by billed amount',
-  description: 'How long a review usually takes, by the amount the provider billed (fictional service levels).',
-  keys: [{ key: 'billed', label: 'Billed amount', match: 'number-range', unit: 'money' }],
-  columns: [{ key: 'days', label: 'Days to finish a review', type: 'number' }],
-  rows: [
-    { keys: { billed: { from: 0, until: 50000 } }, values: { days: 30 } },
-    { keys: { billed: { from: 50000 } }, values: { days: 45 } },
-  ],
-  defaultRow: { days: 45 },
-};
 
 export const EOB_CALCULATIONS: CalculatedField[] = [
   {
@@ -320,7 +318,7 @@ export const EOB_FIRST_PAGE_TINT = { kind: 'tint' as const, color: '#EEF5F1', op
 export function enrichEob(project: Project): Project {
   if (project.documentType !== 'eob') throw new Error('enrichEob expects the explanation-of-benefits sample.');
   let p = project;
-  p = run(p, { type: 'UPSERT_LOOKUP_TABLE', table: EOB_REVIEW_TIMES });
+  p = linkHouse(p, 'claim-review-times');
   for (const f of EOB_CALCULATIONS) p = run(p, { type: 'UPSERT_CALCULATED_FIELD', field: f });
 
   const confirmed: Predicate = { op: 'eq', path: 'claim.liabilityConfirmed', value: true };
@@ -339,6 +337,8 @@ export function enrichEob(project: Project): Project {
   p = run(p, { type: 'SET_CHANNELS', channels: { ...ch, email: { ...ch.email, intro: 'Claims in this explanation: {{calc.claimCount}}. Open it to see what your plan paid and why.' } } });
 
   for (const rule of EOB_WORDING_RULES) p = run(p, { type: 'ADD_WORDING_RULE', rule });
+  p = linkHouse(p, 'glossary-es');
+  p = linkHouse(p, 'house-wording-rules');
   p = run(p, { type: 'ADD_MAPPING', mapping: { id: 'print-house', name: 'Mapping for the print house', system: 'the print house', description: 'Field names of the print house’s claims data file (fictional).' } });
   p = run(p, { type: 'SET_MAPPING_ENTRIES', mappingId: 'print-house', entries: completeMapping(p, EOB_MAPPING_TARGETS) });
   for (const t of eobTests()) p = run(p, { type: 'UPSERT_TEST_CASE', testCase: t });

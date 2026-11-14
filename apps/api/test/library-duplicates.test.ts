@@ -42,6 +42,9 @@ function helpers(getCtx: () => Ctx) {
 
 const groupOf = (scan: any, needle: string) => scan.groups.find((g: any) => g.members.some((m: any) => m.plain.includes(needle)));
 
+/** The house library items the card sample links (D106); a copy of it keeps them. */
+const CARD_SAMPLE_LINKS = ['card-late-fees', 'house-wording-rules'];
+
 describe('duplicate wording (sign-in off: the local admin)', () => {
   let ctx: Ctx;
   beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, auth: false }); });
@@ -133,8 +136,8 @@ describe('duplicate wording (sign-in off: the local admin)', () => {
     expect(near.comparison.customers.filter((x: any) => x.outcome !== 'same').length).toBeGreaterThan(0);
     // capitals are a different text for the reader: not identical, so it is reviewed in the document
     expect((await json('POST', '/api/v1/library/interest-notice/link-preview', { projectId: b, partId: PART })).identical).toBe(false);
-    // nothing was stored
-    expect((await project(a)).libraryLinks ?? []).toEqual([]);
+    // nothing was stored (the copy keeps the card sample's own links: house wording rules, late-fee table)
+    expect(((await project(a)).libraryLinks ?? []).map((l) => l.itemId)).toEqual(CARD_SAMPLE_LINKS);
     expect((await inj('POST', '/api/v1/library/interest-notice/link-preview', { projectId: a, partId: 'no-such' })).json().error.code).toBe('CANNOT_LINK');
   });
 
@@ -157,7 +160,7 @@ describe('duplicate wording (sign-in off: the local admin)', () => {
     expect(r.refused.find((x: any) => x.projectId === d).reason).toMatch(/translations/);
     const saved = await project(a);
     expect(saved.modelVersion).toBe(va + 1);
-    expect(saved.libraryLinks).toEqual([expect.objectContaining({ itemId: 'interest-notice', kind: 'wording', version: 1, target: { kind: 'wording', partId: PART } })]);
+    expect(saved.libraryLinks).toEqual([...CARD_SAMPLE_LINKS.map((itemId) => expect.objectContaining({ itemId })), expect.objectContaining({ itemId: 'interest-notice', kind: 'wording', version: 1, target: { kind: 'wording', partId: PART } })]);
     expect((await json('GET', `/api/v1/projects/${a}/workflow?checks=0`)).state).toBe('draft');
     expect(st.getWorkflow(f).state).toBe('approved');
     const audits = (st as any).db.prepare("SELECT project_id, detail FROM audit WHERE action='library.link'").all();

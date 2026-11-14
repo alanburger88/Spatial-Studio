@@ -40,6 +40,11 @@ describe('the shared library (sign-in off: the local admin)', () => {
   afterAll(async () => { await ctx.app.close(); });
   const { inj, json, project, apply, latest } = helpers(() => ctx);
   const CARD = 'aster-card-demo', EOB = 'harborcare-demo';
+  // The two samples link house library items of their own (house wording rules, a lookup table, the EOB's glossary: D106). This
+  // studio has no house library (extraSamples: false), so those links are "not in the library" here; the tests find
+  // the links they make by item.
+  const linkOf = (p: Project, itemId: string) => p.libraryLinks!.find((l) => l.itemId === itemId)!;
+  const SAMPLE_LINKS: Record<string, string[]> = { [CARD]: ['card-late-fees', 'house-wording-rules'], [EOB]: ['claim-review-times', 'glossary-es', 'house-wording-rules'] };
 
   it('starts empty; an item is created with its first version as a draft, from content or from a saved document', async () => {
     expect(await json('GET', '/api/v1/library')).toEqual({ items: [], can: { create: true, approve: true, setSeverity: true } });
@@ -105,7 +110,8 @@ describe('the shared library (sign-in off: the local admin)', () => {
     const linkCmd = (placement: any): Command => ({ type: 'LINK_LIBRARY_ITEM', item: { id: 'payment-actions', kind: 'block', title: 'Payment actions' }, version: 1, content: v1.content, placement });
     await apply(CARD, linkCmd({ replaceNodeId: 'payment-actions' }));
     const p2 = await apply(second, { type: 'DELETE_NODE', nodeId: 'payment-actions' }, linkCmd({ parentId: 'doc-root', index: 4 }));
-    expect(p2.libraryLinks![0].target).toMatchObject({ kind: 'block', idPrefix: `${p2.libraryLinks![0].linkId}-` });
+    expect(p2.libraryLinks!.map((l) => l.itemId)).toEqual([...SAMPLE_LINKS[CARD], 'payment-actions']);
+    expect(linkOf(p2, 'payment-actions').target).toMatchObject({ kind: 'block', idPrefix: `${linkOf(p2, 'payment-actions').linkId}-` });
     let usage = await json('GET', '/api/v1/library/payment-actions/usage');
     expect(usage.usage.map((u: any) => [u.projectId, u.version, u.behind]).sort()).toEqual([[CARD, 1, false], [second, 1, false]]);
     // Version 2 is approved: both documents are behind; nothing changed in either document.
@@ -125,7 +131,7 @@ describe('the shared library (sign-in off: the local admin)', () => {
   it('the impact of updating a document is the Before & after comparison of the updated document, and it stores nothing', async () => {
     const second = (await json('GET', '/api/v1/projects')).projects.find((p: any) => p.title === 'Second card').projectId;
     const doc = await project(second);
-    const link = doc.libraryLinks![0];
+    const link = linkOf(doc, 'payment-actions');
     const r = await inj('POST', '/api/v1/library/payment-actions/impact', { projectId: second, version: 2 });
     expect(r.statusCode, r.body).toBe(200);
     const impact = r.json();
@@ -151,7 +157,7 @@ describe('the shared library (sign-in off: the local admin)', () => {
   it('saving a document that changes linked content is the client’s business; the server checks link shapes', async () => {
     const p = await project(CARD);
     const bad = JSON.parse(JSON.stringify(p));
-    bad.libraryLinks[0].target.rootNodeId = 'nowhere';
+    linkOf(bad, 'payment-actions').target.rootNodeId = 'nowhere';
     const r = await inj('PUT', `/api/v1/projects/${CARD}`, { project: { ...bad, modelVersion: p.modelVersion + 1 } }, { 'if-match': `"${p.modelVersion}"` });
     expect(r.statusCode).toBe(422);
     expect(r.json().error.message).toMatch(/library link .* not in the document/);
@@ -166,14 +172,18 @@ describe('the shared library (sign-in off: the local admin)', () => {
     expect(ok.statusCode, ok.body).toBe(200);
     const id = ok.json().release.release.id;
     const lib = await json('GET', `/api/v1/releases/${id}/library`);
-    expect(lib.library).toEqual([{ itemId: 'house-brand', title: 'House brand', kind: 'brand', version: 1, inLibrary: true }]);
-    expect((await json('GET', `/api/v1/releases/${id}/template`)).libraryLinks).toHaveLength(1);
+    // The EOB sample's own links come first; this studio has no house library, so they are not in it.
+    const own = (await project(EOB)).libraryLinks!.filter((l) => l.itemId !== 'house-brand').map((l) => ({ itemId: l.itemId, title: l.title, kind: l.kind, version: l.version }));
+    expect(own.map((l) => l.itemId)).toEqual(SAMPLE_LINKS[EOB]);
+    const byId = (a: { itemId: string }, b: { itemId: string }) => a.itemId.localeCompare(b.itemId);
+    expect([...lib.library].sort(byId)).toEqual([...own.map((l) => ({ ...l, inLibrary: false })), { itemId: 'house-brand', title: 'House brand', kind: 'brand', version: 1, inLibrary: true }].sort(byId));
+    expect((await json('GET', `/api/v1/releases/${id}/template`)).libraryLinks).toHaveLength(own.length + 1);
     const z = await inj('GET', `/api/v1/releases/${id}/package?wait=1`);
     expect(z.statusCode).toBe(200);
     const files = new Map(zipEntries(z.rawPayload).map((e) => [e.name, zipRead(z.rawPayload, e)]));
     const manifest = JSON.parse(files.get('manifest.json')!.toString('utf8'));
     expect(manifest.formatVersion).toBe(1);
-    expect(manifest.library).toEqual([{ itemId: 'house-brand', title: 'House brand', kind: 'brand', version: 1 }]);
+    expect([...manifest.library].sort(byId)).toEqual([...own, { itemId: 'house-brand', title: 'House brand', kind: 'brand', version: 1 }].sort(byId));
     const readme = files.get('README.html')!.toString('utf8');
     expect(readme).toMatch(/What came from the library/);
     expect(readme).toMatch(/<td>House brand<\/td><td>Brand<\/td><td>1<\/td>/);
@@ -191,11 +201,11 @@ describe('the shared library (sign-in off: the local admin)', () => {
     const imp = await inj('POST', '/api/v1/projects/import', { file, title: 'Imported with unknown library item' });
     expect(imp.statusCode, imp.body).toBe(201);
     const imported = imp.json().project as Project;
-    expect(imported.libraryLinks![0].itemId).toBe('somewhere-else-block');
+    expect(imported.libraryLinks!.map((l) => l.itemId)).toEqual(file.libraryLinks!.map(() => 'somewhere-else-block'));
     expect(imported.nodes.find((n) => n.id === 'payment-actions')).toBeTruthy();
     const items = (await json('GET', '/api/v1/library')).items;
     expect(linkStatus(imported.libraryLinks![0], items)).toBe('not-in-library');
-    expect(linkStatus((await project(CARD)).libraryLinks![0], items)).toBe('behind');
+    expect(linkStatus(linkOf(await project(CARD), 'payment-actions'), items)).toBe('behind');
     // A malformed link in a file is refused before anything is stored.
     const broken = { ...file, libraryLinks: [{ ...file.libraryLinks![0], kind: 'poster' }] };
     const r = await inj('POST', '/api/v1/projects/import', { file: broken, title: 'Broken links' });

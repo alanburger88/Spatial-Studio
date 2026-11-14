@@ -35,4 +35,25 @@ describe('the enriched samples as real PDFs', () => {
     const stress = EXPECTED_SCENARIOS['card-250-rows'];
     expect(await pages(card, stress.recordId, stress.overrides)).toBeGreaterThan(1);
   }, 300_000);
+
+  it('the card’s first page is the one the fixtures give (same components, same text) and the 250-row case keeps its 8 pages', async () => {
+    const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const compose = async (p: typeof card, id: string, overrides: Record<string, unknown> = {}) => {
+      const res = resolve({ project: p, record: rec(id), overrides });
+      const out = await composer.composePaged(renderPagedDocument(res, p, { profileId: 'paged-pdf', watermark: '' }), { pdf: true });
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(out.pdf!), useSystemFonts: true, disableFontFace: true, verbosity: 0 }).promise;
+      // The run id is a hash of the document (it changes with any addition); everything else on page 1 must not.
+      const first = (await (await doc.getPage(1)).getTextContent()).items.map((it: any) => it.str).join(' ').replace(/run-[0-9a-f]{16}/g, 'run-…');
+      return { pages: out.metrics.pageCount, firstNodes: (out.metrics.pages[0] as any).nodeIds, first };
+    };
+    for (const id of ['CARD-0001', 'CARD-0002']) {
+      const [before, after] = [await compose(baseCard, id), await compose(card, id)];
+      expect(after.firstNodes, id).toEqual(before.firstNodes);
+      expect(after.first, id).toBe(before.first);
+    }
+    const stress = EXPECTED_SCENARIOS['card-250-rows'];
+    const [before, after] = [await compose(baseCard, stress.recordId, stress.overrides), await compose(card, stress.recordId, stress.overrides)];
+    expect([before.pages, after.pages]).toEqual([8, 8]);
+    expect(after.first).toBe(before.first);
+  }, 300_000);
 });

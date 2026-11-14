@@ -70,16 +70,18 @@ describe('wording rules in approval, validation, the AI route and releases (sign
     expect(ok.statusCode, ok.body).toBe(200);
     const id = ok.json().release.release.id;
     const lib = (await inj('GET', `/api/v1/releases/${id}/library`)).json();
-    // the EOB sample's own four rules (D106) come first, then the two added here
+    // the EOB sample's own four rules (D106) come first, then the two added here; the sample also follows the house
+    // wording rules from the library (six rules, linked at version 1)
     const sampleOwn = [{ id: 'harbor-not-a-bill' }, { id: 'harbor-no-patient' }, { id: 'harbor-no-insurance-company' }, { id: 'harbor-short-sentences' }];
-    expect(lib.wordingRules).toMatchObject({ house: null, own: [...sampleOwn, { id: 'plain' }, { id: 'claim-word' }], mustFindings: 0 });
+    const house = { itemId: 'house-wording-rules', title: 'House wording rules', version: 1, rules: 6 };
+    expect(lib.wordingRules).toMatchObject({ house, own: [...sampleOwn, { id: 'plain' }, { id: 'claim-word' }], mustFindings: 0 });
     expect(lib.wordingRules.shouldFindings).toBeGreaterThan(0);
     const z = await inj('GET', `/api/v1/releases/${id}/package?wait=1`);
     expect(z.statusCode).toBe(200);
     const files = new Map(zipEntries(z.rawPayload).map((e) => [e.name, zipRead(z.rawPayload, e)]));
     const manifest = JSON.parse(files.get('manifest.json')!.toString('utf8'));
     expect(manifest.formatVersion).toBe(1);
-    expect(manifest.wordingRules).toMatchObject({ house: null, houseKept: 0, mustFindings: 0, own: [...sampleOwn, { id: 'plain', kind: 'banned', severity: 'must', phrase: 'adjudication', replacement: 'review' }, { id: 'claim-word' }] });
+    expect(manifest.wordingRules).toMatchObject({ house, houseKept: 0, mustFindings: 0, own: [...sampleOwn, { id: 'plain', kind: 'banned', severity: 'must', phrase: 'adjudication', replacement: 'review' }, { id: 'claim-word' }] });
     expect(files.get('README.html')!.toString('utf8')).toMatch(/<h2>Wording rules<\/h2>[\s\S]*no finding against a “must” rule/);
   });
 
@@ -101,8 +103,10 @@ describe('wording rules in approval, validation, the AI route and releases (sign
     const ok = await compliantRewrite(LIVE as any, good.model, p.project, { text, scope: 'messages', locale: 'en-US' });
     expect(ok.mode).toBe('ai');
     expect(ok.options.map((o) => o.text)).toEqual(['Your account is past due, {{customer.givenName}}.']);
-    // the card sample's own rules (D106) are in force too, before the one added here
-    const sampleRules = '- The document must include “not a legal statement”; keep it if the text has it.\n- The text should not use “kindly” (write “please” instead).\n- No sentence should have more than 25 words.\n- The text should not use “relationship specialist” (write “relationship team” instead).\n';
+    // the house wording rules the card sample follows from the library, then its own rules (D106), are in force too,
+    // before the one added here
+    const houseRules = '- The text must not use “click here” (write “select” instead).\n- The text must not use “guaranteed”.\n- The document must include “(fictional)”; keep it if the text has it.\n- Write “use”, not “utilize” (should).\n- Write “to”, not “in order to” (should).\n- No sentence should have more than 40 words.\n';
+    const sampleRules = houseRules + '- The document must include “not a legal statement”; keep it if the text has it.\n- The text should not use “kindly” (write “please” instead).\n- No sentence should have more than 25 words.\n- The text should not use “relationship specialist” (write “relationship team” instead).\n';
     expect(good.seen[0].user).toBe(`House wording rules:\n${sampleRules}- The text must not use “delinquent” (write “past due” instead).\nKind of text: message.\nText:\n${text}`);
     for (const r of RECORDS.slice(0, 20)) expect(good.seen[0].user + good.seen[0].system).not.toContain((r as any).customer?.familyName ?? '§');
     // an answer that still breaks a "must" rule is refused, saying why

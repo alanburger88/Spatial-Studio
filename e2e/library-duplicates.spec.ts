@@ -89,7 +89,9 @@ test('DU02 keep the wording in the library, approve it, and link it in the exact
   await expect(page).toHaveURL(new RegExp(`/studio/${docA}/content`));
   // One undoable, unsaved change in the document
   const st = await page.evaluate(() => { const s = (window as any).__iss.store.getState(); return { links: s.project.libraryLinks, past: s.past.length, dirty: (window as any).__iss.digest() }; });
-  expect(st.links.map((l: any) => [l.kind, l.target.partId, l.version])).toEqual([['wording', PART, 1]]);
+  // the copy keeps the card sample's own links (D106: house wording rules, late-fee table) before the new one
+  expect(st.links.map((l: any) => l.itemId).slice(0, 2)).toEqual(['card-late-fees', 'house-wording-rules']);
+  expect(st.links.slice(2).map((l: any) => [l.kind, l.target.partId, l.version])).toEqual([['wording', PART, 1]]);
   expect(st.past).toBe(1);
   await save(page);
 });

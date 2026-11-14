@@ -7,6 +7,7 @@
  * applied) and say what does not add up. They never change data. Amounts are whole cents.
  */
 import type { SyntheticRecord } from '../types';
+import type { SampleNotes } from './notes';
 
 /** One thing that does not add up for one customer. `intended`: the data is deliberately so (and `why`). */
 export interface ArithmeticFinding {
@@ -159,3 +160,74 @@ export const EXISTING_EXAMPLES: ExistingExample[] = [
     arithmetic: eobArithmetic,
   },
 ];
+
+/* ------------------------------------------------------------------ the notes the examples' accuracy check reads */
+
+const existing = (id: ExistingExample['projectId']) => EXISTING_EXAMPLES.find((e) => e.projectId === id)!;
+
+/** What is deliberate about the enriched Aster Card statement (read by `scripts/audit-examples.ts`). */
+export const CARD_NOTES: SampleNotes = {
+  title: 'Aster Card',
+  kind: 'Credit-card statement (built-in kind)',
+  description: existing('aster-card-demo').notes[0],
+  intendedBlockers: existing('aster-card-demo').blockedCustomers.map((b) => ({ recordId: b.recordId, code: 'REQUIRED_TRANSLATION_MISSING', reason: b.why })),
+  knownDataProblems: [],
+  intendedShould: [{ ruleId: existing('aster-card-demo').deliberateShould.ruleId, reason: `The relationship team message says “relationship specialist”. ${existing('aster-card-demo').deliberateShould.why}` }],
+  unusedFields: [
+    { path: 'card.currency', reason: 'A field of the approved card data (every fixture customer has USD); the approved template formats every amount as US dollars and never prints the currency code. The print-house mapping carries it.' },
+  ],
+  missingCalcs: [],
+  // No approved Spanish at all (the six Spanish-speaking customers are blocked on purpose for the four required texts);
+  // the sample Spanish drafts for the added texts are offered by the studio on request and are not stored in the sample.
+  translations: { 'es-US': { approved: 0, draft: 0, missing: 120 } },
+  mappings: { 'print-house': 'complete' },
+  pages: { 'CARD-0001': 2, 'CARD-0002': 3 },
+  unreached: [
+    { id: 'rule R03', reason: 'Approved rule: two or more missed payments without a request for help. No fixture customer is in that state as issued; the oracle reaches it with overrides.', via: { scenario: 'card-inconsistent-payment-state' } },
+    { id: 'alternative payment-guidance/payment-support-offer', reason: 'Chosen only by R03 (see above).', via: { scenario: 'card-inconsistent-payment-state' } },
+    { id: 'rule R05', reason: 'Approved rule: an approved payment arrangement. Every fixture customer has no arrangement; the oracle and the journey reach it.', via: { scenario: 'card-arrangement-approved' } },
+    { id: 'alternative payment-guidance/payment-arrangement-active', reason: 'Chosen only by R05 (see above).', via: { scenario: 'card-arrangement-approved' } },
+    { id: 'alternative payment-timing/timing-arrangement', reason: 'Added “When to pay” wording for an approved arrangement (no late fee). No fixture customer has an arrangement; the pinned test shows it.', via: { testId: 'aster-arrangement-no-fee' } },
+    { id: 'shown notice-agreement-update', reason: 'In effect from 1 Dec 2026; every fixture statement is issued 1 Nov 2026, so it shows only “as issued on” a later day.', via: { testId: 'aster-issued-december' } },
+    { id: 'alternative notice-agreement-update/agreement-update', reason: 'As above: the notice’s one alternative.', via: { testId: 'aster-issued-december' } },
+    { id: 'hidden spending-summary', reason: 'The spending sentence is hidden only when no transaction is listed; every fixture customer lists at least one.', via: { recordId: 'CARD-0001', overrides: { card: { transactions: [] } } } },
+    { id: 'hidden payment-timing', reason: '“When to pay” is hidden only when no minimum payment is due; every fixture customer owes one.', via: { recordId: 'CARD-0001', overrides: { card: { minimumDueCents: 0 } } } },
+  ],
+  accessiblePdf: {
+    required: false,
+    reason: 'Known limitation, kept on purpose: “Accessible PDF is required” is off for the card. Its transaction table, where it continues onto another page, does not repeat its header row, so that part fails the studio’s table-header check. The suggested fix (repeat the header row) changes the pagination that the 250-row case (AT-18, AT-19, scripts/verify_app.py) and the Page panel browser tests rely on.',
+    knownFailures: [{ code: 'PDF_A11Y_TABLE_NO_HEADERS', reason: 'The continued part of the transaction table has no header row (the known limitation above).' }],
+  },
+  scenarioPages: [{ scenario: 'card-250-rows', pages: 8, reason: 'The oracle’s 250-row stress case: the transaction table runs over eight pages with continued headings (AT-18, AT-19).' }],
+};
+
+/** Two synthetic claims for EOB-0001, to show the claim index the approved rule R19 adds for several claims. */
+const TWO_CLAIMS = [
+  { claimId: 'HC-90001', serviceDate: '2026-10-18', service: 'Office visit', billedCents: 40000, allowedCents: 25000, contractualAdjustmentCents: 15000, planPaidCents: 20000, patientResponsibilityCents: 5000, liabilityConfirmed: true, status: 'processed-covered', network: 'in-network', deductibleAppliedCents: 0, amountUnderReviewCents: 0 },
+  { claimId: 'HC-90002', serviceDate: '2026-10-20', service: 'Diagnostic laboratory', billedCents: 12000, allowedCents: 8000, contractualAdjustmentCents: 4000, planPaidCents: 6000, patientResponsibilityCents: 2000, liabilityConfirmed: true, status: 'processed-covered', network: 'in-network', deductibleAppliedCents: 0, amountUnderReviewCents: 0 },
+];
+
+/** What is deliberate about the enriched HarborCare explanation of benefits (read by `scripts/audit-examples.ts`). */
+export const EOB_NOTES: SampleNotes = {
+  title: 'HarborCare Health',
+  kind: 'Explanation of benefits (built-in kind)',
+  description: existing('harborcare-demo').notes[0],
+  intendedBlockers: [],
+  knownDataProblems: [],
+  intendedShould: [{ ruleId: existing('harborcare-demo').deliberateShould.ruleId, reason: `The approved “Claim totals” disclosure says “patient responsibility”. ${existing('harborcare-demo').deliberateShould.why}` }],
+  unusedFields: [
+    { path: 'claim.service', reason: 'A field of the approved claims data: the first claim’s service. The claim table shows every claim’s service (claims[].service), so for these one-claim customers it is shown there.' },
+    { path: 'claim.serviceDate', reason: 'A field of the approved claims data: the first claim’s service date. The claim table shows every claim’s service date (claims[].serviceDate). The document has no date of its own (see the notes), so no calculation reads it.' },
+  ],
+  missingCalcs: [],
+  translations: { 'es-US': { approved: 0, draft: 0, missing: 121 } },
+  mappings: { 'print-house': 'complete' },
+  pages: {},
+  unreached: [
+    { id: 'rule R19', reason: 'Approved rule: several claims show a claim index. Every fixture customer has exactly one claim.', via: { recordId: 'EOB-0001', overrides: { claims: TWO_CLAIMS } } },
+    { id: 'shown multi-claim-index', reason: 'Shown only by R19 (see above).', via: { recordId: 'EOB-0001', overrides: { claims: TWO_CLAIMS } } },
+    { id: 'alternative multi-claim-index/multi-claim-index', reason: 'The index’s one alternative, shown only by R19.', via: { recordId: 'EOB-0001', overrides: { claims: TWO_CLAIMS } } },
+    { id: 'hidden claim-summary', reason: 'The claim summary is hidden only for a claim that says neither that the member’s liability is confirmed nor that it is not; every fixture claim says one or the other.', via: { recordId: 'EOB-0001', overrides: { claims: [{ ...TWO_CLAIMS[0], liabilityConfirmed: null }] } } },
+    { id: 'language es-US', reason: existing('harborcare-demo').notes[3], via: { recordId: 'EOB-0001', overrides: { customer: { locale: 'es-US' } } } },
+  ],
+};

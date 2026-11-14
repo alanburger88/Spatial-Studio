@@ -93,8 +93,14 @@ describe('example documents: seeding, listing and restoring', () => {
     const rights = items.find((i) => i.id === 'customer-rights-notice');
     expect(rights.latest).toBe(2);
     expect(rights.usage.behind).toBe(1);
-    const shared = items.filter((i) => i.usage.documents === 2).map((i) => i.id).sort();
-    expect(shared).toEqual(['accessible-formats-panel', 'glossary-es', 'house-wording-rules']);
+    // Northwind and Meridian share the panel; all four examples (with Aster Card and HarborCare, D106) follow the house
+    // wording rules; all but the card (which keeps a glossary of its own) the glossary; each original example has its
+    // own table in the library.
+    const usedBy = (n: number) => items.filter((i) => HOUSE.items[i.id as keyof typeof HOUSE.items] && i.usage.documents === n).map((i) => i.id).sort();
+    expect(usedBy(2)).toEqual(['accessible-formats-panel']);
+    expect(usedBy(3)).toEqual(['glossary-es']);
+    expect(usedBy(4)).toEqual(['house-wording-rules']);
+    for (const id of ['card-late-fees', 'claim-review-times', 'energy-rate-bands']) expect(items.find((i) => i.id === id).usage, id).toEqual({ documents: 1, links: 1, behind: 0 });
   });
 
   it('pinned tests on the examples’ own customers count as built-in sample customers; an edited one does not', async () => {
