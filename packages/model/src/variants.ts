@@ -1,12 +1,14 @@
 import { canonicalJson, digestOf } from './digest';
 import { projectContentDigest } from './commands';
 import { richToPlain } from './rich';
-import { actionText, diffProjects, layoutText, predicateText, type ProjectDiff } from './diff';
+import { diffProjects, layoutText, type ProjectDiff } from './diff';
+import { allFieldIndex } from './fields';
+import { itemsLead } from './shapes';
 import { languageName, SOURCE_LANGUAGE } from './languages';
 import { translatableStrings } from './strings';
 import { validateRule } from './validate';
 import { VARIANT_LOCKED_KEYS, variantLockProblem } from './variantLock';
-import type { DocNode, Project, Rule, VariantOf, VariantPurpose } from './types';
+import type { DocNode, Predicate, Project, Rule, RuleAction, VariantOf, VariantPurpose } from './types';
 
 /**
  * Variants by brand or region (wave 5, section 1). Pure functions only: no store, no clock, no network.
@@ -45,6 +47,8 @@ export interface VariantDifference {
   base: string | null;
   variant: string | null;
   nodeId?: string;
+  /** Bookkeeping that follows from another difference (which English a translation was written from): kept, counted and merged, but not listed for people. */
+  quiet?: true;
 }
 
 export interface CompareOptions {
@@ -144,9 +148,19 @@ class Namer {
   node(id: string) { for (const p of this.projects) { const n = p.nodes.find((x) => x.id === id); if (n) return n.name ?? n.label ?? n.id; } return id; }
   part(id: string) { for (const p of this.projects) { const c = p.contentParts.find((x) => x.id === id); if (c) return c.title; } return id; }
   rule(id: string) { for (const p of this.projects) { const r = p.rules.find((x) => x.id === id); if (r) return r.title ? `Rule ${id} “${r.title}”` : `Rule ${id}`; } return `Rule ${id}`; }
+  /** The value columns of a lookup table that hold money (in cents). */
+  moneyColumns(id: string): Set<string> { for (const p of this.projects) { const t = p.lookupTables?.find((x) => x.id === id); if (t) return new Set(t.columns.filter((c) => c.type === 'money').map((c) => c.key)); } return new Set(); }
   table(id: string) { for (const p of this.projects) { const t = p.lookupTables?.find((x) => x.id === id); if (t) return t.title; } return id; }
   link(id: string) { for (const p of this.projects) { const l = p.libraryLinks?.find((x) => x.linkId === id); if (l) return `“${l.title}”`; } return id; }
   test(id: string) { for (const p of this.projects) { const t = p.testCases?.find((x) => x.id === id); if (t) return `${id} “${t.name}”`; } return id; }
+  private fields: Map<string, string> | null = null;
+  /** The name people use for a data field or calculation (its label), not its path. */
+  field(path: string) {
+    if (!this.fields) { this.fields = new Map(); for (const p of [...this.projects].reverse()) for (const [k, f] of allFieldIndex(p)) if (f.label) this.fields.set(k, f.label); }
+    return this.fields.get(path) ?? humanize(path.split('.').slice(-1)[0].replace(/\[\]$/, ''));
+  }
+  /** Wording as a person reads it: bold marks left out, a placeholder shown as the field's name in square brackets. */
+  words(s: string) { return s.replace(/\*\*/g, '').replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, path: string) => `[${this.field(path)}]`); }
   text(id: string) {
     if (!this.strings) { this.strings = new Map(); for (const p of [...this.projects].reverse()) for (const s of translatableStrings(p)) this.strings.set(s.id, s.title); }
     return this.strings.get(id) ?? id;
@@ -154,31 +168,72 @@ class Namer {
 }
 
 const clip = (s: string, n = 200) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-function ruleText(r: Rule): string {
-  return `${r.enabled === false ? 'Switched off. ' : ''}When ${predicateText(r.when)}: ${actionText(r.then)}${r.effective ? ` (${r.effective.from ? `from ${r.effective.from}` : ''}${r.effective.from && r.effective.until ? ' ' : ''}${r.effective.until ? `until ${r.effective.until}` : ''})` : ''}`;
+const scalarWords = (v: unknown) => (v === true ? 'yes' : v === false ? 'no' : v === null || v === undefined ? 'empty' : typeof v === 'string' ? `“${v}”` : String(v));
+/** A condition in plain words, with the fields' names: "Change in use is at least 25". */
+function conditionWords(p: Predicate | undefined, names: Namer): string {
+  if (!p) return 'always';
+  switch (p.op) {
+    case 'and': return p.args.length ? p.args.map((a) => (a.op === 'or' ? `(${conditionWords(a, names)})` : conditionWords(a, names))).join(' and ') : 'always';
+    case 'or': return p.args.length ? p.args.map((a) => (a.op === 'and' ? `(${conditionWords(a, names)})` : conditionWords(a, names))).join(' or ') : 'never';
+    case 'not': return `it is not true that ${conditionWords(p.arg, names)}`;
+    case 'items': return `${itemsLead(p.match, p.count, names.field(p.path))} ${conditionWords(p.where, names)}`;
+    case 'isNull': return `${names.field(p.path)} is empty`;
+    case 'notNull': return `${names.field(p.path)} has a value`;
+    case 'in': return `${names.field(p.path)} is one of ${p.value.map(scalarWords).join(', ')}`;
+    default: {
+      const words: Record<string, string> = { eq: 'is', ne: 'is not', gt: 'is more than', gte: 'is at least', lt: 'is less than', lte: 'is at most' };
+      return `${names.field(p.path)} ${words[p.op]} ${scalarWords(p.value)}`;
+    }
+  }
 }
-function rowsText(rows: unknown): string {
+function actionWords(a: RuleAction, names: Namer): string {
+  switch (a.op) {
+    case 'selectVariant': return `show “${names.part(a.variantId)}” in ${names.node(a.targetNodeId)}`;
+    case 'showSection': return `show the section “${names.node(a.targetNodeId)}”`;
+    case 'requireNodes': return `always include ${a.nodeIds.map((id) => `“${names.node(id)}”`).join(', ')}`;
+    case 'setApprovedLocale': return `use the approved ${languageName(a.locale)} wording`;
+    case 'setPresentationHint': return `apply the presentation “${humanize(a.hint)}”`;
+  }
+}
+function ruleText(r: Rule, names: Namer): string {
+  return `${r.enabled === false ? 'Switched off. ' : ''}When ${conditionWords(r.when, names)}: ${actionWords(r.then, names)}${r.effective ? ` (${r.effective.from ? `from ${r.effective.from}` : ''}${r.effective.from && r.effective.until ? ' ' : ''}${r.effective.until ? `until ${r.effective.until}` : ''})` : ''}`;
+}
+/** A table's rows in words. `money` names the value columns held in cents, shown as an amount (15.00, not 1500). */
+function rowsText(rows: unknown, money: ReadonlySet<string> = new Set()): string {
   if (!Array.isArray(rows)) return clip(canonicalJson(rows ?? null));
   const cell = (v: unknown) => (isObj(v) ? `${v.from ?? '…'}–${v.until ?? '…'}` : String(v));
-  return clip(rows.map((r) => (isObj(r) ? `${Object.values((r.keys as Obj) ?? {}).map(cell).join(', ')} → ${Object.values((r.values as Obj) ?? {}).map(cell).join(', ')}` : String(r))).join('; '));
+  const value = ([k, v]: [string, unknown]) => (money.has(k) && typeof v === 'number' ? (v / 100).toFixed(2) : cell(v));
+  return clip(rows.map((r) => (isObj(r) ? `${Object.values((r.keys as Obj) ?? {}).map(cell).join(', ')} → ${Object.entries((r.values as Obj) ?? {}).map(value).join(', ')}` : String(r))).join('; '));
 }
 /** A value in a few readable words. */
-function valueText(path: VariantPathStep[], v: unknown): string | null {
+function valueText(path: VariantPathStep[], v: unknown, names: Namer): string | null {
   if (v === undefined || v === null) return null;
   const root = rootOf(path);
   const last = path[path.length - 1];
+  // A message's alternatives by their names, not their ids.
+  if (root === 'nodes' && (last === 'variantIds' || last === 'fallbackVariantId')) return Array.isArray(v) ? v.map((id) => names.part(String(id))).join(', ') || '(none)' : names.part(String(v));
   // Text in a few words: bold marks (**) are left out so the words read as the customer reads them.
-  if (typeof v === 'string') return v.startsWith('data:image/') ? 'an image' : clip(v.replace(/\*\*/g, ''));
+  if (typeof v === 'string') return v.startsWith('data:image/') ? 'an image' : clip(names.words(v));
   if (typeof v === 'number' || typeof v === 'boolean') return typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v);
-  if (root === 'rules' && isObj(v) && 'when' in v) return ruleText(v as unknown as Rule);
+  if (root === 'rules' && isObj(v) && 'when' in v) return ruleText(v as unknown as Rule, names);
   if (root === 'nodes') {
-    if (path.length === 2 && isObj(v)) { const n = v as unknown as DocNode; const t = n.content ? richToPlain(n.content) : ''; return clip(`${n.name ?? n.id}${t ? `: ${t}` : ''}`); }
-    if (last === 'content' && isObj(v)) return clip(richToPlain(v as never));
+    if (path.length === 2 && isObj(v)) { const n = v as unknown as DocNode; const t = n.content ? names.words(richToPlain(n.content)) : ''; return clip(`${n.name ?? n.id}${t ? `: ${t}` : ''}`); }
+    if (last === 'content' && isObj(v)) return clip(names.words(richToPlain(v as never)));
     if (last === 'layout') return layoutText(v as never);
-    if (last === 'visibleWhen' || (path[2] === 'variantConditions' && path.length === 4)) return predicateText(v as never);
+    if (last === 'visibleWhen' || (path[2] === 'variantConditions' && path.length === 4)) return conditionWords(v as never, names);
   }
-  if (root === 'contentParts' && path.length === 2 && isObj(v)) return clip(`${v.title}: ${Object.values((v.approvedLocales as Obj) ?? {})[0] ?? ''}`);
-  if (root === 'lookupTables') { if (last === 'rows') return rowsText(v); if (path.length === 2 && isObj(v)) return `${v.title} (${(v.rows as unknown[])?.length ?? 0} rows): ${rowsText(v.rows)}`; }
+  if (root === 'contentParts' && path.length === 2 && isObj(v)) return clip(`${v.title}: ${names.words(String(Object.values((v.approvedLocales as Obj) ?? {})[0] ?? ''))}`);
+  if (root === 'lookupTables') {
+    const money = names.moneyColumns(typeof path[1] === 'object' ? path[1].id : '');
+    if (last === 'rows') return rowsText(v, money);
+    if (path.length === 2 && isObj(v)) return `${v.title} (${(v.rows as unknown[])?.length ?? 0} rows): ${rowsText(v.rows, money)}`;
+  }
+  if (root === 'strings' && isObj(v)) {
+    // The translations of one text: each language with its words, approved first.
+    const parts: string[] = [];
+    for (const [kind, word] of [['approved', ''], ['draft', ' (draft)']] as const) for (const [loc, t] of Object.entries((v[kind] as Obj) ?? {})) if (typeof t === 'string') parts.push(`${languageName(loc)}${word}: ${names.words(t)}`);
+    if (parts.length) return clip(parts.join(' · '));
+  }
   if (Array.isArray(v) && v.every((x) => typeof x === 'string')) return v.join(', ') || '(none)';
   if (root === 'brand' && isObj(v)) return clip(Object.entries(v).map(([k, x]) => `${BRAND_WORDS[k] ?? humanize(k)} ${typeof x === 'string' && x.startsWith('data:image/') ? 'an image' : String(x)}`).join(', '));
   if (isObj(v) && typeof v.title === 'string') return clip(v.title);
@@ -224,6 +279,8 @@ function labelOf(path: VariantPathStep[], names: Namer): string {
   const tail = path.slice(1).map((s) => (typeof s === 'string' ? (s === '#order' ? 'order' : humanize(s)) : s.id));
   return tail.length ? `${head}: ${tail.join(' › ')}` : head;
 }
+/** Which English a translation was written from: it follows from the wording differences beside it. */
+const isQuiet = (path: VariantPathStep[]) => rootOf(path) === 'strings' && path[2] === 'basedOn';
 const nodeOf = (path: VariantPathStep[]) => (rootOf(path) === 'nodes' && typeof path[1] === 'object' ? path[1].id : undefined);
 
 /* ------------------------------------------------------------------ customers of a variant */
@@ -246,7 +303,7 @@ export function compareWithBase(base: Project, variant: Project, opts: CompareOp
   const emit: Emit = (path, from, to) => {
     const kind = from === undefined ? 'added' : to === undefined ? 'removed' : 'changed';
     const nodeId = nodeOf(path);
-    out.push({ id: variantPathId(path), path, group: groupOf(path), label: labelOf(path, names), kind, base: valueText(path, from), variant: valueText(path, to), ...(nodeId ? { nodeId } : {}) });
+    out.push({ id: variantPathId(path), path, group: groupOf(path), label: labelOf(path, names), kind, base: valueText(path, from, names), variant: valueText(path, to, names), ...(nodeId ? { nodeId } : {}), ...(isQuiet(path) ? { quiet: true as const } : {}) });
   };
   for (const k of keysOf(b as unknown as Obj, variant as unknown as Obj)) if (!IDENTITY.has(k)) walk((b as unknown as Obj)[k], (variant as unknown as Obj)[k], [k], emit);
   return out;
@@ -353,7 +410,7 @@ interface MergeCtx {
 function entry(ctx: MergeCtx, path: VariantPathStep[], o: unknown, t: unknown, v: unknown, note?: string): UpdateEntry {
   const nodeId = nodeOf(path);
   const change = o === undefined && t !== undefined ? 'added' : t === undefined && o !== undefined ? 'removed' : 'changed';
-  return { id: variantPathId(path), group: groupOf(path), label: labelOf(path, ctx.names), baseBefore: valueText(path, o), baseNow: valueText(path, t), yours: valueText(path, v), ...(note ? { note } : {}), ...(nodeId ? { nodeId } : {}), change };
+  return { id: variantPathId(path), group: groupOf(path), label: labelOf(path, ctx.names), baseBefore: valueText(path, o, ctx.names), baseNow: valueText(path, t, ctx.names), yours: valueText(path, v, ctx.names), ...(note ? { note } : {}), ...(nodeId ? { nodeId } : {}), change };
 }
 /** What the base changed at `path` comes in, reported change by change (the variant's value there is the base's old one, or `v` when given). */
 const comeIn = (ctx: MergeCtx, path: VariantPathStep[], o: unknown, t: unknown, v: unknown, note?: string) => {
@@ -710,6 +767,12 @@ export function useBaseAgain(variant: Project, base: Project, differenceId: stri
         if (typeof step === 'string' && getAt(next, d.path.slice(0, i)) === undefined) setAt(next, d.path.slice(0, i), typeof d.path[i] === 'object' ? [] : {});
       }
       setAt(next, d.path, baseValue, listPath ? (getAt(B, listPath) as Obj[]) : undefined);
+      // A translation taken back from the base brings the base's note of which English it was written from.
+      if (root === 'strings' && d.path.length === 4 && (d.path[2] === 'approved' || d.path[2] === 'draft')) {
+        const origin = [d.path[0], d.path[1], 'basedOn', d.path[3]];
+        const from = getAt(B, origin);
+        if (from !== undefined && getAt(next, origin.slice(0, 3)) !== undefined) setAt(next, origin, clone(from));
+      }
       const counterRoot = COUNTERS[root];
       if (counterRoot && typeof d.path[1] === 'object') {
         const item = getAt(next, d.path.slice(0, 2)) as Obj | undefined;

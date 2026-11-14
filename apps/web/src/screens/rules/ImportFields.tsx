@@ -4,7 +4,7 @@ import { api } from '../../api/client';
 import { useStudio } from '../../state/store';
 import { Dialog } from '../../ui/common';
 
-const TYPE_LABEL: Record<string, string> = { string: 'Text', int: 'Whole number', cents: 'Amount', bool: 'Yes / no', date: 'Date', enum: 'Choice' };
+const TYPE_LABEL: Record<string, string> = { string: 'Text', int: 'Whole number', cents: 'Amount', bool: 'Yes / no', date: 'Date', enum: 'Choice', group: 'Group of fields', list: 'List' };
 
 /**
  * "Import fields…" in the data fields editor (wave 3, section 4): a data dictionary file (CSV: name, type, description,
@@ -61,7 +61,7 @@ export function ImportFields({ onClose, onApplied }: { onClose: () => void; onAp
         <button type="button" className="btn primary" onClick={apply} disabled={!plan?.command || busy} aria-busy={busy} data-testid="if-apply">{adding.length ? `Add ${adding.length} field${adding.length === 1 ? '' : 's'}${withCustomer && plan?.exampleCustomer ? ', save and add the customer' : ''}` : 'Add'}</button>
       </>}>
       <div className="if" data-testid="if-dialog">
-        <p className="muted">A data dictionary as a CSV file: one row per field with its name, and if you have them its type, a description and an example. Headings such as “Field name”, “Data type” and “Sample value” are recognised. Nothing changes until you add the fields.</p>
+        <p className="muted">A data dictionary as a CSV file: one row per field with its name, and if you have them its type, a description and an example. Headings such as “Field name”, “Data type” and “Sample value” are recognised. For a group of fields or a list, write dotted names: “address.city”, “accounts[].number”, “accounts[].transactions[].amount”. Nothing changes until you add the fields.</p>
         <div className="row">
           <button type="button" className="btn" onClick={() => fileRef.current?.click()} data-testid="if-choose">Choose a CSV file…</button>
           <input ref={fileRef} type="file" hidden accept=".csv,text/csv,text/plain" onChange={(e) => onFile(e.target.files?.[0])} data-testid="if-file" aria-label="Choose a data dictionary file" />
@@ -87,7 +87,7 @@ export function ImportFields({ onClose, onApplied }: { onClose: () => void; onAp
                   {plan.proposals.map((p) => (
                     <tr key={p.line} data-testid="if-row" data-key={p.field.key} data-type={p.type} data-skip={p.skip ? 'yes' : 'no'}>
                       <td className="mono">{p.line}</td>
-                      <td><strong>{p.field.label || p.name}</strong>{p.description && <div className="muted if-small">{p.description}</div>}</td>
+                      <td><strong>{p.field.label || p.name}</strong>{p.inside?.length ? <div className="muted if-small" data-testid="if-inside">In {p.inside.map((x) => `“${x}”`).join(', in ')}</div> : null}{p.description && <div className="muted if-small">{p.description}</div>}</td>
                       <td>{TYPE_LABEL[p.type]}{p.field.enumValues ? `: ${p.field.enumValues.join(', ')}` : ''}{p.typeNote && <div className="if-small if-note" data-testid="if-type-note">{p.typeNote}</div>}</td>
                       <td>{p.example === null ? '—' : String(p.example)}{p.exampleProblem && <div className="if-small if-note" data-testid="if-example-note">{p.exampleProblem}</div>}</td>
                       <td>{p.skip ? <span className="if-small" data-testid="if-skip"><span className="chip warning">Not added</span> {p.skip}</span> : <span className="chip accent">Added</span>}</td>

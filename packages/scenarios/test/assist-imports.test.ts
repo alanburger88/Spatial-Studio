@@ -168,6 +168,54 @@ describe('import fields', () => {
     expect(plan.exampleCustomer!.record.custom).toEqual({ planName: 'Flex', monthlyFee: 4900, renewalDate: '2026-12-01', tier: 'plus', autoRenew: true });
   });
 
+  it('reads groups, lists and a list inside a list from dotted names, and refuses anything nested deeper (wave 5)', () => {
+    const csv = toCsv([
+      ['name', 'label', 'type', 'example'],
+      ['household', '', 'string', 'The Eriksens'],
+      ['mailing.street', '', 'string', '22 Harbour Lane'],
+      ['mailing.city', 'Town', 'string', 'Calder Bay'],
+      ['mailing', 'Mailing address', 'group', ''],
+      ['accounts', 'Accounts', 'list', ''],
+      ['accounts[].number', 'Account number', 'string', '7152-3148'],
+      ['accounts[].balance', '', 'money', '120.50'],
+      ['accounts[].joint', '', 'yes/no', 'yes'],
+      ['accounts[].holder.name', '', 'string', 'Elliot'],
+      ['accounts[].transactions[].date', '', 'date', '2026-09-01'],
+      ['accounts[].transactions[].amount', '', 'amount', '-42.72'],
+      ['accounts[].transactions[].tags[].name', '', 'string', 'x'],
+      ['mailing.geo.lat', '', 'int', '1'],
+      ['meters', '', 'list', ''],
+    ]);
+    const plan = planFieldsImport(blank(), csv);
+    const by = (n: string) => plan.proposals.find((p) => p.name === n)!;
+    expect(by('mailing.city')).toMatchObject({ skip: null, inside: ['Mailing address'], field: { key: 'city', label: 'Town' } });
+    expect(by('mailing')).toMatchObject({ skip: null, type: 'group' });
+    expect(by('accounts[].joint')).toMatchObject({ type: 'string', skip: null });
+    expect(by('accounts[].joint').typeNote).toMatch(/Inside a list a field is text, a whole number, an amount or a date/);
+    expect(by('accounts[].transactions[].amount')).toMatchObject({ type: 'cents', skip: null, inside: ['Accounts', 'Transactions'], example: -4272 });
+    expect(by('accounts[].transactions[].tags[].name').skip).toMatch(/nested deeper than that/);
+    expect(by('mailing.geo.lat').skip).toMatch(/nested deeper than that/);
+    expect(by('meters').skip).toMatch(/A list needs its columns: add rows named “meters\[\]\.<column>”/);
+    const after = apply(blank(), plan.command);
+    const f = (k: string) => after.customFields!.find((x) => x.key === k)!;
+    expect(after.customFields!.map((x) => x.key)).toEqual(['planName', 'household', 'mailing', 'accounts']);
+    expect(f('mailing')).toMatchObject({ type: 'group', label: 'Mailing address', fields: [{ key: 'street', type: 'string' }, { key: 'city', label: 'Town' }] });
+    expect(f('accounts').itemFields!.map((c) => [c.key, c.type])).toEqual([['number', 'string'], ['balance', 'cents'], ['joint', 'string'], ['holder', 'group'], ['transactions', 'list']]);
+    expect(f('accounts').itemFields!.find((c) => c.key === 'transactions')!.itemFields).toEqual([{ key: 'date', label: 'Date', type: 'date' }, { key: 'amount', label: 'Amount', type: 'cents' }]);
+    // One synthetic customer from the examples, with one account and one transaction.
+    expect(plan.exampleCustomer!.record.custom).toEqual({
+      planName: 'Flex', household: 'The Eriksens', mailing: { street: '22 Harbour Lane', city: 'Calder Bay' },
+      accounts: [{ number: '7152-3148', balance: 12050, joint: 'yes', holder: { name: 'Elliot' }, transactions: [{ date: '2026-09-01', amount: -4272 }] }],
+    });
+  });
+
+  it('a list written without brackets is understood once a row names it as a list; a clash with an existing field is not added', () => {
+    const plan = planFieldsImport(blank(), 'name,type\nvisits,list\nvisits.day,date\nvisits.cost,amount\nplanName.code,string\n');
+    const after = apply(blank(), plan.command);
+    expect(after.customFields!.find((x) => x.key === 'visits')).toMatchObject({ type: 'list', itemFields: [{ key: 'day', type: 'date' }, { key: 'cost', type: 'cents' }] });
+    expect(plan.proposals.find((p) => p.name === 'planName.code')!.skip).toMatch(/clashes with the existing field “Plan name”/);
+  });
+
   it('a required field without an example stops the example customer, and says why', () => {
     const plan = planFieldsImport(blank(), 'name,type,required\nmemberNumber,string,yes\n');
     expect(plan.exampleCustomer).toBeNull();

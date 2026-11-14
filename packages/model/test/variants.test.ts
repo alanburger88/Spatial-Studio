@@ -90,13 +90,13 @@ describe('what differs (the variant against the base at the version it follows)'
   const byId = (id: string) => diffs.find((d) => d.id === id);
   it('lists each difference once, grouped, with the base’s value beside the variant’s', () => {
     expect(byId('brand')).toMatchObject({ group: 'brand', base: null, variant: 'main colour #123456, accent colour #2E7D5B', kind: 'added', label: 'Brand' });
-    expect(byId('nodes[greeting].content')).toMatchObject({ group: 'wording', nodeId: 'greeting', variant: 'Hello from Lakeshore, {{customer.givenName}}.' });
+    expect(byId('nodes[greeting].content')).toMatchObject({ group: 'wording', nodeId: 'greeting', variant: 'Hello from Lakeshore, [Given name].' });
     expect(byId('contentParts[payment-standard].approvedLocales.en-US')).toMatchObject({ group: 'wording', variant: 'Pay your Lakeshore balance by the due date.' });
     expect(byId('contentParts[payment-standard].approvedLocales.es-US')).toMatchObject({ group: 'wording', base: null, label: expect.stringMatching(/Spanish/) });
     expect(byId('rules[R06]')).toMatchObject({ group: 'rules', kind: 'changed' });
     expect(byId('nodes[high-volume-note]')).toMatchObject({ group: 'sections', kind: 'removed' });
     expect(byId('nodes[lakeshore-note]')).toMatchObject({ group: 'sections', kind: 'added' });
-    expect(byId('lookupTables[feeByTier].rows')).toMatchObject({ group: 'tables', label: 'Lookup table “Late fee by tier”: values', base: expect.stringContaining('1500'), variant: expect.stringContaining('900') });
+    expect(byId('lookupTables[feeByTier].rows')).toMatchObject({ group: 'tables', label: 'Lookup table “Late fee by tier”: values', base: expect.stringContaining('15.00'), variant: expect.stringContaining('9.00') });
     // version counters are not differences
     expect(diffs.some((d) => /\.version$/.test(d.id))).toBe(false);
     expect(differenceCounts(diffs).total).toBe(diffs.length);
@@ -295,7 +295,7 @@ describe('the update: a three-way merge of the base at the followed version, the
     const base = newer(greetingText('Hello from the base.'), { type: 'SET_BRAND', brand: { primary: '#000000', accent: '#FF0000' } });
     const u = update(differing(), base);
     const greet = u.kept.find((e) => e.id === 'nodes[greeting].content')!;
-    expect(greet).toMatchObject({ yours: 'Hello from Lakeshore, {{customer.givenName}}.', baseNow: 'Hello from the base.', note: expect.stringMatching(/your value stays/) });
+    expect(greet).toMatchObject({ yours: 'Hello from Lakeshore, [Given name].', baseNow: 'Hello from the base.', note: expect.stringMatching(/your value stays/) });
     expect(ids(u.kept)).toContain('brand');
     expect(ids(u.comesIn)).not.toContain('brand');
     expect(u.project.brand!.accent).toBe('#2E7D5B');
@@ -338,14 +338,14 @@ describe('the update: a three-way merge of the base at the followed version, the
   it('a rule changed on both sides is kept as yours; changed on the base only, it comes in', () => {
     const base = newer({ type: 'UPSERT_RULE', rule: { ...ruleOf(BASE, 'R06'), when: { op: 'gte', path: 'card.missedPayments', value: 3 } } });
     const u = update(differing(), base);
-    expect(u.kept.find((e) => e.id === 'rules[R06]')).toMatchObject({ group: 'rules', baseNow: expect.stringMatching(/card\.missedPayments ≥ 3/) });
+    expect(u.kept.find((e) => e.id === 'rules[R06]')).toMatchObject({ group: 'rules', baseNow: expect.stringMatching(/Missed payments is at least 3/) });
     expect(ruleOf(u.project, 'R06').priority).toBe(ruleOf(differing(), 'R06').priority);
     expect(ruleOf(u.project, 'R06').version).toBeGreaterThanOrEqual(ruleOf(base, 'R06').version);
   });
   it('a lookup table changed on both sides: the variant’s values stay, the base’s other changes come in', () => {
     const base = newer({ type: 'UPSERT_LOOKUP_TABLE', table: { ...FEE_BY_TIER, title: 'Late fee by membership tier', rows: [{ keys: { tier: 'basic' }, values: { lateFee: 1700, note: 'Basic' } }, FEE_BY_TIER.rows[1]] } });
     const u = update(differing(), base);
-    expect(u.kept.find((e) => e.id === 'lookupTables[feeByTier].rows')).toMatchObject({ group: 'tables', yours: expect.stringContaining('900'), baseNow: expect.stringContaining('1700') });
+    expect(u.kept.find((e) => e.id === 'lookupTables[feeByTier].rows')).toMatchObject({ group: 'tables', yours: expect.stringContaining('9.00'), baseNow: expect.stringContaining('17.00') });
     expect(ids(u.comesIn)).toContain('lookupTables[feeByTier].title');
     const t = u.project.lookupTables!.find((x) => x.id === 'feeByTier')!;
     expect(t.title).toBe('Late fee by membership tier');
