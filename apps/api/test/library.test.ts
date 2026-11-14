@@ -36,7 +36,7 @@ function helpers(getCtx: () => Ctx) {
 
 describe('the shared library (sign-in off: the local admin)', () => {
   let ctx: Ctx;
-  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, auth: false, releasePackage: { composer: stubComposer() } }); });
+  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, auth: false, releasePackage: { composer: stubComposer() } }); });
   afterAll(async () => { await ctx.app.close(); });
   const { inj, json, project, apply, latest } = helpers(() => ctx);
   const CARD = 'aster-card-demo', EOB = 'harborcare-demo';
@@ -231,7 +231,7 @@ describe('the shared library with sign-in on: who may do what', () => {
   beforeAll(async () => {
     process.env.ADMIN_EMAIL = 'admin@example.test';
     process.env.ADMIN_PASSWORD = 'correct horse battery';
-    ctx = await buildApp({ dataDir: tmp(), logger: false, auth: true, releasePackage: { composer: stubComposer() } });
+    ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, auth: true, releasePackage: { composer: stubComposer() } });
     const login = async (email: string, password: string) => {
       const r = await ctx.app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { email, password } });
       return { cookie: String([r.headers['set-cookie']].flat()[0]).split(';')[0] };

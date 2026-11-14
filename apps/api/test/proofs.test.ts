@@ -84,7 +84,7 @@ function customerValues(rec: SyntheticRecord): { texts: string[]; amounts: numbe
 
 describe('proof records are only ever added', () => {
   let ctx: Ctx;
-  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, releasePackage: { composer: stubComposer() } }); });
+  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, releasePackage: { composer: stubComposer() } }); });
   afterAll(async () => { await ctx.app.close(); });
   const h = helpers(() => ctx);
 
@@ -128,7 +128,7 @@ describe('producing from a release, looking up and verifying', () => {
   let all: any;
   beforeAll(async () => {
     composer = stubComposer();
-    ctx = await buildApp({ dataDir: tmp(), logger: false, releasePackage: { composer } });
+    ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, releasePackage: { composer } });
     r1 = await helpers(() => ctx).approve(EOB);
   });
   afterAll(async () => { await ctx.app.close(); });
@@ -355,7 +355,7 @@ describe('producing from a release, looking up and verifying', () => {
 
 describe('a release approved while it had translation drafts is produced from its template (approved wording only)', () => {
   let ctx: Ctx;
-  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, releasePackage: { composer: stubComposer() } }); });
+  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, releasePackage: { composer: stubComposer() } }); });
   afterAll(async () => { await ctx.app.close(); });
   const h = helpers(() => ctx);
   const DRAFT = 'BORRADOR SIN APROBAR';
@@ -399,7 +399,7 @@ describe('a release approved while it had translation drafts is produced from it
 
 describe('no customer data is stored by this feature', () => {
   let ctx: Ctx;
-  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, releasePackage: { composer: stubComposer() } }); });
+  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, releasePackage: { composer: stubComposer() } }); });
   afterAll(async () => { await ctx.app.close(); });
   const h = helpers(() => ctx);
 
@@ -459,7 +459,7 @@ describe('proof records with sign-in on: who may do what', () => {
   beforeAll(async () => {
     process.env.ADMIN_EMAIL = 'admin@example.test';
     process.env.ADMIN_PASSWORD = 'correct horse battery';
-    ctx = await buildApp({ dataDir: tmp(), logger: false, auth: true, releasePackage: { composer: stubComposer() } });
+    ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, auth: true, releasePackage: { composer: stubComposer() } });
     const login = async (email: string, password: string) => {
       const r = await ctx.app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { email, password } });
       expect(r.statusCode).toBe(200);

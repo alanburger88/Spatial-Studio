@@ -15,7 +15,8 @@ describe('API contract', () => {
   it('health and seeded projects', async () => {
     expect((await inj('GET', '/api/v1/health')).json()).toMatchObject({ status: 'ok', schemaVersion: '1.0.0' });
     const ids = (await inj('GET', '/api/v1/projects')).json().projects.map((p: any) => p.projectId);
-    expect(ids).toEqual(['aster-card-demo', 'harborcare-demo']);
+    // The two fixture samples and the two example documents with their own data (Northwind Energy, Meridian Wealth).
+    expect(ids).toEqual(['aster-card-demo', 'harborcare-demo', 'meridian-wealth-demo', 'northwind-energy-demo']);
   });
 
   it('optimistic concurrency: If-Match required, stale version → 409, success bumps version', async () => {

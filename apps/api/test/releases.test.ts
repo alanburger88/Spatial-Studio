@@ -229,7 +229,7 @@ describe('release package building blocks', () => {
 describe('releases (sign-in off: the local admin)', () => {
   let ctx: Ctx;
   const stub = stubComposer();
-  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, auth: false, releasePackage: { composer: stub } }); });
+  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, auth: false, releasePackage: { composer: stub } }); });
   afterAll(async () => { await ctx.app.close(); });
   const { inj, json, project, save, workflow, approve, makeCardApprovable } = helpers(() => ctx);
   const CARD = 'aster-card-demo', EOB = 'harborcare-demo';
@@ -558,7 +558,7 @@ describe('releases with sign-in on: who may do what', () => {
   beforeAll(async () => {
     process.env.ADMIN_EMAIL = 'admin@example.test';
     process.env.ADMIN_PASSWORD = 'correct horse battery';
-    ctx = await buildApp({ dataDir: tmp(), logger: false, auth: true, releasePackage: { composer: stubComposer() } });
+    ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, auth: true, releasePackage: { composer: stubComposer() } });
     const login = async (email: string, password: string) => {
       const r = await ctx.app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { email, password } });
       expect(r.statusCode).toBe(200);
@@ -663,7 +663,7 @@ describe('releases with sign-in on: who may do what', () => {
 describe('the release package (composition replaced by a stub)', () => {
   let ctx: Ctx;
   const stub = stubComposer();
-  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, auth: false, releasePackage: { composer: stub } }); });
+  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, auth: false, releasePackage: { composer: stub } }); });
   afterAll(async () => { await ctx.app.close(); });
   const { inj, json, project, save, approve, makeCardApprovable, packageOf } = helpers(() => ctx);
   const CARD = 'aster-card-demo';
@@ -1206,7 +1206,7 @@ describe('the release package (composition replaced by a stub)', () => {
 
 describe('the release package of a document with its own data', () => {
   let ctx: Ctx;
-  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, auth: false, releasePackage: { composer: stubComposer(), scenarioCap: 3, referenceCap: 2 } }); });
+  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, auth: false, releasePackage: { composer: stubComposer(), scenarioCap: 3, referenceCap: 2 } }); });
   afterAll(async () => { await ctx.app.close(); });
   const { inj, json, project, save, approve, packageOf } = helpers(() => ctx);
   let id = '';
@@ -1281,7 +1281,7 @@ describe('the release package of a document with its own data', () => {
 
 describe('the release package with the real page composer', () => {
   let ctx: Ctx;
-  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, auth: false, releasePackage: { scenarioCap: 3, referenceCap: 2 } }); });
+  beforeAll(async () => { ctx = await buildApp({ dataDir: tmp(), logger: false, extraSamples: false, auth: false, releasePackage: { scenarioCap: 3, referenceCap: 2 } }); });
   afterAll(async () => { await ctx.app.close(); });
   const { inj, json, approve, packageOf } = helpers(() => ctx);
 
