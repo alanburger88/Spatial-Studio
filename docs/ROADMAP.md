@@ -90,6 +90,27 @@ Decided by the product owner on 2026-11-13: record these four, do not add them t
 | Approval chains | Several approvers in sequence or in parallel, observers, no approving your own change | SmartCOMM, OpenText, Quadient |
 | Editing in unlocked regions | A business user writes a one-off letter and can change only what a designer unlocked | OpenText, SmartCOMM, Quadient |
 
+## Where the roadmap is paused (2026-11-14)
+
+Paused by the product owner before wave 4, to work on the example documents first (decision D105).
+
+| Wave | State |
+|---|---|
+| 1 — Trust, proof and finding your way | Built and verified (v0.11) |
+| 2 — Real documents | Built and verified (v0.12) |
+| 3 — Bringing documents in, and handing them over | Built and verified (v0.13), except the first adapter, which waits for a named target system |
+| 4 — Teams | **Not started. Resume here.** |
+| 5 — Reach and depth | Not started |
+
+**To resume wave 4**, start with its check-in. Two questions are still open:
+
+1. **Proof links** for reviewers without an account: what may a person with a link do? Options put to the product owner, not yet answered: view and comment, expiring and revocable (recommended); view only; view, comment and sign off (an acknowledgement, not a studio approval). A short security design is written before any build.
+2. **Notifications:** in-app only, or also email (email needs a mail service, which is an external service and needs approval to configure).
+
+Wave 4's items are listed under "Wave 4 — Teams" below: proof links, blockers phase 4 (owner, status and notes), notifications and assignments, seeing who else is editing, blockers phase 5 (AI drafts for wording blockers), blockers phase 6 (warn before saving), and asking questions of the whole base.
+
+Also waiting, not tied to a wave: the first adapter (needs a named system, a sample template export and its field names); the four items held from the competitor comparison (raised again after wave 5); a real veraPDF run; live AI checks for "Suggest compliant wording" and "Rebuild from a file".
+
 ## Waves
 
 Sizes: S = about a day of build and verification, M = a few days, L = a week or more of equivalent effort. Each wave ends with the full gate, evidence, and a report of what was and was not verified. Items in a wave are built in parallel where they touch different parts of the studio.
