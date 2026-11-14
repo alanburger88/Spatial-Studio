@@ -494,12 +494,13 @@ export function meridianCustomers(): SampleCustomer[] {
     if (!s.noTransactions) {
       if (contributions) tx.push({ date: d(9), type: w.contribution, fund: 'Meridian Cash Reserve', units: unitsText(contributions * 10), amountCents: contributions });
       const income1 = Math.floor(income / 2);
-      tx.push({ date: d(30), type: w.dividend, fund: holdings[0].fund.replace(` ${w.closed}`, ''), units: '', amountCents: income1 });
+      tx.push({ date: d(30), type: w.dividend, fund: holdings.filter((h) => h.valueCents > 0)[0].fund, units: '', amountCents: income1 });
       tx.push({ date: d(61), type: w.interest, fund: 'Meridian Cash Reserve', units: '', amountCents: income - income1 });
       if (fees) tx.push({ date: d(88), type: w.fee, fund: 'Meridian Cash Reserve', units: '', amountCents: fees });
       if (withdrawals) tx.push({ date: d(45), type: w.withdrawal, fund: 'Meridian Cash Reserve', units: unitsText(withdrawals * 10), amountCents: withdrawals });
       if (s.closed) tx.push({ date: d(52), type: w.sell, fund: 'Meridian Energy Transition Fund', units: unitsText(-((i + 3) * 41_250)), amountCents: roundHalfUp(((i + 3) * 41_250 * FUNDS['US equity'][9][priceIdx]) / 1000, 0) });
-      if (holdings.length > 3) tx.push({ date: d(70), type: w.buy, fund: holdings[1].fund, units: unitsText(5_000 + i * 250), amountCents: roundHalfUp(((5_000 + i * 250) * holdings[1].priceCents) / 1000, 0) });
+      const open = holdings.filter((h) => h.valueCents > 0);
+      if (open.length > 3) tx.push({ date: d(70), type: w.buy, fund: open[1].fund, units: unitsText(5_000 + i * 250), amountCents: roundHalfUp(((5_000 + i * 250) * open[1].priceCents) / 1000, 0) });
       tx.sort((a, b) => String(a.date).localeCompare(String(b.date)));
     }
     // Asset allocation: the holdings grouped by class.
