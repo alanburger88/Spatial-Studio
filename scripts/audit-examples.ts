@@ -643,8 +643,8 @@ export async function settingsChecks(): Promise<SettingsResult[]> {
       const proofId = produced.results?.[0]?.proofId;
       if (!proofId) pf.push(`nothing was produced: ${JSON.stringify(produced).slice(0, 200)}`);
       else {
-        const v = (await inj('POST', `/api/v1/proofs/${proofId}/verify`, {})).json();
-        if (v.verdict !== 'same' && v.same !== true && v.result?.verdict !== 'same') pf.push(`the proof verified as ${JSON.stringify(v.verdict ?? v.result ?? v).slice(0, 200)}`);
+        const v = (await inj('POST', `/api/v1/proofs/${proofId}/verify`, { recordId: customer.recordId })).json();
+        if (v.same !== true) pf.push(`the proof verified as ${JSON.stringify(v.verdict ?? v).slice(0, 200)}`);
       }
       checks.push({ title: 'A proof record produced by the studio verifies as “same”', outcome: outcome(pf, [], `customer ${customer.recordId}`) });
       out.push({ example: ex.id, checks });
@@ -668,11 +668,13 @@ export function fixtureFindings(): { checked: { card: number; eob: number }; fin
   const deliberate = new Map<string, string>();
   for (const [name, c] of Object.entries(expected)) if (Object.keys(c.overrides ?? {}).length) deliberate.set(`${c.recordId}|${name}`, name);
   const findings: FixtureFinding[] = [];
+  let scenario: string | null = null;
   const add = (recordId: string, problem: string) => {
-    const scenario = [...deliberate.entries()].find(([k]) => k.startsWith(`${recordId}|`))?.[1];
-    findings.push({ recordId, problem, intended: false, why: scenario ? `Not in the record itself; ${recordId} is also used with overrides by the scenario “${scenario}”.` : 'No deliberate inconsistency is listed for this record.' });
+    if (scenario) { findings.push({ recordId: `${recordId} + “${scenario}”`, problem, intended: true, why: `Deliberate: the oracle scenario “${scenario}” overrides this record to make it inconsistent (fixtures/expected_scenarios.json).` }); return; }
+    const used = [...deliberate.entries()].find(([k]) => k.startsWith(`${recordId}|`))?.[1];
+    findings.push({ recordId, problem, intended: false, why: used ? `In the record itself; ${recordId} is also used with overrides by the scenario “${used}”.` : 'No deliberate inconsistency is listed for this record.' });
   };
-  for (const r of data.creditCard) {
+  const checkCards = (cards: any[]) => { for (const r of cards) {
     const c = r.card;
     const sum = c.transactions.reduce((s: number, t: any) => s + t.amountCents, 0);
     if (c.newBalanceCents !== c.previousBalanceCents + c.purchasesCents - c.paymentsCreditsCents + c.interestFeesCents) add(r.recordId, `new balance ${c.newBalanceCents} ≠ previous + purchases − payments + interest and fees`);
@@ -681,10 +683,33 @@ export function fixtureFindings(): { checked: { card: number; eob: number }; fin
     for (const t of c.transactions) if (t.date < c.statementStart || t.date > c.statementEnd) { add(r.recordId, `transaction ${t.id} on ${t.date} is outside the statement period`); break; }
     if (c.paymentStatus === 'current' && c.missedPayments > 0) add(r.recordId, 'payment status current with missed payments');
     if (c.minimumDueCents > Math.max(c.newBalanceCents, 0)) add(r.recordId, 'minimum due exceeds the new balance');
-  }
-  for (const r of data.healthcareEob) for (const cl of r.claims) {
-    if (cl.billedCents - cl.contractualAdjustmentCents !== cl.allowedCents) add(r.recordId, `claim ${cl.claimId}: billed − adjustment ≠ allowed`);
-    if (cl.status === 'processed-covered' && cl.allowedCents !== cl.planPaidCents + cl.patientResponsibilityCents) add(r.recordId, `claim ${cl.claimId}: allowed ≠ plan paid + member responsibility`);
+  } };
+  // The fixtures' own rule (fixtures/make_fixtures.py): billed = adjustment + allowed and allowed = plan paid + member amount on
+  // processed claims; a denied or appealed claim has nothing allowed or paid yet and its whole billed amount under review.
+  const UNADJUDICATED = ['denied-pending-review', 'appeal-filed'];
+  const checkClaims = (eobs: any[]) => { for (const r of eobs) for (const cl of r.claims) {
+    if (UNADJUDICATED.includes(cl.status)) {
+      if (cl.allowedCents || cl.planPaidCents || cl.patientResponsibilityCents || cl.contractualAdjustmentCents) add(r.recordId, `claim ${cl.claimId}: an unadjudicated claim with amounts allowed, adjusted or paid`);
+      if (cl.amountUnderReviewCents !== cl.billedCents) add(r.recordId, `claim ${cl.claimId}: the amount under review is not the billed amount`);
+      if (cl.liabilityConfirmed) add(r.recordId, `claim ${cl.claimId}: member liability confirmed on an unadjudicated claim`);
+    } else {
+      if (cl.billedCents - cl.contractualAdjustmentCents !== cl.allowedCents) add(r.recordId, `claim ${cl.claimId}: billed − adjustment ≠ allowed`);
+      if (cl.allowedCents !== cl.planPaidCents + cl.patientResponsibilityCents) add(r.recordId, `claim ${cl.claimId}: allowed ≠ plan paid + member responsibility`);
+    }
+    if (cl.serviceDate > '2026-11-30') add(r.recordId, `claim ${cl.claimId}: a service date in the future`);
+  } };
+  checkCards(data.creditCard);
+  checkClaims(data.healthcareEob);
+  // The oracle's scenarios apply overrides to these records; the same checks on them show which inconsistencies are deliberate.
+  const merge = (base: any, over: any): any => (over && typeof over === 'object' && !Array.isArray(over) && base && typeof base === 'object' && !Array.isArray(base) ? Object.fromEntries([...new Set([...Object.keys(base), ...Object.keys(over)])].map((k) => [k, k in over ? merge(base[k], over[k]) : base[k]])) : over === undefined ? base : over);
+  for (const [name, c] of Object.entries(expected)) {
+    if (!Object.keys(c.overrides ?? {}).length) continue;
+    const rec = [...data.creditCard, ...data.healthcareEob].find((x: any) => x.recordId === c.recordId);
+    if (!rec) continue;
+    scenario = name;
+    const changed = merge(rec, c.overrides);
+    if (rec.card) checkCards([changed]); else checkClaims([changed]);
+    scenario = null;
   }
   // The fixtures' own statement of deliberate inconsistencies: classified against the scenario list.
   for (const f of findings) if (/payment status current/.test(f.problem) && Object.values(expected).some((c) => /inconsistent/.test(JSON.stringify(c)))) { f.intended = true; f.why = 'The fixtures list an inconsistent payment state as a deliberate scenario (card-inconsistent-payment-state).'; }
@@ -775,8 +800,8 @@ export function reportMarkdown(r: AuditReport): string {
   }
   L.push('## The approved card and benefits fixtures (read only)', '');
   L.push(`The same style of arithmetic and date checks over \`fixtures/customers_100.json\` (${r.fixtures.checked.card} card and ${r.fixtures.checked.eob} benefits customers). The files are never changed; their deliberate inconsistencies are listed in \`fixtures/expected_scenarios.json\`.`, '');
-  if (!r.fixtures.findings.length) L.push('No findings: every record adds up and its dates are in order.', '');
-  else {
+  if (!r.fixtures.findings.some((f) => !f.intended)) L.push('No findings: every card record adds up (new balance, purchases and transactions) with its dates in order, and every claim follows the fixtures’ own rule — on a processed claim billed less the adjustment is the allowed amount and the allowed amount is what the plan paid plus the member’s amount; a denied or appealed claim has nothing allowed or paid and its whole billed amount under review. The oracle’s deliberate inconsistencies are made by overrides in `fixtures/expected_scenarios.json`, not in the records; run on those scenarios, the same checks find exactly them (below, all intended).', '');
+  if (r.fixtures.findings.length) {
     L.push('| Customer | Finding | Intended? | Why |', '|---|---|---|---|');
     for (const f of r.fixtures.findings) L.push(`| ${f.recordId} | ${cell(f.problem)} | ${f.intended ? 'yes' : 'no'} | ${cell(f.why)} |`);
     L.push('');
