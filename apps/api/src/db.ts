@@ -5,7 +5,7 @@ import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 // Loaded via require so test bundlers that do not know the newer node:sqlite builtin leave it alone.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
 import { DEMOTE_ON_SAVE, WORKFLOW_LABEL, projectContentDigest, sha256Hex, type DocumentType, type HandoverEntry, type HandoverKind, type Project, type ReleaseActor, type ReleaseEvent, type ReleaseEventKind, type ReleaseInfo, type ReleasePackageCheck, type ReleaseKnownDataProblem, type ReleasePackageSummary, type ReleaseStage, type ReleaseVersions, type Role, type SyntheticRecord, type TemplateInfo, type TemplateVersionInfo, type WorkflowState } from '@iss/model';
-import { seedProjects } from '@iss/model/fixtures';
+import { sampleProjects as seedProjects } from '@iss/model/fixtures'; // the stored samples are the enriched ones (D106)
 
 export interface StoredUser { id: string; email: string; name: string; role: Role; disabled: boolean; createdAt: string; updatedAt: string }
 
