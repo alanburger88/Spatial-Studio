@@ -61,7 +61,9 @@ export function registerImportFileRoutes(app: FastifyInstance, deps: RouteDeps):
     const readings = await readAll(req.body?.files);
     const fs = fileSamples(readings);
     const status = providerStatus(providerConfig());
-    return { samples: fs.samples, alignment: fs.alignment, ai: { live: status.mode === 'external', providerStatus: status.label } };
+    // What would be sent with every mark kept, both ways (a client without the scenarios package can show and confirm these).
+    const outline = { placeholders: sendOutline(fs, { placeholders: true }), asIs: sendOutline(fs, { placeholders: false }) };
+    return { samples: fs.samples, alignment: fs.alignment, outline, ai: { live: status.mode === 'external', providerStatus: status.label } };
   });
 
   app.post<{ Body: Record<string, unknown> }>('/api/v1/projects/rebuild/propose', { bodyLimit: BODY_LIMIT }, async (req) => {

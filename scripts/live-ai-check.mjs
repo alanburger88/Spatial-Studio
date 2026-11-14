@@ -48,6 +48,22 @@ const checkSetup = async () => {
       + `${(j.outline?.lines ?? []).map((l) => clip(l, 170)).join('\n      ')}\n      notes (${(j.notes ?? []).length}): ${(j.notes ?? []).map((n) => clip(n, 200)).join(' | ') || 'none'}`);
 };
 if (process.env.LIVE_ONLY === 'setup') { await checkSetup(); finish(); }
+// Only on request (LIVE_ONLY=rebuild, one call): rebuild a document from a file. The file is the studio's own PDF of the
+// synthetic sample statement (CARD-0001); the outline is sent with the marked values as placeholders, after the
+// confirmation the screen asks for. The proposal must have data fields, a table and no blocking issue once reviewed.
+if (process.env.LIVE_ONLY === 'rebuild') {
+  const pdf = await fetch(`${API}/compose/pdf`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId: P, recordId: 'CARD-0001' }) });
+  const files = [{ data: Buffer.from(await pdf.arrayBuffer()).toString('base64') }];
+  const read = await post('/projects/rebuild/read', { files });
+  const r = await post('/projects/rebuild/propose', { files, useAi: true, placeholders: true, confirmNoCustomerData: true, outline: read.json.outline?.placeholders, title: 'Rebuilt statement (live check)' });
+  const j = r.json;
+  const review = j.mode === 'proposal' ? await post('/projects/setup/draft', { spec: j.spec, source: 'ai', title: 'Rebuilt statement (live check)' }) : null;
+  const ok = r.status === 200 && j.mode === 'proposal' && j.source === 'ai' && j.spec.fields.length >= 3 && j.spec.sections.some((s) => s.type === 'table') && review?.json?.preview?.blocking?.length === 0;
+  record('Rebuild a document from a PDF (placeholders)', ok, j.mode !== 'proposal'
+    ? `status=${r.status} mode=${j.mode} ${r.ms} ms · ${clip(j.message ?? j.error?.message ?? j, 300)}`
+    : `${r.ms} ms · outline ${read.json.outline?.placeholders?.length} characters · fields: ${j.spec.fields.map((f) => `${f.label} (${f.type})`).join(', ')}\n      sections: ${j.spec.sections.map((s) => s.type).join(', ')} · paper ${j.spec.paper ?? 'US Letter'} · notes ${(j.notes ?? []).length} · blocking after review: ${review?.json?.preview?.blocking?.length}`);
+  finish();
+}
 // Only on request (LIVE_ONLY=setup-data, one call): the same with sample data. The model is told the shape of the data
 // only, so what is checked here is that it kept the field names, so that every row is matched and accepted as a customer.
 if (process.env.LIVE_ONLY === 'setup-data') {

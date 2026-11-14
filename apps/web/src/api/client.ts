@@ -75,7 +75,7 @@ export interface SetupDraftBody { description?: string; sampleData?: SetupSample
 export interface SetupCreateBody { spec: SetupSpec; title: string; issuerName?: string; accent?: string; customers: 'generate' | 'supplied' | 'both'; sampleData?: SetupSampleData; source: 'ai' | 'builtin'; /** Set up from an existing PDF or Word file ("Rebuild from a file"). */ origin?: 'file' }
 /** Rebuild from a file: one to three files as base64, never their names. */
 export interface RebuildFile { data: string }
-export interface RebuildReading { samples: FileSample[]; alignment: SampleAlignment | null; ai: { live: boolean; providerStatus: string } }
+export interface RebuildReading { samples: FileSample[]; alignment: SampleAlignment | null; outline: { placeholders: string; asIs: string }; ai: { live: boolean; providerStatus: string } }
 export interface RebuildProposeBody { files: RebuildFile[]; useAi: boolean; placeholders?: boolean; confirmNoCustomerData?: boolean; outline?: string; unmarked?: string[]; title?: string; issuerName?: string }
 /** A checked setup proposed from the files (shown through the ordinary setup review), or a plain state: no AI key, or a model answer that failed the checks. */
 export type RebuildProposal =

@@ -224,6 +224,8 @@ describe('rebuild routes', () => {
     expect(body.samples[0].marks.map((m: any) => m.kind)).toEqual(expect.arrayContaining(['name', 'address', 'reference', 'amount', 'date']));
     expect(body.alignment.counts).toMatchObject({ different: 1 });
     expect(body.ai).toMatchObject({ live: true });
+    expect(body.outline.placeholders).toBe(sendOutline({ samples: body.samples, alignment: body.alignment }, { placeholders: true }));
+    expect(body.outline.asIs).toContain('Ms Jane Example');
     expect((await ctx.app.inject({ method: 'GET', url: '/api/v1/audit' })).json().events.length).toBe(before);
   });
 
