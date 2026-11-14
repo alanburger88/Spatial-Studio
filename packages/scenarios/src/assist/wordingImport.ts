@@ -101,7 +101,9 @@ export function headingLocale(heading: string, prefer: readonly string[] = []): 
   const low = h.toLowerCase();
   const hits = AVAILABLE_LANGUAGES.filter((l) => l.name.toLowerCase() === low || l.endonym.toLowerCase() === low || languageShortName(l.code).toLowerCase() === low || l.code.split('-')[0].toLowerCase() === low);
   if (!hits.length) return null;
-  return hits.find((l) => prefer.includes(l.code))?.code ?? hits[0].code;
+  // The document's own languages first, then the plain form ("French (France)" before "Canadian French").
+  const rank = (l: { code: string; name: string }) => (prefer.includes(l.code) ? 0 : l.name.toLowerCase() === low ? 1 : l.name.toLowerCase().startsWith(`${low} (`) ? 2 : 3);
+  return [...hits].sort((a, b) => rank(a) - rank(b))[0].code;
 }
 
 function readCsv(text: string, project: Project): WordingTable {
