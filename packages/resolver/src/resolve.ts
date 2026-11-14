@@ -496,7 +496,8 @@ export function resolve(input: ResolveInput): Resolution {
         const absentList = known && value === null && path.startsWith('custom.') && c.fields.get(path)?.type === 'array';
         if (known && !Array.isArray(value) && !absentList) findings.push({ code: 'INVALID_BINDING', severity: 'blocking', nodeId: node.id, source: 'binding', message: `${path} is not a collection.` });
         // The column that is summed: the one marked for it, else the amount column of the built-in lists.
-        const amountKey = totalColumnKey(node.columns);
+        // A document with its own data sums only the column marked for a total; the built-in kinds also their amount column.
+        const amountKey = docType === 'custom' ? node.columns?.find((col) => col.total)?.key : totalColumnKey(node.columns);
         (Array.isArray(value) ? value : []).forEach((item: any, i: number) => {
           const cells: RTableRow['cells'] = {};
           for (const col of node.columns ?? []) {

@@ -29,3 +29,15 @@ describe('chart order', () => {
     expect(labels(withChart('data', 2))).toEqual(['Pilates', 'Row']);
   });
 });
+
+/** A table of a document with its own data has a total only when a column is marked for it (types.ts `TableColumn.total`). */
+describe('table totals in a document with its own data', () => {
+  const withTable = (total: boolean): Project => {
+    const g = gymProject();
+    const p = run(g, { type: 'SET_CUSTOM_FIELDS', fields: [...g.customFields!, { key: 'payments', label: 'Payments', type: 'list', itemFields: [{ key: 'kind', label: 'Kind', type: 'string' }, { key: 'amountCents', label: 'Amount', type: 'cents' }] }] });
+    return run(p, { type: 'INSERT_NODE', parentId: 'doc-root', node: { ...defaultNode('repeating-table', 'pay-table', 'custom', p), binding: 'custom.payments', columns: [{ key: 'kind', label: 'Kind' }, { key: 'amountCents', label: 'Amount', format: 'usd-cents', align: 'right', ...(total ? { total: true } : {}) }] } });
+  };
+  const totalOf = (p: Project) => indexTree(resolve({ project: p, record: gymMember({ custom: { payments: [{ kind: 'Fee', amountCents: 500 }, { kind: 'Dividend', amountCents: 1200 }] } }) }).root).get('pay-table')!.table!.totalCents;
+  it('does not sum a column called amountCents unless it is marked', () => expect(totalOf(withTable(false))).toBeUndefined());
+  it('sums the marked column', () => expect(totalOf(withTable(true))).toBe(1700));
+});

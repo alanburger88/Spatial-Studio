@@ -15,7 +15,7 @@ export function NORTHWIND_ES(stage: NorthwindStage): Record<string, string> {
     '@issuer-logo/image.alt': 'Logotipo de Northwind Energy (empresa de servicios ficticia)',
     '@slip-logo/image.alt': 'Logotipo de Northwind Energy (empresa de servicios ficticia)',
     '@document-header/headerFooter': 'DATOS SINTÉTICOS DE DEMOSTRACIÓN · Northwind Energy es ficticia · No es una factura real',
-    '@bill-title/content': '# Su factura de energía\n**{{customer.givenName}} {{customer.familyName}}** · Cuenta **{{custom.accountNumber}}**\nDirección del servicio: {{calc.serviceAddress}}\nFecha de la factura {{custom.billDate}} · Período del {{custom.periodStart}} al {{custom.periodEnd}} ({{calc.billingDays}} días)',
+    '@bill-title/content': '# Su factura de energía\n**{{customer.givenName}} {{customer.familyName}}** · Cuenta **{{custom.accountNumber}}**\nDirección del servicio: {{calc.serviceAddress}}\nFecha de la factura {{custom.billDate}}\nPeríodo de facturación del {{custom.periodStart}} al {{custom.periodEnd}} ({{calc.billingDays}} días)',
     '@amount-due/label': 'Total a pagar',
     '@due-date/label': 'Pague a más tardar el',
     '@running-header/headerFooter': 'Factura de Northwind Energy · Cuenta {{custom.accountNumber}} · {{customer.givenName}} {{customer.familyName}}',
