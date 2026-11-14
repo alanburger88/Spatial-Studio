@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { isSupportedLanguage, projectLanguages } from '@iss/model';
 import { providerConfig } from '../assistant';
-import { compliantRewrite, describeImage, draftNewVersion, draftRule, externalAssist, meaningCheck, rewriteText, subjectLines, type RewriteKind, type RewriteStyle } from '../assistAi';
+import { compliantRewrite, describeImage, draftNewVersion, draftRule, externalAssist, meaningCheck, readQuestionWithAi, rewriteText, subjectLines, type RewriteKind, type RewriteStyle } from '../assistAi';
 import type { WordingTextScope } from '@iss/scenarios';
 import type { RouteDeps } from './deps';
 
@@ -33,7 +33,7 @@ export function registerAssistRoutes(app: FastifyInstance, deps: RouteDeps): voi
       if (!scope) throw new ApiError(400, 'INVALID', `"scope" must be one of ${SCOPES.join(', ')}.`);
       const loc = typeof b.locale === 'string' ? b.locale : 'en-US';
       if (!isSupportedLanguage(loc) || (loc !== 'en-US' && !projectLanguages(project).includes(loc))) throw new ApiError(400, 'INVALID_LOCALE', `Unsupported language ${loc}.`);
-      return compliantRewrite(cfgOf(b), model, project, { text: text(b.text, 'The text', 4000), scope, locale: loc });
+      return compliantRewrite(cfgOf(b), model, project, { text: text(b.text, 'The text', 4000), scope, locale: loc, ...(b.tone === true ? { tone: true } : {}) });
     }
     const style = STYLES.includes(b.style as RewriteStyle) ? (b.style as RewriteStyle) : null;
     const kind = KINDS.includes(b.kind as RewriteKind) ? (b.kind as RewriteKind) : null;
@@ -74,5 +74,16 @@ export function registerAssistRoutes(app: FastifyInstance, deps: RouteDeps): voi
     const b = (req.body ?? {}) as Record<string, unknown>;
     const project = projectOf((req.params as any).projectId, b);
     return describeImage(cfgOf(b), model, project, { nodeId: text(b.nodeId, 'The component', 64) });
+  });
+
+  /* Ask about all customers (wave 4, item 7): a model reads a free sentence into the structured question. The studio
+     answers it in the browser from every customer; this route never sees or returns a customer's data. The server's own
+     customers of the document are used only to take their names out of the sentence before the model sees it. */
+  app.post('/api/v1/projects/:projectId/assist/base-question', async (req) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const projectId = (req.params as any).projectId as string;
+    const project = projectOf(projectId, b);
+    const records = deps.allRecords(projectId).filter((r) => r.documentType === project.documentType);
+    return readQuestionWithAi(cfgOf(b), model, project, { sentence: text(b.sentence, 'The question', 300), records });
   });
 }

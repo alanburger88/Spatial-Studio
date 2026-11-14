@@ -1,6 +1,6 @@
 # Blockers: seeing them, sharing them, resolving them
 
-Status: **design agreed in a workshop with the product owner on 2026-11-13 (eight decisions). Phases 1 to 4 are built (see the phase list, "As built: phases 2 and 3" and "As built: phase 4"); phases 5 and 6 are not.**
+Status: **design agreed in a workshop with the product owner on 2026-11-13 (eight decisions). Phases 1 to 5 are built (see the phase list, "As built: phases 2 and 3", "As built: phase 4" and "As built: phase 5"); phase 6 is not.**
 
 ## Where we start from
 
@@ -59,7 +59,7 @@ Existing links that jump straight to where a fix is made (a rule, a message, a f
 2. **Data problems:** open in Data Explorer with the fields highlighted; known data problem (approver, reason), its effect on approval, the Review panel and the release manifest. **Built** (see "As built: phases 2 and 3").
 3. **Resolve one by one**, and **pin a test when fixed**. **Built** (see "As built: phases 2 and 3").
 4. **Owner, status and notes.** **Built** (see "As built: phase 4").
-5. **AI drafts for wording blockers** (missing translation; wording that reads as a demand for money).
+5. **AI drafts for wording blockers** (missing translation; wording that reads as a demand for money). **Built** (see "As built: phase 5").
 6. **Warn before saving.**
 
 Each phase ends with tests, documentation and a demo path, and is verified before the next starts.
@@ -146,4 +146,41 @@ Built on 2026-11-14 (wave 4, item 2 of `docs/design/WAVE4_TEAMS.md`). Server: `a
 - **No owners or notes are seeded into the example documents**, so the examples' accuracy check is unchanged.
 - **A dated document**: the server judges a cause on every day approval checks, while the screen shows one "As issued on" day;
   a cause present only on another day is not shown as "Fixed when saved" on the screen.
+
+## As built: phase 5
+
+Built on 2026-11-14 (wave 4, item 6 of `docs/design/WAVE4_TEAMS.md`). Screen: `screens/blockers/WordingHelp.tsx`, shown in
+the blocker detail under the fixes and in each wording step of "Resolve one by one"; server: the `tone` option of the
+"suggest compliant wording" route (`apps/api/src/assistAi.ts`); tests `apps/api/test/blockers-drafts.test.ts` and
+`e2e/blockers-drafts.spec.ts`. API: `docs/api/ASK_ALL_CUSTOMERS.md` (the `tone` addition).
+
+- **A missing required translation**: **Draft the translation** asks the same helper Content & Translations uses (AI with a
+  key; without one, the labelled sample drafts written for the built-in examples; otherwise it says there is neither). The
+  text is stored as a DRAFT with where it came from ("AI" or "Sample"), as one undoable step, and never approved. The detail
+  shows the draft, says that the blocker stays open until a person reviews and approves the text, and links to Content &
+  Translations at that text (`content?lang=<code>&text=<id>`).
+- **Wording a "must" wording rule forbids, and the built-in "reads as a demand for money" check**: **Suggest wording that
+  follows the rules** asks the wave 2 helper for the text the blocker is about. Each suggestion is shown as the text now and
+  as suggested, with the words that change struck out and underlined; **Use this wording** changes it as ONE undoable step
+  (`setTextCommands` through `applyAssistCommands`). A translation becomes a draft for a person to approve. For the demand
+  check the helper is given the studio's own tone rule as a "must", and every suggestion is re-checked with it.
+- **Without an AI key** the detail says so in one line and still offers what is built in: the sample draft, and a banned
+  word's own replacement from the rule, shown the same way as before and after.
+- **Never rewritten by the assistant**: required disclosure text (the detail says so and links to it) and text that comes
+  from the library (it says to reword it there).
+- **The assistant policy (D65) is unchanged**: only the document's own text (and, for wording, the rules) is sent to a model,
+  never a customer's data; a person applies every change; nothing is approved by the assistant. The tests prove it for both
+  paths: the request the stand-in model receives holds no value of any customer; the translation is a draft and the blocker
+  is still listed for the same customers afterwards (only an approval clears it); one change, and one undo, restores the
+  wording.
+
+### What differs from the design, and why
+
+- **The rule's own replacement is offered twice when there is no key**: as the existing fix card ("Apply this fix") and as
+  the before and after under "Suggest wording that follows the rules". Both are the same single change; the second shows the
+  words that change, which the design asks for.
+- **A "required phrase is missing" wording blocker gets no suggestion**: there is no text to rewrite; the fix cards say where
+  to add it.
+- **The demand-for-money check applies to explanations of benefits in English**, as the resolver's own check does.
+- **Content & Translations gained `?lang=&text=`** (the language and the search box), the smallest way to open it at one text.
 

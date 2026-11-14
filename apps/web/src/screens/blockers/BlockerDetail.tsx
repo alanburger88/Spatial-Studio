@@ -9,6 +9,7 @@ import { recordSummary } from '../../shell/RecordPicker';
 import { whenText } from './knownData';
 import { CalcLinks } from './CalcLinks';
 import { KIND_LABEL, KIND_NEXT, plural } from './labels';
+import { WordingHelp } from './WordingHelp';
 
 /** What the detail (and the guided pass) can do with a customer's data problem. */
 export interface DataActions {
@@ -169,6 +170,8 @@ export function BlockerDetail({ blocker, records, personas, impactFor, readOnlyR
       <h3 className="section-title">{isData ? 'What can be done' : blocker.fixes.length > 1 ? 'Ways to fix it, side by side' : 'How to fix it'}</h3>
       {readOnlyReason && canApply && <p className="hint bl-readonly" data-testid="bl-readonly">You can see the fixes but not apply them: {readOnlyReason.charAt(0).toLowerCase() + readOnlyReason.slice(1)}.</p>}
       <FixCards blocker={blocker} impactFor={impactFor} readOnlyReason={readOnlyReason} appliedFixId={appliedFixId} onApply={onApply} onOpen={onOpen} />
+      {/* Phase 5: AI drafts for wording blockers (a draft translation, or wording that follows the rules) */}
+      <WordingHelp key={`assist-${blocker.id}`} blocker={blocker} onOpen={onOpen} />
 
       <h3 className="section-title">Where it is fixed by hand</h3>
       <p className="hint bl-next">{KIND_NEXT[blocker.kind]}</p>

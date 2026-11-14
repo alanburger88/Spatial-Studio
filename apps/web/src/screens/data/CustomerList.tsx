@@ -11,9 +11,11 @@ export type OriginFilter = 'all' | Origin;
 const CHIP: Record<Origin, string> = { yours: 'accent', generated: 'info', imported: 'variant', sample: '' };
 
 /** The searchable, grouped list of customers. Up and down move through it; Enter opens the one you are on. */
-export function CustomerList({ records, personas, selectedId, onSelect, broken, canEdit, onNewBlank, onNewCopy, disabledReason }: {
+export function CustomerList({ records, personas, selectedId, onSelect, broken, canEdit, onNewBlank, onNewCopy, disabledReason, only = null, onClearOnly }: {
   records: SyntheticRecord[]; personas: Persona[]; selectedId: string; onSelect: (id: string) => void; broken: Set<string>;
   canEdit: boolean; onNewBlank: () => void; onNewCopy: () => void; disabledReason: string | null;
+  /** Only these customers (from "Ask about all customers"), until `onClearOnly`. */
+  only?: Set<string> | null; onClearOnly?: () => void;
 }) {
   const technical = useStudio((s) => s.viewMode) === 'technical';
   const [q, setQ] = useState('');
@@ -25,6 +27,7 @@ export function CustomerList({ records, personas, selectedId, onSelect, broken, 
   const groups = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const hit = records.filter((r) => {
+      if (only && !only.has(r.recordId)) return false;
       const o = originOf(r);
       if (filter !== 'all' && filter !== o) return false;
       if (!needle) return true;
@@ -32,7 +35,7 @@ export function CustomerList({ records, personas, selectedId, onSelect, broken, 
       return `${s.name} ${s.tag ?? ''} ${r.generated?.label ?? ''} ${technical ? r.recordId : ''}`.toLowerCase().includes(needle);
     });
     return ORIGINS.map((o) => ({ origin: o, rows: hit.filter((r) => originOf(r) === o) })).filter((g) => g.rows.length);
-  }, [records, personas, q, filter, technical]);
+  }, [records, personas, q, filter, technical, only]);
   const order = useMemo(() => groups.flatMap((g) => g.rows.map((r) => r.recordId)), [groups]);
   const total = order.length;
   const counts = useMemo(() => Object.fromEntries(ORIGINS.map((o) => [o, records.filter((r) => originOf(r) === o).length])) as Record<Origin, number>, [records]);
@@ -59,6 +62,12 @@ export function CustomerList({ records, personas, selectedId, onSelect, broken, 
   return (
     <aside className="panel dx-left" data-side="left" data-side-title="Customers" aria-label="Customers">
       <div className="panel-head">Customers <span className="chip count" data-testid="dx-count">{records.length}</span></div>
+      {only && (
+        <div className="callout accent dx-only" role="status" data-testid="dx-only" data-n={records.filter((r) => only.has(r.recordId)).length}>
+          <span>Only the {records.filter((r) => only.has(r.recordId)).length} customers from your question.</span>
+          {onClearOnly && <button type="button" className="btn ghost sm" onClick={onClearOnly} data-testid="dx-only-clear">Show all</button>}
+        </div>
+      )}
       <div className="dx-tools">
         <label className="dx-search"><Icon.search aria-hidden="true" width={14} height={14} />
           <input className="input" type="search" data-testid="dx-search" aria-label="Search customers" placeholder={technical ? 'Search name, persona or ID…' : 'Search customers…'} value={q} onChange={(e) => setQ(e.target.value)} />

@@ -119,3 +119,6 @@
 /* chart captions wrap in full instead of being cut to two lines */
 .ls-cap { display: block; -webkit-line-clamp: unset; overflow: visible; overflow-wrap: break-word; }
 .ls-cap.mono { white-space: normal; overflow-wrap: anywhere; }
+
+/* `?customers=` from "Ask about all customers" (wave 4) */
+.ls-only { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; }

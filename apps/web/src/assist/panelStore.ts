@@ -7,12 +7,13 @@ interface PanelState {
   /** True while the studio shell has mounted the panel; the "Ask AI" button only shows then (not on the gallery or sign-in). */
   available: boolean;
   open: boolean;
-  tab: 'help' | 'chat';
+  /** `all`: "Ask about all customers" (wave 4). */
+  tab: 'help' | 'chat' | 'all';
   focus: PanelFocus;
   /** The element that had focus when the panel opened, so Escape/close can put it back. */
   opener: HTMLElement | null;
   setAvailable(v: boolean): void;
-  setTab(tab: 'help' | 'chat'): void;
+  setTab(tab: 'help' | 'chat' | 'all'): void;
   setFocus(focus: PanelFocus): void;
   openPanel(focus?: PanelFocus): void;
   /** `restoreFocus: false` when the caller is about to move focus somewhere else on purpose. */

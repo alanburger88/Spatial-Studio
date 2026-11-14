@@ -9,6 +9,7 @@ import { Icon } from '../../ui/icons';
 import { CountChips, Customers, FixCards, type DataActions } from './BlockerDetail';
 import { clockTime, type FullCheckResult } from './fullCheck';
 import { KIND_LABEL, KIND_NEXT, plural } from './labels';
+import { WordingHelp } from './WordingHelp';
 import { useFixImpacts, type BlockerData } from './useBlockers';
 import { WorkChips } from './WorkParts';
 import { statusOf, useBlockerWork } from './work';
@@ -216,6 +217,8 @@ export function ResolvePass({ data, current, full, modelChanged, readOnlyReason,
                 {readOnlyReason && step.fixes.some((f) => f.kind === 'change') && <p className="hint bl-readonly">You can see the fixes but not apply them: {readOnlyReason.charAt(0).toLowerCase() + readOnlyReason.slice(1)}.</p>}
                 {stillAfterFix && <p className="bl-note warn" role="status" data-testid="bl-pass-still">The fix was applied, but this still stops {plural(step.openRecordIds.length, 'customer')}. Choose another fix, open where it is fixed, or skip it. Undo is in the top bar.</p>}
                 <FixCards blocker={step} impactFor={impactFor} readOnlyReason={readOnlyReason} appliedFixId={null} onApply={apply} onOpen={onOpen} />
+                {/* Phase 5: AI drafts for wording blockers */}
+                <WordingHelp key={`assist-${step.id}`} blocker={step} onOpen={onOpen} compact />
                 <div className="row wrap bl-pass-actions">
                   <button type="button" className="btn" onClick={() => onOpen(step.link)} data-testid="bl-pass-open"><Icon.external /> {step.link?.label ?? 'Open where this is fixed'}</button>
                   <button type="button" className="btn ghost" onClick={skip} data-testid="bl-pass-skip">Skip</button>

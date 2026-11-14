@@ -162,3 +162,21 @@
 .bl-note-actions .hint { margin: 0; }
 .bl-fixed-group .bl-row-title { color: var(--iss-text-muted); }
 .bl-empty-fixed { margin-top: 12px; text-align: left; }
+
+/* Phase 5: help from the assistant for wording blockers (blockers/WordingHelp.tsx) */
+.bl-assist { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.bl-assist .hint { font-size: 12.5px; line-height: 1.5; color: var(--iss-text-muted); }
+.bl-assist .callout { font-size: 13px; line-height: 1.5; }
+.bl-assist .hint, .bl-assist p { margin: 0; }
+.bl-assist .callout p + p { margin-top: 4px; }
+.bl-assist-policy { font-size: 12px; }
+.bl-draft-now { border-left: 3px solid var(--iss-warning); padding: 4px 0 4px 10px; display: flex; flex-direction: column; gap: 4px; }
+.bl-draft-label { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; }
+.bl-draft-text { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.bl-ba { display: grid; grid-template-columns: 1fr; gap: 8px 12px; padding: 10px; border: 1px solid var(--iss-border); border-radius: 10px; background: var(--iss-surface-raised); }
+.bl-ba-col { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.bl-ba-col p { font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+.bl-ba-lbl { font-size: 12px; font-weight: 700; color: var(--iss-text-muted); display: flex; gap: 6px; align-items: center; }
+.bl-ba-note, .bl-ba > .row { grid-column: 1 / -1; font-size: 12px; }
+del.bl-del { background: var(--iss-error-soft); color: inherit; text-decoration: line-through 2px; border-radius: 3px; }
+ins.bl-ins { background: var(--iss-accent-soft); color: inherit; text-decoration: underline 2px; font-weight: 700; border-radius: 3px; }

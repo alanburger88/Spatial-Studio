@@ -1,5 +1,5 @@
 import { dayWords } from '@iss/model';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { OUTPUT_PROFILES, journeyStates, primaryVariantSet, explainInPlainWords, safeFixPlan } from '@iss/scenarios';
 import { api, type VersionDto } from '../api/client';
@@ -42,6 +42,9 @@ function jumpTo(testIds: string[]) {
   }, 100);
 }
 
+/** "Ask about all customers" (wave 4): its own download, fetched when its tab is first opened. */
+const AskAllCustomers = lazy(() => import('./AskAllCustomers').then((m) => ({ default: m.AskAllCustomers })));
+
 /** The panel itself. `AssistHost` (assist/AssistHost.tsx) decides when it is shown and loads this file on first use. */
 export function AssistPanelBody() {
   const close = usePanel((s) => s.close);
@@ -78,12 +81,23 @@ export function AssistPanelBody() {
         {live === null ? 'Checking assistant…' : live ? 'Live AI on' : 'Built-in assistant · no AI key'}
       </p>
       <ForThisScreen />
-      <div className="assist-tabs" role="tablist" aria-label="Assistant sections">
+      <div className="assist-tabs" role="tablist" aria-label="Assistant sections" onKeyDown={(e) => {
+        // Left and right move between the tabs (only the chosen tab is in the Tab order).
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
+        const order = ['help', 'chat', 'all'] as const;
+        const i = order.indexOf(tab);
+        const next = e.key === 'Home' ? 0 : e.key === 'End' ? order.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : order.length - 1)) % order.length;
+        e.preventDefault();
+        setTab(order[next]);
+        window.setTimeout(() => document.getElementById(`assist-tab-${order[next]}`)?.focus(), 0);
+      }}>
         <button type="button" role="tab" id="assist-tab-help" aria-selected={tab === 'help'} aria-controls="assist-tabpanel" tabIndex={tab === 'help' ? 0 : -1} onClick={() => setTab('help')} data-testid="assist-tab-help">Explain &amp; summary</button>
         <button type="button" role="tab" id="assist-tab-chat" aria-selected={tab === 'chat'} aria-controls="assist-tabpanel" tabIndex={tab === 'chat' ? 0 : -1} onClick={() => setTab('chat')} data-testid="assist-tab-chat">Ask</button>
+        {/* Wave 4: ask about all customers */}
+        <button type="button" role="tab" id="assist-tab-all" aria-selected={tab === 'all'} aria-controls="assist-tabpanel" tabIndex={tab === 'all' ? 0 : -1} onClick={() => setTab('all')} data-testid="assist-tab-all" title="Ask about all customers">All customers</button>
       </div>
       <div className="assist-body" id="assist-tabpanel" role="tabpanel" aria-labelledby={`assist-tab-${tab}`}>
-        {tab === 'chat' ? <Conversation compact /> : (
+        {tab === 'all' ? <Suspense fallback={<p className="assist-status" role="status">Loading…</p>}><AskAllCustomers /></Suspense> : tab === 'chat' ? <Conversation compact /> : (
           <div className="assist-help">
             {focus?.kind === 'explain' ? <ExplainCard nodeId={focus.nodeId} />
               : focus?.kind === 'summary' ? <SinceApproved />

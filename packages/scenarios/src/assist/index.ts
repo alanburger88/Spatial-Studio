@@ -26,3 +26,6 @@ export * from './dataDictionary';
 export * from './mappingChecks';
 export * from './wordingImport';
 export * from './fieldsImport';
+// Ask about all customers (wave 4, item 7): the structured question, the engine's answer and the built-in reader.
+export * from './baseQuery';
+export * from './baseQueryReader';
