@@ -130,7 +130,7 @@ export function Duplicates() {
           </div>
         ) : (
           <div className="dup-body workbench" aria-busy={status === 'loading' || undefined}>
-            <aside className="panel dup-list" aria-label="Duplicate wording" data-side="left" data-side-title="Groups">
+            <aside className="panel dup-list" aria-label="Duplicate wording">
               <div className="panel-head">Groups <span className="sub" data-testid="dup-count">{groups.length} of {scan.groups.length}</span></div>
               <div className="panel-body flush">
                 <ul className="list-rows" data-testid="dup-group-list">
