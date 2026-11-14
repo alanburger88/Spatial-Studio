@@ -32,6 +32,8 @@ import { registerProofRoutes } from './routes/proofs';
 import { registerPdfAccessibilityRoutes } from './routes/pdfAccessibility';
 import { checkDocumentPdf, type PdfAccessibilityResult } from './pdfAccessibility';
 import { registerLibraryRoutes } from './routes/library';
+import { seedHouseLibrary } from './library';
+import { restoreExtraSample, seedExtraSamples, seedSampleProofs } from './samples';
 import { ReleasePackages, createRelease, releaseInfo } from './releases';
 import { chromiumPackageComposer, type PackageComposer } from './releasePackage';
 import type { RouteDeps } from './routes/deps';
@@ -101,6 +103,11 @@ export interface AppOptions { dataDir?: string; logger?: boolean; /** Overrides 
 
 export async function buildApp(opts: AppOptions = {}) {
   const store = new Store(opts.dataDir ?? process.env.DATA_DIR ?? path.resolve(here, '../../../.data'));
+  // The example documents beyond the two fixture samples, their own customers and release, and the house library they
+  // link to: seeded on the first start only (an existing data folder keeps what it has).
+  const seededSamples = seedExtraSamples(store);
+  seedHouseLibrary(store);
+  await seedSampleProofs(store, seededSamples);
   const composer = new Composer();
   const batches = new BatchRunner(composer, path.join(opts.dataDir ?? process.env.DATA_DIR ?? path.resolve(here, '../../../.data'), 'batches'));
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 8 * 1024 * 1024 });
@@ -211,6 +218,8 @@ export async function buildApp(opts: AppOptions = {}) {
     if (projectContentDigest(current) === projectContentDigest(seed)) {
       if ((req.body as any)?.clearSnapshots !== false) store.clearSnapshots(req.params.projectId);
       store.clearKnownDataProblems(req.params.projectId);
+      // An example document with its own customers gets them (and its intended known data problems) back as well.
+      restoreExtraSample(store, req.params.projectId);
       req.audited = true;
       return { project: current, reset: true, unchanged: true, seedDigest: projectContentDigest(seed) };
     }
@@ -218,6 +227,7 @@ export async function buildApp(opts: AppOptions = {}) {
     if ((req.body as any)?.clearSnapshots !== false) store.clearSnapshots(req.params.projectId);
     // Restoring the approved sample starts afresh: no customer's data problem stays set aside.
     store.clearKnownDataProblems(req.params.projectId);
+    restoreExtraSample(store, req.params.projectId);
     audit(store, req, 'project.reset', { projectId: reset.projectId, modelVersion: reset.modelVersion, detail: { fromVersion: current.modelVersion, seedDigest: projectContentDigest(seed) } });
     return { project: reset, reset: true, seedDigest: projectContentDigest(seed) };
   });

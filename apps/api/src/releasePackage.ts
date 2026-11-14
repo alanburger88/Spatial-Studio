@@ -5,6 +5,7 @@ import {
   type DocNode, type Project, type ReleasePackageSummary, type SyntheticRecord, type TestCase,
 } from '@iss/model';
 import { RECORDS } from '@iss/model/fixtures';
+import { EXTRA_SAMPLES } from '@iss/model/samples/index';
 import { indexTree, resolve, type Resolution } from '@iss/resolver';
 import { BRAND_FONTS, DOC_FONT, SCREEN_FONT, checkChannelParity, compareManifests, imageSrc, renderEmail, renderInteractiveHtml, renderPagedDocument, renderSms, type ExtractedManifest } from '@iss/renderers';
 import { baselineCustomer, dataDictionary, documentDateBoundaries, mappingChecks, mappingCsv, mappingFile, mappingFileNames, documentTimeline, planTestData, runTestCase, wordingReleaseRecord, wordingRuleLabel } from '@iss/scenarios';
@@ -307,8 +308,17 @@ export interface ScenarioPlan {
  * `cap`. Then picks up to `referenceCap` of them for reference outputs, each time taking the scenario that shows the
  * most outcomes not shown yet.
  */
+/**
+ * A built-in example document's own customers, exactly as the studio ships them (`@iss/model/samples`): synthetic, part
+ * of the studio's code, so a package may include them like the fixture samples. Empty for any other document.
+ */
+export function builtInSampleCustomers(project: Pick<Project, 'projectId' | 'documentType'>): SyntheticRecord[] {
+  const sample = EXTRA_SAMPLES().find((s) => s.project.projectId === project.projectId && s.project.documentType === project.documentType);
+  return sample ? (sample.customers as SyntheticRecord[]) : [];
+}
+
 export async function planScenarios(project: Project, pinned: PinnedCustomerRef[], cap: number, referenceCap: number): Promise<ScenarioPlan> {
-  const samples = RECORDS.filter((r) => r.documentType === project.documentType);
+  const samples = [...RECORDS.filter((r) => r.documentType === project.documentType), ...builtInSampleCustomers(project)];
   const prefix = RECORD_ID_PREFIX[project.documentType] ?? 'REC';
   const plan = planTestData(project, samples, { outcomes: true, edges: false });
   await tick();

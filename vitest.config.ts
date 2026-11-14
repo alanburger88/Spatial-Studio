@@ -10,6 +10,7 @@ export default defineConfig({
     '@iss/runtime/build': r('packages/runtime/src/build.ts'),
     '@iss/runtime': r('packages/runtime/src/index.ts'),
     '@iss/model/fixtures': r('packages/model/src/fixtures.ts'),
+    '@iss/model/samples/index': r('packages/model/src/samples/index.ts'),
     '@iss/model': r('packages/model/src/index.ts'),
   } },
   // Unit tests never call a live AI model, whatever keys the machine has: they would cost money and stop being repeatable.

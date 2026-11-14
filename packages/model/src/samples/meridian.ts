@@ -187,7 +187,7 @@ export function buildMeridian(): Project {
   b.insert(text('greeting', 'Greeting', 'Dear {{customer.givenName}}, here is how your portfolio did this quarter.', flow({ spaceBeforePt: 0 })));
   b.insert(metric('closing-value', 'Closing value', 'custom.closingValueCents', 'usd-cents', 'primary', flow({ spaceBeforePt: 8 })));
   b.insert(container('summary-rows', 'Account summary', flow({ spaceBeforePt: 8, keepTogether: true })));
-  const line = (id: string, label: string, binding: string, formatter: 'usd-cents' | 'number' | 'text' = 'usd-cents') =>
+  const line = (id: string, label: string, binding: string, formatter: 'usd-cents' | 'text' = 'usd-cents') =>
     b.insert({ id, type: 'bound-field', name: label, label, binding, formatter, nullPolicy: 'fallback', fallbackText: '—', layout: flow({ spaceBeforePt: 2 }) }, 'summary-rows');
   b.insert(text('summary-heading', 'Account summary heading', '## Account summary', flow({ spaceBeforePt: 0 })), 'summary-rows');
   line('opening-value', 'Opening value', 'custom.openingValueCents');

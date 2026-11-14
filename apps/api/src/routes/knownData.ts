@@ -108,7 +108,7 @@ export function releaseKnownDataProblems(store: Store, project: Project): Releas
   return active.map((k): ReleaseKnownDataProblem => {
     const sample = RECORDS.some((r) => r.recordId === k.recordId);
     const origin = sample ? 'sample' : store.projectRecordOrigin(project.projectId, k.recordId);
-    const synthetic = sample || origin === 'generated';
+    const synthetic = sample || origin === 'generated' || origin === 'sample';
     let reason = k.reason;
     if (!synthetic) {
       const names = [nameOf(k.customer), k.customer.customer?.givenName, k.customer.customer?.familyName, k.recordId].filter((n): n is string => typeof n === 'string' && n.trim().length >= 2);
@@ -116,7 +116,7 @@ export function releaseKnownDataProblems(store: Store, project: Project): Releas
     }
     return {
       blockerId: k.blockerId, blocker: k.blocker.title,
-      customer: synthetic ? { kind: sample ? 'sample' : 'generated', id: k.recordId } : { kind: origin === 'supplied' ? 'supplied' : 'imported' },
+      customer: synthetic ? { kind: sample || origin === 'sample' ? 'sample' : 'generated', id: k.recordId } : { kind: origin === 'supplied' ? 'supplied' : 'imported' },
       reason, markedBy: k.markedBy?.name ?? null, markedAt: k.markedAt,
     };
   });

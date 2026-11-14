@@ -7,6 +7,7 @@ import {
   type Project, type ReleaseActor, type ReleaseInfo, type ReleasePackageCheck, type ReleasePackageStatus, type ReleaseStage, type ReleaseVersions,
 } from '@iss/model';
 import { RECORDS } from '@iss/model/fixtures';
+import { builtInSampleCustomers } from './releasePackage';
 import { ENGINE_VERSION } from '@iss/resolver';
 import { EMAIL_RENDERER_VERSION, HTML_RENDERER_VERSION, PAGED_RENDERER_VERSION, SMS_RENDERER_VERSION } from '@iss/renderers';
 import type { PinnedCustomerRef, Store, StoredRelease } from './db';
@@ -36,12 +37,14 @@ export function releaseVersions(project: Project): ReleaseVersions {
  * alone, will ever reach a package.
  */
 export function pinnedCustomerRefs(store: Store, project: Project): PinnedCustomerRef[] {
-  const samples = new Set(RECORDS.filter((r) => r.documentType === project.documentType).map((r) => r.recordId));
+  // The fixture samples of this kind, and a built-in example document's own customers as it ships them.
+  const samples = new Set([...RECORDS.filter((r) => r.documentType === project.documentType), ...builtInSampleCustomers(project)].map((r) => r.recordId));
   const imported = new Set(store.importedRecords(project.documentType).map((r) => r.recordId));
   return (project.testCases ?? []).map((t): PinnedCustomerRef => {
     const base = { testId: t.id, recordId: t.recordId };
-    if (samples.has(t.recordId)) return { ...base, kind: 'sample' };
     const origin = store.projectRecordOrigin(project.projectId, t.recordId);
+    // A built-in example's customer counts as a sample only while it is still the one the studio shipped (origin `sample`).
+    if (samples.has(t.recordId) && (origin === undefined || origin === 'sample')) return { ...base, kind: 'sample' };
     if (origin === 'generated') return { ...base, kind: 'generated', digest: customerDigest(store.projectRecord(t.recordId)!) };
     if (origin === 'supplied') return { ...base, kind: 'supplied' };
     return { ...base, kind: imported.has(t.recordId) ? 'imported' : 'missing' };

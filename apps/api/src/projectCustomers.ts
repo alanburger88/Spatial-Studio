@@ -14,7 +14,7 @@ export interface TestDataChoice { outcomes: boolean; edges: boolean; issueDate?:
 
 /** Shared customers of this kind of document that the generator may start from (never earlier generated ones). */
 export const baseRecordsFor = (store: Store, project: Project): SyntheticRecord[] =>
-  [...RECORDS, ...store.importedRecords(), ...store.projectRecords(project.projectId, 'supplied')].filter((r) => r.documentType === project.documentType);
+  [...RECORDS, ...store.importedRecords(), ...store.projectRecords(project.projectId, 'supplied'), ...store.projectRecords(project.projectId, 'sample')].filter((r) => r.documentType === project.documentType);
 
 export const publicPlan = (plan: TestDataPlan, ids: string[] = []) => ({
   summary: plan.summary,
