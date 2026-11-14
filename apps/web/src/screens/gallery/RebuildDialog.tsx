@@ -30,6 +30,7 @@ type Step = 'choose' | 'found' | 'send';
 const errText = (e: unknown): string => (e instanceof ApiFailure ? e.message : String((e as Error)?.message ?? e));
 const sizeText = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 let keySeed = 0;
+const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
 async function base64Of(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -280,7 +281,7 @@ export function RebuildDialog({ onClose }: { onClose: () => void }) {
       )}
       <p className="rb-summary" data-testid="rebuild-summary">
         {files[sampleTab]?.name ? <><span className="sd-fname" title={files[sampleTab].name}>{files[sampleTab].name}</span>: </> : null}
-        a {FILE_KIND_LABEL[sample.reading.kind]} file, {sample.reading.kind === 'docx' ? 'about ' : ''}{sample.reading.pages} page{sample.reading.pages === 1 ? '' : 's'}, {sample.reading.paper.size ? PAPER_LABEL[sample.reading.paper.size] : `${Math.round(sample.reading.paper.widthPt)} × ${Math.round(sample.reading.paper.heightPt)} pt`} · {sample.reading.blocks.length} blocks · {sample.reading.blocks.filter((b) => b.kind === 'table').length} tables · {sample.reading.images.length} pictures · {sample.marks.filter((m) => !off.has(m.id)).length} likely personal details
+        a {FILE_KIND_LABEL[sample.reading.kind]} file, {sample.reading.kind === 'docx' ? 'about ' : ''}{sample.reading.pages} page{sample.reading.pages === 1 ? '' : 's'}, {sample.reading.paper.size ? PAPER_LABEL[sample.reading.paper.size] : `${Math.round(sample.reading.paper.widthPt)} × ${Math.round(sample.reading.paper.heightPt)} pt`} · {count(sample.reading.blocks.length, 'block')} · {count(sample.reading.blocks.filter((b) => b.kind === 'table').length, 'table')} · {count(sample.reading.images.length, 'picture')} · {count(sample.marks.filter((m) => !off.has(m.id)).length, 'likely personal detail')}
       </p>
       <div className="rb-cols">
         <section className="sd-block" aria-labelledby="rb-blocks-h">

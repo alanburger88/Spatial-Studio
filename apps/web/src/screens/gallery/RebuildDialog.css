@@ -7,6 +7,7 @@
 .rb-fname { flex: 1 1 auto; min-width: 0; max-width: none; }
 .rb-remove { margin-left: auto; }
 .rb-names { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.rb-tabs { align-self: flex-start; }
 .rb-tabs button[aria-selected='true'] { background: var(--iss-accent-soft); color: var(--iss-text); box-shadow: inset 0 0 0 1px var(--iss-accent); }
 .rb-summary { margin: 0; font-size: 13px; color: var(--iss-text-muted); }
 .rb-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 14px; align-items: start; }
