@@ -79,3 +79,39 @@ test('IF03 refused on a card statement, with the reason', async ({ page }) => {
   await expect(page.getByTestId('df-import-refused')).toContainText('its data fields are the studio’s built-in ones');
   await expect(page.getByTestId('df-import-refused')).toContainText('“Your own data”');
 });
+
+test('IF04 groups, lists and a list inside a list from dotted names, with a customer who has one of each (wave 5)', async ({ page, request }) => {
+  const r = await request.post(`${API}/projects`, { data: { templateId: 'blank-project', title: `Nested fields E2E ${Date.now().toString(36)}`, issuerName: 'Calder Bay Credit Union' } });
+  expect(r.status()).toBe(201);
+  const pid = (await r.json()).project.projectId;
+  created.push(pid);
+  await open(page, pid, 'rules-data');
+  await page.getByTestId((await page.getByTestId('no-data-fields-open').count()) ? 'no-data-fields-open' : 'open-data-fields').click();
+  await page.getByTestId('df-import').click();
+  await page.getByTestId('if-dialog').locator('summary').click();
+  await page.getByTestId('if-text').fill([
+    'name,label,type,example',
+    'household,,string,The Eriksens',
+    'mailing,Mailing address,group,',
+    'mailing.city,,string,Calder Bay',
+    'accounts[].number,Account number,string,7152-3148',
+    'accounts[].holder.name,,string,Elliot',
+    'accounts[].transactions[].amount,,amount,-42.72',
+    'accounts[].transactions[].tags[].name,,string,x',
+  ].join('\n') + '\n');
+  const rowOf = (name: string) => page.locator('[data-testid="if-row"]').filter({ hasText: name });
+  await expect(rowOf('City').getByTestId('if-inside')).toHaveText('In “Mailing address”');
+  await expect(rowOf('Amount').getByTestId('if-inside')).toHaveText('In “Accounts”, in “Transactions”');
+  await expect(page.locator('[data-testid="if-row"][data-skip="yes"]').getByTestId('if-skip')).toContainText('nested deeper than that');
+  await page.getByTestId('if-apply').click();
+  await expect(page.getByTestId('if-dialog')).toHaveCount(0);
+  const got = await fields(page);
+  expect(got.map((f: any) => [f.key, f.type])).toEqual([['household', 'string'], ['mailing', 'group'], ['accounts', 'list']]);
+  expect(got[2].itemFields.map((c: any) => [c.key, c.type])).toEqual([['number', 'string'], ['holder', 'group'], ['transactions', 'list']]);
+  await expect(page.getByTestId('save-state')).toContainText('Saved');
+  // the customer made from the examples has one account with one transaction, and passes the studio's own check
+  const records = (await (await request.get(`${API}/records?documentType=custom&full=1&projectId=${pid}`)).json()).records as any[];
+  const example = records.find((x) => x.customer.givenName === 'Example');
+  expect(example?.custom).toEqual({ household: 'The Eriksens', mailing: { city: 'Calder Bay' }, accounts: [{ number: '7152-3148', holder: { name: 'Elliot' }, transactions: [{ amount: -4272 }] }] });
+  await expect(page.getByTestId('df-tree')).toContainText('Transactions');
+});
