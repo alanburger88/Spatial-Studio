@@ -11,6 +11,9 @@ const stamp = Date.now().toString(36);
 const BLOCK = `Payment actions ${stamp}`;
 const WORDING = `Payment reminder ${stamp}`;
 let docA = '', docB = '';
+/** The house library items the card sample itself links (D106: house wording rules, late-fee table); a duplicate keeps them. */
+const SAMPLE_LINKS = ['card-late-fees', 'house-wording-rules'];
+const added = (links: any[]) => links.filter((l) => !SAMPLE_LINKS.includes(l.itemId));
 
 const duplicate = async (request: APIRequestContext, title: string) => {
   const r = await request.post(`${API}/projects/aster-card-demo/duplicate`, { data: { title } });
@@ -71,7 +74,8 @@ test('LB02 a block and a wording go into the library from a document, are approv
   await save(page);
 
   const p = await project(page);
-  expect(p.libraryLinks.map((l: any) => [l.kind, l.version])).toEqual([['block', 1], ['wording', 1]]);
+  expect(p.libraryLinks.map((l: any) => l.itemId).slice(0, SAMPLE_LINKS.length)).toEqual(SAMPLE_LINKS);
+  expect(added(p.libraryLinks).map((l: any) => [l.kind, l.version])).toEqual([['block', 1], ['wording', 1]]);
   expect(p.nodes.some((n: any) => n.id === 'payment-actions')).toBe(true); // linked in place: the same ids
   expect((await itemByTitle(request, BLOCK)).latest).toBe(1);
 });
@@ -87,7 +91,7 @@ test('LB03 a second document uses them read-only; a change is refused with a mes
   await expect(insp.getByTestId('lib-chip').first()).toContainText(`Library · ${BLOCK} · v1`);
   await expect(insp.getByTestId('lib-readonly-note')).toContainText('read-only in this document');
   const p = await project(page);
-  const link = p.libraryLinks[0];
+  const link = added(p.libraryLinks)[0];
   expect(link.target.rootNodeId).toBe(`${link.linkId}-payment-actions`);
   // The canvas and the command bus refuse a change, naming the library item.
   await page.evaluate((id) => (window as any).__iss.store.getState().dispatch({ type: 'DELETE_NODE', nodeId: id }), `${link.linkId}-payment-action`);
@@ -101,7 +105,7 @@ test('LB03 a second document uses them read-only; a change is refused with a mes
   await page.getByTestId('lib-pick-dialog').getByRole('button', { name: new RegExp(WORDING) }).click();
   await expect(insp.getByTestId('lib-node-section')).toContainText(`Library · ${WORDING} · v1`);
   await save(page);
-  expect((await project(page)).libraryLinks).toHaveLength(2);
+  expect(added((await project(page)).libraryLinks)).toHaveLength(2);
 });
 
 test('LB04 a new version is published; the document sees Update available with its impact, applies it, undoes it and unlinks', async ({ page, request }) => {

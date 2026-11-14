@@ -9,8 +9,9 @@ import { MERIDIAN_LOGO, NORTHWIND_LOGO } from './logos';
  * card late-fee table, the claim review-time table and the house wording rules. Each item is approved at version 1; the
  * customer-rights notice also has a version 2, so the Northwind bill (which links version 1) shows "Update available".
  * The example documents link to these items with exactly this content, so "where used" is populated from the first
- * start. The two original examples (Aster Card, HarborCare) link the glossary, the house wording rules and their own
- * table (`showcaseExisting.ts`); their resolved documents are the same as without the links, for every fixture customer.
+ * start. The two original examples (Aster Card, HarborCare) link the house wording rules and their own table, and
+ * HarborCare the glossary (`showcaseExisting.ts`); their resolved documents are the same as without the links, for every
+ * fixture customer.
  *
  * Pure data. The server seeds an item only when the library has no item of that id (`apps/api/src/library.ts`).
  */

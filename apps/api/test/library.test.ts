@@ -40,11 +40,11 @@ describe('the shared library (sign-in off: the local admin)', () => {
   afterAll(async () => { await ctx.app.close(); });
   const { inj, json, project, apply, latest } = helpers(() => ctx);
   const CARD = 'aster-card-demo', EOB = 'harborcare-demo';
-  // The two samples link house library items of their own (glossary, house wording rules, a lookup table: D106). This
+  // The two samples link house library items of their own (house wording rules, a lookup table, the EOB's glossary: D106). This
   // studio has no house library (extraSamples: false), so those links are "not in the library" here; the tests find
   // the links they make by item.
   const linkOf = (p: Project, itemId: string) => p.libraryLinks!.find((l) => l.itemId === itemId)!;
-  const SAMPLE_LINKS: Record<string, string[]> = { [CARD]: ['card-late-fees', 'glossary-es', 'house-wording-rules'], [EOB]: ['claim-review-times', 'glossary-es', 'house-wording-rules'] };
+  const SAMPLE_LINKS: Record<string, string[]> = { [CARD]: ['card-late-fees', 'house-wording-rules'], [EOB]: ['claim-review-times', 'glossary-es', 'house-wording-rules'] };
 
   it('starts empty; an item is created with its first version as a draft, from content or from a saved document', async () => {
     expect(await json('GET', '/api/v1/library')).toEqual({ items: [], can: { create: true, approve: true, setSeverity: true } });

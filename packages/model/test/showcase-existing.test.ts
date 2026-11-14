@@ -232,7 +232,7 @@ describe('links to the house library (glossary, house wording rules, each exampl
   const without = (res: ReturnType<typeof resolve>) => ({ ...res, runId: undefined, projectDigest: undefined });
 
   it('each example links exactly the house items the plan names, with the library’s content', () => {
-    expect(card.libraryLinks!.map((l) => [l.itemId, l.version])).toEqual([['card-late-fees', 1], ['glossary-es', 1], ['house-wording-rules', 1]]);
+    expect(card.libraryLinks!.map((l) => [l.itemId, l.version])).toEqual([['card-late-fees', 1], ['house-wording-rules', 1]]);
     expect(eob.libraryLinks!.map((l) => [l.itemId, l.version])).toEqual([['claim-review-times', 1], ['glossary-es', 1], ['house-wording-rules', 1]]);
     for (const p of [card, eob]) for (const l of p.libraryLinks!) {
       expect(l.version).toBe(HOUSE.linkPlan[l.itemId as HouseItemId]);
@@ -241,6 +241,8 @@ describe('links to the house library (glossary, house wording rules, each exampl
     expect(card.lookupTables).toEqual([CARD_LATE_FEES]);
     expect(eob.lookupTables).toEqual([EOB_REVIEW_TIMES]);
     expect(card.houseWordingRules).toEqual(HOUSE_WORDING_RULES);
+    expect(card.glossary).toBeUndefined();
+    expect(eob.glossary).toEqual((houseContent('glossary-es', 1) as { entries: unknown }).entries);
     expect(card.wordingRules!.map((r) => r.id)).toEqual(['aster-not-legal', 'aster-no-kindly', 'aster-short-sentences', 'aster-relationship-team']);
   });
 

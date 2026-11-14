@@ -43,7 +43,7 @@ function helpers(getCtx: () => Ctx) {
 const groupOf = (scan: any, needle: string) => scan.groups.find((g: any) => g.members.some((m: any) => m.plain.includes(needle)));
 
 /** The house library items the card sample links (D106); a copy of it keeps them. */
-const CARD_SAMPLE_LINKS = ['card-late-fees', 'glossary-es', 'house-wording-rules'];
+const CARD_SAMPLE_LINKS = ['card-late-fees', 'house-wording-rules'];
 
 describe('duplicate wording (sign-in off: the local admin)', () => {
   let ctx: Ctx;
@@ -136,7 +136,7 @@ describe('duplicate wording (sign-in off: the local admin)', () => {
     expect(near.comparison.customers.filter((x: any) => x.outcome !== 'same').length).toBeGreaterThan(0);
     // capitals are a different text for the reader: not identical, so it is reviewed in the document
     expect((await json('POST', '/api/v1/library/interest-notice/link-preview', { projectId: b, partId: PART })).identical).toBe(false);
-    // nothing was stored (the copy keeps the card sample's own links: glossary, house wording rules, late-fee table)
+    // nothing was stored (the copy keeps the card sample's own links: house wording rules, late-fee table)
     expect(((await project(a)).libraryLinks ?? []).map((l) => l.itemId)).toEqual(CARD_SAMPLE_LINKS);
     expect((await inj('POST', '/api/v1/library/interest-notice/link-preview', { projectId: a, partId: 'no-such' })).json().error.code).toBe('CANNOT_LINK');
   });

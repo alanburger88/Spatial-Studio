@@ -217,7 +217,7 @@ export const EOB_NOTES: SampleNotes = {
   intendedShould: [{ ruleId: existing('harborcare-demo').deliberateShould.ruleId, reason: `The approved “Claim totals” disclosure says “patient responsibility”. ${existing('harborcare-demo').deliberateShould.why}` }],
   unusedFields: [
     { path: 'claim.service', reason: 'A field of the approved claims data: the first claim’s service. The claim table shows every claim’s service (claims[].service), so for these one-claim customers it is shown there.' },
-    { path: 'claim.serviceDate', reason: 'As above: the claim table shows every claim’s service date (claims[].serviceDate). The document has no date of its own (see the notes), so no calculation reads it.' },
+    { path: 'claim.serviceDate', reason: 'A field of the approved claims data: the first claim’s service date. The claim table shows every claim’s service date (claims[].serviceDate). The document has no date of its own (see the notes), so no calculation reads it.' },
   ],
   missingCalcs: [],
   translations: { 'es-US': { approved: 0, draft: 0, missing: 121 } },

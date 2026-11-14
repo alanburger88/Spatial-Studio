@@ -227,9 +227,10 @@ export function enrichCard(project: Project): Project {
   p = run(p, { type: 'SET_CHANNELS', channels: { ...ch, email: { ...ch.email, intro: 'You have {{calc.daysUntilDue}} days to pay. Every transaction is in your full statement.' } } });
 
   for (const rule of CARD_WORDING_RULES) p = run(p, { type: 'ADD_WORDING_RULE', rule });
-  // The house wording rules and the Spanish glossary from the library: the approved fixture wording meets every house
-  // "must" rule (it names Aster Card as fictional, never says "click here" or "guaranteed"), so no customer gains a finding.
-  p = linkHouse(p, 'glossary-es');
+  // The house wording rules from the library: the approved fixture wording meets every house "must" rule (it names
+  // Aster Card as fictional, never says "click here" or "guaranteed"), so no customer gains a finding. The card keeps a
+  // glossary of its own (empty): it is where the studio shows a document's own glossary being edited (a linked
+  // glossary is read-only), so the library glossary is linked to HarborCare only.
   p = linkHouse(p, 'house-wording-rules');
   p = run(p, { type: 'ADD_MAPPING', mapping: { id: 'print-house', name: 'Mapping for the print house', system: 'the print house', description: 'Field names of the print house’s statement data file (fictional).' } });
   p = run(p, { type: 'SET_MAPPING_ENTRIES', mappingId: 'print-house', entries: completeMapping(p, CARD_MAPPING_TARGETS) });
