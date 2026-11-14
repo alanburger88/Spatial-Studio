@@ -28,6 +28,7 @@ const CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'asset.', label: 'Images' },
   { id: 'batch.', label: 'Batch runs' },
   { id: 'assist.', label: 'Assistant-assisted changes' },
+  { id: 'file.', label: 'Files read' },
   { id: 'user.', label: 'User accounts' },
   { id: 'auth.', label: 'Sign-ins' },
 ];
@@ -73,7 +74,14 @@ export function auditSentence(e: AuditEventDto, project: Project | null, names: 
     case 'project.save': return `Saved ${v} (${changeSummary(d.changes)})${d.workflow ? ` — moved back to draft from ${String(d.workflow.from).replace('_', ' ')}` : ''}`;
     case 'project.restore': return `Restored v${d.restoredVersion} as ${v}`;
     case 'project.reset': return `Restored the approved sample as ${v}`;
-    case 'project.create': return d.setup ? `Created “${d.title ?? e.projectId}” from a ${d.setup === 'ai' ? 'description, set up by the assistant (AI suggestion, approved by this person)' : 'data file, set up by the studio (built-in)'}` : `Created “${d.title ?? e.projectId}” from the template “${d.templateTitle ?? d.templateId}”${d.templateVersion ? ` v${d.templateVersion}` : ''}`;
+    case 'file.read': {
+      // Kinds and counts only: the log never holds a file's name or content.
+      const kinds = Array.isArray(d.kinds) ? (d.kinds as string[]).map((k) => (k === 'docx' ? 'Word' : 'PDF')) : [];
+      const pages = Array.isArray(d.pages) ? (d.pages as number[]) : [];
+      const what = kinds.length > 1 ? `${kinds.length} sample files (${kinds.map((k, i) => `${k}, ${plural(pages[i] ?? 0, 'page')}`).join('; ')})` : `a ${kinds[0] ?? 'PDF or Word'} file${pages[0] ? ` of ${plural(pages[0], 'page')}` : ''}`;
+      return `Read ${what} to rebuild a document: ${d.ai ? `proposed with the AI model${d.placeholders ? ', marked details sent as placeholders' : ', text sent as it is after the person confirmed it holds no real customer data'}` : 'proposed by the studio without AI'}`;
+    }
+    case 'project.create': return d.setup ? `Created “${d.title ?? e.projectId}” from a ${d.from === 'file' ? `PDF or Word file, ${d.setup === 'ai' ? 'rebuilt by the assistant (AI suggestion, approved by this person)' : 'rebuilt by the studio (built-in)'}` : d.setup === 'ai' ? 'description, set up by the assistant (AI suggestion, approved by this person)' : 'data file, set up by the studio (built-in)'}` : `Created “${d.title ?? e.projectId}” from the template “${d.templateTitle ?? d.templateId}”${d.templateVersion ? ` v${d.templateVersion}` : ''}`;
     case 'project.import': return `Imported “${d.title ?? e.projectId}” from a project file (“${d.fromTitle}” v${d.fromVersion})`;
     case 'records.add': return d.copyOf ? `Made an editable copy of a customer (${who})` : `Added the customer ${who}`;
     case 'records.edit': return `Edited the customer ${who}${d.wasGenerated ? ' (a generated customer, now kept as this document’s own)' : ''}`;

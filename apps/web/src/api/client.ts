@@ -1,5 +1,5 @@
 import type { LibraryContent, LibraryItemInfo, LibraryKind, LibraryUsage, LibraryVersionInfo, SetupSpec, DocumentType, HandoverEntry, HandoverKind, Permission, Persona, Project, ProjectDiff, ReleaseEvent, ReleaseInfo, ReleasePackageStatus, ReleaseStage, Role, RuntimePackageStatus, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
-import type { RowMatch, SetupOutline, TestResult, VersionComparison } from '@iss/scenarios';
+import type { FileSample, NotBroughtItem, RowMatch, SampleAlignment, SetupOutline, TestResult, VersionComparison } from '@iss/scenarios';
 
 /** Typed client for the local Spatial Studio API (/api/v1, proxied by Vite). */
 
@@ -72,7 +72,15 @@ export interface SetupProposal {
 /** `unavailable` is a normal answer (for example a description with no AI key): nothing was drafted. */
 export type SetupDraftResult = SetupProposal | { mode: 'unavailable'; providerStatus: string; message: string; notes: string[] };
 export interface SetupDraftBody { description?: string; sampleData?: SetupSampleData; title?: string; issuerName?: string; accent?: string; spec?: SetupSpec; source?: 'ai' | 'builtin' }
-export interface SetupCreateBody { spec: SetupSpec; title: string; issuerName?: string; accent?: string; customers: 'generate' | 'supplied' | 'both'; sampleData?: SetupSampleData; source: 'ai' | 'builtin' }
+export interface SetupCreateBody { spec: SetupSpec; title: string; issuerName?: string; accent?: string; customers: 'generate' | 'supplied' | 'both'; sampleData?: SetupSampleData; source: 'ai' | 'builtin'; /** Set up from an existing PDF or Word file ("Rebuild from a file"). */ origin?: 'file' }
+/** Rebuild from a file: one to three files as base64, never their names. */
+export interface RebuildFile { data: string }
+export interface RebuildReading { samples: FileSample[]; alignment: SampleAlignment | null; ai: { live: boolean; providerStatus: string } }
+export interface RebuildProposeBody { files: RebuildFile[]; useAi: boolean; placeholders?: boolean; confirmNoCustomerData?: boolean; outline?: string; unmarked?: string[]; title?: string; issuerName?: string }
+/** A checked setup proposed from the files (shown through the ordinary setup review), or a plain state: no AI key, or a model answer that failed the checks. */
+export type RebuildProposal =
+  | { mode: 'proposal'; source: 'ai' | 'builtin'; providerStatus: string; message: string; spec: SetupSpec; notes: string[]; report: NotBroughtItem[] }
+  | { mode: 'unavailable'; reason: 'no-key' | 'failed'; providerStatus: string; message: string; notes: string[] };
 export interface SetupCreated { project: Project; source: 'ai' | 'builtin'; notes: string[]; customers: { total: number; generated: number; supplied: SetupSuppliedSummary | null; startingCustomerOnly: boolean }; preview: SetupPreview }
 
 export interface ScenarioRequest {
@@ -239,6 +247,10 @@ export const api = {
   draftSetup: (body: SetupDraftBody, signal?: AbortSignal) => json<SetupDraftResult>('/api/v1/projects/setup/draft', { method: 'POST', body: JSON.stringify(body), signal }),
   /** Creates the document from the setup a person approved. Needs the right to edit. A 422 (EMPTY_SETUP, INVALID_SETUP) is an `ApiFailure` with a plain message. */
   createSetup: (body: SetupCreateBody) => json<SetupCreated>('/api/v1/projects/setup', { method: 'POST', body: JSON.stringify(body) }),
+  /** Rebuild from a file: reads the files on the server (nothing stored, nothing sent to a model). Refusals are `ApiFailure`s with `body.error.sample`. */
+  readRebuildFiles: (files: RebuildFile[], signal?: AbortSignal) => json<RebuildReading>('/api/v1/projects/rebuild/read', { method: 'POST', body: JSON.stringify({ files }), signal }),
+  /** Rebuild from a file: proposes a setup. With `useAi` the server needs `confirmNoCustomerData` and the exact `outline` shown. */
+  proposeRebuild: (body: RebuildProposeBody, signal?: AbortSignal) => json<RebuildProposal>('/api/v1/projects/rebuild/propose', { method: 'POST', body: JSON.stringify(body), signal }),
   deleteProject: (id: string) => json<{ deleted: boolean }>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
   /** `documentType` may be left out when `projectId` is sent. For a `custom` project `projectId` is required and the rows become that project's own customers; for the built-in kinds `scope: 'project'` does the same. */
   importRecords: (body: { documentType?: string; format: 'json' | 'csv'; data: string; dryRun?: boolean; projectId?: string; scope?: 'project' | 'shared' }) => json<ImportResult>('/api/v1/records/import', { method: 'POST', body: JSON.stringify(body) }),
