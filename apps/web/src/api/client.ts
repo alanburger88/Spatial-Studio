@@ -1,5 +1,5 @@
 import type { LibraryContent, LibraryItemInfo, LibraryKind, LibraryUsage, LibraryVersionInfo, SetupSpec, DocumentType, HandoverEntry, HandoverKind, Permission, Persona, Project, ProjectDiff, ReleaseEvent, ReleaseInfo, ReleasePackageStatus, ReleaseStage, Role, RuntimePackageStatus, SyntheticRecord, WorkflowAction, WorkflowState } from '@iss/model';
-import type { RowMatch, SetupOutline, TestResult, VersionComparison } from '@iss/scenarios';
+import type { DuplicateKind, DuplicateScan, RowMatch, SetupOutline, TestResult, VersionComparison } from '@iss/scenarios';
 
 /** Typed client for the local Spatial Studio API (/api/v1, proxied by Vite). */
 
@@ -358,6 +358,14 @@ export const api = {
   discardLibraryDraft: (itemId: string) => json<{ item: LibraryItemDto | null; discarded: number }>(`/api/v1/library/${encodeURIComponent(itemId)}/draft`, { method: 'DELETE' }),
   /** Dry run: what updating this document's link to `version` changes, and for which synthetic customers. Send `project` for the working copy. */
   libraryImpact: (itemId: string, body: { projectId: string; version?: number; linkId?: string; project?: Project }) => json<LibraryImpactDto>(`/api/v1/library/${encodeURIComponent(itemId)}/impact`, { method: 'POST', body: JSON.stringify(body) }),
+  // Duplicate wording (wave 3): the scan reads only; keeping a wording makes a library draft; the link preview is a dry run.
+  libraryDuplicates: (q: { threshold?: number; kinds?: DuplicateKind[]; language?: string } = {}) => json<LibraryDuplicatesDto>(`/api/v1/library/duplicates?${new URLSearchParams([
+    ...(q.threshold !== undefined ? [['threshold', String(q.threshold)]] : []), ...(q.kinds?.length ? [['kinds', q.kinds.join(',')]] : []), ...(q.language ? [['language', q.language]] : []),
+  ] as Array<[string, string]>)}`),
+  keepDuplicateWording: (body: { title: string; text: string; heading?: string; type: 'text' | 'disclosure'; description?: string; note?: string; members: Array<{ projectId: string; textId: string } | { itemId: string }>; source?: { projectId: string; ref: string } }) =>
+    json<{ item: LibraryItemDto; translations: string[]; notCarried: string[]; edited: boolean }>('/api/v1/library/duplicates/keep', { method: 'POST', body: JSON.stringify(body) }),
+  libraryLinkPreview: (itemId: string, body: { projectId: string; partId: string; project?: Project }) => json<LibraryLinkPreviewDto>(`/api/v1/library/${encodeURIComponent(itemId)}/link-preview`, { method: 'POST', body: JSON.stringify(body) }),
+  linkLibraryDrafts: (itemId: string, targets: Array<{ projectId: string; partId: string; modelVersion?: number }>) => json<LibraryLinkDraftsDto>(`/api/v1/library/${encodeURIComponent(itemId)}/link-drafts`, { method: 'POST', body: JSON.stringify({ targets }) }),
   releaseLibrary: (releaseId: string) => json<{ library: Array<{ itemId: string; title: string; kind: LibraryKind; version: number; inLibrary: boolean }> }>(`/api/v1/releases/${releaseId}/library`),
 };
 
@@ -395,6 +403,26 @@ export interface ReleasePdfRecordDto {
 
 export interface LibraryCan { create: boolean; approve: boolean; /** Only an admin sets whether a house wording rule is a “must” or a “should”. */ setSeverity?: boolean }
 export type LibraryItemDto = LibraryItemInfo & { usage: { documents: number; links: number; behind: number } };
+export type LibraryDuplicatesDto = DuplicateScan & {
+  documents: Array<{ projectId: string; title: string; documentType: DocumentType; modelVersion: number; workflowState: WorkflowState }>;
+  /** How long the scan took (when `cached`, the scan that is being served again). */
+  tookMs: number; cached: boolean; servedInMs: number;
+  can: LibraryCan & { link: boolean };
+};
+export interface LibraryLinkPreviewDto {
+  itemId: string; title: string; partId: string; identical: boolean; difference: string | null;
+  before: { title: string; type: 'text' | 'disclosure'; approvedLocales: Record<string, string> };
+  after: { title: string; type: 'text' | 'disclosure'; approvedLocales: Record<string, string> };
+  comparison: VersionComparison;
+  changes: Array<{ title: string; items: string[] }>;
+  content: LibraryContent;
+  version: LibraryVersionInfo;
+}
+export interface LibraryLinkDraftsDto {
+  item: { id: string; title: string; version: number };
+  linked: Array<{ projectId: string; title: string; partId: string; linkId: string; fromVersion: number; toVersion: number }>;
+  refused: Array<{ projectId: string; title: string | null; partId: string; code: string; reason: string; state?: WorkflowState }>;
+}
 export interface LibraryImpactDto {
   linkId: string; title: string; kind: LibraryKind; from: number; to: number;
   comparison: VersionComparison;
