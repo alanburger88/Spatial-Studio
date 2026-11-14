@@ -1,5 +1,5 @@
 import { dayWords } from '@iss/model';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { OUTPUT_PROFILES, journeyStates, primaryVariantSet, explainInPlainWords, safeFixPlan } from '@iss/scenarios';
 import { api, type VersionDto } from '../api/client';
@@ -9,7 +9,6 @@ import { Icon } from '../ui/icons';
 import { localeLabel, nodeTitle, ruleTitle } from '../ui/plain';
 import { recordSummary } from '../shell/RecordPicker';
 import { Conversation } from './Conversation';
-import { AskAllCustomers } from './AskAllCustomers';
 import { PanelResizer } from './PanelResizer';
 import { ChangeSummaryCard, lastApprovedVersion } from './ChangeSummaryCard';
 import { useAiLive } from './common';
@@ -42,6 +41,9 @@ function jumpTo(testIds: string[]) {
     } else if (++tries > 15) window.clearInterval(t);
   }, 100);
 }
+
+/** "Ask about all customers" (wave 4): its own download, fetched when its tab is first opened. */
+const AskAllCustomers = lazy(() => import('./AskAllCustomers').then((m) => ({ default: m.AskAllCustomers })));
 
 /** The panel itself. `AssistHost` (assist/AssistHost.tsx) decides when it is shown and loads this file on first use. */
 export function AssistPanelBody() {
@@ -95,7 +97,7 @@ export function AssistPanelBody() {
         <button type="button" role="tab" id="assist-tab-all" aria-selected={tab === 'all'} aria-controls="assist-tabpanel" tabIndex={tab === 'all' ? 0 : -1} onClick={() => setTab('all')} data-testid="assist-tab-all" title="Ask about all customers">All customers</button>
       </div>
       <div className="assist-body" id="assist-tabpanel" role="tabpanel" aria-labelledby={`assist-tab-${tab}`}>
-        {tab === 'all' ? <AskAllCustomers /> : tab === 'chat' ? <Conversation compact /> : (
+        {tab === 'all' ? <Suspense fallback={<p className="assist-status" role="status">Loading…</p>}><AskAllCustomers /></Suspense> : tab === 'chat' ? <Conversation compact /> : (
           <div className="assist-help">
             {focus?.kind === 'explain' ? <ExplainCard nodeId={focus.nodeId} />
               : focus?.kind === 'summary' ? <SinceApproved />
