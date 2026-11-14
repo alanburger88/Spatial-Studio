@@ -25,6 +25,8 @@ const CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'comment.', label: 'Comments' },
   { id: 'records.', label: 'Imported records' },
   { id: 'known-data.', label: 'Known data problems' },
+  // Wave 4: a blocker's owner, status and notes.
+  { id: 'blocker.', label: 'Blocker owners and notes' },
   { id: 'asset.', label: 'Images' },
   { id: 'batch.', label: 'Batch runs' },
   { id: 'assist.', label: 'Assistant-assisted changes' },
@@ -89,6 +91,13 @@ export function auditSentence(e: AuditEventDto, project: Project | null, names: 
     case 'known-data.add': return `Set aside a known data problem for ${forWho}: ${d.blocker ?? 'a problem in the customer’s data'}`;
     case 'known-data.remove': return `Removed the known data problem for ${forWho}, who counts as stopped again`;
     case 'known-data.lapse': return d.why === 'customer-gone' ? 'A known data problem was removed because its customer no longer exists' : `A known data problem for ${forWho} no longer applied and was removed (the problem no longer stops them)`;
+    // Wave 4 (blocker owners, status and notes): begin
+    case 'blocker.assign': return d.ownerId ? `Made ${d.ownerName ?? 'someone'} the owner of a blocker: ${d.blocker ?? d.blockerId}` : `Removed the owner of a blocker: ${d.blocker ?? d.blockerId}`;
+    case 'blocker.status': return `Marked a blocker “${d.to === 'being-fixed' ? 'Being fixed' : 'Open'}”: ${d.blocker ?? d.blockerId}`;
+    case 'blocker.note': return `Added a note to a blocker: ${d.blocker ?? d.blockerId}`;
+    case 'blocker.fixed': return `The studio found a blocker fixed${d.how === 'full-check' ? ' by the full check' : ''}: no customer is stopped by it any more (${d.blocker ?? d.blockerId})`;
+    case 'blocker.reopen': return `A fixed blocker came back and is open again: ${d.blocker ?? d.blockerId}`;
+    // Wave 4: end
     case 'testdata.generate': return `Generated ${plural(Number(d.customers ?? 0), 'test customer')} for this document${d.replaced ? ` (replacing ${d.replaced})` : ''}${d.unreachable ? `; ${plural(Number(d.unreachable), 'outcome')} could not be reached` : ''}`;
     case 'testdata.clear': return `Removed ${plural(Number(d.removed ?? 0), 'generated test customer')}`;
     case 'template.save': return d.newTemplate ? `Saved a new template “${d.title}” (v${d.version})` : `Saved version ${d.version} of the template “${d.title}”`;

@@ -93,7 +93,7 @@ export function CountChips({ blocker }: { blocker: BlockerWithStatus }) {
   );
 }
 
-export function BlockerDetail({ blocker, records, personas, impactFor, readOnlyReason, appliedFixId, onApply, onOpen, onPreview, data, stale, children }: {
+export function BlockerDetail({ blocker, records, personas, impactFor, readOnlyReason, appliedFixId, onApply, onOpen, onPreview, data, stale, work, workChips, children }: {
   blocker: BlockerWithStatus; records: SyntheticRecord[]; personas: Persona[];
   impactFor: (blockerId: string, fixId: string) => FixImpact | null;
   readOnlyReason: string | null; appliedFixId: string | null;
@@ -101,6 +101,9 @@ export function BlockerDetail({ blocker, records, personas, impactFor, readOnlyR
   data: DataActions;
   /** The blocker came from a full check made before the last change to the document. */
   stale: boolean;
+  /** Phase 4: owner, status and notes (shown after what is wrong), and their chips beside the title. */
+  work?: React.ReactNode;
+  workChips?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   const isData = blocker.kind === 'customer-data';
@@ -121,6 +124,7 @@ export function BlockerDetail({ blocker, records, personas, impactFor, readOnlyR
           <span className={`chip${isData ? ' warning' : ''}`} data-testid="bl-detail-kind">{KIND_LABEL[blocker.kind]}</span>
           {blocker.status === 'known-data-problem' && <span className="chip warning" data-testid="bl-detail-status">Status: Known data problem</span>}
           <CountChips blocker={blocker} />
+          {workChips}
           {blocker.speed === 'full-check' ? <span className="chip info" data-testid="bl-detail-speed" title="Found by the last full check, which composes the pages.">from the full check</span> : <span className="chip" data-testid="bl-detail-speed" title="Worked out just now for every customer.">checked just now</span>}
           <Tech><span className="chip code">{blocker.code}</span><span className="chip code" title="Stable id of this cause">{blocker.id}</span></Tech>
         </div>
@@ -128,6 +132,7 @@ export function BlockerDetail({ blocker, records, personas, impactFor, readOnlyR
       {stale && blocker.speed === 'full-check' && <p className="bl-note warn" role="status">This comes from a full check made before your last change. It may already be fixed; run the full check again to confirm.</p>}
       <p className="bl-why">{blocker.explanation}</p>
       <About blocker={blocker} />
+      {work}
 
       {runDate && project && (
         <div className="callout warning bl-datanote" data-testid="bl-datenote">

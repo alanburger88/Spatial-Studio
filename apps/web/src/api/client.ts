@@ -444,3 +444,6 @@ export interface LibraryImpactDto {
   content: LibraryContent;
   version: LibraryVersionInfo;
 }
+
+/* Wave 4 (blocker owners, status and notes; notifications and My work): the shared request helper, for api/work.ts. */
+export { json as requestJson };

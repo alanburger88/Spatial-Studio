@@ -15,6 +15,8 @@ import { CommandPalette, useShellUi } from './CommandPalette';
 import { MOD, SettingsMenu } from './Help';
 import { TourPrompt } from './TourPrompt';
 import { LazyDrawers, LazyOverlays } from './LazyOverlays';
+// Wave 4 (notifications and My work): the bell; its panel is a separate download (LazyOverlays).
+import { Bell } from './Bell';
 import { DemoToolsButton, DemoToolsPanel } from './DemoTools';
 import { AssistHost } from '../assist/AssistHost';
 import { useDrawers } from './drawers';
@@ -297,6 +299,7 @@ function TopBar() {
         <button type="button" className="btn ghost palette-btn" onClick={() => useShellUi.getState().setPalette(true)} aria-label="Search (Command palette)" aria-haspopup="dialog" title={`Search everything (${MOD}+K)`} data-testid="open-palette">
           <Icon.search /><span className="pal-btn-label">Search</span><kbd className="kbd">{MOD} K</kbd>
         </button>
+        <Bell />
         <SettingsMenu />
       </div>
       <UserChip />
