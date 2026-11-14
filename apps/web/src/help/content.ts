@@ -241,7 +241,8 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     purpose: 'Everything that stops this document being issued, one entry for each cause, across every synthetic customer. Fix a cause and every customer it stopped is cleared.',
     actions: [
       'Read the summary, then choose a blocker to see what is wrong, who is affected and the fixes to choose from, each with its effect.',
-      'Apply a suggested fix, or open the place where it is fixed by hand. Run the full check to compose pages and compare PDF and web output.',
+      // Wave 4 (blockers phase 5): AI drafts for wording blockers, merged into this action to keep five.
+      'Apply a suggested fix, or open the place where it is fixed by hand. For wording, draft a missing translation or get wording that follows the rules; a person then approves the text. Run the full check to compose pages and compare PDF and web output.',
       'For a problem in one customer\'s data: open it in Data Explorer with the fields highlighted, or have an approver mark it a known data problem with a reason.',
       'Use "Resolve one by one" to walk through the open blockers, most customers first, and pin a test for each one fixed.',
       // Wave 4 (blocker owners, status and notes)
@@ -407,6 +408,8 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
       'Read a proposal with its effect before and after, and approve or reject it.',
       'See which rules were involved in an answer, and open one.',
       'Check whether the built-in or an AI answer is in use (the built-in assistant is the default and always works).',
+      // Wave 4: ask about all customers
+      'Under “Ask about all customers” (also the “All customers” tab of the assistant panel), ask who gets something, how many do, or why one customer does. The studio counts every synthetic customer and can open them in the Scenario Landscape or Data Explorer.',
     ],
     next: [
       { screen: 'S07', why: 'open the rules the assistant mentions' },

@@ -244,6 +244,14 @@ bar from overflowing, the document name in the breadcrumb gives way first on win
   offered where they exist.
 - The assistant policy is unchanged: nothing is approved by the assistant, and no customer data is sent to a model.
 
+**As built (2026-11-14).** See "As built: phase 5" in `docs/design/BLOCKERS.md` and `docs/api/ASK_ALL_CUSTOMERS.md` (the
+`tone` addition). Built as designed, in the blocker detail and in each wording step of "Resolve one by one": the draft is
+stored as one undoable step with its origin and is never approved; a suggestion is shown as before and after with the words
+that change marked and is used as one undoable step; without a key the screen says so in one line and offers the sample
+draft and the rule's own replacement. What differs: the built-in "reads as a demand for money" check is given to the helper
+as a "must" tone rule (explanations of benefits, English); required disclosures and library texts are never rewritten (the
+screen says where they are changed); Content & Translations gained `?lang=&text=` so the blocker can open it at one text.
+
 ## 7. Ask questions of all customers
 
 "Who gets the hardship message, and why?" "How many customers see the winter notice in Spanish?" "Which customers are
@@ -258,6 +266,43 @@ stopped, and by what?"
   Scenario Landscape and Data Explorer with the same customers selected. It also shows the question as the studio
   understood it, so a wrong reading is visible.
 - It lives in the assistant panel as "Ask about all customers".
+
+**As built (2026-11-14).** Code: `packages/scenarios/src/assist/baseQuery.ts` (question, check, answer) and
+`baseQueryReader.ts` (built-in reader); `readQuestionWithAi` and `POST /api/v1/projects/:projectId/assist/base-question`
+(`docs/api/ASK_ALL_CUSTOMERS.md`); the card `apps/web/src/assist/AskAllCustomers.tsx`, in the assistant panel's third tab
+("All customers") and on the AI Assistant screen (where the panel is not shown). Tests: `apps/api/test/ask-all-customers.test.ts`
+(55 phrasings, the four examples, counts compared with Blockers, coverage and the Landscape, the model's reading) and
+`e2e/ask-all-customers.spec.ts`.
+
+- **The question** asks who, how many, or why one customer; about a rule (its condition holds), a message alternative or a
+  section (shown), being stopped (by anything, a kind of blocker or one blocker) or a language; optionally "but not" a second
+  one, a condition on a data field, "in <language>" and "as issued on".
+- **The answer** is worked out in the browser by the same `ScenarioEngine` the Cube and Landscape use, from every customer,
+  with the top bar's output, journey step and day: the count ("7 of 34 synthetic customers"), the customers (ten, then "show
+  all"), the reason grouped and in words (the rule by its title and number with its condition, a section's own condition, the
+  fallback, or each blocker with a link to it), what narrowed it, and links that open the Scenario Landscape and Data Explorer
+  on exactly those customers. The question as understood is shown above it, with who read it (the built-in reader or AI). The
+  answer follows the open document: change a rule and it is worked out again.
+- **Counts are the other screens'**: an outcome counts as coverage counts it, a blocker question uses the Blockers screen's own
+  result (known data problems set aside, the last full check included), and a language is the Landscape's language filter.
+  The unit tests compare every rule, message, section, language and blocker kind of the four examples.
+- **The built-in reader** reads "who gets X", "how many get X", "who gets X but not Y", "why does <customer> get X", "who is
+  stopped (and by what / by <kind>)", "… in Spanish", "who sees <section>", "who matches rule R07", "… where <field> is
+  <value>" and "… as issued on <date>". X is matched against rule titles, message and alternative titles, section names and
+  kinds of blocker, ignoring case, quotes, small misspellings and a generic last word ("message"). When X (or a customer's
+  name) fits more than one thing it asks, with the candidates as buttons. Requests to change something are refused and never
+  sent to a model; a sentence it cannot read goes to the model only when a key is set.
+- **The model** is given only the vocabulary (names of rules, messages and alternatives, sections, fields with label and
+  type, languages, kinds of blocker) and the sentence with every customer's name and id replaced by `<customer>` (in the
+  browser, and again on the server). Its answer is a fixed shape, checked against the document; a "why" names the
+  placeholder and the studio puts the customer back.
+
+What differs: Landscape and Data Explorer could not take a list of customers, so both gained `?customers=<id,…>` (the
+Landscape resolves only those customers with the same engine; Data Explorer lists only them), each with "Show all"; "in
+Spanish" means the customer's language (as the Landscape filter), not whether approved Spanish wording exists; a "section" is
+any part that can be left out, including a message component; the model is not given the allowed values of a field, so a
+condition on a list of values it names wrongly is refused rather than guessed; two sample customers share the name "Taylor
+Rivers", so a question naming them is asked back.
 
 ---
 

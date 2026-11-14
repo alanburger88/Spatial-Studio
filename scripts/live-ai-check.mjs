@@ -81,6 +81,23 @@ if (process.env.LIVE_ONLY === 'setup-data') {
   finish();
 }
 
+// Only on request (LIVE_ONLY=ask-question, two calls): "Ask about all customers" (wave 4, item 7). A free sentence the
+// built-in reader cannot read is turned by the model into the structured question; the studio answers it. The second
+// sentence names a sample customer: the model must answer with the placeholder (the route takes the name out first).
+// Run by the integrator on purpose only; never part of the automated tests.
+if (process.env.LIVE_ONLY === 'ask-question') {
+  const NW = 'northwind-energy-demo';
+  const r = await post(`/projects/${NW}/assist/base-question`, { sentence: 'Of the people who read their bills in Spanish, which ones end up with the note about getting help paying for heating in winter?' });
+  const q = r.json.question;
+  record('Ask about all customers: a free sentence read into a question', r.status === 200 && r.json.mode === 'ai' && q?.target?.kind === 'section' && q?.target?.nodeId === 'winter-help' && q?.language === 'es-US', `mode=${r.json.mode} ${r.ms} ms · ${clip(q ?? r.json.message, 300)}`);
+  const recs = (await (await fetch(`${API}/records?documentType=custom&full=1&projectId=${NW}`)).json()).records ?? [];
+  const who = recs[0] ? `${recs[0].customer.givenName} ${recs[0].customer.familyName}` : 'Avery Lindqvist';
+  const r2 = await post(`/projects/${NW}/assist/base-question`, { sentence: `Explain to me the reason ${who} is shown the bit about using more electricity than last year` });
+  const q2 = r2.json.question;
+  record('Ask about all customers: a named customer comes back as the placeholder', r2.status === 200 && r2.json.mode === 'ai' && q2?.ask === 'why' && q2?.customer === '<customer>' && q2?.target?.nodeId === 'high-usage', `mode=${r2.json.mode} ${r2.ms} ms · ${clip(q2 ?? r2.json.message, 300)}`);
+  finish();
+}
+
 // 1. Assistant chat: the question from the first live run. The reply must not disclaim who the customer is.
 {
   const r = await post('/assistant/message', { message: 'Explain why this customer get this About "Payment guidance" for Morgan Santos', context: { projectId: P, recordId: 'CARD-0005', overrides: {}, journeyCursor: null, selectedNodeId: 'payment-guidance' } });
