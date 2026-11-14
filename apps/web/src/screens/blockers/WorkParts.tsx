@@ -41,17 +41,19 @@ export function WorkPanel({ blockerId, status, item, data, frozen }: { blockerId
   const blocked = useWorkBlockedReason();
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState('');
+  // What was just chosen, shown at once while the server answers (cleared when it has, or on a refusal).
+  const [chosen, setChosen] = useState<{ owner?: string; beingFixed?: boolean }>({});
   const people = data?.people ?? [];
   const authEnabled = data?.authEnabled ?? false;
   const run = async (fn: () => Promise<void>, ok?: () => void) => {
     setBusy(true);
     try { await fn(); ok?.(); }
     catch (e) { useStudio.getState().toast({ kind: 'error', title: 'Not changed', message: e instanceof Error ? e.message : String(e) }); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setChosen({}); }
   };
   const store = useBlockerWorkStore.getState();
-  const owner = item?.owner?.id ?? '';
-  const beingFixed = status === 'being-fixed';
+  const owner = chosen.owner ?? item?.owner?.id ?? '';
+  const beingFixed = chosen.beingFixed ?? status === 'being-fixed';
   const disabled = !data || busy || !!blocked;
   const trimmed = text.trim();
   return (
@@ -60,7 +62,7 @@ export function WorkPanel({ blockerId, status, item, data, frozen }: { blockerId
       <div className="bl-work-row">
         <label className="field bl-work-owner">
           <span className="lbl">Owner</span>
-          <select className="select" value={owner} disabled={disabled || frozen} onChange={(e) => void run(() => store.set(projectId, blockerId, { ownerId: e.target.value || null }))} data-testid="bl-owner-picker" title={blocked ?? undefined}>
+          <select className="select" value={owner} disabled={disabled || frozen} onChange={(e) => { const v = e.target.value; setChosen({ owner: v }); void run(() => store.set(projectId, blockerId, { ownerId: v || null })); }} data-testid="bl-owner-picker" title={blocked ?? undefined}>
             <option value="">No owner</option>
             {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             {item?.owner && !people.some((p) => p.id === item.owner!.id) && <option value={item.owner.id}>{item.owner.name} (no longer a studio user)</option>}
@@ -68,7 +70,7 @@ export function WorkPanel({ blockerId, status, item, data, frozen }: { blockerId
         </label>
         <label className={`bl-switch${frozen || status === 'known-data-problem' ? ' off' : ''}`} title={status === 'known-data-problem' ? 'Every customer it stops is set aside as a known data problem.' : frozen ? 'Fixed: no customer is stopped by it any more.' : 'Tell others someone is working on it'}>
           <input type="checkbox" role="switch" checked={beingFixed} aria-checked={beingFixed} disabled={disabled || frozen || status === 'known-data-problem'}
-            onChange={(e) => void run(() => store.set(projectId, blockerId, { status: e.target.checked ? 'being-fixed' : 'open' }))} data-testid="bl-being-fixed" />
+            onChange={(e) => { const on = e.target.checked; setChosen({ beingFixed: on }); void run(() => store.set(projectId, blockerId, { status: on ? 'being-fixed' : 'open' })); }} data-testid="bl-being-fixed" />
           <span className="bl-switch-track" aria-hidden="true"><span /></span>
           <span>Being fixed</span>
         </label>
