@@ -100,7 +100,7 @@ Paused by the product owner before wave 4, to work on the example documents firs
 | 2 — Real documents | Built and verified (v0.12) |
 | 3 — Bringing documents in, and handing them over | Built and verified (v0.13), except the first adapter, which waits for a named target system |
 | 4 — Teams | Built and verified (v0.15, decisions D111–D117) on 2026-11-14: 1,220 unit tests, 384 browser tests |
-| 5 — Reach and depth | Not started |
+| 5 — Reach and depth | **Started on 2026-11-14. Check-in done (D118): three of the six items are being built (variants, richer data shapes, message experiments); the other three wait for a print partner or native-language reviewers. Design: `docs/design/WAVE5_REACH_AND_DEPTH.md`. Nothing in it is verified yet.** |
 
 **To resume wave 4**, start with its check-in. Two questions are still open:
 

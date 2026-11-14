@@ -161,9 +161,10 @@ export function Dialog({ title, onClose, children, footer, labelledBy = 'dialog-
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby={labelledBy} ref={ref}>
-        <header id={labelledBy}>{title}<button className="btn ghost icon" style={{ marginLeft: 'auto' }} onClick={onClose} aria-label="Close dialog"><Icon.close /></button></header>
+        {/* role="none": inside a dialog these are its head and foot, not the page's banner and footer landmarks. */}
+        <header role="none" id={labelledBy}>{title}<button className="btn ghost icon" style={{ marginLeft: 'auto' }} onClick={onClose} aria-label="Close dialog"><Icon.close /></button></header>
         <div className="body">{children}</div>
-        {footer && <footer>{footer}</footer>}
+        {footer && <footer role="none">{footer}</footer>}
       </div>
     </div>
   );
