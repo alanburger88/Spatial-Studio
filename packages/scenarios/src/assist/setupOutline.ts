@@ -1,4 +1,4 @@
-import { SETUP_FIELD_TYPE_LABEL, type Project, type SetupField, type SetupSection, type SetupSpec } from '@iss/model';
+import { PAPER_SIZES, SETUP_FIELD_TYPE_LABEL, type Project, type SetupField, type SetupSection, type SetupSpec } from '@iss/model';
 import { ruleWording } from './ruleDraft';
 
 /**
@@ -13,6 +13,8 @@ export interface SetupOutline {
   sections: Array<{ kind: string; text: string; versions?: Array<{ title: string; shownWhen: string; fallback: boolean }> }>;
   email: { subject: string; intro: string } | null;
   sms: string | null;
+  /** The paper the pages use, when the setup names one other than US Letter (for example "A4"). */
+  paper?: string;
   /** The whole outline as sentences, for a plain list. */
   lines: string[];
 }
@@ -72,5 +74,7 @@ export function setupOutline(spec: SetupSpec, project: Project): SetupOutline {
   if (email?.intro) lines.push(`Email opening text: ${q(clip(email.intro, 160))}`);
   if (sms) lines.push(`Text message: ${q(sms)}`);
   if (!email && !sms) lines.push('The email and the text message keep the standard wording.');
-  return { fields, sections, email, sms, lines };
+  const paper = spec.paper && spec.paper !== 'US-Letter' ? PAPER_SIZES[spec.paper]?.label : undefined;
+  if (paper) lines.push(`Paper: ${paper}.`);
+  return { fields, sections, email, sms, lines, ...(paper ? { paper } : {}) };
 }
