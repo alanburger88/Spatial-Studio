@@ -76,8 +76,24 @@ function DetachDialog({ project, onClose }: { project: Project; onClose: () => v
 
 /* ---- the update */
 
-function EntryList({ entries, testId, mode }: { entries: UpdateEntry[]; testId: string; mode: 'in' | 'kept' | 'look' }) {
-  if (!entries.length) return <p className="muted vr-none" data-testid={`${testId}-none`}>Nothing.</p>;
+/**
+ * The base sometimes takes a thing out and puts the same thing back (a block linked again to the shared library): two
+ * entries that cancel out for the reader. They are folded into one closing line so the real changes are not buried.
+ */
+function foldRenewed(entries: UpdateEntry[]): { shown: UpdateEntry[]; renewed: string[]; folded: number } {
+  const used = new Set<number>();
+  const renewed: string[] = [];
+  entries.forEach((e, i) => {
+    if (used.has(i) || e.change !== 'removed') return;
+    const j = entries.findIndex((x, k) => k !== i && !used.has(k) && x.change === 'added' && x.group === e.group && x.label === e.label && x.baseNow === e.baseBefore);
+    if (j >= 0) { used.add(i); used.add(j); renewed.push(e.label); }
+  });
+  return { shown: entries.filter((_, i) => !used.has(i)), renewed, folded: used.size };
+}
+
+function EntryList({ entries: all, testId, mode }: { entries: UpdateEntry[]; testId: string; mode: 'in' | 'kept' | 'look' }) {
+  if (!all.length) return <p className="muted vr-none" data-testid={`${testId}-none`}>Nothing.</p>;
+  const { shown: entries, renewed, folded } = mode === 'in' ? foldRenewed(all) : { shown: all, renewed: [], folded: 0 };
   return (
     <ul className="vr-entries list-rows" data-testid={testId}>
       {entries.map((e, i) => (
@@ -88,6 +104,12 @@ function EntryList({ entries, testId, mode }: { entries: UpdateEntry[]; testId: 
           {e.note && <p className="vr-note">{e.note}</p>}
         </li>
       ))}
+      {folded > 0 && (
+        <li className="vr-entry vr-renewed" data-testid={`${testId}-renewed`} data-count={folded}>
+          <div className="vr-entry-head"><strong>{entries.length ? `The other ${folded} entries are` : `All ${folded} entries are`} {plural(renewed.length, 'thing')} the base took out and put back unchanged</strong></div>
+          <p className="vr-note">For example a block linked again to the shared library. Nothing in them reads differently: {renewed.join(', ')}.</p>
+        </li>
+      )}
     </ul>
   );
 }
@@ -143,7 +165,9 @@ function UpdateBox({ project, vs }: { project: Project; vs: VariantState }) {
 
 function Differences({ project, vs }: { project: Project; vs: VariantState }) {
   const canEdit = useCan('edit');
-  const groups = VARIANT_GROUPS.map((g) => ({ g, items: vs.differences.filter((d) => d.group === g) })).filter((x) => x.items.length);
+  // Bookkeeping that follows from a wording difference beside it (which English a translation was written from) is not listed.
+  const listed = vs.differences.filter((d) => !d.quiet);
+  const groups = VARIANT_GROUPS.map((g) => ({ g, items: listed.filter((d) => d.group === g) })).filter((x) => x.items.length);
   const useBase = (d: VariantDifference) => {
     const r = baseValueAgain(project, vs.at!, d.id, { customers: vs.customers });
     const toast = useStudio.getState().toast;
@@ -152,9 +176,9 @@ function Differences({ project, vs }: { project: Project; vs: VariantState }) {
     if (done.ok) toast({ kind: 'success', title: 'The base’s again', message: `${done.label}. Undo takes it back.` });
   };
   return (
-    <section className="vr-diffs" aria-labelledby="vr-diff-h" data-testid="variant-differences" data-count={vs.differences.length}>
-      <h3 id="vr-diff-h">Differences from the base <span className="chip count">{vs.differences.length}</span></h3>
-      {vs.differences.length === 0
+    <section className="vr-diffs" aria-labelledby="vr-diff-h" data-testid="variant-differences" data-count={listed.length}>
+      <h3 id="vr-diff-h">Differences from the base <span className="chip count">{listed.length}</span></h3>
+      {listed.length === 0
         ? <p className="muted" data-testid="variant-no-differences">None yet: this variant is the same as version {vs.follows} of the base. Change its brand, wording, sections, lookup tables or rules, and the differences appear here.</p>
         : groups.map(({ g, items }) => (
           <div key={g} className="vr-diff-group" data-testid={`variant-diff-group-${g}`}>
