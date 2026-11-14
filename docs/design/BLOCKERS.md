@@ -1,6 +1,6 @@
 # Blockers: seeing them, sharing them, resolving them
 
-Status: **design agreed in a workshop with the product owner on 2026-11-13 (eight decisions). Phases 1 to 5 are built (see the phase list, "As built: phases 2 and 3", "As built: phase 4" and "As built: phase 5"); phase 6 is not.**
+Status: **design agreed in a workshop with the product owner on 2026-11-13 (eight decisions). All six phases are built (see the phase list, "As built: phases 2 and 3", "As built: phase 4", "As built: phase 5" and "As built: phase 6").**
 
 ## Where we start from
 
@@ -60,7 +60,7 @@ Existing links that jump straight to where a fix is made (a rule, a message, a f
 3. **Resolve one by one**, and **pin a test when fixed**. **Built** (see "As built: phases 2 and 3").
 4. **Owner, status and notes.** **Built** (see "As built: phase 4").
 5. **AI drafts for wording blockers** (missing translation; wording that reads as a demand for money). **Built** (see "As built: phase 5").
-6. **Warn before saving.**
+6. **Warn before saving.** **Built** (see "As built: phase 6").
 
 Each phase ends with tests, documentation and a demo path, and is verified before the next starts.
 
@@ -184,3 +184,53 @@ the blocker detail under the fixes and in each wording step of "Resolve one by o
 - **The demand-for-money check applies to explanations of benefits in English**, as the resolver's own check does.
 - **Content & Translations gained `?lang=&text=`** (the language and the search box), the smallest way to open it at one text.
 
+## As built: phase 6
+
+Built on 2026-11-14 (wave 4, item 5 of `docs/design/WAVE4_TEAMS.md`). The comparison is pure, in
+`packages/scenarios/src/saveCheck.ts` (`fastCauses`, `newCausesOnSave`, `newCauseCustomers`; tests
+`packages/scenarios/test/save-check.test.ts`); the screen side is `apps/web/src/state/saveFlow.ts` (`requestSave`), a separate
+download `apps/web/src/shell/saveCheck.ts` and the dialog in `apps/web/src/shell/SaveDialogs.tsx`; browser tests
+`e2e/save-warning.spec.ts`.
+
+- **What is compared.** The fast root causes of the version about to be saved and of the last saved version, across every
+  customer the studio holds for the document and every day the approval check uses: what the resolver finds for each customer
+  (`customerBlockers`), broken "must" wording rules, and the static rule and data-link checks. It is the same set the server
+  works out for "Fixed" (`savedCauses`), built from the same engine functions, and causes are matched by `blockerIdOf`.
+- **When it warns.** Only when the new version has a cause the saved one does not. Then a dialog, before anything is saved:
+  each new cause in the Blockers screen's own words, its kind, how many synthetic customers it stops ("no customer stopped
+  yet" for a cause no customer meets), **Open where this is fixed** (the same place the Blockers screen opens) and **See it
+  in Blockers**, and a line saying that layout and PDF problems are not part of this check. **Go back** has the focus (Enter
+  or Escape goes back); **Save anyway** saves. Saving is never prevented, and if the comparison cannot be worked out the save
+  goes ahead.
+- **No dialog** when nothing new is added, or when nothing has changed, or for a person who may not edit (the store's own
+  answer applies).
+- **A cause that only gains customers does not warn.** It is not a new cause: the saved version already has it, the Blockers
+  screen lists every customer it stops, and its owner, status and notes carry over. Warning about it would also make the
+  dialog appear for ordinary edits on a document that already has blockers.
+- **A cause removed and another added**: only the added one is named.
+- **Cost.** The saved version's causes are worked out once, when the person first edits after a save (when the browser is
+  idle), and remembered; Save then works out only the new version's. Measured in the development build on this machine: Aster
+  Card (70 customers) 43–84 ms with the saved version ready, about 100–130 ms with neither ready; Aster Card with a 250-row
+  customer added (71 customers) 54 ms; HarborCare, Northwind and Meridian 18–120 ms. Well under the 300 ms budget, so the work
+  is not moved further off the click. Describing a new cause (its words and where it is fixed) runs the Blockers engine on the
+  affected customers only, and only when there is something to show.
+
+### Which saves are warned
+
+| Save | Warned? | Why |
+|---|---|---|
+| Save button, Ctrl/Cmd+S, "Save project" in the command palette, "Save changes" in version history | Yes | A person chose to save these edits. |
+| Autosave | — | There is none to the server. Translation and email/SMS "autosave" write into the open document only; the warning applies when it is saved. |
+| Fix all safe issues; applying an assistant proposal; a fix in Blockers | Not by itself | These change the open document and do not save; the warning applies when it is saved. They fix causes, so they rarely add one. |
+| Restoring a version from version history | No | The person chose a version that was saved before, after seeing what it changes; the server stores it as it was. Its blockers show on the Blockers screen at once. |
+| Importing, a new document from a template, a setup or a file | No | A new document has no earlier saved version to compare with. |
+| "Add fields and a customer" (Rules & data) | No | It must save so that the server can make the customer; adding fields adds no cause. |
+| The guided demo | No | A scripted demonstration on the samples. |
+| A save through the API (tests, scripts) | No | This is a screen feature; the API is unchanged. |
+
+### What differs from the design, and why
+
+- **Each cause also links to the Blockers screen**, beside "Open where this is fixed", because the open, unsaved version's
+  blockers are listed there with their fixes.
+- **The check covers every day the approval check uses** for a document dated by the run, as the server's "Fixed" does,
+  while the Blockers screen shows one "As issued on" day.

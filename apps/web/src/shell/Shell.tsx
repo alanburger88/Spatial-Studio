@@ -17,6 +17,12 @@ import { TourPrompt } from './TourPrompt';
 import { LazyDrawers, LazyOverlays } from './LazyOverlays';
 // Wave 4 (notifications and My work): the bell; its panel is a separate download (LazyOverlays).
 import { Bell } from './Bell';
+// Wave 4 (who else is editing): reporting this window, and the others' initials in the top bar.
+import { usePresenceReporting } from './presence';
+import { PresenceBar } from './PresenceBar';
+// Wave 4 (warn before saving; a newer version was saved first): a save a person starts, and its dialogs.
+import { requestSave, useSaveFlow } from '../state/saveFlow';
+import { SaveDialogsHost } from './SaveDialogsHost';
 import { DemoToolsButton, DemoToolsPanel } from './DemoTools';
 import { AssistHost } from '../assist/AssistHost';
 import { useDrawers } from './drawers';
@@ -24,6 +30,8 @@ import { WorkflowChip } from './workflow';
 import './shell-extras.css';
 import './section-tabs.css';
 import './collab.css';
+// Wave 4: the top bar as a whole fits from 1,000 px (see the file for the order in which things give way).
+import './topbar-fit.css';
 
 /** Activity (audit log) nav icon: a pulse line. */
 const ActivityIcon = (props: SVGProps<SVGSVGElement>) => (
@@ -104,6 +112,9 @@ export function screenOfPath(pathname: string): (typeof SCREENS)[number] | null 
   return SCREENS.find((x) => !x.path.startsWith('/') && x.path === seg) ?? null;
 }
 
+/** The name of a screen, for "Dana is on Design Studio" (wave 4, who else is editing). */
+const screenLabelOf = (id: string | null): string => (id && screenById(id)?.label) || 'another screen';
+
 /** Address of a screen for a project (Exploded keeps the selected component in its address, as before). */
 export function screenTo(s: (typeof SCREENS)[number], project: Project | null, sel: string | null | undefined, pid: string): string {
   if (s.path.startsWith('/')) return s.path;
@@ -150,22 +161,38 @@ function LanguageSelect() {
   const record = useRecord();
   const res = useResolution();
   const forced = usePreviewLanguage();
+  // Narrow windows: the picker shows a short code ("Auto · EN", "ES"); the full name stays in its tooltip.
+  const narrow = useNarrowBar();
   if (!project) return null;
   const langs = ['en-US', ...projectLanguages(project)];
   const own = (record?.customer?.locale as string | undefined) ?? 'en-US';
   const shown = res?.locale ?? own;
   const options = forced && !langs.includes(forced) ? [...langs, forced] : langs;
   // Short names keep the bar compact; the region is added only when two project languages share a name.
-  const short = (l: string) => (options.filter((o) => languageShortName(o) === languageShortName(l)).length > 1 ? languageName(l) : languageShortName(l));
+  const code = (l: string) => (options.filter((o) => o.split('-')[0] === l.split('-')[0]).length > 1 ? l : l.split('-')[0]).toUpperCase();
+  const short = (l: string) => (narrow ? code(l) : options.filter((o) => languageShortName(o) === languageShortName(l)).length > 1 ? languageName(l) : languageShortName(l));
   return (
     <label className="ctx-field ctx-language" title={`The document is shown in ${languageName(shown)}. ${forced ? 'Switched for this preview only.' : 'Auto follows the language this customer prefers.'}`}>
       <span className="ctx-lbl">Language</span>
       <select className="select" aria-label="Document language" value={forced ?? ''} onChange={(e) => setPreviewLanguage(e.target.value || null)} data-testid="select-language" data-language={shown}>
-        <option value="">{`Auto · ${languageShortName(own)}`}</option>
+        <option value="">{`Auto · ${narrow ? code(own) : languageShortName(own)}`}</option>
         {options.map((l) => <option key={l} value={l}>{short(l)}</option>)}
       </select>
     </label>
   );
+}
+
+/** True on windows narrow enough that the top bar's pickers use their short forms (see topbar-fit.css). */
+const NARROW_BAR = '(max-width: 1240px)';
+function useNarrowBar(): boolean {
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia(NARROW_BAR).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW_BAR);
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return narrow;
 }
 
 function isTyping(el: EventTarget | null) {
@@ -180,7 +207,7 @@ export function useGlobalShortcuts() {
     const onKey = (e: KeyboardEvent) => {
       const s = useStudio.getState();
       const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); s.save(); return; }
+      if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); void requestSave('keyboard'); return; }
       if (isTyping(e.target)) return;
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); s.undo(); }
       else if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); s.redo(); }
@@ -211,7 +238,7 @@ function useUiShortcuts() {
 
 function Overlays() {
   useUiShortcuts();
-  return <><CommandPalette /><LazyOverlays /></>;
+  return <><CommandPalette /><LazyOverlays /><SaveDialogsHost /></>;
 }
 
 function TopBar() {
@@ -224,12 +251,16 @@ function TopBar() {
   const past = useStudio((s) => s.past.length);
   const future = useStudio((s) => s.future.length);
   const saving = useStudio((s) => s.saving);
-  const { undo, redo, save, setRecord, setProfile } = useStudio.getState();
+  const { undo, redo, setRecord, setProfile } = useStudio.getState();
+  const checking = useSaveFlow((s) => s.checking);
+  const lastCheck = useSaveFlow((s) => s.last);
   const dirty = useIsDirty();
   const session = useStudio((s) => s.session);
   const readOnly = editBlockedReason(session);
   const { pathname } = useLocation();
   const inStudio = pathname.startsWith('/studio/');
+  // Wave 4 (who else is editing): this window tells the server where it is; the others are shown beside the document name.
+  usePresenceReporting(inStudio, inStudio ? screenOfPath(pathname)?.id ?? null : null);
   // A language switch has its own control in the bar; the chip is for every other what-if change.
   const hasOverrides = Object.keys(ctx.overrides).some((k) => k !== 'customer') || Object.keys((ctx.overrides as { customer?: Record<string, unknown> }).customer ?? {}).some((k) => k !== 'locale');
   // "Show me where" from the gallery: once the project and its picker exist, focus the picker and ring it briefly.
@@ -268,6 +299,7 @@ function TopBar() {
           </label>
         </nav>
       )}
+      {project && inStudio && <PresenceBar screenLabel={screenLabelOf} />}
       <div className="spacer" />
       {project && (
         <div className="topbar-group">
@@ -285,7 +317,7 @@ function TopBar() {
           <div className="row" style={{ gap: 4 }}>
             <button className="btn icon" onClick={undo} disabled={!past || !!readOnly} aria-label={`Undo (${past} available)`} title={readOnly ?? 'Undo (Ctrl+Z)'} data-testid="undo"><Icon.undo /></button>
             <button className="btn icon" onClick={redo} disabled={!future || !!readOnly} aria-label={`Redo (${future} available)`} title={readOnly ?? 'Redo (Ctrl+Y)'} data-testid="redo"><Icon.redo /></button>
-            <button className={`btn${dirty ? ' primary' : ''}`} onClick={() => save()} disabled={saving || !!readOnly} data-testid="save-project" title={readOnly ?? 'Save (Ctrl+S)'}><Icon.save /> <span className="save-label">{saving ? 'Saving…' : 'Save'}</span></button>
+            <button className={`btn${dirty ? ' primary' : ''}`} onClick={() => void requestSave('button')} disabled={saving || checking || !!readOnly} data-testid="save-project" data-checking={checking ? 'yes' : undefined} data-check-ms={lastCheck?.ms} title={readOnly ?? 'Save (Ctrl+S)'}><Icon.save /> <span className="save-label">{saving || checking ? 'Saving…' : 'Save'}</span></button>
           </div>
           <button type="button" className="save-state-btn" onClick={() => useDrawers.getState().show('history')} data-testid="open-history" aria-haspopup="dialog" title={`${dirty ? 'Unsaved changes' : 'Saved'} — open version history`}>
             <span className={`save-state${dirty ? ' dirty' : ''}`} data-testid="save-state" aria-live="polite"><span className="dot" />{dirty ? 'Unsaved' : 'Saved'}<span className="save-ver"> · v{project.modelVersion}</span></span>

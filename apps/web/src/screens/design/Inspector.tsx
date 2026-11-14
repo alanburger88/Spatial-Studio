@@ -20,6 +20,8 @@ import { NotInEffectChip, PeriodChip, PeriodEditor } from '../dates/period';
 import { NodeLibrary, ReadOnlyWhenLinked, useLinkedNode } from '../library/NodeLibrary';
 import { LibraryChip } from '../library/LinkUI';
 import { WordingFindings } from '../wording/WordingFindings';
+// Wave 4 (who else is editing): a warning when another window has the same component selected.
+import { otherName, useOthersOnComponent } from '../../shell/presence';
 
 /**
  * The fields a one-line condition can test. The two sample kinds keep their numbers, amounts, choices and yes/no fields;
@@ -103,6 +105,28 @@ export function CommitInput({ value, onCommit, type = 'text', ariaLabel, testId,
   );
 }
 
+/**
+ * Wave 4 (who else is editing): "Dana is also on this component." A warning before you edit, never a lock: whoever saves
+ * second is told and chooses what to do.
+ */
+function AlsoOnComponent({ nodeId }: { nodeId: string }) {
+  const others = useOthersOnComponent(nodeId);
+  const authEnabled = useStudio((s) => !!s.session?.authEnabled);
+  if (!others.length) return null;
+  // "Dana is also on this component." / "Another window is also on this component." / "You are also on this component in another window."
+  const people = [...new Set(others.filter((o) => !o.sameUser).map((o) => o.name))];
+  const mine = others.some((o) => o.sameUser);
+  const parts = [...people, ...(mine && (!authEnabled || people.length) ? [people.length ? 'another window' : 'Another window'] : [])];
+  const sentence = !parts.length ? 'You are also on this component in another window.'
+    : `${parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`} ${parts.length === 1 ? 'is' : 'are'} also on this component.`;
+  const dirty = others.some((o) => o.dirty);
+  return (
+    <div className="callout warning insp-also" role="status" style={{ marginTop: 8 }} data-testid="inspector-also-here" data-count={others.length} title={others.map((o) => otherName(o, authEnabled)).join(', ')}>
+      <strong>{sentence}</strong> {dirty ? 'There are unsaved changes there. ' : ''}You can still edit; if both of you save, the second save is stopped and asked what to do.
+    </div>
+  );
+}
+
 export function Inspector({ project, res, nodeId, onEditText }: { project: Project; res: Resolution; nodeId: string | null; onEditText: (id: string) => void }) {
   const [tab, setTabState] = useState<Tab>(lastTab);
   const setTab = (t: Tab) => { lastTab = t; setTabState(t); };
@@ -129,6 +153,7 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
               {lib.link && <LibraryChip link={lib.link} />}
               {node.layout?.paged?.mode === 'fixed' ? <span className="chip info">Fixed anchor</span> : <span className="chip">Flow</span>}
             </div>
+            <AlsoOnComponent nodeId={node.id} />
             {!rnode.visible && <div className="callout warning" style={{ marginTop: 8 }} data-testid="not-rendered"><strong>Not rendered in this scenario.</strong> {rnode.hiddenReason}</div>}
           </div>
           <div className="tabs insp-tabs" role="tablist" aria-label="Inspector sections">

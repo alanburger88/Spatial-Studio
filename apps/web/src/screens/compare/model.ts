@@ -8,6 +8,9 @@ export type SideId = string;
 export const WORKING: SideId = 'working';
 export const releaseSide = (number: number): SideId => `r${number}`;
 export const releaseNumberOf = (side: SideId): number | null => { const m = /^r(\d{1,6})$/.exec(side); return m ? Number(m[1]) : null; };
+/** Wave 4 (a newer version was saved first): a saved version as a side, `v<model version>`, read from the version history. */
+export const savedSide = (version: number): SideId => `v${version}`;
+export const savedNumberOf = (side: SideId | null): number | null => { const m = /^v(\d{1,6})$/.exec(side ?? ''); return m && Number(m[1]) > 0 ? Number(m[1]) : null; };
 
 export const OUTPUTS = ['pdf', 'web', 'email', 'sms'] as const;
 export type Output = (typeof OUTPUTS)[number];
@@ -19,6 +22,7 @@ const byNumberDesc = (releases: ReleaseInfo[]) => [...releases].sort((a, b) => b
 /** A side named in the URL that this document can actually show. */
 export function validSide(raw: string | null, releases: ReleaseInfo[]): SideId | null {
   if (raw === WORKING) return WORKING;
+  if (savedNumberOf(raw) !== null) return raw; // a saved version: the screen loads it and says so if it does not exist
   const n = raw ? releaseNumberOf(raw) : null;
   return n !== null && releases.some((r) => r.number === n) ? releaseSide(n) : null;
 }
@@ -47,6 +51,7 @@ export function otherSideFor(side: SideId, releases: ReleaseInfo[], working: Pro
   const n = releaseNumberOf(side);
   const rel = n === null ? null : releases.find((r) => r.number === n);
   if (side === WORKING) return releaseSide(byNumberDesc(releases)[0]?.number ?? 0);
+  if (savedNumberOf(side) !== null) return WORKING;
   if (rel && projectContentDigest(working) !== rel.contentDigest) return WORKING;
   const other = byNumberDesc(releases).find((r) => r.number !== n);
   return other ? releaseSide(other.number) : WORKING;
@@ -54,10 +59,11 @@ export function otherSideFor(side: SideId, releases: ReleaseInfo[], working: Pro
 
 export function sideLabel(side: SideId, releases: ReleaseInfo[], dirty = false): string {
   if (side === WORKING) return dirty ? 'Working version (not released, with unsaved changes)' : 'Working version (not released)';
+  if (savedNumberOf(side) !== null) return `Saved version ${savedNumberOf(side)} (not released)`;
   const r = releases.find((x) => x.number === releaseNumberOf(side));
   return r ? `Release ${r.number} · ${STANDING_CHIP[r.standing].label} · ${fmtAbs(r.approvedAt)}` : side;
 }
-export const sideShort = (side: SideId): string => (side === WORKING ? 'Working version' : `Release ${releaseNumberOf(side)}`);
+export const sideShort = (side: SideId): string => (side === WORKING ? 'Working version' : savedNumberOf(side) !== null ? `Saved version ${savedNumberOf(side)}` : `Release ${releaseNumberOf(side)}`);
 
 /** The customers of one outcome, in the engine's order. */
 export function customersOf(customers: CustomerComparison[], outcome: ComparisonOutcome): CustomerComparison[] {

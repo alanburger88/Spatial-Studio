@@ -99,3 +99,18 @@ export async function plainCopy(request: APIRequestContext, sample: 'aster-card-
   expect(project.calculatedFields ?? []).toEqual([]);
   return { projectId: project.projectId as string, project };
 }
+
+/**
+ * Save a change that deliberately adds a blocker. Since blockers phase 6 the studio warns first (e2e/save-warning.spec.ts):
+ * check the warning names a new cause (`cause`: a pattern for its blocker id), answer Save anyway, and wait until saved.
+ */
+export async function saveAnyway(page: Page, cause?: RegExp) {
+  await page.getByTestId('save-project').click();
+  await expect(page.getByTestId('save-warning')).toBeVisible({ timeout: 30_000 });
+  if (cause) {
+    const ids = await page.getByTestId('save-warning-cause').evaluateAll((els) => els.map((e) => e.getAttribute('data-blocker') ?? ''));
+    expect(ids.some((id) => cause.test(id)), `new causes: ${ids.join(', ')}`).toBe(true);
+  }
+  await page.getByTestId('save-warning-save').click();
+  await expect(page.getByTestId('save-state')).toContainText('Saved', { timeout: 30_000 });
+}

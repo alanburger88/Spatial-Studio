@@ -8,7 +8,7 @@
  * so every run uses names of its own and its own copies of the sample document.
  */
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
-import { API, open, plainCopy } from './helpers';
+import { API, open, plainCopy, saveAnyway } from './helpers';
 
 const stamp = Date.now().toString(36);
 const HOUSE = `House rules ${stamp}`;
@@ -99,10 +99,10 @@ test('WR03 a banned word typed into a message shows the finding under the field,
   await expect(field).toHaveValue('Your account is past due. Please pay {{card.minimumDueCents}}.');
   await expect(findings).toHaveCount(0);
   expect((await project(page)).modelVersion).toBe(before); // into the field, not the model
-  // Now leave the banned word in and save the text: it is a blocker
+  // Now leave the banned word in and save the text: it is a blocker, so the studio warns before saving (blockers phase 6)
   await field.fill('Your account is delinquent.');
   await insp.getByRole('button', { name: 'Save text (new version)' }).click();
-  await save(page);
+  await saveAnyway(page, /^wording-banned~payment-reminder~/);
 });
 
 test('WR04 a “must” rule is a blocker on Blockers and blocks approval; fixing it clears both', async ({ page }) => {

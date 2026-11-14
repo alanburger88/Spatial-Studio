@@ -175,6 +175,10 @@ const ROUTES: Record<string, Need> = {
   // Reading a question stores and changes nothing (the answer is worked out in the browser), so anyone signed in may ask.
   'POST /api/v1/projects/:projectId/assist/base-question': 'any',
   /* ---- end ask about all customers ---- */
+  /* ---- who else is editing (wave 4, docs/api/PRESENCE.md): any signed-in user; read-like, so never audited ---- */
+  'POST /api/v1/projects/:projectId/presence': 'any',
+  'POST /api/v1/presence/leave': 'any',
+  /* ---- end who else is editing ---- */
 };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Routes not listed above: reads need a session; anything that writes needs edit rights (safe default for new modules). */

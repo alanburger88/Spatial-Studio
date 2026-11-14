@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { API, demoTool, open, resetAll } from './helpers';
+import { API, demoTool, open, resetAll, saveAnyway } from './helpers';
 import { gotoScreen } from './nav-helper';
 
 const P = 'aster-card-demo';
@@ -182,9 +182,8 @@ test('B05 the status bar opens the screen; Resolve in Blockers from Validate & C
   expect(blockerParam(page)).toBe(TIE);
   await expect(page.getByTestId('bl-detail')).toHaveAttribute('data-blocker', TIE);
 
-  // 4. the Review panel (it reviews the saved model, so save first)
-  await page.getByTestId('save-project').click();
-  await expect(page.getByTestId('save-state')).toContainText('Saved', { timeout: 30_000 });
+  // 4. the Review panel (it reviews the saved model, so save first; the save adds the tie, so the studio warns first)
+  await saveAnyway(page, /^priority-tie~/);
   await page.getByTestId('workflow-status').click();
   const item = page.getByTestId('review-panel').getByTestId('readiness-blocking').filter({ hasText: /priority/i }).first();
   await expect(item).toBeVisible({ timeout: 60_000 });
@@ -239,8 +238,7 @@ test('B07 a user who may not edit sees the fixes but cannot apply them, and is t
   await open(page, P, 'rules-data');
   await demoTool(page, 'seed-d01');
   await page.getByTestId('demo-tools').getByRole('button', { name: 'Close demo tools' }).click();
-  await page.getByTestId('save-project').click();
-  await expect(page.getByTestId('save-state')).toContainText('Saved', { timeout: 30_000 });
+  await saveAnyway(page, /^priority-tie~/); // the tie is a new blocker: the studio warns before saving
   await page.route('**/api/v1/session', (route) => route.fulfill({ json: {
     authEnabled: true, user: { id: 'u-rev', name: 'Riley Reviewer', email: 'rev@example.test', role: 'reviewer' },
     permissions: ['view', 'comment'], roles: ['reviewer'], expiresAt: null,

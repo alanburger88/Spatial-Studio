@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CATALOG_BY_TYPE, WORKFLOW_LABEL, type Project, type ProjectDiff, type RuleChange, type ValueChange } from '@iss/model';
 import { api, ApiFailure, type VersionDto, type VersionMeta } from '../api/client';
 import { editBlockedReason, useIsDirty, useStudio } from '../state/store';
+import { requestSave } from '../state/saveFlow'; // wave 4: warn before saving
 import { Proof, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { actionSentence, nodeTitle, predicateSentence, ruleSentence } from '../ui/plain';
@@ -284,7 +285,7 @@ function HistoryPanelInner() {
                         <div className="callout warning" role="status">
                           You have unsaved changes. Restoring replaces the current model, so save or discard them first.
                           <div className="row" style={{ marginTop: 8 }}>
-                            <button type="button" className="btn sm" onClick={() => void useStudio.getState().save()} disabled={!!readOnly}>Save changes</button>
+                            <button type="button" className="btn sm" onClick={() => void requestSave('history')} disabled={!!readOnly}>Save changes</button>
                             <button type="button" className="btn sm danger" onClick={() => void useStudio.getState().discardChanges()} data-testid="history-discard">Discard unsaved changes</button>
                           </div>
                         </div>
