@@ -1,6 +1,6 @@
 import { isSupportedLanguage } from './languages';
 import { periodProblem } from './effective';
-import { fieldIndex, projectFieldIndex, type FieldDef } from './fields';
+import { fieldIndex, itemDefsOf, itemScopeIndex, projectFieldIndex, type FieldDef } from './fields';
 import type { DocumentType, Predicate, Project, Rule } from './types';
 
 const COMPARE = new Set(['eq', 'ne', 'gt', 'gte', 'lt', 'lte']);
@@ -21,6 +21,17 @@ export function validatePredicate(p: Predicate, scope: DocumentType | Map<string
       return errors;
     case 'not':
       return validatePredicate(p.arg, fields, depth + 1);
+    case 'items': {
+      // Richer data shapes (wave 5): how many items of a list meet a condition on one item.
+      const list = fields.get(p.path) ?? itemDefsOf(fields).find((f) => f.path === p.path);
+      if (!list || list.type !== 'array') return [`“${p.path}” is not a list of this document.`];
+      if (!['any', 'every', 'none', 'atLeast'].includes(p.match)) return [`Say whether any, every, no or at least a number of items of ${list.label} must match.`];
+      if (p.match === 'atLeast' && (!Number.isInteger(p.count) || p.count! < 1 || p.count! > 1000)) errors.push(`“At least” needs a whole number of items from 1 to 1000.`);
+      if (p.match !== 'atLeast' && p.count !== undefined) errors.push('Only “at least” takes a number of items.');
+      if (!p.where) return [...errors, `Say what each item of ${list.label} is tested for.`];
+      errors.push(...validatePredicate(p.where, itemScopeIndex(fields, p.path), depth + 1));
+      return errors;
+    }
     case 'isNull':
     case 'notNull':
       if (!fields.has(p.path)) errors.push(`Unknown field path “${p.path}”.`);

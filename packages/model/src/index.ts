@@ -28,3 +28,5 @@ export * from './lookupPaste';
 export * from './effective';
 export * from './library';
 export * from './mapping';
+// Richer data shapes (wave 5, section 2)
+export * from './shapes';

@@ -122,6 +122,16 @@ export interface RNode {
   image?: { src: string; alt: string; fit: string };
   shape?: { kind: 'line' | 'rect'; stroke?: string; fill?: string; strokeWidthPt?: number; radiusPt?: number };
   headerFooter?: { role: string; inlines: RInline[]; repeat: boolean };
+  // Richer data shapes (wave 5). Absent on every node of a document without repeating sections.
+  /** A repeating section: the list it repeats over, how many items this customer has, and the page options. */
+  repeat?: { list: string; label: string; count: number; newPage: boolean; keepHeading: boolean };
+  /**
+   * A component inside a repeating section, as laid out for one item (`index` from 1 of `count`; `section` is the
+   * section's id). The first item's components keep their own ids; those of later items are `<id>~<index>` with
+   * `instanceOf` naming the component of the document.
+   */
+  repeatItem?: { section: string; index: number; count: number; first: boolean };
+  instanceOf?: string;
 }
 
 export interface CoreResult {

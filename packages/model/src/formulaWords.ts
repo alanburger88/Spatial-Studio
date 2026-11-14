@@ -1,4 +1,4 @@
-import { CALC_PREFIX, DOCUMENT_DATE_PATH, type FieldDef } from './fields';
+import { CALC_PREFIX, DOCUMENT_DATE_PATH, itemDefsOf, itemScopeIndex, listOfItemPath, type FieldDef } from './fields';
 import { dayWords } from './isoDate';
 import type { CalculatedField, EffectivePeriod, Expr, LookupTable, Predicate, Project, Scalar } from './types';
 
@@ -29,8 +29,17 @@ export const moneyWords = (cents: number): string => `${cents < 0 ? '−' : ''}$
 function pathName(scope: WordsScope, path: string): string {
   if (path === DOCUMENT_DATE_PATH) return 'the document’s date';
   if (path.startsWith(CALC_PREFIX)) { const k = path.slice(CALC_PREFIX.length); return q(scope.calcs?.find((c) => c.key === k)?.label ?? k); }
-  const f = scope.fields.get(path);
+  const f = scope.fields.get(path) ?? itemDefsOf(scope.fields as Map<string, FieldDef>).find((x) => x.path === path);
   return q(f?.label ?? path);
+}
+
+/** A list (possibly a list inside the items of a list) and its columns, for the words of COUNT and SUM. */
+function listDef(scope: WordsScope, list: string): { def: FieldDef | undefined; across: string | null } {
+  const own = scope.fields.get(list);
+  if (own) return { def: own, across: null };
+  const def = itemDefsOf(scope.fields as Map<string, FieldDef>).find((x) => x.path === list);
+  const outer = listOfItemPath(list);
+  return { def, across: def && outer ? q(scope.fields.get(outer)?.label ?? outer) : null };
 }
 
 function scalarWords(v: Scalar, f: FieldDef | undefined): string {
@@ -53,6 +62,14 @@ export function conditionInWords(p: Predicate, scope: WordsScope, fields: Readon
     case 'isNull': return `${name(p.path)} is empty`;
     case 'notNull': return `${name(p.path)} has a value`;
     case 'in': { const f = fields.get(p.path); return `${name(p.path)} is ${p.value.length === 1 ? scalarWords(p.value[0], f) : `one of ${listOf(p.value.map((v) => scalarWords(v, f)))}`}`; }
+    case 'items': {
+      // Richer data shapes (wave 5): "for any item of “Accounts”, “Balance” is less than $0.00".
+      const inner = itemScopeIndex(fields as Map<string, FieldDef>, p.path);
+      const list = q(fields.get(p.path)?.label ?? inner.get(p.path)?.label ?? p.path);
+      const how = p.match === 'any' ? `for any item of ${list}` : p.match === 'every' ? `for every item of ${list}` : p.match === 'none' ? `for no item of ${list}` : `for at least ${p.count ?? 1} item${(p.count ?? 1) === 1 ? '' : 's'} of ${list}`;
+      const sub = fields === scope.fields ? conditionInWords(p.where, { ...scope, fields: inner }) : conditionInWords(p.where, scope, inner);
+      return `${how}, ${sub}`;
+    }
     default: {
       const f = fields.get(p.path) ?? (p.path === DOCUMENT_DATE_PATH ? ({ type: 'date' } as FieldDef) : undefined);
       const words = f?.type === 'date' ? DATE_OP_WORDS : OP_WORDS;
@@ -67,9 +84,10 @@ const BINARY: Record<string, string> = { add: 'plus', sub: 'minus', mul: 'times'
 export function exprWords(e: Expr, scope: WordsScope): string {
   const w = (x: Expr) => exprWords(x, scope);
   const group = (x: Expr, parent: Expr['op']) => ((parent === 'mul' || parent === 'div') && (x.op === 'add' || x.op === 'sub') ? `(${w(x)})` : w(x));
-  const listName = (list: string) => pathName(scope, list);
-  const column = (list: string, col: string) => q(scope.fields.get(list)?.itemFields?.find((c) => c.key === col)?.label ?? col);
-  const rowFields = (list: string): Map<string, FieldDef> => new Map((scope.fields.get(list)?.itemFields ?? []).map((c) => [c.key, { path: c.key, type: c.type, label: c.label } as FieldDef]));
+  // Richer data shapes (wave 5): a list inside a list read for the whole document is "… of every item of “Accounts”".
+  const listName = (list: string) => { const l = listDef(scope, list); return l.across ? `${pathName(scope, list)} of every item of ${l.across}` : pathName(scope, list); };
+  const column = (list: string, col: string) => q(listDef(scope, list).def?.itemFields?.find((c) => c.key === col)?.label ?? col);
+  const rowFields = (list: string): Map<string, FieldDef> => new Map((listDef(scope, list).def?.itemFields ?? []).map((c) => [c.key, { path: c.key, type: c.type, label: c.label } as FieldDef]));
   const where = (list: string, p?: Predicate) => (p ? ` where ${conditionInWords(p, scope, rowFields(list))}` : '');
   switch (e.op) {
     case 'field': return pathName(scope, e.path);

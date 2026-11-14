@@ -51,7 +51,9 @@ export type Predicate =
   | { op: 'not'; arg: Predicate }
   | { op: ComparisonOp; path: string; value: Scalar }
   | { op: 'in'; path: string; value: Scalar[] }
-  | { op: 'isNull' | 'notNull'; path: string };
+  | { op: 'isNull' | 'notNull'; path: string }
+  // Richer data shapes (wave 5): a condition about the items of a list. See `ItemsCondition`.
+  | ItemsCondition;
 
 export type RuleAction =
   | { op: 'selectVariant'; targetNodeId: string; variantId: string }
@@ -125,6 +127,8 @@ export interface CalculatedField {
   type: CalcType;
   description?: string;
   expr: Expr;
+  /** Richer data shapes (wave 5): worked out once for each item of this list (`custom.<key>`). Absent = once per customer. */
+  list?: string;
 }
 
 /** How a lookup table's key column is matched: exact text, or a range of numbers or days (from included, until excluded). */
@@ -272,6 +276,8 @@ export interface DocNode {
   variantPeriods?: Record<string, EffectivePeriod>;
   /** Repeating table: the footer shows this money field (a data or calculated field) instead of the column sum. */
   totalFrom?: string;
+  /** Richer data shapes (wave 5): a container that is a repeating section (its content is repeated for each item of a list). */
+  repeat?: RepeatSettings;
 
   // Rich text
   content?: RichDoc;
@@ -632,15 +638,22 @@ export interface ComponentCatalogEntry {
 export interface CustomListColumn {
   key: string;
   label: string;
-  type: 'string' | 'int' | 'cents' | 'date';
+  /** `group` and `list` (wave 5): a group of fields of each item, or a list inside each item (one level). */
+  type: 'string' | 'int' | 'cents' | 'date' | 'group' | 'list';
+  /** A `group` column: its fields (text, whole number, amount or date). */
+  fields?: CustomGroupMember[];
+  /** A `list` column: the columns of each of its rows (text, whole number, amount or date). */
+  itemFields?: CustomListColumn[];
 }
 
 /** A user-defined data field. Records carry its value under `custom.<key>` (a list field: an array of rows). */
 export interface CustomField {
   key: string;
   label: string;
-  type: 'string' | 'int' | 'cents' | 'bool' | 'date' | 'enum' | 'list';
+  type: 'string' | 'int' | 'cents' | 'bool' | 'date' | 'enum' | 'list' | 'group';
   enumValues?: string[];
+  /** Group fields only (wave 5): the fields of the group, read as `custom.<key>.<member>`. */
+  fields?: CustomGroupMember[];
   /** List fields only: the columns of each row (1 to 8). Rules can test the number of rows through `custom.<key>.count`. */
   itemFields?: CustomListColumn[];
   required?: boolean;
@@ -731,4 +744,36 @@ export interface WordingRule {
   language?: Locale;
   /** Why the rule exists, in the author's words. */
   note?: string;
+}
+
+/* ------------------------------------------------------------- Richer data shapes (wave 5, section 2) */
+
+/** One field of a group (a named set of simple fields: no group in a group, no list in a group). */
+export interface CustomGroupMember {
+  key: string;
+  label: string;
+  type: 'string' | 'int' | 'cents' | 'bool' | 'date' | 'enum';
+  enumValues?: string[];
+  required?: boolean;
+  example?: string;
+}
+
+/** How many items of a list must meet a condition: any, every, none, or at least `count`. */
+export type ItemsMatch = 'any' | 'every' | 'none' | 'atLeast';
+
+/**
+ * A condition about the items of a list: `path` is the list (`custom.accounts`, or an inner list
+ * `custom.accounts[].transactions`); `where` is a condition on one item, written with the item's own paths
+ * (`custom.accounts[].balanceCents`). "Every" is true for an empty list; "none" too.
+ */
+export interface ItemsCondition { op: 'items'; path: string; match: ItemsMatch; count?: number; where: Predicate }
+
+/** A repeating section: a container whose content is laid out once and repeated for each item of `list`. */
+export interface RepeatSettings {
+  /** A list field of the document (`custom.<key>`). */
+  list: string;
+  /** Start each item after the first on a new page (PDF). */
+  newPage?: boolean;
+  /** Keep each item's first component (its heading) on the same page as what follows it (PDF). */
+  keepHeading?: boolean;
 }

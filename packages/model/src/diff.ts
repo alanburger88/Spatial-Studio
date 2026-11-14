@@ -155,6 +155,7 @@ export function predicateText(p: Predicate | undefined): string {
     case 'isNull': return `${p.path} is empty`;
     case 'notNull': return `${p.path} is present`;
     case 'in': return `${p.path} in [${p.value.map((v) => JSON.stringify(v)).join(', ')}]`;
+    case 'items': return `${p.match === 'atLeast' ? `AT LEAST ${p.count ?? 1}` : p.match.toUpperCase()} of ${p.path} WHERE (${predicateText(p.where)})`;
     default: {
       const sym: Record<string, string> = { eq: '=', ne: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤' };
       return `${p.path} ${sym[p.op]} ${JSON.stringify(p.value)}`;
