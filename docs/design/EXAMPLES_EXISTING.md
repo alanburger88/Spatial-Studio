@@ -137,3 +137,36 @@ calculated fields, wording, periods, layout and project settings.
 - Oracle scenarios: card-inconsistent-payment-state (payment state) and eob-unconfirmed-liability (allowed ≠ plan paid +
   member responsibility) are the deliberate inconsistencies; card-250-rows' stress rows sum exactly to purchases;
   card-tie-defect is a rule patch, not data.
+
+## Test expectations changed (each deliberately; no assertion loosened)
+
+| Test | Before | After | Why |
+|---|---|---|---|
+| `e2e/acceptance.spec.ts` AT-36 | 30 components after reset | 34 | four new components on the card |
+| `apps/api/test/issue-date-routes.test.ts` "a document that does not use dates…" | card / CARD-0001 | EOB / EOB-0001 | the card has a date now; the EOB has none |
+| `apps/api/test/mapping-release.test.ts` | release mappings [Core, Print House] | [the print house (complete), Core, Print House]; its file is in the package | the card sample carries a complete mapping |
+| `apps/api/test/releases.test.ts` frozen template | equals the approved project | equals it without `mappings` | `template.json` never carries mappings (D104), the sample now has one |
+| same, release digest after edits | `projectContentDigest(template)` | digest of the frozen project; frozen minus mappings = template | as above |
+| same, package layout | no `data/mapping*` file | exactly the print-house `.json` and `.csv` | complete mapping is handed over |
+| same, data dictionary | `card.transactions` used by `card.transactions.count` | … and `calc.listedTotal` | new calculation reads the list |
+| same, scenarios | every cover is an outcome | date-boundary scenarios excluded from the outcome count (and checked to carry their date) | the card has date boundaries now |
+| same (3 places), re-resolving a scenario | without its date | with the scenario's `issueDate` | dated scenarios are produced "as issued on" their day |
+| `apps/api/test/runnable-package.test.ts` | reference lines `{customerRef, data}`; frozen copy run ID = package run ID | lines carry the scenario's `issueDate`; frozen copy without mappings = package run ID | dated scenarios; template.json leaves the mapping out |
+| `apps/api/test/wording-rules.test.ts` | own rules [plain, claim-word]; prompt with one rule; "no wording rules" on the card sample | the EOB's four own rules first; prompt lists the card's four rules first; a new card from the starter / the fixture card | the samples have own wording rules |
+| `e2e/calculations`, `lookup-tables`, `dates` (card), `mapping`, `wording-rules`, `wave2-links`, `rules` (pin test), `channels-editor` (defaults) | the stored sample | a new document from the built-in starter (`plainCopy` in `e2e/helpers.ts`) | their subject is a document without these features; the samples now have them |
+| `e2e/channels-editor.spec.ts` unknown token | channels stay `null` | channels stay as they were | the card sample has its own email wording |
+| `e2e/blockers-resolve.spec.ts` BR01, BR04 | no pinned tests before; one after | the sample's own tests before; exactly one new "Stays fixed" test after | the samples have pinned tests |
+| `e2e/pdf-accessibility.spec.ts` PA03 | box unchecked, check, undo | box checked, uncheck, undo | accessible PDF is required for the EOB |
+
+## Defect found and fixed
+
+- `apps/api/src/proofs.ts`: a proof's explanation named a section's own inline condition (`claim-summary:summary-confirmed`)
+  by its id instead of in words (`inlineConditionWords`). It already affected the card's high-volume note; the EOB's new
+  claim summary made the existing proofs test see it. Covered by `apps/api/test/proofs.test.ts` ("explains each part with
+  names…", every rule title differs from its id).
+
+## Observation (not changed)
+
+A document with a mapping resolves to a different run ID from its stored copy than from `template.json`, because the
+project digest includes the mapping and `template.json` leaves it out. Every release route resolves on the template, so
+proofs and packages agree; only a direct run of the stored frozen copy differs.
