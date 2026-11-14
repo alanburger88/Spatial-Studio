@@ -10,6 +10,8 @@ import { CountChips, Customers, FixCards, type DataActions } from './BlockerDeta
 import { clockTime, type FullCheckResult } from './fullCheck';
 import { KIND_LABEL, KIND_NEXT, plural } from './labels';
 import { useFixImpacts, type BlockerData } from './useBlockers';
+import { WorkChips } from './WorkParts';
+import { statusOf, useBlockerWork } from './work';
 
 /**
  * "Resolve one by one": a guided pass over the open blockers, most customers still stopped first. Each step explains the
@@ -121,6 +123,7 @@ export function ResolvePass({ data, current, full, modelChanged, readOnlyReason,
   const s = useResolvePass((st) => passOf(st, pid));
   const patch = (p: Partial<PassState> | ((s: PassState) => Partial<PassState>)) => useResolvePass.getState().patch(pid, p);
   const { result } = data;
+  const work = useBlockerWork();
 
   /* After a fix: once the engine has worked out the changed model, the blocker is either gone (fixed) or still there. */
   useEffect(() => {
@@ -181,6 +184,7 @@ export function ResolvePass({ data, current, full, modelChanged, readOnlyReason,
               <div className="bl-chips">
                 <span className={`chip${step.kind === 'customer-data' ? ' warning' : ''}`}>{KIND_LABEL[step.kind]}</span>
                 <CountChips blocker={step} />
+                <WorkChips status={statusOf(step, work.items.find((i) => i.blockerId === step.id))} item={work.items.find((i) => i.blockerId === step.id)} />
                 {step.speed === 'full-check' ? <span className="chip info">from the full check</span> : <span className="chip">checked just now</span>}
               </div>
             </div>

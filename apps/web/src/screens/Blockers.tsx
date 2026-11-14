@@ -5,7 +5,7 @@ import type { BlockerKind, BlockerLink, BlockerWithStatus, FixProposal, KnownDat
 import { Loading, ScreenHeader } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { applyAssistCommands } from '../assist/common';
-import { useStudio, editBlockedReason } from '../state/store';
+import { useStudio, editBlockedReason, useIsDirty } from '../state/store';
 import { FixAllButton, FixAllDialog, useSafePlan } from './ValidateCompare';
 import { BlockerDetail, type DataActions } from './blockers/BlockerDetail';
 import { KnownDialog, useKnownBlockedReason } from './blockers/KnownDialog';
@@ -17,6 +17,9 @@ import { Summary } from './blockers/Summary';
 import { useFullCheck } from './blockers/fullCheck';
 import { KIND_LABEL, isKind, plural } from './blockers/labels';
 import { useDocumentBlockers, useFixImpacts, type WantedImpact } from './blockers/useBlockers';
+// Phase 4: owner, status and notes.
+import { FixedDetail, FixedGroup, WorkChips, WorkPanel, type FixedEntry } from './blockers/WorkParts';
+import { statusOf, useBlockerWork, useMe, useReportFullCheck } from './blockers/work';
 import './Blockers.css';
 
 /**
@@ -41,6 +44,15 @@ export function Blockers() {
   const wantedId = params.get('blocker');
   /** `?customer=<id>`: only the blockers that stop this customer (from a blocked batch result or a generated customer). */
   const customerId = params.get('customer');
+  /** Phase 4: `?mine=1` shows only the causes this person owns; `?fixed=<id>` shows one cause from the "Fixed" group. */
+  const mine = params.get('mine') === '1';
+  const fixedId = params.get('fixed');
+  const work = useBlockerWork();
+  useReportFullCheck(full);
+  const me = useMe();
+  const dirty = useIsDirty();
+  const workById = useMemo(() => new Map(work.items.map((i) => [i.blockerId, i])), [work.items]);
+  const workFor = (id: string) => workById.get(id);
 
   const [applied, setApplied] = useState<{ blockerId: string; fixId: string } | null>(null);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
@@ -55,7 +67,18 @@ export function Blockers() {
 
   const blockers = data?.result.blockers ?? [];
   const ofCustomer = customerId ? blockers.filter((b) => b.recordIds.includes(customerId)) : blockers;
-  const shown = kind ? ofCustomer.filter((b) => b.kind === kind) : ofCustomer;
+  const ofKind = kind ? ofCustomer.filter((b) => b.kind === kind) : ofCustomer;
+  const shown = mine ? ofKind.filter((b) => workById.get(b.id)?.owner?.id === me.id) : ofKind;
+  /* The "Fixed" group: causes the studio found fixed in the saved document (until the next approval), and causes someone
+     works on that the open, unsaved version no longer has (fixed once saved). */
+  const liveIds = new Set(blockers.map((b) => b.id));
+  const fixedEntries: FixedEntry[] = work.items.flatMap((item): FixedEntry[] => {
+    if (mine && item.owner?.id !== me.id) return [];
+    if (kind && item.kind !== kind) return [];
+    if (item.status === 'fixed') return liveIds.has(item.blockerId) ? [] : [{ item, unsaved: false }];
+    return data && current && dirty && item.speed === 'fast' && !liveIds.has(item.blockerId) ? [{ item, unsaved: true }] : [];
+  });
+  const fixedSel = fixedId ? fixedEntries.find((e) => e.item.blockerId === fixedId) ?? null : null;
   const customerName = (() => { const r = customerId ? records.find((x) => x.recordId === customerId) : undefined; return r ? `${r.customer.givenName} ${r.customer.familyName}` : customerId; })();
   const selected: BlockerWithStatus | null = blockers.find((b) => b.id === wantedId) ?? shown[0] ?? null;
   useEffect(() => { asideBody.current?.scrollTo?.({ top: 0 }); }, [selected?.id]);
@@ -65,7 +88,13 @@ export function Blockers() {
     for (const [k, v] of Object.entries(patch)) { if (v) n.set(k, v); else n.delete(k); }
     return n;
   }, { replace });
-  const select = (id: string) => { setNote(null); setPinnedNote(false); setApplied(null); setParam({ blocker: id }); };
+  const select = (id: string) => { setNote(null); setPinnedNote(false); setApplied(null); setParam({ blocker: id, fixed: null }); };
+  const selectFixed = (id: string) => { setNote(null); setParam({ fixed: id }); };
+  /* A link to a cause that has since been fixed (a notification) opens it in the "Fixed" group. */
+  useEffect(() => {
+    if (!wantedId || !data || !current || liveIds.has(wantedId)) return;
+    if (work.items.some((i) => i.blockerId === wantedId && i.status === 'fixed')) setParam({ fixed: wantedId, blocker: null });
+  }, [wantedId, data, current, work.items]); // eslint-disable-line react-hooks/exhaustive-deps
   const setKind = (k: BlockerKind | null) => setParam({ kind: k });
 
   /* When the selected blocker disappears (a fix was applied, or the model changed), say so and move to the next one. */
@@ -199,13 +228,17 @@ export function Blockers() {
               <p>A cause that none of these customers reaches is not listed, so this is only as good as the customers: generate test customers to cover every rule, message, language and edge value.</p>
               {full.ranAtMs === null && <p className="muted" data-testid="bl-empty-full">Pages and PDF/web differences have not been checked yet. Run the full check to include them.</p>}
               <div className="row wrap"><button type="button" className="btn" onClick={generate} data-testid="bl-generate"><Icon.plus /> Generate test customers</button></div>
+              {fixedEntries.length > 0 && <div className="bl-list bl-empty-fixed"><FixedGroup entries={fixedEntries} selectedId={fixedSel?.item.blockerId ?? null} onSelect={selectFixed} /></div>}
             </section>
           ) : (
             <section className="panel bl-listpanel" aria-label="Blockers">
-              <div className="panel-head">{kind ? KIND_LABEL[kind] : 'Blockers'} <span className="sub">{shown.length === blockers.length ? plural(blockers.length, 'cause') : `${shown.length} of ${blockers.length} causes`}</span></div>
-              {shown.length === 0 && <p className="muted bl-none-shown">Nothing to show with this filter.</p>}
+              <div className="panel-head bl-list-head">{kind ? KIND_LABEL[kind] : 'Blockers'} <span className="sub">{shown.length === blockers.length ? plural(blockers.length, 'cause') : `${shown.length} of ${blockers.length} causes`}</span>
+                <button type="button" className={`btn sm bl-mine${mine ? ' primary' : ' ghost'}`} aria-pressed={mine} onClick={() => setParam({ mine: mine ? null : '1' })} data-testid="bl-mine" title="Show only the blockers you own">Mine</button>
+              </div>
+              {shown.length === 0 && <p className="muted bl-none-shown" data-testid="bl-none-shown">{mine ? 'You own none of these blockers. Choose a blocker and make yourself its owner in the detail.' : 'Nothing to show with this filter.'}</p>}
               <div className="bl-list-scroll">
-                <BlockerList blockers={shown} selectedId={selected?.id ?? null} onSelect={select} impactFor={impactFor} totalChecked={result.checked} />
+                <BlockerList blockers={shown} selectedId={fixedSel ? null : selected?.id ?? null} onSelect={select} impactFor={impactFor} totalChecked={result.checked} workFor={workFor}
+                  after={<FixedGroup entries={fixedEntries} selectedId={fixedSel?.item.blockerId ?? null} onSelect={selectFixed} />} />
               </div>
             </section>
           )}
@@ -225,8 +258,10 @@ export function Blockers() {
               </div>
             )}
 
-            {selected ? (
-              <BlockerDetail blocker={selected} records={records} personas={personas} impactFor={impactFor} readOnlyReason={readOnly}
+            {fixedSel ? <FixedDetail entry={fixedSel} data={work.data} /> : selected ? (
+              <BlockerDetail blocker={selected}
+                work={<WorkPanel key={selected.id} blockerId={selected.id} status={statusOf(selected, workFor(selected.id))} item={workFor(selected.id)} data={work.data} />}
+                workChips={<WorkChips status={statusOf(selected, workFor(selected.id))} item={workFor(selected.id)} />} records={records} personas={personas} impactFor={impactFor} readOnlyReason={readOnly}
                 appliedFixId={applied && applied.blockerId === selected.id ? applied.fixId : null}
                 onApply={apply} onOpen={openLink} data={dataActions} onPreview={previewCustomer} stale={modelChanged}>
                 {unconfirmed && <p className="bl-note warn" role="status" data-testid="bl-unconfirmed">A fix was applied. This blocker comes from the full check, so run the full check again to confirm that it is gone.</p>}

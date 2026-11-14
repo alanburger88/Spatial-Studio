@@ -180,6 +180,12 @@ Follows decision 6 of `docs/design/BLOCKERS.md`.
 - Anyone who can comment can assign, change the status and add notes. With sign-in off the only possible owner is the
   local admin; the screen says that assignment becomes useful with sign-in on.
 
+**As built (2026-11-14).** See "As built: phase 4" in `docs/design/BLOCKERS.md` and `docs/api/BLOCKER_WORK.md`. What differs:
+"Fixed" is decided by the server against the saved document (after every change to a document and on every read), and a cause
+fixed only in unsaved edits shows as "Fixed when saved"; causes only the full check sees are judged by the browser's report of a
+full check of the saved version; a cause must be in the saved document before it gets an owner or a status; the owner picker
+reads a new `GET /api/v1/assignable-people` because the user list is for admins only; a fixed cause that comes back is Open.
+
 ## 3. Notifications and "My work"
 
 - **A bell** in the top bar with the number of unread items, and a panel listing them, newest first. Each item says
@@ -195,6 +201,16 @@ Follows decision 6 of `docs/design/BLOCKERS.md`.
 - Stored on the server per user. The browser asks for news every 30 seconds while the studio is open. No email, no
   push, nothing outside the studio.
 - No customer names in a notification: ids and counts only, as in the Activity log.
+
+**As built (2026-11-14).** See `docs/api/NOTIFICATIONS.md`. One function creates them (`notify` in
+`apps/api/src/notifications.ts`); it never tells the actor and keeps only ids and whole numbers in its data, and the words are
+made when the list is read. The bell sits in the top bar's tools; its panel (notifications and a "My work" tab) is a separate
+download. What differs: "submitted for review" goes to everyone whose role may review or approve, so admins too; a reply tells
+the person who started the thread (not everyone in it); a comment opens the Review panel with its component selected; "My work"
+does not list unanswered review-link comments yet, and the review-link comment notification (`review_link.comment`) has its
+kind, words and a unit test but is called by the review-links module when the integrator joins them. With sign-in off the local
+admin's own actions notify nobody, so the panel says why it is quiet and "My work" carries the useful content. To keep the top
+bar from overflowing, the document name in the breadcrumb gives way first on windows narrower than 1,240 px.
 
 ## 4. See who else is editing
 

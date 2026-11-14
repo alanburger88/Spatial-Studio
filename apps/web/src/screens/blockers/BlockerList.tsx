@@ -3,6 +3,9 @@ import type { Blocker, BlockerKind, BlockerWithStatus, FixImpact } from '@iss/sc
 import { Tech } from '../../ui/common';
 import { CountChips } from './BlockerDetail';
 import { KINDS, KIND_LABEL, KIND_NEXT, plural } from './labels';
+import type { BlockerWorkItem } from '../../api/work';
+import { WorkChips } from './WorkParts';
+import { statusOf } from './work';
 
 /** What a fix would do, in a few words, for the list. */
 export function shortEffect(impact: FixImpact | null): string | null {
@@ -21,8 +24,12 @@ function bestFixLine(b: Blocker, impact: FixImpact | null): { text: string; effe
   return { text: best.title, effect: shortEffect(impact) };
 }
 
-export function BlockerList({ blockers, selectedId, onSelect, impactFor, totalChecked }: {
+export function BlockerList({ blockers, selectedId, onSelect, impactFor, totalChecked, workFor, after }: {
   blockers: BlockerWithStatus[]; selectedId: string | null; onSelect: (id: string) => void; impactFor: (blockerId: string, fixId: string) => FixImpact | null; totalChecked: number;
+  /** Phase 4: the owner, status and notes of a cause, when someone works on it. */
+  workFor?: (blockerId: string) => BlockerWorkItem | undefined;
+  /** Shown after the kinds, before the footnote (the "Fixed" group). */
+  after?: React.ReactNode;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const onKey = (e: React.KeyboardEvent) => {
@@ -53,13 +60,15 @@ export function BlockerList({ blockers, selectedId, onSelect, impactFor, totalCh
               {rows.map((b) => {
                 const sel = selectedId === b.id;
                 const best = bestFixLine(b, b.fixes[0]?.kind === 'change' ? impactFor(b.id, b.fixes[0].id) : null);
+                const work = workFor?.(b.id);
                 return (
                   <li key={b.id} className={`bl-row-item${sel ? ' selected' : ''}`}>
-                    <button type="button" className="bl-row" data-testid={`bl-row-${b.id}`} data-blocker={b.id} data-kind={b.kind} data-speed={b.speed} data-count={b.customerCount} data-status={b.status} aria-current={sel ? 'true' : undefined} onClick={() => onSelect(b.id)}>
+                    <button type="button" className="bl-row" data-testid={`bl-row-${b.id}`} data-blocker={b.id} data-kind={b.kind} data-speed={b.speed} data-count={b.customerCount} data-status={b.status} data-work-status={statusOf(b, work)} data-owner={work?.owner?.id ?? ''} aria-current={sel ? 'true' : undefined} onClick={() => onSelect(b.id)}>
                       <span className="bl-row-top">
                         <strong className="bl-row-title">{b.title}</strong>
                         <CountChips blocker={b} />
                         {b.status === 'known-data-problem' && <span className="chip warning" data-testid="bl-status">Known data problem</span>}
+                        {workFor && <WorkChips status={statusOf(b, work)} item={work} compact />}
                         {b.speed === 'full-check' && <span className="chip info" data-testid="bl-from-full" title="Found by the last full check, which composes the pages. It can be out of date until the check is run again.">from the full check</span>}
                         <Tech><span className="chip code">{b.code}</span></Tech>
                       </span>
@@ -72,6 +81,7 @@ export function BlockerList({ blockers, selectedId, onSelect, impactFor, totalCh
           </section>
         );
       })}
+      {after}
       <p className="hint bl-foot">Checked against {plural(totalChecked, 'synthetic customer')}. A cause that none of them reaches is not listed; generate more test customers to widen the net.</p>
     </div>
   );

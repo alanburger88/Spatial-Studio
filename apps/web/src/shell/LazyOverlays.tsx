@@ -3,6 +3,7 @@ import { useShellUi } from './CommandPalette';
 import { useDrawers } from './drawers';
 import { Loading } from '../ui/common';
 import { loadAssistPanel } from '../assist/AssistHost';
+import { useNotifyState } from './notifyState';
 
 /**
  * Help, the tour, version history and review are each their own download, fetched the first time they are opened. They are
@@ -15,11 +16,14 @@ export const overlayLoaders = {
   history: () => import('./History'),
   review: () => import('./Review'),
   assist: loadAssistPanel,
+  // Wave 4: the bell's panel (notifications and My work).
+  notifications: () => import('./NotificationsPanel'),
 };
 const HelpSheet = lazy(() => overlayLoaders.help().then((m) => ({ default: m.HelpSheet })));
 const Tour = lazy(() => overlayLoaders.tour().then((m) => ({ default: m.Tour })));
 const HistoryPanel = lazy(() => overlayLoaders.history().then((m) => ({ default: m.HistoryPanel })));
 const ReviewPanel = lazy(() => overlayLoaders.review().then((m) => ({ default: m.ReviewPanel })));
+const NotificationsPanel = lazy(() => overlayLoaders.notifications().then((m) => ({ default: m.NotificationsPanel })));
 
 function DialogLoading({ label }: { label: string }) {
   return <div className="dialog-backdrop"><div className="dialog" role="status" aria-busy="true" style={{ padding: 24 }}><Loading label={label} /></div></div>;
@@ -39,10 +43,12 @@ function DrawerLoading() {
 export function LazyOverlays() {
   const help = useShellUi((s) => s.shortcutsOpen);
   const tour = useShellUi((s) => s.tourOpen);
+  const notifications = useNotifyState((s) => s.open);
   return (
     <>
       {help && <Suspense fallback={<DialogLoading label="Loading help…" />}><HelpSheet /></Suspense>}
       {tour && <Suspense fallback={null}><Tour /></Suspense>}
+      {notifications && <Suspense fallback={null}><NotificationsPanel /></Suspense>}
     </>
   );
 }

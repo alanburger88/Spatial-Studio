@@ -163,6 +163,14 @@ const ROUTES: Record<string, Need> = {
   'POST /api/v1/review/:token/comments': 'public',
   'GET /api/v1/review/:token/pdf': 'public',
   /* ---- end review links ---- */
+  // Wave 4 (blocker owners, status and notes; notifications and My work): anyone who may comment assigns, sets the status
+  // and adds notes; reporting a full check of the saved version is the same; marking one's own notifications read is anyone's.
+  'PUT /api/v1/projects/:projectId/blocker-work/:blockerId': 'comment',
+  'POST /api/v1/projects/:projectId/blocker-work/:blockerId/notes': 'comment',
+  'POST /api/v1/projects/:projectId/blocker-work/full-check': 'comment',
+  'POST /api/v1/notifications/:id/read': 'any',
+  'POST /api/v1/notifications/read-all': 'any',
+  // Wave 4: end
 };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Routes not listed above: reads need a session; anything that writes needs edit rights (safe default for new modules). */

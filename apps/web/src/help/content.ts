@@ -240,11 +240,12 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
   S17: {
     purpose: 'Everything that stops this document being issued, one entry for each cause, across every synthetic customer. Fix a cause and every customer it stopped is cleared.',
     actions: [
-      'Read the summary: customers who can be issued, customers stopped, and the time of the last full check.',
-      'Choose a blocker to see what is wrong, who is affected and the fixes to choose from, each with its effect.',
+      'Read the summary, then choose a blocker to see what is wrong, who is affected and the fixes to choose from, each with its effect.',
       'Apply a suggested fix, or open the place where it is fixed by hand. Run the full check to compose pages and compare PDF and web output.',
       'For a problem in one customer\'s data: open it in Data Explorer with the fields highlighted, or have an approver mark it a known data problem with a reason.',
       'Use "Resolve one by one" to walk through the open blockers, most customers first, and pin a test for each one fixed.',
+      // Wave 4 (blocker owners, status and notes)
+      'Give a blocker an owner, mark it "Being fixed" and add notes for the people fixing it. "Mine" shows the blockers you own; "Fixed" lists those the studio found fixed, until the document is next approved. The bell in the top bar tells you when one is given to you.',
     ],
     next: [
       { screen: 'S09', why: 'run the checks and compare outputs' },
