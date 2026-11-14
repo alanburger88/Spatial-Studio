@@ -90,8 +90,10 @@ const NodeHtml = memo(function NodeHtml({ html }: { html: string }) {
 
 function NodeBox({ n, mode, ia, depth, inRow }: { n: RNode; mode: RenderMode; ia: NodeInteraction; depth: number; inRow?: boolean }) {
   const pl = n.layout?.paged;
-  const t = ia.transient?.[n.id];
-  const selected = ia.selectedId === n.id;
+  // A component of a later item of a repeating section (wave 5) is the same component of the document: selecting it selects that component.
+  const own = n.instanceOf ?? n.id;
+  const t = ia.transient?.[own];
+  const selected = ia.selectedId === own;
   const cls = ['pv-node', `pv-${n.type}`];
   if (selected) cls.push('is-selected');
   if (ia.highlightIds?.includes(n.id)) cls.push('is-highlight');
@@ -109,11 +111,21 @@ function NodeBox({ n, mode, ia, depth, inRow }: { n: RNode; mode: RenderMode; ia
     style.marginLeft = pl?.align === 'center' ? `${(100 - w) / 2}%` : pl?.align === 'right' ? `${100 - w}%` : 0;
     style.marginTop = `${depth === 0 ? (pl?.spaceBeforePt ?? 8) : 0}pt`;
   }
-  const label = `${n.name} (${n.id})${n.visible ? '' : ' — not rendered in this scenario'}`;
+  const label = `${n.name} (${n.id})${n.repeatItem ? ` — item ${n.repeatItem.index} of ${n.repeatItem.count}` : ''}${n.visible ? '' : ' — not rendered in this scenario'}`;
   let inner: ReactNode;
   if (ia.editingId === n.id && ia.renderEditor) inner = ia.renderEditor(n);
   else if (!n.visible) inner = <div className="pv-ghost"><span className="pv-ghost-name">{n.name}</span><span className="pv-ghost-why">Hidden for this customer · {n.hiddenReason}</span></div>;
-  else if (n.type === 'container') {
+  else if (n.type === 'container' && n.repeat) {
+    // A repeating section: its content once per item, each item marked (studio marks, never in the outputs).
+    const items = new Map<number, RNode[]>();
+    for (const c of n.children) { const i = c.repeatItem?.index ?? 1; items.set(i, [...(items.get(i) ?? []), c]); }
+    inner = <div className="iss-container pv-repeat" data-testid={`repeat-${n.id}`}>{[...items.keys()].sort((a, b) => a - b).map((i) => (
+      <div key={i} className="pv-repeat-item" data-repeat-item={i}>
+        <div className="pv-repeat-label" aria-hidden="true">{n.repeat!.label} · item {i} of {n.repeat!.count}{i > 1 ? ' · repeated' : ' · laid out here'}</div>
+        {renderNodes(items.get(i)!, mode, ia, depth + 1, false)}
+      </div>
+    ))}{!n.children.length && <div className="pv-empty-container">Empty repeating section — drop components here</div>}</div>;
+  } else if (n.type === 'container') {
     const row = pl?.direction === 'row';
     inner = <div className={`iss-container${row ? ' iss-row' : ''}`}>{renderNodes(n.children, mode, ia, depth + 1, row)}{!n.children.length && <div className="pv-empty-container">Empty section — drop components here</div>}</div>;
   } else {
@@ -131,12 +143,12 @@ function NodeBox({ n, mode, ia, depth, inRow }: { n: RNode; mode: RenderMode; ia
       tabIndex={-1}
       aria-label={label}
       aria-pressed={selected}
-      draggable={!!ia.editable && pl?.mode !== 'fixed' && ia.editingId !== n.id}
-      onDragStart={(e) => { e.stopPropagation(); ia.onNodeDragStart?.(n.id, e); }}
-      onClick={(e) => { e.stopPropagation(); ia.onSelect?.(n.id, e); }}
-      onDoubleClick={(e) => { e.stopPropagation(); ia.onDoubleClick?.(n.id); }}
-      onDragOver={(e) => { if (ia.onDragOverNode) { e.stopPropagation(); ia.onDragOverNode(n.id, e); } }}
-      onDrop={(e) => { if (ia.onDropNode) { e.stopPropagation(); ia.onDropNode(n.id, e); } }}
+      draggable={!!ia.editable && pl?.mode !== 'fixed' && ia.editingId !== n.id && !n.instanceOf}
+      onDragStart={(e) => { e.stopPropagation(); ia.onNodeDragStart?.(own, e); }}
+      onClick={(e) => { e.stopPropagation(); ia.onSelect?.(own, e); }}
+      onDoubleClick={(e) => { e.stopPropagation(); if (!n.instanceOf) ia.onDoubleClick?.(n.id); }}
+      onDragOver={(e) => { if (ia.onDragOverNode) { e.stopPropagation(); ia.onDragOverNode(own, e); } }}
+      onDrop={(e) => { if (ia.onDropNode) { e.stopPropagation(); ia.onDropNode(own, e); } }}
     >
       {inner}
       {ia.dropReject?.nodeId === n.id && <div className="pv-reject-msg" role="alert">⛔ {ia.dropReject.reason}</div>}

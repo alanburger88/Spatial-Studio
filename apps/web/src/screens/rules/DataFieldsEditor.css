@@ -43,3 +43,10 @@
 .if-note { color: var(--iss-warning-fg, var(--iss-text-muted)); }
 .if-problems { margin: 0; padding-left: 24px; font-size: 12.5px; }
 .if-cust { display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; flex-wrap: wrap; }
+/* Richer data shapes (wave 5): a group's fields and a list inside a list, indented under their column; the shape tree. */
+.df-sub { grid-column: 1 / -1; margin-left: 16px; padding-left: 10px; border-left: 2px solid var(--iss-border); }
+.df-sub .df-list { margin: 4px 0; }
+.df-tree { margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--iss-border); border-radius: 6px; background: var(--iss-surface-2); }
+.df-tree summary { cursor: pointer; font-weight: 600; }
+.df-tree ul { margin: 4px 0 0; padding-left: 18px; }
+.df-tree li { margin: 1px 0; }

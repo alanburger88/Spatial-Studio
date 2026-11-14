@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCommand, allFieldIndex, blankProject, buildContext, checkFormula, conditionInWords, customFieldUsage, evaluateCalculations, exprScopeOf, formulaInWords, itemCalculations,
   itemFieldDefs, parseFormula, printCondition, printFormula, projectFieldIndex, projectFields, validateCustomFields, validatePredicate, wordsScopeOf,
-  type CustomField, type Predicate, type Project,
+  type CustomField, type ItemsCondition, type Predicate, type Project,
 } from '@iss/model';
 import { ANY_OVERDRAWN, EVERY_ACTIVE, buildHousehold, householdCustomers } from '@iss/model/samples/index';
 import { evaluatePredicate, indexTree, resolve } from '@iss/resolver';
@@ -93,7 +93,7 @@ describe('calculations per item and across the items', () => {
 describe('conditions about the items of a list', () => {
   const ctxOf = (accounts: unknown[]) => buildContext({ ...customers[0], custom: { ...customers[0].custom, accounts } } as never);
   const acct = (balanceCents: number, n = 1) => ({ balanceCents, transactions: Array.from({ length: n }, () => ({ amountCents: 1 })) });
-  const q = (match: 'any' | 'every' | 'none' | 'atLeast', count?: number): Predicate => ({ op: 'items', path: 'custom.accounts', match, ...(count ? { count } : {}), where: { op: 'lt', path: 'custom.accounts[].balanceCents', value: 0 } });
+  const q = (match: 'any' | 'every' | 'none' | 'atLeast', count?: number): ItemsCondition => ({ op: 'items', path: 'custom.accounts', match, ...(count ? { count } : {}), where: { op: 'lt', path: 'custom.accounts[].balanceCents', value: 0 } });
 
   it('any, every, none and at least N, with an empty list', () => {
     const cases: Array<[unknown[], Record<string, boolean>]> = [
