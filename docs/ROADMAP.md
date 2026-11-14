@@ -129,6 +129,8 @@ What a production statement, bill or letter needs that the samples do not.
 
 ### Wave 3 — Bringing documents in, and handing them over
 
+**Status: built and verified on 2026-11-14** (1,051 unit tests, 354 browser tests), except the first adapter, which waits for a named target system. What was and was not verified is in `reports/BUILD_PROGRESS.md` (v0.13) and decisions D100–D103. Not proven: a live AI call for rebuilding from a file, and any real-world PDF or Word file.
+
 | Item | Size | Notes | Depends on |
 |---|---|---|---|
 | Rebuild from an existing PDF or Word file (AI) | L | Builds on "Describe your document"; always produces a report of what was not brought across | Setup from a description (built), page design depth |

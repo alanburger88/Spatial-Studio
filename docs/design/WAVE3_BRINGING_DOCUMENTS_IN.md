@@ -1,6 +1,6 @@
 # Bringing documents in, and handing them over
 
-Status: **design for roadmap wave 3 (`docs/ROADMAP.md`). Not built yet.**
+Status: **built in roadmap wave 3 (`docs/ROADMAP.md`), except the first adapter; see the "As built" note at the end of each section.**
 Decisions by the product owner on 2026-11-14 (D100): **no target system is named yet, so the neutral parts are built and the first adapter waits**; for rebuilding from a file, **only text and layout go to the AI model, after the person has seen what will be sent and confirmed the file holds no real customer data**.
 
 ## 1. Rebuild from an existing PDF or Word file
