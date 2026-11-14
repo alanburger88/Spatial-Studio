@@ -100,6 +100,8 @@ describe('variants (sign-in off)', () => {
     const other = await project(EOB);
     expect((await put(EOB, { ...other, variantOf: p.variantOf }, other.modelVersion)).json().error.code).toBe('VARIANT_FROM_SAVE');
     expect((await put(variantId, { ...p, variantOf: { ...p.variantOf!, projectId: EOB } }, p.modelVersion)).json().error.code).toBe('VARIANT_BASE_FIXED');
+    // nor step around the lock by naming a base version that does not exist
+    expect((await put(variantId, { ...moved, variantOf: { ...p.variantOf!, modelVersion: 999 } }, p.modelVersion)).json().error.code).toBe('VARIANT_VERSION_UNKNOWN');
     // a malformed variantOf is refused like any malformed part
     expect((await put(variantId, { ...p, variantOf: { ...p.variantOf!, purpose: 'x' as never } }, p.modelVersion)).statusCode).toBe(422);
   });

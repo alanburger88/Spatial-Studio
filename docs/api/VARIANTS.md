@@ -122,7 +122,8 @@ saved versions (`GET /projects/:id/versions/:v`), so unsaved edits show at once.
 - **Save** (`PUT /api/v1/projects/:projectId`): a variant whose locked parts differ from its base at the followed version
   is refused (`422 VARIANT_LOCKED`, with `nodeId` when there is one), as is a `baseNodeIds` list that does not match that
   version. An ordinary document cannot become a variant by saving (`422 VARIANT_FROM_SAVE`) and a variant cannot change
-  which document it follows (`422 VARIANT_BASE_FIXED`). A save without `variantOf` detaches. When the base or the followed
+  which document it follows (`422 VARIANT_BASE_FIXED`), nor move to a base version the base's history does not hold
+  (`422 VARIANT_VERSION_UNKNOWN`; a variant imported from another studio may keep the version it already followed). A save without `variantOf` detaches. When the base or the followed
   version is not in the studio, nothing is checked (it behaves as an ordinary document). Restoring an earlier version of a
   variant is checked the same way.
 - **Delete** (`DELETE /api/v1/projects/:projectId`): a base with variants is refused (`409 HAS_VARIANTS`, `variants:

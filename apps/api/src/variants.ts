@@ -55,7 +55,14 @@ export function variantSaveProblem(store: Store, current: Project | null, incomi
   if (!current?.variantOf) return { code: 'VARIANT_FROM_SAVE', message: 'A document becomes a variant only with “New variant” on its base.' };
   if (current.variantOf.projectId !== v.projectId) return { code: 'VARIANT_BASE_FIXED', message: `This variant follows “${current.variantOf.baseTitle}”. A variant cannot change which document it follows; detach it instead.` };
   const found = baseOf(store, incoming);
-  if (!found || 'missing' in found) return null; // no base here: it behaves as an ordinary document
+  if (!found) return null;
+  if ('missing' in found) {
+    // The base is here but the version named is not: only a variant that already followed it (imported from another
+    // studio) may keep it. A save cannot move a variant to a version the base does not have, to step around the lock.
+    const same = current.variantOf.modelVersion === v.modelVersion && current.variantOf.contentDigest === v.contentDigest;
+    if (found.missing !== 'document' && !same) return { code: 'VARIANT_VERSION_UNKNOWN', message: `“${current.variantOf.baseTitle}” has no saved version ${v.modelVersion} with that content, so this variant cannot follow it.` };
+    return null; // no base here: it behaves as an ordinary document
+  }
   if (found.base.variantOf) return { code: 'VARIANT_ONE_LEVEL', message: 'A variant cannot follow another variant.' };
   const baseIds = new Set(found.at.nodes.map((n) => n.id));
   const stray = v.baseNodeIds.find((id) => !baseIds.has(id));
