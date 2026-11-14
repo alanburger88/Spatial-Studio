@@ -70,8 +70,9 @@ function ChangeWords({ c }: { c: VisibleChange }) {
     case 'appears': return <>was not shown, now shows <Quoted text={c.after} />.</>;
     case 'disappears': return <>is no longer shown; it showed <Quoted text={c.before} />.</>;
     case 'layout': return <>is placed or sized differently. The words are the same.</>;
-    case 'stopped': return <>a blocker now stops this document{c.after ? `: ${c.after}` : ''}.</>;
-    case 'unstopped': return <>no blocker stops this document any more{c.before ? ` (it was stopped: ${c.before})` : ''}.</>;
+    // The blocker's own message usually ends with a full stop: it is not doubled.
+    case 'stopped': return <>a blocker now stops this document{c.after ? `: ${c.after.replace(/\.+$/, '')}` : ''}.</>;
+    case 'unstopped': return <>no blocker stops this document any more{c.before ? ` (it was stopped: ${c.before.replace(/\.+$/, '')})` : ''}.</>;
     case 'language': return <>was <strong>{localeLabel(c.before)}</strong>, now <strong>{localeLabel(c.after)}</strong>.</>;
     default:
       return d ? (
