@@ -175,3 +175,6 @@ a.dx-msg-node { color: var(--iss-accent-strong); }
 .dx-scroll .callout.dx-blocker[data-state="gone"] { background: linear-gradient(var(--iss-accent-soft), var(--iss-accent-soft)), var(--iss-surface); }
 .dx-blocker p { margin: 0; }
 .dx-blocker-actions { gap: 8px; align-items: center; margin-top: 4px; }
+
+/* `?customers=` from "Ask about all customers" (wave 4) */
+.dx-only { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; margin: 8px 10px 0; font-size: 12.5px; }

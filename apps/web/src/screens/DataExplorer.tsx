@@ -35,7 +35,11 @@ export function DataExplorer() {
   const onDirty = useCallback((d: boolean) => { dirtyRef.current = d; }, []);
   /** Run something that leaves the customer being edited; ask first when there are unsaved edits. */
   const guard = useCallback((run: () => void) => { if (dirtyRef.current) setPending({ run }); else run(); }, []);
-  const show = useCallback((id: string) => setParams({ customer: id }, { replace: true }), [setParams]);
+  // `customers=<id,id>` (from "Ask about all customers"): the list shows only those customers until it is cleared.
+  const onlyParam = params.get('customers');
+  const only = useMemo(() => (onlyParam ? new Set(onlyParam.split(',').map((x) => x.trim()).filter(Boolean)) : null), [onlyParam]);
+  const show = useCallback((id: string) => setParams((p) => { const n = new URLSearchParams({ customer: id }); const c = p.get('customers'); if (c) n.set('customers', c); return n; }, { replace: true }), [setParams]);
+  const clearOnly = useCallback(() => setParams((p) => { const n = new URLSearchParams(p); n.delete('customers'); return n; }, { replace: true }), [setParams]);
 
   // Leaving the screen with unsaved edits: in-app links ask first, and closing the tab warns.
   useEffect(() => {
@@ -86,7 +90,7 @@ export function DataExplorer() {
         ) : (
           <>
             <CustomerList records={records} personas={personas} selectedId={selectedId} onSelect={(id) => { if (id !== selectedId) guard(() => show(id)); }} broken={broken}
-              canEdit={canEdit && !busy} disabledReason={blockedReason} onNewBlank={newBlank} onNewCopy={newCopy} />
+              canEdit={canEdit && !busy} disabledReason={blockedReason} onNewBlank={newBlank} onNewCopy={newCopy} only={only} onClearOnly={clearOnly} />
             <Workspace key={`${project.projectId}:${saved.recordId}`} project={project} saved={saved} canEdit={canEdit} blockedReason={blockedReason}
               onDirty={onDirty} onMakeCopy={makeCopy} onDeleted={(id) => void deleted(id)} onPreview={preview}
               highlight={blockerId && saved.recordId === wanted ? highlight : undefined} blockerId={saved.recordId === wanted ? blockerId : null} />

@@ -9,6 +9,7 @@ import { Icon } from '../ui/icons';
 import { localeLabel, nodeTitle, ruleTitle } from '../ui/plain';
 import { recordSummary } from '../shell/RecordPicker';
 import { Conversation } from './Conversation';
+import { AskAllCustomers } from './AskAllCustomers';
 import { PanelResizer } from './PanelResizer';
 import { ChangeSummaryCard, lastApprovedVersion } from './ChangeSummaryCard';
 import { useAiLive } from './common';
@@ -78,12 +79,23 @@ export function AssistPanelBody() {
         {live === null ? 'Checking assistant…' : live ? 'Live AI on' : 'Built-in assistant · no AI key'}
       </p>
       <ForThisScreen />
-      <div className="assist-tabs" role="tablist" aria-label="Assistant sections">
+      <div className="assist-tabs" role="tablist" aria-label="Assistant sections" onKeyDown={(e) => {
+        // Left and right move between the tabs (only the chosen tab is in the Tab order).
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
+        const order = ['help', 'chat', 'all'] as const;
+        const i = order.indexOf(tab);
+        const next = e.key === 'Home' ? 0 : e.key === 'End' ? order.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : order.length - 1)) % order.length;
+        e.preventDefault();
+        setTab(order[next]);
+        window.setTimeout(() => document.getElementById(`assist-tab-${order[next]}`)?.focus(), 0);
+      }}>
         <button type="button" role="tab" id="assist-tab-help" aria-selected={tab === 'help'} aria-controls="assist-tabpanel" tabIndex={tab === 'help' ? 0 : -1} onClick={() => setTab('help')} data-testid="assist-tab-help">Explain &amp; summary</button>
         <button type="button" role="tab" id="assist-tab-chat" aria-selected={tab === 'chat'} aria-controls="assist-tabpanel" tabIndex={tab === 'chat' ? 0 : -1} onClick={() => setTab('chat')} data-testid="assist-tab-chat">Ask</button>
+        {/* Wave 4: ask about all customers */}
+        <button type="button" role="tab" id="assist-tab-all" aria-selected={tab === 'all'} aria-controls="assist-tabpanel" tabIndex={tab === 'all' ? 0 : -1} onClick={() => setTab('all')} data-testid="assist-tab-all" title="Ask about all customers">All customers</button>
       </div>
       <div className="assist-body" id="assist-tabpanel" role="tabpanel" aria-labelledby={`assist-tab-${tab}`}>
-        {tab === 'chat' ? <Conversation compact /> : (
+        {tab === 'all' ? <AskAllCustomers /> : tab === 'chat' ? <Conversation compact /> : (
           <div className="assist-help">
             {focus?.kind === 'explain' ? <ExplainCard nodeId={focus.nodeId} />
               : focus?.kind === 'summary' ? <SinceApproved />

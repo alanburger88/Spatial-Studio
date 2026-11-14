@@ -1,0 +1,38 @@
+/* "Ask about all customers" (assist/AskAllCustomers.tsx): the assistant panel's third tab and a panel on the AI Assistant screen. Tokens only. */
+
+.ask { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ask.in-panel { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 16px; }
+.ask-title { margin: 0; font-size: 14px; font-weight: 700; }
+.ask-lead { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.ask-form { display: flex; gap: 6px; align-items: center; }
+.ask-form .input { flex: 1; min-width: 0; }
+.ask-examples { display: flex; flex-wrap: wrap; gap: 6px; }
+.ask-chip { font: inherit; font-size: 12px; line-height: 1.35; text-align: left; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--iss-border-strong); background: var(--iss-surface-raised); color: var(--iss-text); cursor: pointer; max-width: 100%; overflow-wrap: anywhere; }
+.ask-chip:hover { border-color: var(--iss-accent); background: var(--iss-accent-soft); }
+.ask-chip:focus-visible { outline: none; box-shadow: var(--iss-focus); }
+
+.ask-askback p, .ask-notread p { margin: 0 0 6px; font-size: 13px; line-height: 1.5; }
+.ask-notread p:last-child, .ask-askback p:last-child { margin-bottom: 0; }
+.ask-choices { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.ask-choices .btn { justify-content: flex-start; text-align: left; white-space: normal; height: auto; padding-top: 5px; padding-bottom: 5px; }
+.ask-wait { margin: 0; font-size: 12.5px; display: flex; gap: 6px; align-items: center; }
+
+.ask-answer { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--iss-border); }
+.ask-understood { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--iss-text-muted); overflow-wrap: anywhere; }
+.ask-understood .ask-label { font-weight: 700; color: var(--iss-text); margin-right: 4px; }
+.ask-src { margin-left: 6px; vertical-align: 1px; }
+.ask-count { margin: 0; font-size: 18px; line-height: 1.3; }
+.ask-headline { margin: 0; font-size: 13.5px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.ask-sub { font-size: 12px; font-weight: 700; color: var(--iss-text-muted); margin-bottom: 2px; }
+.ask-reasons ul, .ask-blockers ul, .ask-notes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.5; }
+.ask-reasons li { display: flex; gap: 6px; align-items: baseline; overflow-wrap: anywhere; }
+.ask-reasons li .chip { flex: none; }
+.ask-notes { font-size: 12px; }
+.ask-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.5; }
+.ask-why { display: flex; flex-direction: column; gap: 6px; }
+.ask-customers .list-rows li { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; padding: 5px 2px; font-size: 13px; }
+.ask-cust { font-weight: 600; }
+.ask-percust { font-size: 12px; overflow-wrap: anywhere; }
+.ask-customers > .btn { margin-top: 4px; }
+.ask-links { gap: 6px; }
+.ask-foot { margin: 0; }

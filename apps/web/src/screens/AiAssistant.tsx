@@ -3,6 +3,7 @@ import { ScreenHeader } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { useStudio } from '../state/store';
 import { Conversation, pickPrompt, useConv, useConversation } from '../assist/Conversation';
+import { AskAllCustomers } from '../assist/AskAllCustomers';
 import './AiAssistant.css';
 
 const PROMPT_GROUPS: Record<string, Array<{ title: string; prompts: string[] }>> = {
@@ -65,6 +66,10 @@ export function AiAssistant() {
               </div>
               <label className="ai-toggle"><input type="checkbox" checked={forceOffline} onChange={(e) => useConv.setState({ forceOffline: e.target.checked })} data-testid="force-offline" /> <span><strong>Force offline fallback</strong><br /><span className="muted">Demonstrates that the deterministic guided assistant always works, with no outbound calls.</span></span></label>
             </div>
+          </div>
+          {/* Wave 4: ask about all customers (the same card as the assistant panel's "All customers" tab) */}
+          <div className="panel" data-testid="ai-ask-all">
+            <div className="panel-body"><AskAllCustomers inPanel={false} /></div>
           </div>
           <div className="panel">
             <div className="panel-head">Suggested prompts</div>

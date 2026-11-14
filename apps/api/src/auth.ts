@@ -171,6 +171,10 @@ const ROUTES: Record<string, Need> = {
   'POST /api/v1/notifications/:id/read': 'any',
   'POST /api/v1/notifications/read-all': 'any',
   // Wave 4: end
+  /* ---- ask about all customers (wave 4, item 7; docs/api/ASK_ALL_CUSTOMERS.md) ---- */
+  // Reading a question stores and changes nothing (the answer is worked out in the browser), so anyone signed in may ask.
+  'POST /api/v1/projects/:projectId/assist/base-question': 'any',
+  /* ---- end ask about all customers ---- */
 };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Routes not listed above: reads need a session; anything that writes needs edit rights (safe default for new modules). */

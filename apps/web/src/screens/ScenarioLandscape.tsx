@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { buildLandscape, dimensionValue, journeyStates, OUTPUT_PROFILES, primaryVariantSet, type DimensionId, type LandscapeCluster } from '@iss/scenarios';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { buildLandscape, dimensionValue, journeyStates, OUTPUT_PROFILES, primaryVariantSet, ScenarioEngine, type DimensionId, type LandscapeCluster } from '@iss/scenarios';
 import { ScreenHeader, Loading, Empty, Tech } from '../ui/common';
 import { recordSummary } from '../shell/RecordPicker';
 import { Icon } from '../ui/icons';
@@ -37,7 +37,12 @@ export function ScenarioLandscape() {
   const technical = useStudio((s) => s.viewMode) === 'technical';
   const records = useStudio((s) => s.records);
   const personas = useStudio((s) => s.personas);
-  const engine = useScenarioEngine();
+  const allEngine = useScenarioEngine();
+  /* `?customers=<id,id>` (from "Ask about all customers"): only those customers, worked out by the same engine. */
+  const [params, setParams] = useSearchParams();
+  const onlyParam = params.get('customers');
+  const only = useMemo(() => (onlyParam ? new Set(onlyParam.split(',').map((x) => x.trim()).filter(Boolean)) : null), [onlyParam]);
+  const engine = useMemo(() => (allEngine && only ? new ScenarioEngine(allEngine.project, allEngine.records.filter((r) => only.has(r.recordId)), allEngine.issueDate) : allEngine), [allEngine, only]);
 
   const [includeJourney, setIncludeJourney] = useState(false);
   const [filters, setFilters] = useState<Partial<Record<DimensionId, string>>>({});
@@ -231,6 +236,12 @@ export function ScenarioLandscape() {
       <div className="screen-body ls-body">
         {/* ------------------------------------------------------------ chart + table */}
         <div className="ls-center">
+          {only && (
+            <div className="callout accent ls-only" role="status" data-testid="landscape-only" data-n={engine?.universeRecords.length ?? 0}>
+              <span>Showing only the {engine?.universeRecords.length ?? 0} synthetic customers from your question.</span>
+              <button type="button" className="btn ghost sm" onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.delete('customers'); return n; }, { replace: true })} data-testid="landscape-only-clear">Show all customers</button>
+            </div>
+          )}
           <div className="ls-filters" aria-label="Landscape filters">
             {facetDims.map((f) => (
               <div className="ls-field" key={f.dim}>
