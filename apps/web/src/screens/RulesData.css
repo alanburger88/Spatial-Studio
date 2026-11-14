@@ -218,3 +218,7 @@
 .rd-owncust-lbl { color: var(--iss-text-muted); font-weight: 600; }
 .rd-owncust-confirm { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .rd-owncust-note { max-width: 360px; }
+/* Richer data shapes (wave 5): a condition about the items of a list. */
+.rd-items { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+.rd-items .select { max-width: 220px; }
+.rd-items-count { width: 64px; }
