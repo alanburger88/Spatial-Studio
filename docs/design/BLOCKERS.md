@@ -1,6 +1,6 @@
 # Blockers: seeing them, sharing them, resolving them
 
-Status: **design agreed in a workshop with the product owner on 2026-11-13 (eight decisions). Phases 1 to 3 are built (see the phase list and "As built: phases 2 and 3"); phases 4 to 6 are not.**
+Status: **design agreed in a workshop with the product owner on 2026-11-13 (eight decisions). Phases 1 to 4 are built (see the phase list, "As built: phases 2 and 3" and "As built: phase 4"); phases 5 and 6 are not.**
 
 ## Where we start from
 
@@ -58,7 +58,7 @@ Existing links that jump straight to where a fix is made (a rule, a message, a f
 1. **The Blockers screen:** root-cause list across all customers, kinds, the two speeds of checking, detail with existing suggested fixes shown as alternatives, links to where each is fixed; the status bar opens it.
 2. **Data problems:** open in Data Explorer with the fields highlighted; known data problem (approver, reason), its effect on approval, the Review panel and the release manifest. **Built** (see "As built: phases 2 and 3").
 3. **Resolve one by one**, and **pin a test when fixed**. **Built** (see "As built: phases 2 and 3").
-4. **Owner, status and notes.**
+4. **Owner, status and notes.** **Built** (see "As built: phase 4").
 5. **AI drafts for wording blockers** (missing translation; wording that reads as a demand for money).
 6. **Warn before saving.**
 
@@ -100,3 +100,50 @@ Built on 2026-11-13. Engine: `packages/scenarios/src/assist/blockers.ts` (tests 
 - **A fix applied in the pass to a blocker from the full check** is listed as "waiting for the full check to confirm" and is not offered a pinned test, because the studio cannot yet tell that it worked.
 - **The status "Known data problem" belongs to a blocker only when every customer it stops is set aside**; otherwise each customer shows its own mark. Owners, the other statuses and notes are phase 4.
 - **None of the shipped sample customers has a data problem today**, so the read-only path is shown in the tests with an imported customer (shared and read-only in the same way); a sample customer named by id in a release is tested with a document change that leaves a value every sample lacks.
+
+## As built: phase 4
+
+Built on 2026-11-14 (wave 4, item 2 of `docs/design/WAVE4_TEAMS.md`). Server: `apps/api/src/blockerWork.ts` and
+`apps/api/src/routes/work.ts` (tests `apps/api/test/blocker-work.test.ts`); screens: `screens/blockers/WorkParts.tsx` and
+`work.ts`, with the list, detail and guided pass; browser tests `e2e/blockers-owners.spec.ts`. API: `docs/api/BLOCKER_WORK.md`.
+
+- **Owner, status and notes** are kept by the server per document and blocker id. Every row shows its status (Open, Being
+  fixed, Known data problem) and its owner ("Yours" for the person's own); **Mine** (`?mine=1`) shows only the person's own. The
+  detail has **Owner, status and notes**: the owner picker (studio users), the **Being fixed** switch, and the notes (plain text,
+  author and time, oldest first, at most 1,000 characters). The guided pass shows the owner and status of each step.
+- **Anyone who may comment** assigns, sets the status and adds notes; the server checks it (`comment`) with sign-in on. With
+  sign-in off the only possible owner is the local admin, and the detail says in one line that assignment becomes useful with
+  sign-in on.
+- **"Fixed" is decided by the server, against the saved document.** After every successful change to a document (a hook on the
+  document's routes, before the answer leaves) and on every read of the work, the server works out every cause the saved
+  document has for every customer on every day approval checks (`savedCauses`: the resolver's findings per customer, broken
+  "must" wording rules, the static rule and data-link checks). A worked-on cause that is gone is marked fixed once, with its
+  version, and its owner is notified unless the owner's own change fixed it; a fixed cause that comes back is open again. The
+  screen also shows a worked-on cause that the open, unsaved version no longer has as **Fixed when saved**.
+- **Causes only the full check sees** (layout and pages, PDF/web, PDF accessibility) are judged by a full check of the saved
+  version: the screen reports what such a check found, and the server refuses a report about any other version.
+- **The "Fixed" group** lists fixed causes, with the version, owner and notes, until the document's next approval; then they
+  drop off with their notes (the approval time is read from the review history).
+- **Notes never appear in a document, a release or a package**; the test approves a document with notes and scans the release
+  and every package file. The Activity log records who assigned, set a status or added a note (never the note), and when the
+  studio found a cause fixed or open again.
+
+### What differs from the design, and why
+
+- **"Fixed" is judged on the saved document, not the open one.** It is a fact the whole team relies on and that notifies the
+  owner, so it must not depend on someone's unsaved edits or on the Blockers screen being open. The screen shows the unsaved case
+  separately ("Fixed when saved").
+- **A cause must be in the saved document to be given an owner or a status** (`409 NOT_IN_SAVED_DOCUMENT`), otherwise the server
+  would at once judge it fixed. Causes only the full check sees are the exception: they are accepted and judged by full-check
+  reports.
+- **Full-check causes are judged by what the browser reports** about a full check of exactly the saved version, because only the
+  browser runs the full check today. A report is about status only; approval does not depend on it.
+- **The owner picker reads a new `GET /api/v1/assignable-people`** (names and roles of enabled users) because the user list
+  (`/api/v1/users`) is for admins only.
+- **A fixed cause that comes back is Open**, not the status it had before; its owner and notes are kept.
+- **Giving an owner, a status or a note is not an edit of the document**, so it is not undone with the top-bar Undo (as for known
+  data problems).
+- **No owners or notes are seeded into the example documents**, so the examples' accuracy check is unchanged.
+- **A dated document**: the server judges a cause on every day approval checks, while the screen shows one "As issued on" day;
+  a cause present only on another day is not shown as "Fixed when saved" on the screen.
+

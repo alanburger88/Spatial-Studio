@@ -22,12 +22,12 @@ export function useWorkBlockedReason(): string | null {
 }
 
 /** The status and owner of a row, as chips. */
-export function WorkChips({ status, item, compact }: { status: WorkStatus; item: BlockerWorkItem | undefined; compact?: boolean }) {
+export function WorkChips({ status, item, compact, ownerOnly }: { status: WorkStatus; item: BlockerWorkItem | undefined; compact?: boolean; /** Leave the status out (the row already shows it). */ ownerOnly?: boolean }) {
   const me = useMe();
   const owner = item?.owner;
   return (
     <>
-      {status !== 'known-data-problem' && <span className={`chip ${STATUS_CHIP[status]}`.trim()} data-testid="bl-work-status" data-status={status}>{STATUS_LABEL[status]}</span>}
+      {!ownerOnly && status !== 'known-data-problem' && <span className={`chip ${STATUS_CHIP[status]}`.trim()} data-testid="bl-work-status" data-status={status}>{STATUS_LABEL[status]}</span>}
       {owner
         ? <span className="chip bl-owner" data-testid="bl-owner" data-owner={owner.id} title={`Owner: ${owner.name}`}>{owner.id === me.id ? 'Yours' : compact ? owner.name : `Owner: ${owner.name}`}</span>
         : !compact && <span className="chip bl-owner none" data-testid="bl-owner" data-owner="">No owner</span>}
@@ -129,7 +129,7 @@ export function FixedGroup({ entries, selectedId, onSelect }: { entries: FixedEn
                   <strong className="bl-row-title">{item.title}</strong>
                   {unsaved ? <span className="chip info" title="Your unsaved changes clear it. Save, and the studio marks it Fixed.">Fixed when saved</span>
                     : <span className="chip accent" data-testid="bl-work-status" data-status="fixed">Fixed</span>}
-                  <WorkChips status="fixed" item={item} compact />
+                  <WorkChips status="fixed" item={item} compact ownerOnly />
                 </span>
                 <span className="bl-row-fix muted">{unsaved ? 'Not found in the open version.' : <>Fixed in version {item.fixedInVersion}{item.fixedAt ? <>, <When iso={item.fixedAt} /></> : null}.</>} {KIND_LABEL[item.kind as BlockerKind]}.</span>
               </button>

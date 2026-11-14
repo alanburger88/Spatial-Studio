@@ -142,7 +142,7 @@ export function NotificationsPanel() {
                     <ul className="list-rows notify-list">
                       {work.blockers.map((b) => (
                         <li key={`${b.projectId}|${b.blockerId}`}>
-                          <button type="button" className="notify-item" onClick={() => go({ screen: 'blockers', projectId: b.projectId, blockerId: b.blockerId })} data-testid="my-work-blocker" data-blocker={b.blockerId}>
+                          <button type="button" className="notify-item" onClick={() => go({ screen: 'blockers', projectId: b.projectId, blockerId: b.blockerId })} data-testid="my-work-blocker" data-blocker={b.blockerId} data-project={b.projectId}>
                             <span className="notify-text"><strong>{b.title}</strong><span className="muted"> in “{b.documentTitle}”</span></span>
                             <span className="notify-meta">
                               <span className={`chip${b.status === 'being-fixed' ? ' info' : b.status === 'known-data-problem' ? ' warning' : ''}`}>{STATUS_WORDS[b.status] ?? b.status}</span>
