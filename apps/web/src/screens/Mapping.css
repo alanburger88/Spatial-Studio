@@ -1,6 +1,6 @@
 /* Mapping (S26): list of mappings, the dictionary or the chosen mapping's table, and the checks. Tokens only. */
-.mp-body { grid-template-columns: 240px minmax(0, 1fr) 320px; align-items: stretch; }
-.mp-body.mp-two { grid-template-columns: 240px minmax(0, 1fr); }
+.mp-body { grid-template-columns: 220px minmax(0, 1fr) 290px; align-items: stretch; }
+.mp-body.mp-two { grid-template-columns: 220px minmax(0, 1fr); }
 .mp-body > .panel { min-width: 0; }
 .mp-main .panel-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .mp-item { display: flex !important; flex-direction: column; gap: 4px; width: 100%; min-width: 0; text-align: left; font: inherit; background: none; border: 0; padding: 10px 12px; cursor: pointer; color: var(--iss-text); }
@@ -17,14 +17,14 @@
 .mp-table { width: 100%; font-size: 12.5px; }
 .mp-table th, .mp-table td { vertical-align: top; }
 .mp-table thead th { position: sticky; top: 0; z-index: 1; background: var(--iss-surface-sunken); }
-.mp-edit .input { width: 100%; min-width: 110px; font-size: 12.5px; padding: 4px 6px; }
-.mp-fieldcell { text-align: left; font-weight: 400; display: table-cell; min-width: 170px; }
+.mp-edit .input { width: 100%; min-width: 90px; font-size: 12.5px; padding: 4px 6px; }
+.mp-fieldcell { text-align: left; font-weight: 400; display: table-cell; min-width: 140px; }
 .mp-fieldcell > span { display: block; }
 .mp-label { font-weight: 600; }
 .mp-path { font-size: 11.5px; color: var(--iss-text-muted); overflow-wrap: anywhere; }
 .mp-req { margin-left: 6px; }
 .mp-col .mp-label { font-weight: 500; padding-left: 8px; }
-.mp-nn { min-width: 150px; }
+.mp-nn { min-width: 120px; }
 .mp-nn .input { margin-top: 4px; }
 .mp-problem { background: var(--iss-error-soft); }
 .mp-flash { box-shadow: inset 4px 0 0 var(--iss-accent); }
@@ -42,11 +42,16 @@
 .mp-findings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
 .mp-rules summary { cursor: pointer; font-weight: 600; font-size: 12.5px; }
 .mp-rules ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; }
-.mp-import { display: flex; flex-direction: column; gap: 10px; min-width: min(760px, 86vw); }
+.dialog:has(.mp-import) { width: min(860px, calc(100vw - 32px)); }
+.mp-import { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .mp-import .textarea { width: 100%; font-family: var(--iss-font-mono, monospace); }
 .mp-paste summary { cursor: pointer; font-size: 13px; }
 .mp-problems { margin: 0; padding-left: 24px; font-size: 12.5px; }
-.mp-form { display: flex; flex-direction: column; gap: 10px; min-width: min(460px, 80vw); }
+.mp-form { display: flex; flex-direction: column; gap: 10px; }
 .mp-form .input { width: 100%; }
 @media (max-width: 1100px) { .mp-body, .mp-body.mp-two { grid-template-columns: minmax(0, 1fr); } .mp-scroll { max-height: none; } }
 .mp-goto { padding: 0 6px; min-height: 0; font-size: 12px; }
+.mp-tcell { min-width: 150px; }
+.mp-tcell .mp-typein { margin-top: 4px; }
+.mp-chiplinks { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.mp-chiplinks .btn { border: 1px solid var(--iss-border); }

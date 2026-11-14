@@ -21,19 +21,21 @@ export const MappingTable = forwardRef<MappingTableHandle, { mapping: TargetMapp
   const [q, setQ] = useState('');
   const [flash, setFlash] = useState<string | null>(null);
   const problemPaths = useMemo(() => new Set(check.findings.filter((f) => f.severity === 'problem').flatMap((f) => f.paths)), [check]);
+  // Rows marked in colour: a clash or a target mapped twice (a field not mapped yet is shown by its status only).
+  const badPaths = useMemo(() => new Set(check.findings.filter((f) => f.kind === 'type-clash' || f.kind === 'mapped-twice').flatMap((f) => f.paths)), [check]);
   const rows = useMemo(() => check.rows.filter((r) => {
     if (filter === 'open' && r.status !== 'unmapped') return false;
     if (filter === 'problems' && !problemPaths.has(r.path)) return false;
     return !q || `${r.label} ${r.path} ${r.entry?.target ?? ''}`.toLowerCase().includes(q.toLowerCase());
   }), [check, filter, q, problemPaths]);
-  const win = useWindow(rows.length, ROW_HEIGHT + 14);
+  const win = useWindow(rows.length, 84);
   useImperativeHandle(ref, () => ({
     goTo(path: string) {
       setFilter('all'); setQ('');
       const i = check.rows.findIndex((r) => r.path === path);
       setFlash(path);
       requestAnimationFrame(() => {
-        if (win.ref.current && i >= 0 && win.windowed) win.ref.current.scrollTop = Math.max(0, i * (ROW_HEIGHT + 14) - 60);
+        if (win.ref.current && i >= 0 && win.windowed) win.ref.current.scrollTop = Math.max(0, i * (84) - 60);
         requestAnimationFrame(() => {
           const el = document.querySelector<HTMLElement>(`[data-testid="map-row"][data-path="${CSS.escape(path)}"]`);
           el?.scrollIntoView({ block: 'center' });
@@ -57,10 +59,10 @@ export const MappingTable = forwardRef<MappingTableHandle, { mapping: TargetMapp
       <datalist id={listId}>{(mapping.targetFields ?? []).map((t) => <option key={t.name} value={t.name}>{[t.type, t.description].filter(Boolean).join(' · ')}</option>)}</datalist>
       <div className="mp-scroll" ref={win.ref}>
         <table className="table mp-table mp-edit" aria-label={`Mapping: ${mapping.name}`} data-testid="map-table">
-          <thead><tr><th scope="col">Document field</th><th scope="col">Target field</th><th scope="col">Target type</th><th scope="col">Format and note</th><th scope="col">Not needed by the target</th><th scope="col">Status</th></tr></thead>
+          <thead><tr><th scope="col">Document field</th><th scope="col">Target field and type</th><th scope="col">Format and note</th><th scope="col">Not needed by the target</th><th scope="col">Status</th></tr></thead>
           <tbody>
             {win.before > 0 && <tr aria-hidden="true" style={{ height: win.before }} />}
-            {shown.map((r) => <Row key={r.path} row={r} mapping={mapping} listId={listId} canEdit={canEdit} problem={problemPaths.has(r.path)} flash={flash === r.path} />)}
+            {shown.map((r) => <Row key={r.path} row={r} mapping={mapping} listId={listId} canEdit={canEdit} problem={badPaths.has(r.path)} flash={flash === r.path} />)}
             {win.after > 0 && <tr aria-hidden="true" style={{ height: win.after }} />}
           </tbody>
         </table>
@@ -102,12 +104,11 @@ function Row({ row, mapping, listId, canEdit, problem, flash }: { row: MappingRo
         <span className="muted mp-small">{TYPE_WORDS[row.type] ?? row.type}{row.calculated ? ' · calculated' : ''}{row.required ? '' : row.calculated ? '' : ' · optional'}</span>
         <Tech><span className="mono mp-path">{row.path}</span></Tech>
       </th>
-      <td><input className="input" list={listId} value={target} disabled={!canEdit || notNeeded} placeholder={notNeeded ? '—' : 'Target field'} aria-label={`Target field for ${row.label}`} onChange={(ev) => setTarget(ev.target.value)} onBlur={() => commit()} onKeyDown={onKey} maxLength={120} data-testid="map-target-input" /></td>
-      <td>
-        <input className="input" value={type} disabled={!canEdit || notNeeded} placeholder={fromList ?? 'Type'} aria-label={`Target type for ${row.label}`} onChange={(ev) => setType(ev.target.value)} onBlur={() => commit()} onKeyDown={onKey} maxLength={60} data-testid="map-type-input" />
+      <td className="mp-tcell"><input className="input" list={listId} value={target} disabled={!canEdit || notNeeded} placeholder={notNeeded ? '—' : 'Target field'} aria-label={`Target field for ${row.label}`} onChange={(ev) => setTarget(ev.target.value)} onBlur={() => commit()} onKeyDown={onKey} maxLength={120} data-testid="map-target-input" />
+        <input className="input mp-typein" value={type} disabled={!canEdit || notNeeded} placeholder={fromList ?? 'Type (optional)'} aria-label={`Target type for ${row.label}`} onChange={(ev) => setType(ev.target.value)} onBlur={() => commit()} onKeyDown={onKey} maxLength={60} data-testid="map-type-input" />
         {row.targetKind && <span className={`mp-small ${row.clash ? 'mp-bad' : 'muted'}`} data-testid="map-type-read">{fromList ? 'From the list: ' : ''}read as {TARGET_KIND_LABEL[row.targetKind]}</span>}
       </td>
-      <td><input className="input" value={note} disabled={!canEdit} placeholder={row.type === 'cents' ? 'e.g. divide by 100' : 'Format or note'} aria-label={`Format note for ${row.label}`} onChange={(ev) => setNote(ev.target.value)} onBlur={() => commit()} onKeyDown={onKey} maxLength={300} data-testid="map-format-input" /></td>
+      <td><input className="input" value={note} disabled={!canEdit} placeholder={row.type === 'cents' ? 'e.g. ÷ 100' : 'Format, note'} aria-label={`Format note for ${row.label}`} onChange={(ev) => setNote(ev.target.value)} onBlur={() => commit()} onKeyDown={onKey} maxLength={300} data-testid="map-format-input" /></td>
       <td className="mp-nn">
         <label className="mp-check"><input type="checkbox" checked={notNeeded} disabled={!canEdit} onChange={(ev) => { const on = ev.target.checked; setNotNeeded(on); if (!on) commit({ notNeeded: false }); }} data-testid="map-notneeded" /> <span className="sr-only">{row.label} is </span>Not needed</label>
         {notNeeded && <input className="input" value={reason} autoFocus={!e?.notNeeded} disabled={!canEdit} placeholder="Why (required)" aria-label={`Why the target does not need ${row.label}`} onChange={(ev) => setReason(ev.target.value)} onBlur={() => commit()} onKeyDown={onKey} maxLength={300} data-testid="map-reason-input" />}

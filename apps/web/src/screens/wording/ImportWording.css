@@ -1,5 +1,6 @@
 /* Import wording dialog (Content & Translations). Tokens only. */
-.wi { display: flex; flex-direction: column; gap: 10px; min-width: min(980px, 90vw); }
+.dialog:has(.wi) { width: min(1040px, calc(100vw - 32px)); }
+.wi { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .wi-pick { align-items: center; gap: 8px; flex-wrap: wrap; }
 .wi-paste summary { cursor: pointer; font-size: 13px; }
 .wi-paste .textarea { width: 100%; margin: 6px 0; font-family: var(--iss-font-mono, monospace); }

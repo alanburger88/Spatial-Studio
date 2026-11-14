@@ -120,6 +120,9 @@ export function Mapping() {
 
 function ChecksPanel({ check, onGoTo }: { check: MappingCheck; onGoTo: (path: string) => void }) {
   const problems = check.findings.filter((f) => f.severity === 'problem');
+  const unmapped = problems.filter((f) => f.kind === 'unmapped');
+  const others = problems.filter((f) => f.kind !== 'unmapped');
+  const labelOf = (path: string) => check.rows.find((r) => r.path === path)?.label ?? path;
   const notes = check.findings.filter((f) => f.severity === 'note');
   const LABEL: Record<string, string> = { unmapped: 'Not mapped', 'mapped-twice': 'Mapped twice', 'type-clash': 'Type clash', 'stale-entry': 'No longer a field', calculated: 'Calculated', 'lookup-table': 'Lookup table', 'document-date': 'The document’s date', 'not-in-target-list': 'Not in the list', 'amount-format': 'Cents or dollars' };
   const item = (f: MappingCheck['findings'][number], i: number) => (
@@ -138,7 +141,14 @@ function ChecksPanel({ check, onGoTo }: { check: MappingCheck; onGoTo: (path: st
         {check.counts.mappedTwice > 0 && ` ${check.counts.mappedTwice} target field${check.counts.mappedTwice === 1 ? '' : 's'} mapped twice.`}
       </p>
       <p className="mp-small muted">Complete means nothing the document reads is left undecided, no target field is mapped from two fields, and no type clashes. Only a complete mapping goes into a release package.</p>
-      {problems.length > 0 && <><h4 className="mp-h4">Problems <span className="chip count">{problems.length}</span></h4><ul className="mp-findings">{problems.slice(0, 60).map(item)}{problems.length > 60 && <li className="muted">and {problems.length - 60} more (use “Not mapped” above the table)</li>}</ul></>}
+      {unmapped.length > 0 && (
+        <div data-testid="map-unmapped">
+          <h4 className="mp-h4">Not mapped <span className="chip count">{unmapped.length}</span></h4>
+          <p className="mp-small muted">Read by the document but not decided yet: choose the target field, or mark it “not needed by the target” with a reason.</p>
+          <ul className="mp-chiplinks">{unmapped.slice(0, 80).map((f) => <li key={f.paths[0]} data-testid="map-finding" data-kind="unmapped" data-severity="problem"><button type="button" className="btn sm ghost mp-goto" onClick={() => onGoTo(f.paths[0])} data-testid="map-goto" title={f.message}>{labelOf(f.paths[0])}</button></li>)}</ul>
+        </div>
+      )}
+      {others.length > 0 && <><h4 className="mp-h4">Problems <span className="chip count">{others.length}</span></h4><ul className="mp-findings">{others.map(item)}</ul></>}
       {notes.length > 0 && <><h4 className="mp-h4">For the target system to know</h4><ul className="mp-findings">{notes.map(item)}</ul></>}
       <details className="mp-rules"><summary>How types are compared</summary><ul>{TYPE_RULES.map((r) => <li key={r}>{r}</li>)}</ul></details>
     </div>
