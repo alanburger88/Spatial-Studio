@@ -172,7 +172,7 @@ function ItemDetail({ item }: { item: LibraryItemDto }) {
             {usage === null ? <Loading label="Looking through the documents…" /> : !usage.length ? <p className="muted" data-testid="lib-used-none">No document uses it yet. In a document, use “From the library” to add it.</p> : (
               <ul className="list-rows" data-testid="lib-used">
                 {usage.map((u) => (
-                  <li key={u.linkId} data-testid="lib-used-doc" data-behind={u.behind ? 'true' : 'false'}>
+                  <li key={`${u.projectId}:${u.linkId}`} data-testid="lib-used-doc" data-behind={u.behind ? 'true' : 'false'}>
                     <Link to={`/studio/${u.projectId}/overview`}>{u.title}</Link>
                     <span className="muted"> · version {u.version}</span>
                     {u.behind ? <span className="chip info" style={{ marginLeft: 6 }}>Behind: version {item.latest} is approved</span> : <span className="chip" style={{ marginLeft: 6 }}>Up to date</span>}
