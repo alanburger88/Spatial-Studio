@@ -215,6 +215,8 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
     if (choice !== 'generate' && !rows) throw new ApiError(400, 'SAMPLE_DATA_REQUIRED', 'Supply the sample data to use it for this document’s customers, or choose generated customers.');
     // Who drafted the setup is what the studio told the person when it proposed it; the studio keeps no draft to look it up in.
     const source: SetupSource = b.source === 'ai' ? 'ai' : 'builtin';
+    // A setup proposed from an existing PDF or Word file ("Rebuild from a file"); the file itself never reaches this route.
+    const fromFile = b.origin === 'file';
 
     const id = freeProjectId(title);
     // The project is built here from the setup alone. Whatever else a client sends (a project, components, rules) is not read.
@@ -228,7 +230,7 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
     catch (e: any) { throw new ApiError(422, 'INVALID_SETUP', 'The studio could not work out a document from this setup, so nothing was created.', { problems: [{ code: 'CANNOT_RESOLVE', message: String(e?.message ?? e).slice(0, 300) }] }); }
     const supplied = rows ? suppliedFor(project, rows) : null;
 
-    const saved = store.putProject(project, projectContentDigest(project), { by: by(req), label: source === 'ai' ? 'Set up from a description (AI suggestion, approved by a person)' : 'Set up from sample data' });
+    const saved = store.putProject(project, projectContentDigest(project), { by: by(req), label: fromFile ? (source === 'ai' ? 'Rebuilt from a file (AI suggestion, approved by a person)' : 'Rebuilt from a file (built-in reading)') : source === 'ai' ? 'Set up from a description (AI suggestion, approved by a person)' : 'Set up from sample data' });
     // Supplied rows first: generated customers then start from them. A document with its own data is never left without a customer.
     if (supplied?.records.length) store.addProjectRecords(saved.projectId, RECORD_ID_PREFIX.custom, 'supplied', supplied.records);
     if (choice === 'supplied') ensureCustomer(store, saved); else firstCustomers(store, saved);
@@ -239,7 +241,7 @@ export function registerSetupRoutes(app: FastifyInstance, deps: RouteDeps): void
     const notes = [...built.notes];
     if (startingCustomerOnly) notes.push('None of the supplied rows could be used, so one starting customer was created to preview the document with.');
 
-    audit(store, req, 'project.create', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { title, setup: source, customers: total, generated: generated.length, supplied: mine.length, rejected: supplied?.summary.rejectedCount ?? 0, notes: notes.length } });
+    audit(store, req, 'project.create', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { title, setup: source, ...(fromFile ? { from: 'file' } : {}), customers: total, generated: generated.length, supplied: mine.length, rejected: supplied?.summary.rejectedCount ?? 0, notes: notes.length } });
     reply.status(201);
     return {
       project: saved,

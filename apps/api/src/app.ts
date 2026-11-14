@@ -23,6 +23,7 @@ import { registerAssistRoutes } from './routes/assist';
 import { registerTestDataRoutes } from './routes/testData';
 import { registerRecordRoutes } from './routes/records';
 import { registerSetupRoutes } from './routes/setup';
+import { registerImportFileRoutes } from './routes/importFile';
 import { registerReleaseRoutes } from './routes/releases';
 import { registerRuntimeRoutes } from './routes/runtime';
 import { knownDataProblemsInForce, registerKnownDataRoutes } from './routes/knownData';
@@ -104,6 +105,7 @@ export async function buildApp(opts: AppOptions = {}) {
     const correlationId = randomUUID();
     if (err instanceof ApiError) return reply.status(err.status).send({ error: { code: err.code, message: err.message, correlationId, ...err.extra } });
     if (err instanceof z.ZodError) return reply.status(400).send({ error: { code: 'INVALID_REQUEST', message: err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '), correlationId } });
+    if (err.statusCode === 413) return reply.status(413).send({ error: { code: 'TOO_LARGE', message: 'The request is too large.', correlationId } });
     if (err.validation || err.statusCode === 400) return reply.status(400).send({ error: { code: 'INVALID_REQUEST', message: err.message, correlationId } });
     req.log.error({ correlationId, code: err.code, message: String(err.message).slice(0, 300) });
     return reply.status(500).send({ error: { code: 'INTERNAL', message: 'Unexpected server error (details logged without content bodies).', correlationId } });
@@ -257,6 +259,7 @@ export async function buildApp(opts: AppOptions = {}) {
   registerTestDataRoutes(app, deps);
   registerRecordRoutes(app, deps);
   registerSetupRoutes(app, deps);
+  registerImportFileRoutes(app, deps);
   registerReleaseRoutes(app, deps);
   registerRuntimeRoutes(app, deps, opts.releasePackage?.composer ?? chromiumPackageComposer(composer));
   registerKnownDataRoutes(app, deps);

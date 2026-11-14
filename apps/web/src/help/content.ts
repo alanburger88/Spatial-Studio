@@ -39,7 +39,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     purpose: 'The home page of the studio: every document you can work on, the two samples that come with the studio, and the place to start a new one. Pick a document here and you land on its Overview.',
     actions: [
       'Open a sample, or a document you made, to see where it stands.',
-      'Start a new project from a starter template, from a description of your document, or from an empty page.',
+      'Start a new project from a starter template, from a description of your document, by rebuilding a PDF or Word file you already send, or from an empty page.',
       'Import a studio project file as a new draft, or import customer records.',
       'Make a copy of any project, rename or delete your own, or save one as a template, from its menu.',
       'Restore the two samples to how they shipped.',

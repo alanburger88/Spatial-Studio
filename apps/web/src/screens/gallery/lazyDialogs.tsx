@@ -7,10 +7,12 @@ import { Loading } from '../../ui/common';
  */
 export const dialogLoaders = {
   setup: () => import('./SetupDialog'),
+  rebuild: () => import('./RebuildDialog'),
   importRecords: () => import('./ImportRecords'),
   templates: () => import('./TemplateDialogs'),
 };
 const SetupDialogImpl = lazy(() => dialogLoaders.setup().then((m) => ({ default: m.SetupDialog })));
+const RebuildDialogImpl = lazy(() => dialogLoaders.rebuild().then((m) => ({ default: m.RebuildDialog })));
 const ImportDialogImpl = lazy(() => dialogLoaders.importRecords().then((m) => ({ default: m.ImportDialog })));
 const SaveTemplateDialogImpl = lazy(() => dialogLoaders.templates().then((m) => ({ default: m.SaveTemplateDialog })));
 const ImportProjectDialogImpl = lazy(() => dialogLoaders.templates().then((m) => ({ default: m.ImportProjectDialog })));
@@ -18,6 +20,7 @@ const ImportProjectDialogImpl = lazy(() => dialogLoaders.templates().then((m) =>
 const fallback = <div className="dialog-backdrop"><div className="dialog" role="status" aria-busy="true" style={{ padding: 24 }}><Loading label="Loading…" /></div></div>;
 
 export function SetupDialog(props: ComponentProps<typeof SetupDialogImpl>) { return <Suspense fallback={fallback}><SetupDialogImpl {...props} /></Suspense>; }
+export function RebuildDialog(props: ComponentProps<typeof RebuildDialogImpl>) { return <Suspense fallback={fallback}><RebuildDialogImpl {...props} /></Suspense>; }
 export function ImportDialog(props: ComponentProps<typeof ImportDialogImpl>) { return <Suspense fallback={fallback}><ImportDialogImpl {...props} /></Suspense>; }
 export function SaveTemplateDialog(props: ComponentProps<typeof SaveTemplateDialogImpl>) { return <Suspense fallback={fallback}><SaveTemplateDialogImpl {...props} /></Suspense>; }
 export function ImportProjectDialog(props: ComponentProps<typeof ImportProjectDialogImpl>) { return <Suspense fallback={fallback}><ImportProjectDialogImpl {...props} /></Suspense>; }

@@ -4,7 +4,7 @@ import { DOCUMENT_TYPE_LABEL, NEUTRAL_ACCENT, BLANK_PROJECT_TEMPLATE_ID, ISSUER_
 import { resolve, type Resolution } from '@iss/resolver';
 import { api, ApiFailure, type ImportResult, type ProjectSummary, type TemplateInfoDto } from '../api/client';
 import { editBlockedReason, useCan, useStudio } from '../state/store';
-import { ImportDialog, ImportProjectDialog, SaveTemplateDialog, SetupDialog } from './gallery/lazyDialogs';
+import { ImportDialog, ImportProjectDialog, RebuildDialog, SaveTemplateDialog, SetupDialog } from './gallery/lazyDialogs';
 import { CountsList, SAVE_TEMPLATE_DENIED } from './gallery/templateBits';
 import { Biz, Dialog, Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
@@ -191,7 +191,7 @@ function TemplateThumb({ templateId, documentType, version }: { templateId: stri
   return state ? <PagePreview res={state.res} project={state.project} scale={0.2} showGuides={false} ia={{ selectedId: null }} /> : <div className="gal-paper-skel np-skel"><span className="spinner" /></div>;
 }
 
-function NewProjectDialog({ onClose, onDescribe }: { onClose: () => void; onDescribe: () => void }) {
+function NewProjectDialog({ onClose, onDescribe, onRebuild }: { onClose: () => void; onDescribe: () => void; onRebuild: () => void }) {
   const navigate = useNavigate();
   const canEditHere = useCan('edit');
   const editWhy = useStudio((st) => editBlockedReason(st.session)) ?? 'You do not have permission to create documents';
@@ -276,6 +276,14 @@ function NewProjectDialog({ onClose, onDescribe }: { onClose: () => void; onDesc
             {!canEditHere && <p className="np-bad" data-testid="setup-open-why">{editWhy}, so this is not available to you.</p>}
           </div>
           <button type="button" className="btn primary" onClick={onDescribe} disabled={!canEditHere} title={canEditHere ? 'Describe the document and let the assistant propose a setup' : editWhy} data-testid="setup-open">Describe your document</button>
+        </div>
+        <div className="np-describe" data-testid="rebuild-entry">
+          <div className="np-describe-text">
+            <h3 className="np-heading">Rebuild from a file</h3>
+            <p className="muted">Start from a PDF or Word file of a document you already send. The studio reads it on this machine and proposes the fields, sections and tables; nothing goes to an AI model unless you confirm it.</p>
+            {!canEditHere && <p className="np-bad">{editWhy}, so this is not available to you.</p>}
+          </div>
+          <button type="button" className="btn" onClick={onRebuild} disabled={!canEditHere} title={canEditHere ? 'Choose a PDF or Word file and let the studio propose a setup from it' : editWhy} data-testid="rebuild-open">Rebuild from a file</button>
         </div>
         <h3 className="np-heading">Or start from a template</h3>
         {loadErr && <p className="callout error" role="alert">{loadErr}</p>}
@@ -380,6 +388,9 @@ export function ProjectGallery() {
   const closeDescribe = useCallback(() => setDescribing(false), []);
   const closeCreating = useCallback(() => setCreating(false), []);
   const openDescribe = useCallback(() => { setCreating(false); setDescribing(true); }, []);
+  const [rebuilding, setRebuilding] = useState(false);
+  const closeRebuild = useCallback(() => setRebuilding(false), []);
+  const openRebuild = useCallback(() => { setCreating(false); setRebuilding(true); }, []);
   const [tick, setTick] = useState(0);
   const closeImportProject = useCallback(() => setImportingProject(false), []);
   useEffect(() => {
@@ -470,8 +481,9 @@ export function ProjectGallery() {
           <p>Both sample projects return to their approved models, issued snapshots are cleared and saved view context is forgotten. Your own projects and imported records are kept. Use this before a stakeholder run.</p>
         </Dialog>
       )}
-      {creating && <NewProjectDialog onClose={closeCreating} onDescribe={openDescribe} />}
+      {creating && <NewProjectDialog onClose={closeCreating} onDescribe={openDescribe} onRebuild={openRebuild} />}
       {describing && <SetupDialog onClose={closeDescribe} />}
+      {rebuilding && <RebuildDialog onClose={closeRebuild} />}
       {importingProject && <ImportProjectDialog onClose={closeImportProject} />}
       {importing && <ImportDialog onClose={() => setImporting(false)} onDone={recordsChanged} />}
     </section>

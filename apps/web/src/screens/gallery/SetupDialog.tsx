@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useNavigate } from 'react-router-dom';
 import { ACCENT_PATTERN, ISSUER_NAME_MAX, ISSUER_NAME_MIN, NEUTRAL_ACCENT, SETUP_LIMITS, type Project, type SetupField, type SetupSection, type SetupSpec } from '@iss/model';
 import { resolve, type Resolution } from '@iss/resolver';
-import { baselineCustomer, readSampleData, type SetupOutline } from '@iss/scenarios';
+import { NOT_BROUGHT_TOPIC_LABEL, baselineCustomer, readSampleData, type NotBroughtItem, type SetupOutline } from '@iss/scenarios';
 import { api, ApiFailure, type SetupProposal, type SetupSampleData } from '../../api/client';
 import { NeedsAi, SourceChip, useAiLive } from '../../assist/common';
 import { PagePreview } from '../../doc/PagePreview';
@@ -95,15 +95,22 @@ function ProposalThumb({ project }: { project: Project }) {
 
 /* ------------------------------------------------------------------ the dialog */
 
-export function SetupDialog({ onClose }: { onClose: () => void }) {
+/**
+ * "Rebuild from a file" opens this dialog at its review step with a proposal made from the files (`RebuildDialog`),
+ * the report of what was not brought across, and a way back to its own steps.
+ */
+export interface SetupStart { proposal: SetupProposal; title: string; issuerName?: string; report: NotBroughtItem[]; onBack: () => void }
+
+export function SetupDialog({ onClose, start }: { onClose: () => void; start?: SetupStart }) {
   const navigate = useNavigate();
   const aiLive = useAiLive();
   const rootRef = useRef<HTMLDivElement>(null);
+  const [initial] = useState(() => (start ? entriesOf(start.proposal) : null));
 
   // Step 1
-  const [step, setStep] = useState<'describe' | 'review'>('describe');
-  const [title, setTitle] = useState('');
-  const [issuer, setIssuer] = useState('');
+  const [step, setStep] = useState<'describe' | 'review'>(start ? 'review' : 'describe');
+  const [title, setTitle] = useState(start?.title ?? '');
+  const [issuer, setIssuer] = useState(start?.issuerName ?? '');
   const [accent, setAccent] = useState('');
   const [description, setDescription] = useState('');
   const [dataText, setDataText] = useState('');
@@ -119,10 +126,10 @@ export function SetupDialog({ onClose }: { onClose: () => void }) {
   const [unavailable, setUnavailable] = useState<{ message: string; notes: string[]; providerStatus: string } | null>(null);
 
   // Step 2
-  const [proposal, setProposal] = useState<SetupProposal | null>(null);
-  const [base, setBase] = useState<SetupSpec | null>(null);
-  const [fields, setFields] = useState<FieldEntry[]>([]);
-  const [sections, setSections] = useState<SectionEntry[]>([]);
+  const [proposal, setProposal] = useState<SetupProposal | null>(start?.proposal ?? null);
+  const [base, setBase] = useState<SetupSpec | null>(initial?.base ?? null);
+  const [fields, setFields] = useState<FieldEntry[]>(initial?.fields ?? []);
+  const [sections, setSections] = useState<SectionEntry[]>(initial?.sections ?? []);
   const [changed, setChanged] = useState(false);
   const [customers, setCustomers] = useState<'generate' | 'supplied' | 'both'>('generate');
   const [allNotes, setAllNotes] = useState(false);
@@ -209,7 +216,7 @@ export function SetupDialog({ onClose }: { onClose: () => void }) {
     if (!workingSpec || !proposal || changed || busy) return;
     setBusy('create'); setErr(null);
     try {
-      const r = await api.createSetup({ spec: workingSpec, title: titleTrim, ...(issuerTrim ? { issuerName: issuerTrim } : {}), ...(accent ? { accent: accent.toLowerCase() } : {}), customers, ...(customers !== 'generate' && sampleData ? { sampleData } : {}), source: proposal.source });
+      const r = await api.createSetup({ spec: workingSpec, title: titleTrim, ...(issuerTrim ? { issuerName: issuerTrim } : {}), ...(accent ? { accent: accent.toLowerCase() } : {}), customers, ...(customers !== 'generate' && sampleData ? { sampleData } : {}), source: proposal.source, ...(start ? { origin: 'file' as const } : {}) });
       await useStudio.getState().loadProjects();
       useStudio.getState().toast({ kind: 'success', title: 'Document created', message: `“${r.project.title}” was set up with ${r.customers.total} customer${r.customers.total === 1 ? '' : 's'} to preview with.` });
       onClose();
@@ -274,8 +281,8 @@ export function SetupDialog({ onClose }: { onClose: () => void }) {
       : (
         <>
           {changed && <span className="sd-foot-note" data-testid="setup-unchecked">You changed the setup. Check your changes before creating.</span>}
-          <button type="button" className="btn" onClick={() => { setStep('describe'); setErr(null); }} disabled={!!busy} data-testid="setup-back">Back to the description</button>
-          <button type="button" className="btn" onClick={draft} disabled={!canDraft} title={changed ? 'Drafts a new proposal from your description and replaces your edits' : draftBlock ?? 'Run the assistant again with the same description'} data-testid="setup-draft-again">{busy === 'draft' ? 'Drafting…' : 'Draft again'}</button>
+          <button type="button" className="btn" onClick={() => { if (start) { start.onBack(); return; } setStep('describe'); setErr(null); }} disabled={!!busy} data-testid="setup-back">{start ? 'Back to what will be sent' : 'Back to the description'}</button>
+          {!start && <button type="button" className="btn" onClick={draft} disabled={!canDraft} title={changed ? 'Drafts a new proposal from your description and replaces your edits' : draftBlock ?? 'Run the assistant again with the same description'} data-testid="setup-draft-again">{busy === 'draft' ? 'Drafting…' : 'Draft again'}</button>}
           <button type="button" className="btn primary" onClick={create} disabled={!workingSpec || changed || !!busy || (customers !== 'generate' && !suppliedUsable)} title={changed ? 'Check your changes first' : undefined} data-testid="setup-create">{busy === 'create' ? 'Creating…' : 'Create the document'}</button>
         </>
       );
@@ -366,12 +373,22 @@ export function SetupDialog({ onClose }: { onClose: () => void }) {
   /* ------------------------------------------------------------------ step 2 */
   const review: ReactNode = proposal && workingSpec ? (
     <div className="sd-step" data-testid="setup-step-review" hidden={step !== 'review'}>
-      <h3 className="sd-h" tabIndex={-1} data-step-heading>2. Review the proposal</h3>
+      <h3 className="sd-h" tabIndex={-1} data-step-heading>{start ? '4' : '2'}. Review the proposal</h3>
       <div className="sd-head">
         <SourceChip source={proposal.source} />
         <p className="sd-message" data-testid="setup-message">{proposal.message}</p>
-        <p className="sd-nothing muted"><strong>Nothing is created until you choose Create.</strong> {proposal.providerStatus}</p>
+        <p className="sd-nothing muted"><strong>Nothing is created until you choose Create.</strong> {proposal.providerStatus}{proposal.outline.paper ? ` · Paper: ${proposal.outline.paper}` : ''}</p>
       </div>
+
+      {start && start.report.length > 0 && (
+        <section className="sd-block" data-testid="setup-not-brought" aria-labelledby="sd-nba-h">
+          <h4 id="sd-nba-h" className="sd-bh">What was not brought across from the file</h4>
+          <ul className="sd-notes">
+            {start.report.map((item, i) => <li key={i} data-topic={item.topic}><strong>{NOT_BROUGHT_TOPIC_LABEL[item.topic]}:</strong> {item.text}</li>)}
+          </ul>
+          <p className="hint">The file itself is not kept. Keep a copy of this list if you need it later: it is not stored with the document.</p>
+        </section>
+      )}
 
       {proposal.notes.length > 0 && (
         <section className="sd-block" data-testid="setup-notes" aria-labelledby="sd-notes-h">
@@ -539,9 +556,9 @@ export function SetupDialog({ onClose }: { onClose: () => void }) {
   ) : null;
 
   return (
-    <Dialog title="Describe your document" onClose={stableClose} labelledBy="setup-dialog-title" footer={footer}>
+    <Dialog title={start ? 'Rebuild from a file' : 'Describe your document'} onClose={stableClose} labelledBy="setup-dialog-title" footer={footer}>
       <div className="sd-root" ref={rootRef} data-testid="setup-dialog" data-step={step}>
-        <p className="sd-steps muted" aria-label="Progress">Step {step === 'describe' ? 1 : 2} of 2 · <strong>{step === 'describe' ? 'Describe' : 'Review'}</strong></p>
+        <p className="sd-steps muted" aria-label="Progress">{start ? <>Step 4 of 4 · <strong>Review</strong></> : <>Step {step === 'describe' ? 1 : 2} of 2 · <strong>{step === 'describe' ? 'Describe' : 'Review'}</strong></>}</p>
         {describe}
         {review}
       </div>

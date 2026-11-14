@@ -15,5 +15,10 @@ export * from './ruleDraft';
 export * from './ruleReview';
 export * from './setupFromData';
 export * from './setupOutline';
+// Rebuild from a file (wave 3): the reading's shape, likely personal details, comparing samples, the outline and proposal.
+export * from './fileReading';
+export * from './personalDetails';
+export * from './alignSamples';
+export * from './setupFromFile';
 export * from './wordingRules';
 export * from './duplicates';

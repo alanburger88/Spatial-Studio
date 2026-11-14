@@ -4,7 +4,7 @@ import { channelConfig } from './channels';
 import { customFieldDefs, defaultFormatterFor, fieldsFor, CUSTOM_LIST_MAX_COLUMNS } from './fields';
 import { isSafeUrl, richFromMarkup } from './rich';
 import { ACCENT_PATTERN, blankProject, ISSUER_NAME_MAX, ISSUER_NAME_MIN, projectFileProblems, TEMPLATE_TITLE_MAX } from './templates';
-import type { ComparisonOp, CustomField, CustomListColumn, DocNode, Predicate, Project, Rule, Scalar } from './types';
+import type { ComparisonOp, CustomField, CustomListColumn, DocNode, PaperSize, Predicate, Project, Rule, Scalar } from './types';
 
 /**
  * A document setup: a small, plain description of a new document "with its own data" that a model, the built-in data
@@ -72,7 +72,12 @@ export interface SetupSpec {
   email?: { subject: string; intro: string };
   /** The text message. */
   sms?: string;
+  /** The paper the pages are composed on (a document rebuilt from a file keeps the file's paper). Absent: US Letter. */
+  paper?: PaperSize;
 }
+
+/** The paper sizes a setup can ask for. */
+export const SETUP_PAPER_SIZES: PaperSize[] = ['US-Letter', 'A4', 'US-Legal'];
 
 export const SETUP_FIELD_TYPES: SetupFieldType[] = ['text', 'number', 'amount', 'date', 'choice', 'yesNo', 'list'];
 export const SETUP_COLUMN_TYPES: SetupColumnType[] = ['text', 'number', 'amount', 'date'];
@@ -449,7 +454,7 @@ function cleanSection(raw: unknown, ctx: CheckCtx): SetupSection | null {
   }
 }
 
-const TOP_KEYS = new Set(['title', 'issuerName', 'accent', 'summary', 'fields', 'sections', 'email', 'sms']);
+const TOP_KEYS = new Set(['title', 'issuerName', 'accent', 'summary', 'fields', 'sections', 'email', 'sms', 'paper']);
 
 function clean(raw: unknown, note: Note): SetupSpec {
   let o: Record<string, unknown> = {};
@@ -487,6 +492,11 @@ function clean(raw: unknown, note: Note): SetupSpec {
   }
   const sms = wording(o.sms, SETUP_LIMITS.sms, 'The text message', ctx, false, true);
   if (sms) spec.sms = sms;
+  if (typeof o.paper === 'string' && o.paper.trim()) {
+    const paper = pick(o.paper, SETUP_PAPER_SIZES);
+    if (paper) spec.paper = paper;
+    else note(`The paper ${q(o.paper.trim().slice(0, 20))} is not one the studio offers (US Letter, A4 or US Legal), so US Letter is used.`);
+  }
   return spec;
 }
 
@@ -566,6 +576,9 @@ export function projectFromSetupSpec(raw: SetupSpec, opts: { projectId: string; 
     note(`${what} could not be added: ${r.message}`);
     return false;
   };
+
+  // 0. The paper, before anything is placed on the pages.
+  if (spec.paper && spec.paper !== 'US-Letter') run({ type: 'SET_PAGE_DESIGN', patch: { paper: spec.paper } }, 'The paper size');
 
   // 1. Data fields: all at once, or one by one when the set as a whole is refused.
   const wanted = setupCustomFields(spec);
