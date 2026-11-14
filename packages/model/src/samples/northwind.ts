@@ -118,9 +118,9 @@ export const NW_RATES = {
 
 const f = (path: string) => ({ op: 'field' as const, path });
 export const NORTHWIND_CALCS: CalculatedField[] = [
-  { key: 'electricUsage', label: 'Electricity used (kWh)', type: 'number', description: 'The usage of every electricity meter added up.', expr: { op: 'sum', list: 'custom.meters', column: 'usage', where: { op: 'eq', path: 'fuel', value: 'Electricity' } } },
-  { key: 'gasUsage', label: 'Gas used (therms)', type: 'number', description: 'The usage of every gas meter added up.', expr: { op: 'sum', list: 'custom.meters', column: 'usage', where: { op: 'eq', path: 'fuel', value: 'Gas' } } },
-  { key: 'estimatedReads', label: 'Estimated readings', type: 'number', expr: { op: 'count', list: 'custom.meters', where: { op: 'eq', path: 'readType', value: 'estimated' } } },
+  { key: 'electricUsage', label: 'Electricity used (kWh)', type: 'number', description: 'The usage of every electricity meter added up.', expr: { op: 'sum', list: 'custom.meters', column: 'usage', where: { op: 'in', path: 'fuel', value: ['Electricity', 'Electricidad'] } } },
+  { key: 'gasUsage', label: 'Gas used (therms)', type: 'number', description: 'The usage of every gas meter added up.', expr: { op: 'sum', list: 'custom.meters', column: 'usage', where: { op: 'in', path: 'fuel', value: ['Gas'] } } },
+  { key: 'estimatedReads', label: 'Estimated readings', type: 'number', expr: { op: 'count', list: 'custom.meters', where: { op: 'in', path: 'readType', value: ['estimated', 'estimada'] } } },
   { key: 'deliveryRate', label: 'Delivery rate (¢ per kWh)', type: 'number', expr: { op: 'lookup', table: 'rateBands', column: 'rate', keys: [f('calc.electricUsage')] } },
   { key: 'deliveryBand', label: 'Delivery rate band', type: 'text', expr: { op: 'lookup', table: 'rateBands', column: 'band', keys: [f('calc.electricUsage')] } },
   { key: 'deliveryCharge', label: 'Electricity delivery charge', type: 'money', description: 'Electricity used times the delivery rate of its band, to the cent.', expr: { op: 'round', places: 2, arg: { op: 'mul', a: { op: 'mul', a: f('calc.electricUsage'), b: { op: 'money', cents: 1 } }, b: f('calc.deliveryRate') } } },
@@ -219,19 +219,25 @@ export function buildNorthwind(stage: NorthwindStage = 'working', plan: HouseLin
   b.rule({ id: 'R03', title: 'Payment plan: installment message', mode: 'exclusive', priority: 300, exclusiveGroup: 'payment-message', when: eq('custom.paymentPlan', true), then: { op: 'selectVariant', targetNodeId: 'payment-message', variantId: 'pay-plan' } });
   b.rule({ id: 'R04', title: 'Automatic payment: no action needed', mode: 'exclusive', priority: 200, exclusiveGroup: 'payment-message', when: eq('custom.autopay', true), then: { op: 'selectVariant', targetNodeId: 'payment-message', variantId: 'pay-autopay' } });
 
+  b.rule({ id: 'R08', title: 'Spanish-speaking customer: approved Spanish wording only', mode: 'obligation', priority: 900, when: eq('customer.locale', 'es-US'), then: { op: 'setApprovedLocale', locale: 'es-US', errorIfMissingMandatoryTranslation: true } });
+
   /* ---- the rate change: the old wording until the day it changes, the new wording from that day */
-  b.insert({ id: 'rate-notice', type: 'conditional-region', name: 'Electricity rate notice', policy: 'exclusive', variantIds: [], variantConditions: {}, layout: flow({ spaceBeforePt: 10, keepTogether: true }) });
   const electric = isIn('custom.services', ['electric', 'dual']);
-  b.run({ type: 'ADD_VARIANT', nodeId: 'rate-notice', variantId: 'rate-upcoming', title: 'Your electricity supply rate is changing', text: 'From December 1, 2026, the electricity supply rate changes from 7.85¢ to 8.42¢ per kWh, as approved by the Calder Bay Public Utility Commission (fictional). This bill uses the current rate of {{calc.supplyRate}}¢ per kWh; your next bill will use the new rate.', when: electric });
-  b.run({ type: 'ADD_VARIANT', nodeId: 'rate-notice', variantId: 'rate-new', title: 'Your new electricity supply rate', text: 'Since December 1, 2026, the electricity supply rate is {{calc.supplyRate}}¢ per kWh (it was 7.85¢). The Calder Bay Public Utility Commission (fictional) approved the change. This bill uses the new rate.', when: electric });
+  b.message({ id: 'rate-notice', name: 'Rate notice', layout: flow({ spaceBeforePt: 10, keepTogether: true }) }, [
+    { id: 'rate-gas', title: 'Your gas rates', text: 'Gas delivery and supply rates are unchanged this season. If your rates change, we will tell you on your bill at least one month before.', fallback: true },
+    { id: 'rate-upcoming', title: 'Your electricity supply rate is changing', text: 'From December 1, 2026, the electricity supply rate changes from 7.85¢ to 8.42¢ per kWh, as approved by the Calder Bay Public Utility Commission (fictional). This bill uses the current rate of {{calc.supplyRate}}¢ per kWh; your next bill will use the new rate.' },
+    { id: 'rate-new', title: 'Your new electricity supply rate', text: 'Since December 1, 2026, the electricity supply rate is {{calc.supplyRate}}¢ per kWh (it was 7.85¢). The Calder Bay Public Utility Commission (fictional) approved the change. This bill uses the new rate.' },
+  ]);
   b.run({ type: 'SET_VARIANT_PERIOD', nodeId: 'rate-notice', variantId: 'rate-upcoming', period: { until: RATE_CHANGE_DAY } });
   b.run({ type: 'SET_VARIANT_PERIOD', nodeId: 'rate-notice', variantId: 'rate-new', period: { from: RATE_CHANGE_DAY } });
+  b.rule({ id: 'R06', title: 'Electricity customers before the rate change: announce it', mode: 'exclusive', priority: 120, exclusiveGroup: 'rate-notice', when: electric, then: { op: 'selectVariant', targetNodeId: 'rate-notice', variantId: 'rate-upcoming' }, effective: { until: RATE_CHANGE_DAY } });
+  b.rule({ id: 'R07', title: 'Electricity customers from the rate change: confirm the new rate', mode: 'exclusive', priority: 110, exclusiveGroup: 'rate-notice', when: electric, then: { op: 'selectVariant', targetNodeId: 'rate-notice', variantId: 'rate-new' }, effective: { from: RATE_CHANGE_DAY } });
 
   /* ---- electricity and gas sections: shown by the services on the account */
   b.insert(container('electricity-section', 'Electricity', flow({ spaceBeforePt: 14 }), { visibleWhen: electric }));
   b.insert(text('electricity-heading', 'Electricity heading', '## Electricity', flow({ spaceBeforePt: 0, keepWithNext: true })), 'electricity-section');
   b.insert(container('electricity-row', 'Electricity use and chart', flow({ direction: 'row', spaceBeforePt: 4, keepTogether: true }, { area: 'main', span: 12, direction: 'row' })), 'electricity-section');
-  b.insert(text('electricity-use', 'Electricity use', 'You used **{{calc.electricUsage}} kWh** in {{calc.billingDays}} days, an average of {{calc.avgDailyKwh}} kWh a day.\nYour delivery rate is {{calc.deliveryRate}}¢ per kWh, the rate for {{calc.deliveryBand}}, so electricity delivery costs {{calc.deliveryCharge}} this month. The supply rate is {{calc.supplyRate}}¢ per kWh.\nYour highest month in the past year was {{calc.peakMonthKwh}} kWh. Your next meter reading will be around {{calc.nextReadDate}}.', flow({ widthPct: 52, spaceBeforePt: 0 }, { area: 'main', span: 7 })), 'electricity-row');
+  b.insert(text('electricity-use', 'Electricity use', 'You used **{{calc.electricUsage}} kWh** in {{calc.billingDays}} days, an average of {{calc.avgDailyKwh}} kWh a day.\nYour delivery rate is {{calc.deliveryRate}}¢ per kWh, the rate for a month of {{calc.deliveryBand}}, so electricity delivery costs {{calc.deliveryCharge}} this month. The supply rate is {{calc.supplyRate}}¢ per kWh.\nYour highest month in the past year was {{calc.peakMonthKwh}} kWh. Your next meter reading will be around {{calc.nextReadDate}}.', flow({ widthPct: 52, spaceBeforePt: 0 }, { area: 'main', span: 7 })), 'electricity-row');
   b.insert({ id: 'electricity-chart', type: 'chart', name: 'Electricity use chart', binding: 'custom.usageHistory', chart: { kind: 'bar', title: 'Electricity use, last 6 months (kWh)', groupBy: 'month', valueKey: 'kwh', limit: 6, palette: 'mono', order: 'data' }, layout: flow({ widthPct: 48, spaceBeforePt: 0 }, { area: 'main', span: 5 }) }, 'electricity-row');
   b.insert(text('electricity-compare', 'Compared with last year', 'In the same month last year you used {{custom.lastYearKwh}} kWh. Your use changed by {{calc.kwhChangePct}}%.', flow({ spaceBeforePt: 4 }), { visibleWhen: gt0('custom.lastYearKwh') }), 'electricity-section');
 
@@ -244,7 +250,8 @@ export function buildNorthwind(stage: NorthwindStage = 'working', plan: HouseLin
   b.insert(text('dual-fuel-note', 'Dual-fuel saving', '**Dual-fuel saving.** Because you buy both electricity and gas from us, your gas customer charge is $2.00 lower every month.', flow({ spaceBeforePt: 10 }), { visibleWhen: eq('custom.services', 'dual') }));
 
   /* ---- usage messages */
-  b.insert(text('estimated-read-note', 'Estimated reading explanation', '**About estimated readings.** We could not read {{calc.estimatedReads}} of your meters this time, so we estimated the reading from your past use and the weather. Estimated kilowatt-hours are corrected automatically at your next actual reading.', flow({ spaceBeforePt: 10, keepTogether: true }), { visibleWhen: gt0('calc.estimatedReads') }));
+  b.insert({ id: 'estimated-read-note', type: 'conditional-region', name: 'Estimated reading explanation', policy: 'exclusive', variantIds: [], variantConditions: {}, layout: flow({ spaceBeforePt: 10, keepTogether: true }) });
+  b.run({ type: 'ADD_VARIANT', nodeId: 'estimated-read-note', variantId: 'estimated-read', title: 'About estimated readings', text: 'We could not read {{calc.estimatedReads}} of your meters this time, so we estimated the reading from your past use and the weather. Estimated kilowatt-hours are corrected automatically at your next actual reading.', when: gt0('calc.estimatedReads') });
   b.insert({ id: 'high-usage', type: 'conditional-region', name: 'Higher use message', ruleDriven: true, policy: 'exclusive', variantIds: [], layout: flow({ spaceBeforePt: 10, keepTogether: true }) });
   b.run({ type: 'ADD_VARIANT', nodeId: 'high-usage', variantId: 'high-usage-tips', title: 'You used more electricity than last year', text: 'Your electricity use is {{calc.kwhChangePct}}% higher than in the same month last year. Heating and shorter days often raise use in winter. A free home energy check can help you find savings: call 1-800-555-0148 to book one.' });
   b.run({ type: 'UPDATE_NODE', nodeId: 'high-usage', patch: { fallbackVariantId: 'high-usage-tips' } });
@@ -271,7 +278,8 @@ export function buildNorthwind(stage: NorthwindStage = 'working', plan: HouseLin
   });
 
   /* ---- winter help (in effect for the heating season only) and paying */
-  b.insert(text('winter-help', 'Winter heating help', '## Help with winter heating bills\nFrom November through March, households that qualify can get help with heating costs from the Calder Bay Home Energy Assistance Program (fictional). Call 1-800-555-0142 or visit example.com/northwind/help to apply. Applying does not affect your service.', flow({ spaceBeforePt: 14, keepTogether: true }), { visibleWhen: isIn('custom.services', ['gas', 'dual']) }));
+  b.insert({ id: 'winter-help', type: 'conditional-region', name: 'Winter heating help', policy: 'exclusive', variantIds: [], variantConditions: {}, layout: flow({ spaceBeforePt: 12, keepTogether: true }) });
+  b.run({ type: 'ADD_VARIANT', nodeId: 'winter-help', variantId: 'winter-help-text', title: 'Help with winter heating bills', text: 'From November through March, households that qualify can get help with heating costs from the Calder Bay Home Energy Assistance Program (fictional). Call 1-800-555-0142 or visit example.com/northwind/help to apply. Applying does not affect your service.', when: isIn('custom.services', ['gas', 'dual']) });
   b.run({ type: 'SET_SECTION_PERIOD', nodeId: 'winter-help', period: { ...WINTER } });
   b.insert(container('pay-actions', 'Ways to pay', flow({ direction: 'row', spaceBeforePt: 14, keepTogether: true }, { area: 'main', span: 12, direction: 'row' })));
   b.insert({ id: 'pay-online', type: 'action-link', name: 'Pay online', action: { label: 'Pay your bill online', url: 'https://example.com/northwind/pay', fallbackText: 'Pay online at example.com/northwind/pay, by phone at 1-800-555-0148, or by mail with the payment slip.' }, layout: flow({ widthPct: 72, spaceBeforePt: 0 }, { area: 'main', span: 9 }) }, 'pay-actions');
@@ -329,12 +337,12 @@ const gt0 = (path: string) => ({ op: 'gt' as const, path, value: 0 });
 export function northwindTests(stage: NorthwindStage): TestCase[] {
   const T = (id: string, name: string, recordId: string, expect: TestCase['expect'], issueDate?: string): TestCase => ({ id, name, recordId, expect, ...(issueDate ? { issueDate } : {}) });
   return [
-    T('T1', 'Standard bill, electricity only', 'NWE-60001', { selectedVariants: { 'payment-message': 'pay-standard' }, visibleNodeIds: ['electricity-section'], hiddenNodeIds: ['gas-section', 'dual-fuel-note'], noBlocking: true }),
+    T('T1', 'Standard bill, electricity only', 'NWE-60001', { selectedVariants: { 'payment-message': 'pay-standard', 'rate-notice': 'rate-upcoming' }, hiddenNodeIds: ['high-usage', 'estimated-read-note'], noBlocking: true }),
     T('T2', 'Overdue account gets the past-due message', 'NWE-60005', { selectedVariants: { 'payment-message': 'pay-overdue' }, noBlocking: true }),
     T('T3', 'Spanish-speaking customer gets the approved Spanish bill', 'NWE-60003', { approvedLocale: 'es-US', noBlocking: true }),
-    T('T4', 'Gas only: no electricity section, winter help shown', 'NWE-60002', { visibleNodeIds: ['gas-section', 'winter-help'], hiddenNodeIds: ['electricity-section', 'rate-notice'], noBlocking: true }),
+    T('T4', 'Gas only: gas rate notice and winter help', 'NWE-60002', { selectedVariants: { 'rate-notice': 'rate-gas' }, visibleNodeIds: ['winter-help'], hiddenNodeIds: ['high-usage'], noBlocking: true }),
     T('T5', 'As issued the day before the rate change: the upcoming-rate notice', 'NWE-60011', { selectedVariants: { 'rate-notice': 'rate-upcoming' }, noBlocking: true }, '2026-11-30'),
-    T('T6', 'As issued on the day of the rate change: the new-rate notice', 'NWE-60012', { selectedVariants: { 'rate-notice': 'rate-new' }, noBlocking: true }, RATE_CHANGE_DAY),
+    T('T6', 'As issued on the day of the rate change: the new-rate notice', 'NWE-60011', { selectedVariants: { 'rate-notice': 'rate-new' }, noBlocking: true }, RATE_CHANGE_DAY),
     T('T7', 'Estimated reading explained, higher use flagged', 'NWE-60008', { visibleNodeIds: ['estimated-read-note', 'high-usage'], noBlocking: true }),
     ...(stage === 'working' ? [T('T8', 'Credit balance: nothing to pay', 'NWE-60016', { selectedVariants: { 'payment-message': 'pay-credit' }, noBlocking: true })] : []),
   ];
@@ -427,26 +435,37 @@ const SPECS: NwSpec[] = [
   { given: 'Nadia', family: 'Sorensen', services: 'electric', plan: 'budget', billDate: '2026-11-27', kwh: 520, lastYearKwh: 530, previous: 8210, paid: 8210, autopay: true, noDueDate: true, street: '21 Ashgrove Mews' },
 ];
 
+/**
+ * The words the billing system writes into a customer's data, in the customer's language (English or Spanish). The
+ * calculations that read the fuel and the read type accept both spellings.
+ */
+export const NW_DATA_WORDS = {
+  en: { electricity: 'Electricity', gas: 'Gas', actual: 'actual', estimated: 'estimated', month: 'month', therms: 'therms', aMonth: 'a month', per: 'per', therm: 'therm', customerCharge: 'Customer charge', meter: 'meter', delivery: 'Delivery', supply: 'Supply', publicPurpose: 'Public purpose programs', dualSaving: 'Dual-fuel saving' },
+  es: { electricity: 'Electricidad', gas: 'Gas', actual: 'real', estimated: 'estimada', month: 'mes', therms: 'termias', aMonth: 'al mes', per: 'por', therm: 'termia', customerCharge: 'Cargo fijo', meter: 'medidor', delivery: 'Distribución', supply: 'Suministro', publicPurpose: 'Programas de interés público', dualSaving: 'Ahorro por doble servicio' },
+} as const;
+
 /** Every charge line, worked out from the usage and the rates, so the lines, the totals and the calculations agree to the cent. */
 function chargesFor(s: NwSpec, kwh: number, therms: number, meters: Array<{ fuel: string; meterNumber: string }>): Array<Record<string, unknown>> {
+  const w = NW_DATA_WORDS[s.es ? 'es' : 'en'];
   const rows: Array<Record<string, unknown>> = [];
   // Energy rates to a hundredth of a cent; fixed monthly charges to the cent.
-  const rate = (u: number, per: string) => per ? `$${(u / 10000).toFixed(4)} per ${per}` : `${u < 0 ? '−' : ''}$${(Math.abs(u) / 10000).toFixed(2)} a month`;
+  const rate = (u: number, per: string) => per ? `$${(u / 10000).toFixed(4)} ${w.per} ${per}` : `${u < 0 ? '−' : ''}$${(Math.abs(u) / 10000).toFixed(2)} ${w.aMonth}`;
   const line = (fuel: string, description: string, quantity: number, unit: string, r: number, per: string) => rows.push({ fuel, description, quantity, unit, rate: rate(r, per), rateTenThousandths: r, amountCents: centsAt(quantity, r) });
-  const elec = meters.filter((m) => m.fuel === 'Electricity');
-  const gas = meters.filter((m) => m.fuel === 'Gas');
-  for (const m of elec) line('Electricity', elec.length > 1 ? `Customer charge, meter ${m.meterNumber}` : 'Customer charge', 1, 'month', NW_RATES.electricCustomer, '');
+  const band = kwh < 500 ? '0–499 kWh' : kwh < 1000 ? '500–999 kWh' : '1,000+ kWh';
+  const elec = meters.filter((m) => m.fuel === w.electricity);
+  const gas = meters.filter((m) => m.fuel === w.gas);
+  for (const m of elec) line(w.electricity, elec.length > 1 ? `${w.customerCharge}, ${w.meter} ${m.meterNumber}` : w.customerCharge, 1, w.month, NW_RATES.electricCustomer, '');
   if (elec.length) {
-    line('Electricity', `Delivery (${kwh < 500 ? 'up to 500 kWh' : kwh < 1000 ? '500 to 999 kWh' : '1,000 kWh and over'})`, kwh, 'kWh', NW_RATES.delivery(kwh), 'kWh');
-    line('Electricity', 'Supply', kwh, 'kWh', NW_RATES.supply(s.billDate), 'kWh');
-    line('Electricity', 'Public purpose programs', kwh, 'kWh', NW_RATES.publicPurpose, 'kWh');
+    line(w.electricity, `${w.delivery} (${band})`, kwh, 'kWh', NW_RATES.delivery(kwh), 'kWh');
+    line(w.electricity, w.supply, kwh, 'kWh', NW_RATES.supply(s.billDate), 'kWh');
+    line(w.electricity, w.publicPurpose, kwh, 'kWh', NW_RATES.publicPurpose, 'kWh');
   }
-  for (const m of gas) line('Gas', gas.length > 1 ? `Customer charge, meter ${m.meterNumber}` : 'Customer charge', 1, 'month', NW_RATES.gasCustomer, '');
+  for (const m of gas) line(w.gas, gas.length > 1 ? `${w.customerCharge}, ${w.meter} ${m.meterNumber}` : w.customerCharge, 1, w.month, NW_RATES.gasCustomer, '');
   if (gas.length) {
-    line('Gas', 'Delivery', therms, 'therms', NW_RATES.gasDelivery, 'therm');
-    line('Gas', 'Supply', therms, 'therms', NW_RATES.gasSupply, 'therm');
+    line(w.gas, w.delivery, therms, w.therms, NW_RATES.gasDelivery, w.therm);
+    line(w.gas, w.supply, therms, w.therms, NW_RATES.gasSupply, w.therm);
   }
-  if (s.services === 'dual') line('Gas', 'Dual-fuel saving', 1, 'month', NW_RATES.dualDiscount, '');
+  if (s.services === 'dual') line(w.gas, w.dualSaving, 1, w.month, NW_RATES.dualDiscount, '');
   return rows;
 }
 
@@ -460,7 +479,9 @@ export function northwindCustomers(): SampleCustomer[] {
     const therms = s.services === 'electric' ? 0 : s.therms ?? 0;
     const meters: Array<Record<string, unknown>> = [];
     const meterNo = (fuel: 'E' | 'G', k: number) => `${fuel}-${String(41000 + (i * 37 + k * 11) % 9000).padStart(5, '0')}`;
-    const addMeters = (fuel: 'Electricity' | 'Gas', total: number, count: number, unit: string, base: number) => {
+    const w = NW_DATA_WORDS[s.es ? 'es' : 'en'];
+    const addMeters = (kind: 'electric' | 'gas', total: number, count: number, unit: string, base: number) => {
+      const fuel = kind === 'electric' ? w.electricity : w.gas;
       // Split the usage over the meters; the last meter takes the remainder so the sum is exact.
       let left = total;
       for (let k = 0; k < count; k++) {
@@ -468,12 +489,12 @@ export function northwindCustomers(): SampleCustomer[] {
         const use = k === count - 1 ? left : Math.max(0, share + ((k * 37) % 23) - 11);
         left -= use;
         const prev = base + k * 1371 + i * 97;
-        const estimated = s.estimated === (fuel === 'Electricity' ? 'electric' : 'gas') && k === 0;
-        meters.push({ fuel, meterNumber: meterNo(fuel === 'Electricity' ? 'E' : 'G', k), previousRead: prev, currentRead: prev + use, readType: estimated ? 'estimated' : 'actual', usage: use, unit });
+        const estimated = s.estimated === kind && k === 0;
+        meters.push({ fuel, meterNumber: meterNo(kind === 'electric' ? 'E' : 'G', k), previousRead: prev, currentRead: prev + use, readType: estimated ? w.estimated : w.actual, usage: use, unit });
       }
     };
-    if (s.services !== 'gas') addMeters('Electricity', kwh, 1 + (s.extraMeters?.electric ?? 0), 'kWh', 24000);
-    if (s.services !== 'electric') addMeters('Gas', therms, 1 + (s.extraMeters?.gas ?? 0), 'therms', 3100);
+    if (s.services !== 'gas') addMeters('electric', kwh, 1 + (s.extraMeters?.electric ?? 0), 'kWh', 24000);
+    if (s.services !== 'electric') addMeters('gas', therms, 1 + (s.extraMeters?.gas ?? 0), w.therms, 3100);
     const charges = chargesFor(s, kwh, therms, meters as Array<{ fuel: string; meterNumber: string }>);
     const current = charges.reduce((t, c) => t + (c.amountCents as number), 0);
     const taxes = roundHalfUp((current * NW_RATES.taxBps) / 10000, 0);

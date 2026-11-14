@@ -29,9 +29,9 @@ export const RATE_BANDS: LookupTable = {
   keys: [{ key: 'usage', label: 'Monthly use (kWh)', match: 'number-range', unit: 'number' }],
   columns: [{ key: 'rate', label: 'Delivery rate (¢ per kWh)', type: 'number' }, { key: 'band', label: 'Band', type: 'text' }],
   rows: [
-    { keys: { usage: { from: 0, until: 500 } }, values: { rate: 6.12, band: 'up to 500 kWh' } },
-    { keys: { usage: { from: 500, until: 1000 } }, values: { rate: 6.88, band: '500 to 999 kWh' } },
-    { keys: { usage: { from: 1000 } }, values: { rate: 7.41, band: '1,000 kWh and over' } },
+    { keys: { usage: { from: 0, until: 500 } }, values: { rate: 6.12, band: '0–499 kWh' } },
+    { keys: { usage: { from: 500, until: 1000 } }, values: { rate: 6.88, band: '500–999 kWh' } },
+    { keys: { usage: { from: 1000 } }, values: { rate: 7.41, band: '1,000+ kWh' } },
   ],
 };
 
