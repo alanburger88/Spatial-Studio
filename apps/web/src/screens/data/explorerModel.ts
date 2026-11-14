@@ -119,7 +119,8 @@ export function buildSections(project: Pick<Project, 'documentType' | 'customFie
     for (let i = 0; i < segs.length - 1; i++) {
       prefix = prefix ? `${prefix}.${segs[i]}` : segs[i];
       let g = level.find((x) => x.key === segs[i]) as GroupNode | undefined;
-      if (!g) { g = { kind: 'group', key: segs[i], path: prefix, label: i === 0 ? SECTION_LABEL[segs[i]] ?? humanise(segs[i]) : humanise(segs[i]), children: [] }; level.push(g); }
+      // A group of the document's own fields (wave 5) is shown by its own name.
+      if (!g) { g = { kind: 'group', key: segs[i], path: prefix, label: i === 0 ? SECTION_LABEL[segs[i]] ?? humanise(segs[i]) : i === segs.length - 2 && def.group ? def.group : humanise(segs[i]), children: [] }; level.push(g); }
       level = g.children as GroupNode[];
     }
     const leaf: TreeNode = def.type === 'array'
@@ -150,9 +151,14 @@ export function problemsFor(record: unknown, project: Project): Problem[] {
   const seen = new Set<string>();
   const out: Problem[] = [];
   for (const message of messages) {
-    const row = /^([A-Za-z0-9_.]+)\[(\d+)\]\.([A-Za-z0-9_]+): (.*)$/.exec(message);
+    const row = /^([A-Za-z0-9_.]+)\[(\d+)\]\.([A-Za-z0-9_.]+): (.*)$/.exec(message);
+    // A row of a list inside a list (wave 5): "Accounts, row 2, Transactions, row 3, Amount: …".
+    const deep = /^([A-Za-z0-9_.]+)\[(\d+)\]\.([A-Za-z0-9_]+)\[(\d+)\]\.?([A-Za-z0-9_.]*):? (.*)$/.exec(message);
     let p: Problem;
-    if (row) {
+    if (deep) {
+      const list = fields.get(deep[1]); const inner = list?.innerLists?.find((l) => l.key === deep[3]); const col = inner?.itemFields.find((c) => c.key === deep[5]);
+      p = { path: `${deep[1]}[${deep[2]}].${deep[3]}[${deep[4]}]${deep[5] ? `.${deep[5]}` : ''}`, message: `${list?.label ?? deep[1]}, row ${Number(deep[2]) + 1}, ${inner?.label ?? deep[3]}, row ${Number(deep[4]) + 1}${deep[5] ? `, ${col?.label ?? deep[5]}` : ''}: ${deep[6]}` };
+    } else if (row) {
       const list = fields.get(row[1]); const col = list?.itemFields?.find((c) => c.key === row[3]);
       p = { path: `${row[1]}[${row[2]}].${row[3]}`, message: `${list?.label ?? row[1]}, row ${Number(row[2]) + 1}, ${col?.label ?? row[3]}: ${row[4]}` };
     } else {
@@ -213,11 +219,13 @@ export function blankRecord(project: Pick<Project, 'documentType' | 'customField
 
 /** A new, empty row for a list. Text stays empty, amounts and numbers start at zero; dates and choices are left unset. */
 export function blankRow(fields: RowField[]): Rec {
-  const row: Rec = {};
+  let row: Rec = {};
   for (const f of fields) {
-    if (f.type === 'string') row[f.key] = '';
-    else if (f.type === 'cents' || f.type === 'int' || f.type === 'points') row[f.key] = 0;
-    else if (f.type === 'bool') row[f.key] = false;
+    // A field of a group in the row (wave 5) is kept in the group's object (`holder.name`).
+    const put = (v: unknown) => { row = f.key.includes('.') ? setIn(row, f.key.split('.'), v) : { ...row, [f.key]: v }; };
+    if (f.type === 'string') put('');
+    else if (f.type === 'cents' || f.type === 'int' || f.type === 'points') put(0);
+    else if (f.type === 'bool') put(false);
   }
   return row;
 }
