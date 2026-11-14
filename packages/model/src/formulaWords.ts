@@ -1,5 +1,6 @@
 import { CALC_PREFIX, DOCUMENT_DATE_PATH, itemDefsOf, itemScopeIndex, listOfItemPath, type FieldDef } from './fields';
 import { dayWords } from './isoDate';
+import { itemsLead } from './shapes';
 import type { CalculatedField, EffectivePeriod, Expr, LookupTable, Predicate, Project, Scalar } from './types';
 
 /**
@@ -66,9 +67,8 @@ export function conditionInWords(p: Predicate, scope: WordsScope, fields: Readon
       // Richer data shapes (wave 5): "for any item of “Accounts”, “Balance” is less than $0.00".
       const inner = itemScopeIndex(fields as Map<string, FieldDef>, p.path);
       const list = q(fields.get(p.path)?.label ?? inner.get(p.path)?.label ?? p.path);
-      const how = p.match === 'any' ? `for any item of ${list}` : p.match === 'every' ? `for every item of ${list}` : p.match === 'none' ? `for no item of ${list}` : `for at least ${p.count ?? 1} item${(p.count ?? 1) === 1 ? '' : 's'} of ${list}`;
       const sub = fields === scope.fields ? conditionInWords(p.where, { ...scope, fields: inner }) : conditionInWords(p.where, scope, inner);
-      return `${how}, ${sub}`;
+      return `${itemsLead(p.match, p.count, list.slice(1, -1))} ${sub}`;
     }
     default: {
       const f = fields.get(p.path) ?? (p.path === DOCUMENT_DATE_PATH ? ({ type: 'date' } as FieldDef) : undefined);

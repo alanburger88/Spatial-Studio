@@ -136,6 +136,8 @@ function leavesOf(p: Predicate, out: Leaf[] = []): Leaf[] {
     case 'not': leavesOf(p.arg, out); break;
     case 'isNull': case 'notNull': out.push({ node: p, path: p.path, op: p.op, values: [] }); break;
     case 'in': out.push({ node: p, path: p.path, op: p.op, values: Array.isArray(p.value) ? p.value : [] }); break;
+    // A condition about the items of a list (wave 5) is reached by the coverage search, not by threshold values.
+    case 'items': break;
     default: out.push({ node: p, path: p.path, op: p.op, values: [p.value] });
   }
   return out;

@@ -1,4 +1,4 @@
-import { languageName, projectFieldIndex, type Predicate, type Project, type Rule, type RuleAction, type Scalar } from '@iss/model';
+import { allFieldIndex, itemsLead, languageName, projectFieldIndex, type Predicate, type Project, type Rule, type RuleAction, type Scalar } from '@iss/model';
 import { formatCents, formatDate } from '@iss/resolver';
 
 /**
@@ -100,7 +100,8 @@ export function listWords(items: string[], max = 3, noun = 'more'): string {
 
 /** The label of a data field from the project's data contract ("Missed payments"), never the path. */
 export function fieldWords(project: FieldScope, path: string): string {
-  const f = projectFieldIndex(project).get(path);
+  // A field of a list's items (wave 5) is named like any other field.
+  const f = projectFieldIndex(project).get(path) ?? (path.includes('[]') ? allFieldIndex(project).get(path) : undefined);
   if (f?.label) return f.label;
   const leaf = humanise(path.split('.').slice(-1)[0] ?? path).replace(/ cents$/, '');
   return leaf ? leaf.charAt(0).toUpperCase() + leaf.slice(1) : path;
@@ -127,6 +128,7 @@ export function conditionWords(project: FieldScope, p: Predicate | undefined): s
     case 'and': return p.args.length ? p.args.map((a) => (a.op === 'or' ? `(${conditionWords(project, a)})` : conditionWords(project, a))).join(' and ') : 'always';
     case 'or': return p.args.length ? p.args.map((a) => (a.op === 'and' ? `(${conditionWords(project, a)})` : conditionWords(project, a))).join(' or ') : 'never';
     case 'not': return `it is not true that ${conditionWords(project, p.arg)}`;
+    case 'items': return `${itemsLead(p.match, p.count, fieldWords(project, p.path))} ${conditionWords(project, p.where)}`;
     case 'isNull': return `${lower1(fieldWords(project, p.path))} is empty`;
     case 'notNull': return `${lower1(fieldWords(project, p.path))} has a value`;
     case 'in': return `${lower1(fieldWords(project, p.path))} is one of ${p.value.map((v: Scalar) => valueWords(project, p.path, v)).join(', ')}`;

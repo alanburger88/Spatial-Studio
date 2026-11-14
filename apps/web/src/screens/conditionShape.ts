@@ -16,6 +16,7 @@ function leafOf(p: Predicate): Cond | null {
     case 'and': case 'or': case 'not': return null;
     case 'isNull': case 'notNull': return { path: p.path, op: p.op, value: null, neg: false };
     case 'in': return { path: p.path, op: 'in', value: p.value, neg: false };
+    case 'items': return null;
     default: return { path: p.path, op: p.op, value: p.value, neg: false };
   }
 }

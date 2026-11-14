@@ -2,6 +2,9 @@ import {
   applyCommand, applyJourney, buildContext, deepClone, getPath, inEffect, notInEffectWords, projectFieldIndex,
   type DocNode, type FieldDef, type Predicate, type Project, type Rule, type Scalar, type SyntheticRecord, type TestCase,
 } from '@iss/model';
+// Richer data shapes (wave 5): conditions about the items of a list.
+import { allFieldIndex, isItemPath, itemPrefix, itemsLead, scopeCtx, setPath, type ItemsCondition } from '@iss/model';
+import { evaluatePredicate } from '@iss/resolver';
 import { formatCents, formatDate, resolve, type Finding, type RNode, type Resolution } from '@iss/resolver';
 import { captureExpectation, nextTestId } from '../testCases';
 import type { CoverageGap } from './types';
@@ -19,8 +22,9 @@ import type { CoverageGap } from './types';
 
 /* ------------------------------------------------------------------ conditions as "any of these combinations" */
 
-type LitKind = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'nin' | 'null' | 'notnull';
-interface Lit { path: string; kind: LitKind; value?: Scalar; values?: Scalar[] }
+type LitKind = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'nin' | 'null' | 'notnull' | 'items';
+/** `items` (wave 5): a condition about the items of a list (`items`), required to hold or, with `neg`, not to hold. */
+interface Lit { path: string; kind: LitKind; value?: Scalar; values?: Scalar[]; items?: ItemsCondition; neg?: boolean }
 type Conj = Lit[];
 
 const MAX_CONJ = 256;
@@ -35,6 +39,7 @@ const COMPLEMENT: Record<string, LitKind> = { eq: 'ne', ne: 'eq', gt: 'lte', gte
 function holds(l: Lit, v: unknown): boolean {
   if (v === undefined) v = null;
   switch (l.kind) {
+    case 'items': return true; // decided on the whole customer (`itemsHold`), never on one value
     case 'null': return v === null;
     case 'notnull': return v !== null;
     case 'in': return v !== null && (l.values ?? []).includes(v as Scalar);
@@ -68,6 +73,7 @@ function dnf(p: Predicate, neg: boolean, keep: (c: Conj) => boolean): Conj[] {
     case 'isNull': return [[{ path: p.path, kind: neg ? 'notnull' : 'null' }]];
     case 'notNull': return [[{ path: p.path, kind: neg ? 'null' : 'notnull' }]];
     case 'in': return neg ? [[{ path: p.path, kind: 'nin', values: p.value }], [{ path: p.path, kind: 'null' }]] : [[{ path: p.path, kind: 'in', values: p.value }]];
+    case 'items': return [[{ path: p.path, kind: 'items', items: p, neg }]];
     default: return neg ? [[{ path: p.path, kind: COMPLEMENT[p.op], value: p.value }], [{ path: p.path, kind: 'null' }]] : [[{ path: p.path, kind: p.op, value: p.value }]];
   }
 }
@@ -106,6 +112,88 @@ function valuesFor(field: FieldDef, lits: Lit[], current: unknown): unknown[] {
   }
   if (lits.some((l) => l.kind === 'null')) out.push(null);
   return out;
+}
+
+/* ------------------------------------------------------------------ conditions about the items of a list (wave 5) */
+
+/** Whether an items condition holds (or, negated, does not hold) for a customer. */
+function itemsHold(l: Lit, ctx: unknown): boolean {
+  return evaluatePredicate(l.items!, ctx) !== !!l.neg;
+}
+
+/** A plain row for a list: every field of an item with a neutral value (text, zero, the first choice, no inner rows). */
+function sampleItem(fields: Map<string, FieldDef>, list: string): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  const pre = `${itemPrefix(list)}.`;
+  for (const f of fields.values()) {
+    if (f.item !== list || f.derived || f.calculated || !f.path.startsWith(pre)) continue;
+    const rel = f.path.slice(pre.length);
+    const v = f.type === 'array' ? [] : f.type === 'string' ? 'Sample' : f.type === 'date' ? '2026-01-01' : f.type === 'bool' ? false : f.type === 'enum' ? f.enumValues?.[0] ?? null : 0;
+    setPath(row, rel, v as Scalar);
+  }
+  return row;
+}
+
+/**
+ * The fewest changes to a top-level list that make its items conditions hold: "every", "none" and "fewer than n" hold
+ * for an empty list; "any" and "at least n" change the first items (adding rows when there are too few) until enough
+ * meet the condition. Null when a condition reads something the items cannot be given (a calculated value, say).
+ */
+function solveItems(project: Project, lits: Lit[], ctx: unknown): unknown[] | null {
+  const list = lits[0].path;
+  if (isItemPath(list)) return null;
+  const fields = allFieldIndex(project);
+  const cur = getPath(ctx, list);
+  let rows: Array<Record<string, unknown>> = Array.isArray(cur) ? deepClone(cur) as Array<Record<string, unknown>> : [];
+  for (const l of lits) {
+    const p = l.items!;
+    const notWhere: Predicate = { op: 'not', arg: p.where };
+    const need = p.match === 'any' ? (l.neg ? null : { k: 1, where: p.where })
+      : p.match === 'none' ? (l.neg ? { k: 1, where: p.where } : null)
+      : p.match === 'every' ? (l.neg ? { k: 1, where: notWhere } : null)
+      : (l.neg ? null : { k: Math.max(1, p.count ?? 1), where: p.where });
+    if (!need) { rows = []; continue; }
+    while (rows.length < need.k) rows.push(rows.length ? deepClone(rows[rows.length - 1]) : sampleItem(fields, list));
+    for (let i = 0; i < need.k; i++) {
+      const solved = solveItem(fields, list, need.where, rows[i], ctx, i);
+      if (!solved) return null;
+      rows[i] = solved;
+    }
+  }
+  return rows;
+}
+
+/** One item changed so that it meets `where` (tried one "all of these" combination at a time). */
+function solveItem(fields: Map<string, FieldDef>, list: string, where: Predicate, item: Record<string, unknown>, ctx: unknown, index: number): Record<string, unknown> | null {
+  const pre = `${itemPrefix(list)}.`;
+  const holdsIn = (row: Record<string, unknown>) => evaluatePredicate(where, scopeCtx(ctx as Record<string, unknown>, list, row, index));
+  if (holdsIn(item)) return item;
+  for (const conj of dnf(where, false, () => true).slice(0, 12)) {
+    const row = deepClone(item);
+    let ok = true;
+    const by = new Map<string, Lit[]>();
+    for (const l of conj) by.set(l.path, [...(by.get(l.path) ?? []), l]);
+    for (const [path, ls] of by) {
+      if (!path.startsWith(pre)) { if (!ls.every((l) => holds(l, getPath(ctx, path)))) { ok = false; break; } continue; }
+      const rel = path.slice(pre.length);
+      const count = rel.endsWith('.count') ? fields.get(path.slice(0, -6)) : undefined;
+      if (count?.type === 'array') {
+        const n = valuesFor({ path, type: 'int', label: '' }, ls, getPath(row, rel)).find((v) => ls.every((l) => holds(l, v)));
+        if (typeof n !== 'number' || n < 0 || n > 500) { ok = false; break; }
+        const arr = Array.isArray(getPath(row, rel.slice(0, -6))) ? getPath(row, rel.slice(0, -6)) as unknown[] : [];
+        resize(arr, n, count);
+        setPath(row, rel.slice(0, -6), arr as unknown as Scalar);
+        continue;
+      }
+      const f = fields.get(path);
+      if (!f || f.derived || f.calculated) { ok = false; break; }
+      const v = valuesFor(f, ls, getPath(row, rel)).find((x) => ls.every((l) => holds(l, x)));
+      if (v === undefined) { ok = false; break; }
+      setPath(row, rel, v as Scalar);
+    }
+    if (ok && holdsIn(row)) return row;
+  }
+  return null;
 }
 
 /* ------------------------------------------------------------------ the search environment */
@@ -180,6 +268,7 @@ class Env {
   /** Can this combination hold for some customer at all (ignoring which customer)? */
   satisfiable = (conj: Conj): boolean => {
     for (const [path, lits] of this.byPath(conj)) {
+      if (lits.some((l) => l.kind === 'items')) continue; // decided per customer
       if (path === 'documentType') { if (!lits.every((l) => holds(l, this.project.documentType))) return false; continue; }
       const f = this.fields.get(path);
       if (!f || !this.overridable(path)) continue; // decided per customer
@@ -192,6 +281,14 @@ class Env {
   plan(conj: Conj, ctx: unknown): Array<[string, unknown]> | null {
     const changes: Array<[string, unknown]> = [];
     for (const [path, lits] of this.byPath(conj)) {
+      if (lits.some((l) => l.kind === 'items')) {
+        // Richer data shapes (wave 5): the list is changed as a whole so that enough of its items meet the condition.
+        if (lits.every((l) => l.kind !== 'items' || itemsHold(l, ctx))) continue;
+        const rows = solveItems(this.project, lits.filter((l) => l.kind === 'items'), ctx);
+        if (!rows) return null;
+        changes.push([path, rows]);
+        continue;
+      }
       const cur = getPath(ctx, path) as unknown;
       if (lits.every((l) => holds(l, cur))) continue;
       const f = this.fields.get(path);
@@ -322,10 +419,11 @@ function show(field: FieldDef | undefined, v: unknown): string {
   return typeof v === 'string' ? q(v) : String(v);
 }
 
-const LIT_WORDS: Record<LitKind, string> = { eq: 'is', ne: 'is not', gt: 'is more than', gte: 'is at least', lt: 'is less than', lte: 'is at most', in: 'is one of', nin: 'is none of', null: 'is empty', notnull: 'is filled in' };
+const LIT_WORDS: Record<LitKind, string> = { eq: 'is', ne: 'is not', gt: 'is more than', gte: 'is at least', lt: 'is less than', lte: 'is at most', in: 'is one of', nin: 'is none of', null: 'is empty', notnull: 'is filled in', items: 'meets' };
 function describeLit(fields: Map<string, FieldDef>, l: Lit): string {
   const f = fields.get(l.path);
   const label = f?.label ?? l.path;
+  if (l.kind === 'items') return `${l.neg ? 'not ' : ''}${itemsLead(l.items!.match, l.items!.count, label).replace(/,$/, '')} the condition holds`;
   if (l.kind === 'null' || l.kind === 'notnull') return `${label} ${LIT_WORDS[l.kind]}`;
   const value = l.values ? l.values.map((v) => show(f, v)).join(', ') : show(f, l.value);
   return `${label} ${LIT_WORDS[l.kind]} ${value}`;

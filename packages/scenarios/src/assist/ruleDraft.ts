@@ -1,5 +1,5 @@
 import {
-  deepClone, languageName, languageShortName, projectFieldIndex, validateRule,
+  deepClone, itemScopeIndex, itemsLead, languageName, languageShortName, projectFieldIndex, validateRule,
   type FieldDef, type Predicate, type Project, type Rule, type RuleAction, type Scalar,
 } from '@iss/model';
 import type { AssistSource, RuleDraft } from './types';
@@ -82,6 +82,11 @@ function predicateSentence(fields: Fields, p: Predicate, nested = false): string
       return nested && p.args.length > 1 ? `(${s})` : s;
     }
     case 'not': return `not (${predicateSentence(fields, p.arg)})`;
+    case 'items': {
+      // Richer data shapes (wave 5): "for any item of “Accounts”, balance is less than $0.00".
+      const inner = itemScopeIndex(fields as Map<string, FieldDef>, p.path);
+      return `${itemsLead(p.match, p.count, inner.get(p.path)?.label ?? fieldLabelOf(fields, p.path))} ${predicateSentence(inner, p.where, true)}`;
+    }
     case 'isNull': return `${lowerFirst(fieldLabelOf(fields, p.path))} is empty`;
     case 'notNull': return `${lowerFirst(fieldLabelOf(fields, p.path))} is present`;
     case 'in': return `${lowerFirst(fieldLabelOf(fields, p.path))} is one of ${p.value.map((v) => valueText(fields.get(p.path), v)).join(', ')}`;

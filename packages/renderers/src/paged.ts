@@ -163,7 +163,47 @@ function nodeUsesPageDesign(n: RNode): boolean {
  */
 export function usesPageDesign(res: Resolution, project: Project, profileId: ProfileId = 'paged-pdf'): boolean {
   const profile = project.presentationProfiles.find((p) => p.id === profileId) ?? project.presentationProfiles.find((p) => p.kind === 'paged');
-  return !isLegacyPageDesign(profile) || res.root.children.some((n) => n.visible && nodeUsesPageDesign(n));
+  return !isLegacyPageDesign(profile) || pagedFlowNodes(res.root.children).some((n) => n.visible && nodeUsesPageDesign(n));
+}
+
+/* ------------------------------------------------------------- richer data shapes (wave 5, section 2) */
+
+/**
+ * The page's top-level components as the paginator places them. A repeating section is not one block: each item's
+ * components flow as blocks of their own, so an inner table continues across pages with its heading repeated like any
+ * table. With "keep the heading with the first rows", an item's components before its first table move as one block
+ * kept with the table's first rows. A document without repeating sections gives exactly its own top-level components.
+ */
+export function pagedFlowNodes(children: RNode[]): RNode[] {
+  if (!children.some((n) => n.repeat)) return children;
+  return children.flatMap((n) => (n.repeat && n.visible ? sectionBlocks(n) : [n]));
+}
+
+function sectionBlocks(section: RNode): RNode[] {
+  const items = new Map<number, RNode[]>();
+  for (const c of section.children) {
+    if (!c.visible) continue;
+    const i = c.repeatItem?.index ?? 1;
+    // Inside a section everything flows: a fixed position would leave the item.
+    const flowing = c.layout?.paged?.mode === 'fixed' ? { ...c, layout: { ...c.layout, paged: { mode: 'flow' as const } } } : c;
+    items.set(i, [...(items.get(i) ?? []), flowing]);
+  }
+  const out: RNode[] = [];
+  for (const i of [...items.keys()].sort((a, b) => a - b)) {
+    const kids = items.get(i)!;
+    if (!section.repeat!.keepHeading) { out.push(...kids); continue; }
+    const t = kids.findIndex((k) => !!k.table);
+    const lead = kids.slice(0, t < 0 ? kids.length : t);
+    if (!lead.length) { out.push(...kids); continue; }
+    const pl = lead[0].layout?.paged;
+    const keep = t >= 0;
+    const block: RNode = lead.length === 1
+      ? { ...lead[0], layout: { ...lead[0].layout, paged: { ...(pl ?? { mode: 'flow' as const }), keepWithNext: keep || pl?.keepWithNext } } }
+      : { id: lead[0].id, type: 'container', name: lead[0].name, visible: true, visibleBecause: [], ruleIds: [], dataLineage: [], children: lead, repeatItem: lead[0].repeatItem,
+        layout: { paged: { mode: 'flow', widthPct: 100, spaceBeforePt: pl?.spaceBeforePt ?? 8, keepWithNext: keep, ...(pl?.breakBefore ? { breakBefore: pl.breakBefore } : {}) } } };
+    out.push(block, ...kids.slice(lead.length));
+  }
+  return out;
 }
 
 /** The CSS of a page background: always decoration (see `.iss-bg`). Unknown or unsafe images are left out. */
@@ -203,7 +243,7 @@ export function renderPagedDocument(res: Resolution, project: Project, opts: Pag
   /** Where each fixed item is read: on the first page above the flow area, below it, or on later pages only. */
   const firstFlowBottomPt = design ? design.first.flow.yPt + design.first.flow.hPt : flow.bottomPt;
   const fixedRead: Array<'before' | 'after' | 'later'> = [];
-  for (const n of res.root.children) {
+  for (const n of pagedFlowNodes(res.root.children)) {
     if (!n.visible) continue;
     const pl = n.layout?.paged ?? { mode: 'flow' as const };
     const inner = nodeInnerHtml(n, mode, renderNested);

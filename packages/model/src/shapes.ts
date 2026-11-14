@@ -133,3 +133,10 @@ export const ITEMS_MATCH_WORDS: Record<ItemsMatch, string> = { any: 'any', every
 export const ITEMS_MATCH_LIST: readonly ItemsMatch[] = ['any', 'every', 'none', 'atLeast'];
 /** The formula word of each kind of items condition. */
 export const ITEMS_FORMULA_WORD: Record<ItemsMatch, string> = { any: 'ANY', every: 'EVERY', none: 'NONE', atLeast: 'AT_LEAST' };
+
+/** The start of an items condition in plain words: "for any item of “Accounts”," (fixed studio English). */
+export function itemsLead(match: ItemsMatch, count: number | undefined, listLabel: string): string {
+  const list = `“${listLabel}”`;
+  if (match === 'atLeast') return `for at least ${count ?? 1} item${(count ?? 1) === 1 ? '' : 's'} of ${list},`;
+  return `for ${match === 'none' ? 'no' : match} item of ${list},`;
+}

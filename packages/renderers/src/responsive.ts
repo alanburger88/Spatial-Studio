@@ -366,6 +366,12 @@ export function renderInteractiveHtml(res: Resolution, project: Project, opts?: 
       const figure = nodeInnerHtml(n, mode, renderNested).replace('<svg viewBox', '<svg data-iss-chart viewBox').replace(/(<svg data-iss-chart[^>]*?) role="img"/, '$1 role="group"');
       return figure + (n.chart!.data.length ? `<button class="iss-btn iss-js-only" type="button" data-chart-toggle="${tid}" aria-expanded="false" aria-controls="${tid}">${T('chartShowData')}</button><table class="iss-table iss-chart-data" id="${tid}" hidden><caption class="iss-sr">${esc(n.chart!.title)}</caption><tbody>${rows}</tbody></table>` : '');
     }
+    if (n.repeat) {
+      // Richer data shapes (wave 5): each item of a repeating section is a part of its own.
+      const byItem = new Map<number, RNode[]>();
+      for (const c of n.children) { const i = c.repeatItem?.index ?? 1; byItem.set(i, [...(byItem.get(i) ?? []), c]); }
+      return `<div class="iss-container iss-repeat">${[...byItem.keys()].sort((a, b) => a - b).map((i) => `<section class="iss-repeat-item" data-repeat-item="${i}">${byItem.get(i)!.map(renderNested).join('')}</section>`).join('')}</div>`;
+    }
     return nodeInnerHtml(n, mode, renderNested);
   };
   const card = (n: RNode, span?: number) => {
@@ -393,6 +399,8 @@ export function renderInteractiveHtml(res: Resolution, project: Project, opts?: 
       case 'repeating-table': case 'chart': return 'data';
       case 'variant-set': case 'conditional-region': case 'rich-text': case 'action-link': case 'qr-code': return 'message';
       case 'container':
+        // A repeating section (wave 5) is the document's details: one part per item.
+        if (n.repeat) return 'data';
         if (has(n, (x) => x.type === 'summary-metric' || x.type === 'bound-field')) return 'summary';
         if (has(n, (x) => x.type === 'action-link' || x.type === 'qr-code')) return 'message';
         if (has(n, (x) => x.type === 'disclosure')) return 'notices';
@@ -467,7 +475,7 @@ export function renderInteractiveHtml(res: Resolution, project: Project, opts?: 
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"/>
 <style>${htmlCss(accent, project)}
 ${documentCss(accent, project)}
-${screenOverrides()}</style></head>
+${screenOverrides()}${project.nodes.some((n) => n.repeat) ? REPEAT_CSS : ''}</style></head>
 <body>
 <a class="iss-skip" href="#iss-main">${T('skipToContent')}</a>
 <aside class="iss-demo-ribbon" aria-label="${T('syntheticNoticeLabel')}">${T('syntheticNotice', { issuer: project.issuer?.name ?? '' })}${isEob ? T('syntheticNoticeNotBill') : ''}${res.translation?.draftsShown.length ? ' · DRAFT — UNAPPROVED TRANSLATIONS' : ''}</aside>
@@ -492,3 +500,9 @@ ${sectionsHtml}
 function screenOverrides(): string {
   return `.iss-shell .iss-row{display:grid}.iss-shell .iss-metric,.iss-shell .iss-metric-label,.iss-shell .iss-metric-value{box-sizing:border-box}.iss-shell .iss-disclosure .iss-version{position:static}`;
 }
+
+/** Richer data shapes (wave 5): the items of a repeating section, one after another with a rule between them. Only in documents that have one. */
+const REPEAT_CSS = `
+.iss-repeat-item{display:block;padding:12px 0}
+.iss-repeat-item + .iss-repeat-item{border-top:1px solid #d4dbe3;margin-top:8px}
+.iss-repeat-item > .iss-node + .iss-node{margin-top:10px}`;

@@ -42,7 +42,6 @@ export interface EmailRender {
   facts: ChannelFacts; renderer: string;
 }
 
-function walk(n: RNode, f: (n: RNode) => void) { if (!n.visible) return; f(n); n.children.forEach((c) => walk(c, f)); }
 
 export function blocksText(blocks: RBlock[] | undefined): string {
   const inl = (xs: RInline[] = []) => xs.map((i) => (i.kind === 'break' ? ' ' : i.href && /^https:\/\//.test(i.href) ? `${i.text} (${i.href})` : i.text)).join('');
@@ -56,7 +55,9 @@ export function extractChannelFacts(res: Resolution, project: Project): ChannelF
   const isEob = project.documentType === 'eob';
   const nodes = new Map<string, RNode>();
   const ordered: RNode[] = [];
-  walk(res.root, (n) => { nodes.set(n.id, n); ordered.push(n); });
+  // A repeating section (wave 5) is summarised in one line: its items are in the full document, not in the email or SMS.
+  const visit = (n: RNode) => { if (!n.visible) return; nodes.set(n.id, n); ordered.push(n); if (!n.repeat) n.children.forEach(visit); };
+  visit(res.root);
   const accent = safeAccent(project.issuer?.accent);
   const fact = (id: string): ChannelFact | undefined => {
     const f = nodes.get(id)?.field; if (!f) return undefined;
@@ -93,6 +94,8 @@ export function extractChannelFacts(res: Resolution, project: Project): ChannelF
       } else if (t.rows.length) {
         tables.push({ nodeId: n.id, caption: t.caption, columns: t.columns.map((c) => ({ label: c.label, align: c.align })), rows: t.rows.map((r) => t.columns.map((c) => r.cells[c.key]?.display ?? '')), ...(total ? { totalDisplay: total } : {}) });
       }
+    } else if (n.type === 'container' && n.repeat) {
+      summaries.push({ nodeId: n.id, kind: 'table', text: sysText(res.systemStrings, 'emailTableSummaryDocument', { caption: n.name, count: n.repeat.count }) });
     } else if (n.type === 'chart' && n.chart) {
       summaries.push({ nodeId: n.id, kind: 'chart', text: n.chart.summary });
     } else if (n.type === 'expandable-explanation' && n.explanation) {
