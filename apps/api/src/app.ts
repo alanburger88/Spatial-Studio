@@ -32,6 +32,9 @@ import { registerProofRoutes } from './routes/proofs';
 import { registerPdfAccessibilityRoutes } from './routes/pdfAccessibility';
 import { checkDocumentPdf, type PdfAccessibilityResult } from './pdfAccessibility';
 import { registerLibraryRoutes } from './routes/library';
+// Wave 4 (blocker owners, status and notes; notifications and My work): begin
+import { notifyReply, notifyWorkflow, registerWorkRoutes } from './routes/work';
+// Wave 4 (blocker owners, status and notes; notifications and My work): end
 import { seedHouseLibrary } from './library';
 import { restoreExtraSample, seedExtraSamples, seedSampleProofs } from './samples';
 import { ReleasePackages, createRelease, releaseInfo } from './releases';
@@ -284,6 +287,8 @@ export async function buildApp(opts: AppOptions = {}) {
   registerProofRoutes(app, deps, { composer: opts.releasePackage?.composer ?? chromiumPackageComposer(composer) });
   registerPdfAccessibilityRoutes(app, deps);
   registerLibraryRoutes(app, deps);
+  // Wave 4 (blocker owners, status and notes; notifications and My work)
+  registerWorkRoutes(app, deps, { authEnabled });
 
   /* ------------------------------------------------ version history, review workflow, comments, audit */
 
@@ -401,6 +406,8 @@ export async function buildApp(opts: AppOptions = {}) {
       return { ...moved, release: made };
     });
     audit(store, req, `workflow.${action}`, { projectId: p.projectId, modelVersion: p.modelVersion, detail: { from, to, withComment: !!comment, ...(release ? { release: { number: release.release.number, created: release.created } } : {}) } });
+    // Wave 4 (notifications): submitting tells reviewers and approvers; changes requested or approved tells the submitter.
+    notifyWorkflow(store, { authEnabled, actor: by(req), project: p, action });
     if (release?.created) audit(store, req, 'release.create', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { releaseId: release.release.id, number: release.release.number, title: release.release.title, stage: 'Test', origin: 'approval', approvedBy: req.user?.name ?? null, supersededAtTest: release.supersededAtTest } });
     const view = workflowView(p, req, false);
     if (!release) return view;
@@ -436,6 +443,8 @@ export async function buildApp(opts: AppOptions = {}) {
     } else if (!p.nodes.some((n) => n.id === nodeId)) throw new ApiError(400, 'UNKNOWN_NODE', `No component ${nodeId || '(none)'} in ${p.projectId}.`);
     const c = store.addComment({ id: `cmt-${randomUUID().slice(0, 12)}`, projectId: p.projectId, nodeId, parentId, body, author: req.user?.id ?? 'unknown', authorName: req.user?.name ?? 'Unknown', modelVersion: p.modelVersion });
     audit(store, req, parentId ? 'comment.reply' : 'comment.create', { projectId: p.projectId, modelVersion: p.modelVersion, detail: { commentId: c.id, nodeId, nodeName: nodeNameOf(p, nodeId), parentId, length: body.length } });
+    // Wave 4 (notifications): a reply tells the person who started the thread.
+    if (parentId) { const root = store.getComment(parentId); if (root) notifyReply(store, { actor: by(req), projectId: p.projectId, rootAuthorId: root.author, commentId: c.id, parentId, nodeId }); }
     reply.status(201);
     return { comment: { ...c, mine: true } };
   });

@@ -369,6 +369,14 @@ export function customerBlockers(project: Project, record: SyntheticRecord, opts
   return [...by.values()].sort((a, b) => BLOCKER_KIND_ORDER.indexOf(a.kind) - BLOCKER_KIND_ORDER.indexOf(b.kind) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
+/**
+ * Phase 4: the plain-words title of the cause a finding belongs to (the same title `documentBlockers` gives it), for
+ * the server, which keeps a cause's owner, status and notes and names it in notifications. Never a customer's data.
+ */
+export function blockerTitleOf(project: Project, f: Finding): string {
+  return wordsFor(project, f, aboutOf(project, f), 0).title;
+}
+
 /* ------------------------------------------------------------------ phase 2: known data problems */
 
 /** The longest reason a person may give for setting a customer's data problem aside. */
