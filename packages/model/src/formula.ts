@@ -1,6 +1,6 @@
 import { checkExpr, exprChildren, type ExprScope } from './expressions';
-import type { FieldDef } from './fields';
-import type { ComparisonOp, Expr, Predicate, Scalar } from './types';
+import { itemScopeIndex, type FieldDef } from './fields';
+import type { ComparisonOp, Expr, ItemsMatch, Predicate, Scalar } from './types';
 
 /**
  * The formula view of a calculation: a spreadsheet-style line such as `=DAYS(card.dueDate, ISSUE_DATE())`.
@@ -42,7 +42,7 @@ export const FORMULA_FUNCTIONS: readonly FormulaFunction[] = [
 ] as const;
 
 /** Words of a condition (`AND`, `OR`, `NOT(…)`, `IN (…)`, `IS EMPTY`, `IS PRESENT`) and the comparison signs, for auto-complete. */
-export const FORMULA_CONDITION_WORDS = ['AND', 'OR', 'NOT', 'IN', 'IS EMPTY', 'IS PRESENT', 'WHERE', 'TRUE', 'FALSE', 'NULL'] as const;
+export const FORMULA_CONDITION_WORDS = ['AND', 'OR', 'NOT', 'IN', 'IS EMPTY', 'IS PRESENT', 'WHERE', 'TRUE', 'FALSE', 'NULL', 'ANY', 'EVERY', 'NONE', 'AT_LEAST'] as const;
 export const FORMULA_COMPARISONS: Record<ComparisonOp, string> = { eq: '=', ne: '<>', gt: '>', gte: '>=', lt: '<', lte: '<=' };
 
 /** A mistake in a formula: what is wrong, and where (character offsets into the text, end excluded). */
@@ -96,7 +96,8 @@ function tokenize(src: string): Tok[] {
       continue;
     }
     if (/[A-Za-z_]/.test(ch)) {
-      const m = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*/.exec(src.slice(i))!;
+      // A segment may end in [] (one item of a list: custom.accounts[].number, wave 5).
+      const m = /^[A-Za-z_][A-Za-z0-9_]*(?:\[\])?(\.[A-Za-z_][A-Za-z0-9_]*(?:\[\])?)*/.exec(src.slice(i))!;
       i += m[0].length;
       if (src[i] === '.') fail('A field name cannot end with a dot.', i, i + 1);
       toks.push({ kind: m[0].includes('.') ? 'path' : 'ident', text: m[0], start, end: i });
@@ -119,7 +120,9 @@ function tokenize(src: string): Tok[] {
 // Built on first use, not when the module loads, so a bundle that never parses a formula can leave the parser out.
 let functionNames: Set<string> | null = null;
 const FUNCTION_NAMES = (): Set<string> => (functionNames ??= new Set(FORMULA_FUNCTIONS.map((f) => f.name)));
-const KEYWORDS: ReadonlySet<string> = /* @__PURE__ */ new Set(['AND', 'OR', 'NOT', 'IN', 'IS', 'EMPTY', 'PRESENT', 'WHERE', 'TRUE', 'FALSE', 'NULL']);
+const KEYWORDS: ReadonlySet<string> = /* @__PURE__ */ new Set(['AND', 'OR', 'NOT', 'IN', 'IS', 'EMPTY', 'PRESENT', 'WHERE', 'TRUE', 'FALSE', 'NULL', 'ANY', 'EVERY', 'NONE', 'AT_LEAST']);
+/** Conditions about the items of a list (wave 5): ANY(list WHERE …), EVERY(…), NONE(…), AT_LEAST(n, list WHERE …). */
+const ITEMS_WORDS: Record<string, ItemsMatch> = { ANY: 'any', EVERY: 'every', NONE: 'none', AT_LEAST: 'atLeast' };
 const COMPARE: Record<string, ComparisonOp> = { '=': 'eq', '<>': 'ne', '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte' };
 const describe = (t: Tok): string => (t.kind === 'eof' ? 'the end of the formula' : `“${t.text}”`);
 
@@ -291,7 +294,30 @@ class Parser {
       return { op: word === 'AND' ? 'and' : 'or', args };
     }
     if (t.kind === 'lp') { this.next(); const c = this.condition(); this.expect('rp', 'a closing bracket “)”'); return c; }
+    if (word in ITEMS_WORDS && this.peek(1).kind === 'lp') return this.items(word);
     return this.comparison();
+  }
+
+  items(word: string): Predicate {
+    this.next(); this.next();
+    const match = ITEMS_WORDS[word];
+    let count: number | undefined;
+    if (match === 'atLeast') {
+      const n = this.peek();
+      if (n.kind !== 'num' || !Number.isInteger(n.value) || (n.value as number) < 1) fail('AT_LEAST needs a whole number of items first, for example AT_LEAST(2, custom.accounts WHERE …).', n.start, n.end);
+      this.next();
+      count = n.value as number;
+      this.expect('comma', 'a comma after the number of items');
+    }
+    const l = this.peek();
+    if (l.kind !== 'path') fail(`${word} needs a list, for example ${word}(custom.accounts WHERE custom.accounts[].balanceCents < $0.00).`, l.start, l.end);
+    this.next();
+    const w = this.peek();
+    if (!this.isWord(w, 'WHERE')) fail(`After the list write WHERE and the condition each item is tested for.`, w.start, w.end);
+    this.next();
+    const where = this.condition();
+    this.expect('rp', `a closing bracket “)” to end ${word}(…)`);
+    return { op: 'items', path: l.text, match, ...(count !== undefined ? { count } : {}), where };
   }
 
   comparison(): Predicate {
@@ -420,6 +446,11 @@ export function printCondition(p: Predicate, fields?: ReadonlyMap<string, FieldD
     case 'isNull': return `${p.path} IS EMPTY`;
     case 'notNull': return `${p.path} IS PRESENT`;
     case 'in': return `${p.path} IN (${p.value.map((v) => printScalar(v, fields?.get(p.path))).join(', ')})`;
+    case 'items': {
+      const inner = fields instanceof Map ? itemScopeIndex(fields, p.path) : fields;
+      const head = p.match === 'atLeast' ? `AT_LEAST(${p.count ?? 1}, ` : `${p.match.toUpperCase()}(`;
+      return `${head}${p.path} WHERE ${printCondition(p.where, inner)})`;
+    }
     default: return `${p.path} ${FORMULA_COMPARISONS[p.op]} ${printScalar(p.value, fields?.get(p.path))}`;
   }
 }

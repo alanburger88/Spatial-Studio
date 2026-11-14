@@ -3,6 +3,8 @@ import { CATALOG_BY_TYPE, starterContentParts } from './catalog';
 import { digestOf } from './digest';
 import { isSafeUrl, sanitizeRichDoc, tokensIn } from './rich';
 import { projectFieldIndex, validateCustomFields } from './fields';
+// Richer data shapes (wave 5, section 2)
+import { allFieldIndex, isItemPath, listOfItemPath, scopeFieldIndex } from './fields';
 import { isSupportedLanguage, languageName, languageShortName, projectLanguages, SOURCE_LANGUAGE } from './languages';
 import { isStringId, translatableStrings } from './strings';
 import { tokensOfText } from './translations';
@@ -169,8 +171,13 @@ function reject(code: string, message: string, nodeId?: string): CommandResult {
   return { ok: false, code, message, nodeId };
 }
 
-function validateNodeShape(node: DocNode, project: Project): string | null {
+function validateNodeShape(node: DocNode, project: Project, parentId?: string): string | null {
   if (!/^[a-z0-9][a-z0-9-]{1,63}$/.test(node.id)) return `Invalid node id “${node.id}”.`;
+  // Richer data shapes (wave 5): a component inside a repeating section reads the fields of the section's items too.
+  const sectionList = repeatListAt(project, parentId ?? parentOf(project, node.id)?.id);
+  const repeatBad = node.repeat !== undefined ? repeatProblem(project, node, parentId ?? parentOf(project, node.id)?.id) : null;
+  if (repeatBad) return repeatBad;
+  const projectFieldIndex = (p: Project) => scopeFieldIndex(p, sectionList);
   if (!CATALOG_BY_TYPE[node.type]) return `Unknown component type ${node.type}.`;
   if (node.styleId && !(project.styles ?? []).some((s) => s.id === node.styleId)) return `Unknown text style “${node.styleId}”.`;
   if (node.action && !isSafeUrl(node.action.url)) return `Unsafe action URL. Only https:// links are allowed.`;
@@ -217,7 +224,7 @@ function applyOne(project: Project, cmd: Command): CommandResult {
       if (map.has(cmd.node.id)) return reject('DUPLICATE_ID', `Node ${cmd.node.id} already exists.`);
       const why = dropRejection(project, cmd.parentId, cmd.node.type);
       if (why) return reject('INVALID_DROP_TARGET', why, cmd.parentId);
-      const shape = validateNodeShape(cmd.node, project);
+      const shape = validateNodeShape(cmd.node, project, cmd.parentId);
       if (shape) return reject('INVALID_NODE', shape, cmd.node.id);
       const node = cmd.node.content ? { ...cmd.node, content: sanitizeRichDoc(cmd.node.content).doc } : cmd.node;
       // A message or disclosure that brings wording of its own (a project with no wording yet) gets it in the same step.
@@ -252,6 +259,8 @@ function applyOne(project: Project, cmd: Command): CommandResult {
       const why = dropRejection(project, cmd.parentId, node.type);
       if (why) return reject('INVALID_DROP_TARGET', why, cmd.parentId);
       if (node.locked) return reject('LOCKED', `${cmd.nodeId} is locked.`, cmd.nodeId);
+      const moveBad = moveIntoSectionProblem(project, node, cmd.parentId);
+      if (moveBad) return reject('INVALID_DROP_TARGET', moveBad, cmd.nodeId);
       return { ok: true, label: `Move ${node.name ?? node.id}`, project: bump(project, (d) => {
         for (const n of d.nodes) if (n.children) n.children = n.children.filter((c) => c !== cmd.nodeId);
         const parent = d.nodes.find((n) => n.id === cmd.parentId)!;
@@ -363,7 +372,7 @@ function applyOne(project: Project, cmd: Command): CommandResult {
       if (!/^[a-z0-9][a-z0-9-]{1,63}$/.test(cmd.variantId)) return reject('INVALID_ID', `Invalid variant id ${cmd.variantId}.`);
       if (node.variantIds?.includes(cmd.variantId)) return reject('DUPLICATE_ID', `Variant ${cmd.variantId} already exists in ${node.id}.`);
       if (/<\s*\/?\s*[a-z]/i.test(cmd.text)) return reject('UNSAFE_CONTENT', 'Raw HTML is not allowed in content.');
-      if (cmd.when) { const e = validatePredicate(cmd.when, projectFieldIndex(project)); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
+      if (cmd.when) { const e = validatePredicate(cmd.when, scopeFieldIndex(project, repeatListAt(project, cmd.nodeId))); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
       const partExists = project.contentParts.some((c) => c.id === cmd.variantId);
       return { ok: true, label: `Add variant ${cmd.title}`, project: bump(project, (d) => {
         const t = d.nodes.find((n) => n.id === cmd.nodeId)!;
@@ -386,7 +395,7 @@ function applyOne(project: Project, cmd: Command): CommandResult {
     case 'SET_VARIANT_CONDITION': {
       const node = map.get(cmd.nodeId);
       if (!node?.variantIds?.includes(cmd.variantId)) return reject('NOT_FOUND', `Variant ${cmd.variantId} not in ${cmd.nodeId}.`);
-      if (cmd.when) { const e = validatePredicate(cmd.when, projectFieldIndex(project)); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
+      if (cmd.when) { const e = validatePredicate(cmd.when, scopeFieldIndex(project, repeatListAt(project, cmd.nodeId))); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
       return { ok: true, label: `Condition for ${cmd.variantId}`, project: bump(project, (d) => {
         const t = d.nodes.find((n) => n.id === cmd.nodeId)!;
         const conds = { ...(t.variantConditions ?? {}) };
@@ -417,7 +426,8 @@ function applyOne(project: Project, cmd: Command): CommandResult {
       if (errs.length) return reject('INVALID_FIELDS', errs.join(' '));
       // A list also offers its number of rows (`custom.<key>.count`).
       const kept = new Set(cmd.fields.flatMap((f) => (f.type === 'list' ? [`custom.${f.key}`, `custom.${f.key}.count`] : [`custom.${f.key}`])));
-      const used = customFieldUsage(project).filter((u) => !kept.has(u.path));
+      const keptAll = allFieldIndex({ ...project, customFields: cmd.fields });
+  const used = customFieldUsage(project).filter((u) => !kept.has(u.path) && !keptAll.has(u.path));
       if (used.length) return reject('FIELD_IN_USE', `${used[0].path} is still used by ${used[0].where.join(', ')}. Remove those references first.`);
       const candidate = { ...project, customFields: cmd.fields };
       const bad = project.rules.map((r) => validateRule(r, candidate)).find((e) => e.length);
@@ -588,7 +598,7 @@ function applyOne(project: Project, cmd: Command): CommandResult {
       if (!field || typeof field !== 'object') return reject('INVALID_CALCULATION', 'The calculated field cannot be read.');
       const existing = list.findIndex((c) => c.key === field.key);
       if (existing < 0 && list.length >= CALC_MAX) return reject('TOO_MANY', `A document can have at most ${CALC_MAX} calculated fields.`);
-      const clean: CalculatedField = { key: field.key, label: typeof field.label === 'string' ? field.label.trim() : field.label, type: field.type, ...(typeof field.description === 'string' && field.description.trim() ? { description: field.description.trim() } : {}), expr: field.expr };
+      const clean: CalculatedField = { key: field.key, label: typeof field.label === 'string' ? field.label.trim() : field.label, type: field.type, ...(typeof field.description === 'string' && field.description.trim() ? { description: field.description.trim() } : {}), expr: field.expr, ...(field.list !== undefined ? { list: field.list } : {}) };
       let next = existing >= 0 ? list.map((c, i) => (i === existing ? clean : c)) : [...list, clean];
       if (existing < 0 && cmd.index !== undefined) { next = [...list]; next.splice(Math.max(0, Math.min(cmd.index, list.length)), 0, clean); }
       const errors = validateCalculatedFields(project, next);
@@ -1180,12 +1190,16 @@ export function customFieldUsage(project: Project): Array<{ path: string; where:
   const walk = (p: Predicate, where: string): void => {
     if ('args' in p) p.args.forEach((a) => walk(a, where));
     else if ('arg' in p) walk(p.arg, where);
+    else if (p.op === 'items') { add(p.path, where); walk(p.where, where); }
     else add(p.path, where);
   };
   for (const r of project.rules) walk(r.when, `rule ${r.id}`);
   for (const n of project.nodes) {
     if (n.binding) add(n.binding, n.name ?? n.id);
     tokensIn(n.content).forEach((path) => add(path, n.name ?? n.id));
+    // Richer data shapes (wave 5): a repeating section uses its list; components use fields in their conditions.
+    if (n.repeat?.list) add(n.repeat.list, n.name ?? n.id);
+    if (n.visibleWhen && isItemPath(JSON.stringify(n.visibleWhen))) walk(n.visibleWhen, n.name ?? n.id);
   }
   for (const c of project.contentParts) for (const t of Object.values(c.approvedLocales)) (t ?? '').replace(/\{\{\s*(custom\.[A-Za-z0-9]+)/g, (_m: string, path: string) => { add(path, c.title); return ''; });
   for (const c of project.calculatedFields ?? []) { const deps = exprDependencies(c.expr); for (const path of [...deps.fields, ...deps.lists]) add(path, `calculation “${c.label}”`); }
@@ -1253,8 +1267,11 @@ function referenceProblems(candidate: Project): string | null {
   const fields = projectFieldIndex(candidate);
   for (const r of candidate.rules) { const e = validatePredicate(r.when, fields); if (e.length) return `rule ${r.id} (${e[0]})`; }
   for (const n of candidate.nodes) {
-    for (const p of [n.visibleWhen, ...Object.values(n.variantConditions ?? {})]) if (p) { const e = validatePredicate(p, fields); if (e.length) return `${n.name ?? n.id} (${e[0]})`; }
-    if (n.totalFrom && fields.get(n.totalFrom)?.type !== 'cents') return `the footer total of ${n.name ?? n.id} (it must be an amount)`;
+    // Inside a repeating section (wave 5) a component also reads the fields of the section's items.
+    const inSection = candidate.nodes.some((x) => x.repeat) ? repeatListAt(candidate, n.id) : null;
+    const nf = inSection ? scopeFieldIndex(candidate, inSection) : fields;
+    for (const p of [n.visibleWhen, ...Object.values(n.variantConditions ?? {})]) if (p) { const e = validatePredicate(p, nf); if (e.length) return `${n.name ?? n.id} (${e[0]})`; }
+    if (n.totalFrom && nf.get(n.totalFrom)?.type !== 'cents') return `the footer total of ${n.name ?? n.id} (it must be an amount)`;
   }
   return null;
 }
@@ -1275,4 +1292,56 @@ export function validateStyles(styles: TextStyle[]): string[] {
     for (const k of ['spaceBeforePt', 'spaceAfterPt'] as const) if (st[k] !== undefined && (st[k]! < 0 || st[k]! > 72)) errors.push(`Style ${st.id}: spacing must be 0–72 pt.`);
   }
   return errors;
+}
+
+/* ------------------------------------------------------------ richer data shapes (wave 5, section 2) */
+
+/** The list a repeating section at or above `nodeId` repeats over (null when the place is not inside one). */
+export function repeatListAt(project: Project, nodeId: string | undefined): string | null {
+  const map = nodeMap(project);
+  let cur = nodeId ? map.get(nodeId) : undefined;
+  for (let guard = 0; cur && guard < 200; guard++) {
+    if (cur.type === 'container' && cur.repeat?.list) return cur.repeat.list;
+    cur = parentOf(project, cur.id);
+  }
+  return null;
+}
+
+/** Why a repeating section cannot be set up like this (null when it can). */
+function repeatProblem(project: Project, node: DocNode, parentId: string | undefined): string | null {
+  const r = node.repeat!;
+  if (node.type !== 'container') return 'Only a section (a container) can repeat for each item of a list.';
+  if (!r || typeof r.list !== 'string') return 'Choose the list the section repeats for.';
+  const f = projectFieldIndex(project).get(r.list);
+  if (!f || f.type !== 'array' || !r.list.startsWith('custom.')) return `“${r.list}” is not one of this document’s own lists. A repeating section repeats for the items of a list of the document’s data fields.`;
+  if (parentId && parentId !== project.rootNodeId) return 'A repeating section sits directly on the page, not inside another section, so that its items can continue across pages.';
+  if (node.layout?.paged?.mode === 'fixed') return 'A repeating section flows with the page; it cannot have a fixed position.';
+  for (const k of ['newPage', 'keepHeading'] as const) if (r[k] !== undefined && typeof r[k] !== 'boolean') return `The setting ${k} of a repeating section is yes or no.`;
+  return null;
+}
+
+/** The item paths a component and everything inside it read (bindings, tokens, conditions, a table's total). */
+function itemPathsIn(project: Project, nodeId: string): string[] {
+  const map = nodeMap(project);
+  const out: string[] = [];
+  for (const id of [nodeId, ...descendants(project, nodeId)]) {
+    const n = map.get(id);
+    if (!n) continue;
+    for (const p of [n.binding, n.totalFrom, ...tokensIn(n.content), ...predicateLeafPaths(n.visibleWhen), ...Object.values(n.variantConditions ?? {}).flatMap((x) => predicateLeafPaths(x))]) if (p && isItemPath(p)) out.push(p);
+  }
+  return out;
+}
+
+/** Why a component cannot be moved to `parentId`: a repeating section stays on the page; item fields stay inside a section of their list. */
+function moveIntoSectionProblem(project: Project, node: DocNode, parentId: string): string | null {
+  if (node.repeat && parentId !== project.rootNodeId) return 'A repeating section sits directly on the page, not inside another section, so that its items can continue across pages.';
+  const target = repeatListAt(project, parentId);
+  if (node.repeat && target) return 'A repeating section cannot sit inside another repeating section.';
+  const fields = allFieldIndex(project);
+  const wrong = itemPathsIn(project, node.id).find((p) => listOfItemPath(p) !== target);
+  if (wrong) {
+    const list = listOfItemPath(wrong)!;
+    return `“${node.name ?? node.id}” shows “${fields.get(wrong)?.label ?? wrong}”, which belongs to each item of “${fields.get(list)?.label ?? list}”. It can only be inside a repeating section of that list.`;
+  }
+  return null;
 }

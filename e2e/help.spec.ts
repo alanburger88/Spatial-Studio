@@ -33,7 +33,7 @@ test.describe('help content', () => {
     }
     for (const id of ['S03', 'S04', 'S05', 'S06', 'S20']) expect(SCREEN_HELP[id].read?.length, `${id} says how to read it`).toBeGreaterThan(0);
     for (const g of GLOSSARY) { expect(g.means.length).toBeGreaterThan(30); if (g.screen) expect(SCREEN_IDS).toContain(g.screen); }
-    expect(GLOSSARY.map((g) => g.term)).toEqual(['Blocker', 'Known data problem', 'Release', 'Test and Production', 'Proof record', 'Pinned test', 'Synthetic customer', 'Alternative (variant)', 'The document\'s date', 'Coverage']);
+    expect(GLOSSARY.map((g) => g.term)).toEqual(['Blocker', 'Known data problem', 'Release', 'Test and Production', 'Proof record', 'Pinned test', 'Synthetic customer', 'Alternative (variant)', 'The document\'s date', 'Repeating section', 'Coverage']);
   });
 });
 

@@ -37,6 +37,8 @@ const DNF_LIMIT = 256;
 function dnf(p: Predicate, negated: boolean): Atom[][] | null {
   switch (p.op) {
     case 'not': return dnf(p.arg, !negated);
+    // A condition about the items of a list (wave 5) is not analysed for overlaps here: it is left to the coverage check.
+    case 'items': return null;
     case 'and':
     case 'or': {
       const parts = p.args.map((a) => dnf(a, negated));

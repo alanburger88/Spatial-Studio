@@ -1,6 +1,6 @@
 import {
   CALC_PREFIX, DOCUMENT_DATE_PATH, buildContext, calcTypeOfField, checkExpr, dayFromNumber, dayNumber, evaluateCalculations, exprDependencies, getPath, isIsoDay,
-  projectFields, rowFieldsOf, exprScopeOf,
+  projectFields, rowFieldsOf, exprScopeOf, itemFieldDefs, scopeFieldIndex,
   type CalcType, type CalcValue, type CalculatedField, type Expr, type ExprScope, type FieldDef, type LookupTable, type Missing, type Predicate, type Project, type SyntheticRecord,
 } from '@iss/model';
 import { formatCents, formatDate, formatNumber } from '@iss/resolver';
@@ -49,8 +49,13 @@ export interface Ctx {
 }
 
 export function makeCtx(project: Project, selfKey: string | null): Ctx {
-  const fields = projectFields(project);
-  return { project, scope: exprScopeOf(project), selfKey, fields, lists: fields.filter((f) => f.type === 'array' && (f.itemFields?.length ?? 0) > 0 && !f.calculated), tables: project.lookupTables ?? [] };
+  // Richer data shapes (wave 5): a calculation that belongs to a list offers the fields of one item first; every
+  // calculation can count or add up a list inside the items (for the item, or across every item).
+  const list = (project.calculatedFields ?? []).find((c) => c.key === selfKey)?.list;
+  const all = list ? [...scopeFieldIndex(project, list).values()] : projectFields(project);
+  const fields = list ? [...all.filter((f) => f.item === list), ...all.filter((f) => f.item !== list)] : all;
+  const nested = itemFieldDefs(project.customFields).filter((f) => f.type === 'array' && !fields.some((x) => x.path === f.path));
+  return { project, scope: exprScopeOf(project, list), selfKey, fields, lists: [...fields, ...nested].filter((f) => f.type === 'array' && (f.itemFields?.length ?? 0) > 0 && !f.calculated), tables: project.lookupTables ?? [] };
 }
 
 const fits = (t: CalcType | null, want: Expected): boolean => !!t && (want === 'joinable' ? t === 'text' || t === 'number' || t === 'date' : t === want);

@@ -71,15 +71,24 @@ function setField(record: Record<string, unknown>, path: string, value: unknown)
 }
 
 /** Three rows for a list field, built from its columns. */
-function sampleRows(f: FieldDef, fields: Map<string, FieldDef>): Array<Record<string, unknown>> {
-  return [1, 2, 3].map((n) => Object.fromEntries((f.itemFields ?? []).map((it) => {
-    // A claim row shares its allowed values with the single-claim field of the same name.
-    const twin = f.path === 'claims' ? fields.get(`claim.${it.key}`) : undefined;
-    const value = it.type === 'string' ? `Sample ${plain(it.label).toLowerCase()} ${n}`
-      : it.type === 'date' ? shiftDay(FIRST_DATE, n - 1)
-      : fallbackValue({ type: it.type, label: it.label, enumValues: twin?.enumValues }, 0);
-    return [it.key, value];
-  })));
+function sampleRows(f: Pick<FieldDef, 'path' | 'itemFields' | 'innerLists'>, fields: Map<string, FieldDef>, count = 3): Array<Record<string, unknown>> {
+  return Array.from({ length: count }, (_, k) => k + 1).map((n) => {
+    const row = Object.fromEntries((f.itemFields ?? []).map((it) => {
+      // A claim row shares its allowed values with the single-claim field of the same name.
+      const twin = f.path === 'claims' ? fields.get(`claim.${it.key}`) : undefined;
+      const value = it.type === 'string' ? `Sample ${plain(it.label).toLowerCase()} ${n}`
+        : it.type === 'date' ? shiftDay(FIRST_DATE, n - 1)
+        : fallbackValue({ type: it.type, label: it.label, enumValues: twin?.enumValues }, 0);
+      return [it.key, value];
+    }));
+    // Richer data shapes (wave 5): a group in the row is an object of its fields; a list inside the row gets one row,
+    // none and four rows in the first three items (none, one and many).
+    if (!f.innerLists && !(f.itemFields ?? []).some((it) => it.key.includes('.'))) return row;
+    const shaped: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(row)) setField(shaped, key, value);
+    for (const inner of f.innerLists ?? []) shaped[inner.key] = sampleRows({ path: `${f.path}[].${inner.key}`, itemFields: inner.itemFields }, fields, [1, 0, 4][(n - 1) % 3]);
+    return shaped;
+  });
 }
 
 /**
@@ -136,6 +145,8 @@ function leavesOf(p: Predicate, out: Leaf[] = []): Leaf[] {
     case 'not': leavesOf(p.arg, out); break;
     case 'isNull': case 'notNull': out.push({ node: p, path: p.path, op: p.op, values: [] }); break;
     case 'in': out.push({ node: p, path: p.path, op: p.op, values: Array.isArray(p.value) ? p.value : [] }); break;
+    // A condition about the items of a list (wave 5) is reached by the coverage search, not by threshold values.
+    case 'items': break;
     default: out.push({ node: p, path: p.path, op: p.op, values: [p.value] });
   }
   return out;

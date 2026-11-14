@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { buildContext, calculationUsage, checkExpr, evaluateCalculations, exprScopeOf, formulaInWords, projectFieldIndex, wordsScopeOf, CALC_MAX, type CalcType, type CalculatedField } from '@iss/model';
+import { buildContext, calculationUsage, checkExpr, evaluateCalculations, exprScopeOf, formulaInWords, projectFieldIndex, scopeFieldIndex, wordsScopeOf, CALC_MAX, type CalcType, type CalculatedField } from '@iss/model';
 import { Dialog, Empty, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { useCan, usePreviewDate, useRecord, useResolution, useStudio } from '../state/store';
@@ -98,7 +98,8 @@ export function Calculations() {
                 {calcs.map((c) => {
                   const mine = customer?.values[c.key];
                   const miss = customer?.missing[c.key];
-                  const bad = checkExpr(c.expr, scope).problems.length > 0;
+                  const bad = checkExpr(c.expr, c.list ? exprScopeOf(project, c.list) : scope).problems.length > 0;
+                  const perItem = c.list ? fieldIndex.get(c.list)?.label ?? c.list : null;
                   const unused = !usage.has(c.key);
                   return (
                     <button key={c.key} type="button" className={`calc-row${c.key === selected?.key ? ' selected' : ''}`} aria-current={c.key === selected?.key ? 'true' : undefined} data-testid={`calc-row-${c.key}`} onClick={() => select(c.key)}>
@@ -106,9 +107,9 @@ export function Calculations() {
                         <span className="calc-row-name">{c.label}</span>
                         <span className="chip">{TYPE_NAME[c.type]}</span>
                       </span>
-                      <span className="calc-row-words">{formulaInWords(c.expr, wordsScope)}</span>
+                      <span className="calc-row-words">{formulaInWords(c.expr, c.list ? wordsScopeOf(project, scopeFieldIndex(project, c.list)) : wordsScope)}</span>
                       <span className="calc-row-foot">
-                        {customer ? (mine !== null && mine !== undefined
+                        {perItem ? <span className="chip" data-testid={`calc-row-per-item-${c.key}`}>For each item of “{perItem}”</span> : customer ? (mine !== null && mine !== undefined
                           ? <span className="calc-row-val" data-testid={`calc-row-value-${c.key}`} data-raw={String(mine)}>{formatCalcValue(c.type, mine, locale)}</span>
                           : <span className="calc-row-val missing" data-testid={`calc-row-value-${c.key}`} title={miss?.message}>No value</span>) : null}
                         {bad && <span className="chip error">Has a problem</span>}
@@ -193,11 +194,15 @@ function AddDialog({ project, onClose, onCreate }: { project: Parameters<typeof 
   const [label, setLabel] = useState('');
   const [type, setType] = useState<CalcType>('number');
   const [error, setError] = useState<string | null>(null);
+  // Richer data shapes (wave 5): worked out once for the document, or once for each item of one of its lists.
+  const lists = (project.customFields ?? []).filter((f) => f.type === 'list');
+  const [forList, setForList] = useState('');
   const submit = () => {
     const calcs = project.calculatedFields ?? [];
     const key = keyFromLabel(label, new Set(calcs.map((c) => c.key)), 'calc');
-    const ctx = makeCtx(project, key);
-    setError(onCreate({ key, label: label.trim(), type, expr: seed(type, ctx) }));
+    const draft = forList ? { ...project, calculatedFields: [...calcs, { key, label: label.trim(), type, list: forList, expr: { op: 'number' as const, value: 0 } }] } : project;
+    const ctx = makeCtx(draft as typeof project, key);
+    setError(onCreate({ key, label: label.trim(), type, expr: seed(type, ctx), ...(forList ? { list: forList } : {}) }));
   };
   return (
     <Dialog title="Add a calculation" onClose={onClose} labelledBy="calc-add-title"
@@ -210,6 +215,14 @@ function AddDialog({ project, onClose, onCreate }: { project: Parameters<typeof 
             {CALC_TYPES.map((t) => <option key={t} value={t}>{TYPE_NAME[t]}</option>)}
           </select>
           <span className="hint">It starts with a simple step that you then change in the builder or the formula.</span></div>
+        {lists.length > 0 && (
+          <div className="field"><label htmlFor="calc-add-for">Worked out</label>
+            <select id="calc-add-for" className="select" value={forList} onChange={(e) => setForList(e.target.value)} data-testid="calc-add-for">
+              <option value="">Once for the whole document</option>
+              {lists.map((l) => <option key={l.key} value={`custom.${l.key}`}>For each item of “{l.label}”</option>)}
+            </select>
+            <span className="hint">For each item: a subtotal per account, for example. It can be shown inside a repeating section of that list, as a table total and in its conditions.</span></div>
+        )}
         {error && <p className="callout error" role="alert" data-testid="calc-add-error">{error}</p>}
       </form>
     </Dialog>

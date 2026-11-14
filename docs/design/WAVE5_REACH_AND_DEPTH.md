@@ -122,6 +122,34 @@ For documents with their own data. The built-in kinds (card statement, explanati
     input and its contract describes it.
 11. **Old documents** open and behave exactly as before. No stored document needs changing.
 
+### As built (wave 5, section 2)
+
+Built as designed; the design note is `docs/design/DATA_SHAPES.md` (paths, limits, how a repeating section is resolved
+and paginated, every place that walks the field tree) and the contracts are in `docs/dev/RULES_DATA_CONTRACTS.md`.
+
+- **Shapes and paths.** Groups at the top level and in list items; a list inside a list item, one level (deeper is
+  refused in plain words). Paths `custom.address.city`, `custom.accounts[].number`, `custom.accounts[].transactions[].amountCents`.
+  A person sees names ("Account number", "Mailing address: City"), never paths.
+- **Repeating section** = a container with "Repeat for each item of" (Inspector), sitting on the page; options "start
+  each item on a new page" and "keep each item's heading with its first rows". Inside, components use the item's
+  fields, a table of the item's inner list and calculations per item. PDF: each item's parts flow as blocks of their
+  own, so inner tables continue with headings repeated; web page: one part per item; email: one summary line; SMS:
+  not shown. Design Studio shows the first item in full and each later item compactly; clicking a copy selects the
+  component.
+- **Calculations per item** ("Worked out: for each item of …" when adding one) and across items
+  (`SUM(custom.accounts[].transactions.amountCents)` in a calculation of the whole document).
+- **Rules over items**: any / every / none / at least N, in the rule editor ("Add a condition about items") and the
+  formula language (`ANY(…)`, `AT_LEAST(2, …)`); conditions on components inside a section are decided per item.
+- **Around the document**: data fields editor (groups, lists inside list items, a tree of the shape); Data Explorer
+  (group fields of a row and the lists inside each row, edited in place); test customers (inner lists with none, one
+  and many rows; items conditions reached); nested JSON import with path-named errors; CSV refused for lists with
+  JSON offered; data dictionary (`innerLists`, `itemFields`), mapping paths, the runnable package's input schema.
+- **Not changed**: "Rebuild from a file" and "Describe a template" keep producing flat shapes (their proposals still
+  validate); rules that choose a message are decided once per document (per item: use a component's condition).
+- **Example**: "Household accounts statement" (`packages/model/src/samples/household.ts`, 20 synthetic customers) is
+  used by tests only. It is not a seeded sample (that would change sample counts everywhere) and is not offered under
+  "New project → start from an example"; it is kept test-only.
+
 ---
 
 ## 3. Message experiments

@@ -147,3 +147,49 @@ Every node is addressed by a **slot path** from the root: `''`, `a`, `b`, `arg`,
 | `compareVersions(a, b, r, { issueDate })` | Before & after on a day. | |
 | `planTestData(p, r, { issueDate })` | Reaches outcomes through calculations and dates; `GeneratedCustomer.issueDate` when a run date is needed. | |
 | `captureExpectation(p, r, o, cursor, issueDate)`, `runTestCase` | Pinned tests "as issued on" their `issueDate`. | |
+
+## Richer data shapes (wave 5, section 2)
+
+Design note: `docs/design/DATA_SHAPES.md`. Documents with their own data only; documents without these shapes behave
+byte for byte as before.
+
+| Addition | What it is |
+|---|---|
+| `CustomField.type 'group'`, `.fields: CustomGroupMember[]` | A named group of 1–12 simple fields; paths `custom.<group>.<field>`, named "Group: Field". |
+| `CustomListColumn.type 'group' \| 'list'`, `.fields`, `.itemFields` | A group in each item (`custom.accounts[].holder.name`) or a list inside each item (`custom.accounts[].transactions`, its rows `custom.accounts[].transactions[].amountCents`). One level: deeper is refused. |
+| `CalculatedField.list` | The calculation is worked out for each item of that list (`custom.<key>`), in the item's scope; read as `calc.<key>` inside the item. |
+| `Predicate { op: 'items', path, match, count?, where }` | How many items of a list meet `where` (written with the item's paths): `any`, `every`, `none`, `atLeast` (`count` 1–1000). Every and none hold for an empty list. The input recorded in a trace is the number of items that match. |
+| `DocNode.repeat { list, newPage?, keepHeading? }` | A container repeated for each item (see the design note). |
+| `FieldDef.group`, `.item`, `.innerLists` | A group field's group name; the list whose items have this field; a list's inner lists with their columns. |
+
+Formula (in `printCondition` / `parseFormula`):
+
+| Kind | Formula |
+|---|---|
+| Field of the current item | `custom.accounts[].balanceCents` |
+| Total of the current item's inner list (in a calculation that belongs to `custom.accounts`) | `SUM(custom.accounts[].transactions.amountCents)` |
+| The same across every item (in a calculation of the whole document) | `SUM(custom.accounts[].transactions.amountCents)`; also `COUNT(…)`, `LARGEST(…)`, `SMALLEST(…)` |
+| Items conditions | `ANY(custom.accounts WHERE custom.accounts[].balanceCents < $0.00)`, `EVERY(…)`, `NONE(…)`, `AT_LEAST(2, custom.accounts WHERE …)` |
+
+Words (`conditionInWords`, `formulaInWords`): "for any item of “Accounts”, “Closing balance” is less than $0.00";
+"The total of “Amount” in “Transactions” of every item of “Accounts”."
+
+| Function (`@iss/model`) | What it does |
+|---|---|
+| `itemFieldDefs(customFields, calcs)` | Every field of an item of every list (and of an inner list's row), with `item`. |
+| `scopeFieldIndex(project, list?)` | The fields at one place: the project's, plus one item's of `list`. |
+| `allFieldIndex(project)` | Every path, item paths included (contract, mapping, names). |
+| `itemScopeIndex(index, list)`, `itemDefsOf(index)` | The same from a field index made by `projectFieldIndex`. |
+| `isItemPath`, `listOfItemPath`, `itemPrefix` | Path helpers (`custom.accounts[].x` → `custom.accounts`). |
+| `scopeCtx`, `itemContexts`, `readList`, `inItemScope` | Read one item, the items of a list, the rows of a list (across items outside an item). |
+| `itemCalculations(ctx, list)`, `itemCalculationMissing(scope, key)` | The values per item worked out by `evaluateCalculations` (not in its `values`, which stay the document's). |
+| `decideItems(match, count, results)`, `itemsLead(match, count, label)` | Any/every/none/at least from per-item answers; the words "for any item of “Accounts”,". |
+| `repeatListAt(project, nodeId)` | The list of the repeating section a component sits in (null when none). |
+| `usesRicherShapes(project)` | Whether a document uses any of the new shapes. |
+
+Checks and refusals (plain words): a third level of list, a group in a group, a list in a group, a group in an inner
+list; an item's field used outside its section ("… belongs to each item of “Accounts” …"); a calculation of the
+whole document reading a calculation of the items; a repeating section inside another section, fixed, or over a list
+the document does not have; moving a component that shows an item's field out of its section. Resolver finding
+`INVALID_BINDING` for an item's field outside a section. Coverage and test customers reach items conditions and
+components inside a section (shown for at least one item).

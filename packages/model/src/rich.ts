@@ -29,7 +29,7 @@ export function richFromMarkup(markup: string): RichDoc {
 
 export function inlineFromMarkup(text: string): RichInline[] {
   const out: RichInline[] = [];
-  const re = /(\{\{\s*([a-zA-Z0-9_.]+)\s*\}\})|(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(\[([^\]]+)\]\(([^)\s]+)\))/g;
+  const re = /(\{\{\s*([a-zA-Z0-9_.[\]]+)\s*\}\})|(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(\[([^\]]+)\]\(([^)\s]+)\))/g;
   let last = 0;
   let m: RegExpExecArray | null;
   const push = (t: string, marks?: RichMark[]) => { if (t) out.push(marks ? { type: 'text', text: t, marks } : { type: 'text', text: t }); };
@@ -62,7 +62,7 @@ export function tokensIn(doc: RichDoc | undefined): string[] {
 }
 
 export function tokensInText(text: string): string[] {
-  return [...text.matchAll(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g)].map((m) => m[1]);
+  return [...text.matchAll(/\{\{\s*([a-zA-Z0-9_.[\]]+)\s*\}\}/g)].map((m) => m[1]);
 }
 
 /** Plain text approximation with tokens shown as {{path}} — used for search and domain checks. */
@@ -96,7 +96,7 @@ export function sanitizeRichDoc(input: unknown): { doc: RichDoc; problems: strin
     if (!n || typeof n !== 'object' || !ALLOWED_INLINE.has(n.type)) { problems.push(`Removed unsupported inline ${n?.type}`); return null; }
     if (n.type === 'token') {
       const path = String(n.attrs?.path ?? '');
-      if (!/^[a-zA-Z0-9_.]+$/.test(path)) { problems.push(`Removed malformed token`); return null; }
+      if (!/^[a-zA-Z0-9_.]+$/.test(path.replace(/\[\]/g, ''))) { problems.push(`Removed malformed token`); return null; }
       // A data value may be bold or italic like the words around it (`**{{custom.amount}}**`); links stay on text only.
       const tokenMarks = (Array.isArray(n.marks) ? n.marks : []).filter((m: any) => m?.type === 'bold' || m?.type === 'italic').map((m: any) => ({ type: m.type as 'bold' | 'italic' }));
       return tokenMarks.length ? { type: 'token', attrs: { path }, marks: tokenMarks } : { type: 'token', attrs: { path } };

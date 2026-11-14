@@ -1,4 +1,4 @@
-import { projectFieldIndex, type Predicate, type Project, type Rule } from '@iss/model';
+import { allFieldIndex, itemsLead, projectFieldIndex, type Predicate, type Project, type Rule } from '@iss/model';
 
 /**
  * Plain-language renderings for Business view. Pure functions over the canonical model: they never invent
@@ -9,7 +9,8 @@ const humanise = (s: string) => s.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[
 
 /** Friendly field label from the typed data contract (falls back to a humanised path). */
 export function fieldLabel(project: Pick<Project, 'documentType' | 'customFields'>, path: string): string {
-  const f = projectFieldIndex(project).get(path);
+  // A field of a list's items (wave 5) is named like any other field.
+  const f = projectFieldIndex(project).get(path) ?? (path.includes('[]') ? allFieldIndex(project).get(path) : undefined);
   return f?.label ?? humanise(path.split('.').slice(-1)[0]);
 }
 
@@ -27,6 +28,7 @@ export function predicateSentence(project: Pick<Project, 'documentType' | 'custo
     case 'and': return p.args.map((a) => predicateSentence(project, a)).join(' and ');
     case 'or': return p.args.map((a) => predicateSentence(project, a)).join(' or ');
     case 'not': return `not (${predicateSentence(project, p.arg)})`;
+    case 'items': return `${itemsLead(p.match, p.count, fieldLabel(project, p.path))} ${predicateSentence(project, p.where)}`;
     case 'isNull': return `${fieldLabel(project, p.path)} is empty`;
     case 'notNull': return `${fieldLabel(project, p.path)} is present`;
     case 'in': return `${fieldLabel(project, p.path)} is one of ${p.value.map(valueText).join(', ')}`;

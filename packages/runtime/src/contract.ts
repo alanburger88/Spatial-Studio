@@ -17,6 +17,8 @@ export const MAX_REF_LENGTH = 200;
 export interface DictionaryField {
   path: string; label: string; type: FieldDef['type']; required: boolean; calculated: boolean;
   allowedValues?: string[]; columns?: Array<{ key: string; label: string; type: FieldDef['type'] }>; example?: unknown;
+  /** Richer data shapes (wave 5): lists inside the items of a list. */
+  innerLists?: Array<{ key: string; label: string; columns: Array<{ key: string; label: string; type: FieldDef['type'] }> }>;
 }
 export interface Dictionary { documentKind: DocumentType; fields: DictionaryField[] }
 
@@ -70,7 +72,13 @@ export function inputSchemaFromDictionary(dict: Dictionary, about: { releaseId: 
     if (dict.documentKind === 'eob' && f.path.startsWith('claim.')) { claimColumns[f.path.slice(6)] = scalar(f); continue; }
     if (f.type === 'array') {
       const items = objectSchema();
-      for (const c of f.columns ?? []) items.properties[c.key] = scalar(c);
+      // A group's fields in a row (`holder.name`, wave 5) are an object in the row; a list inside the row is an array of rows.
+      for (const c of f.columns ?? []) { const [g, m] = c.key.split('.'); if (m) { items.properties[g] ??= objectSchema(); items.properties[g].properties[m] = scalar(c); } else items.properties[c.key] = scalar(c); }
+      for (const l of f.innerLists ?? []) {
+        const rows = objectSchema();
+        for (const c of l.columns) rows.properties[c.key] = scalar(c);
+        items.properties[l.key] = { type: 'array', title: l.label, items: rows };
+      }
       setLeaf(f.path.split('.'), { type: 'array', title: f.label, items }, f.required);
       continue;
     }

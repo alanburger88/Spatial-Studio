@@ -4,6 +4,7 @@ import {
   projectFieldIndex, projectFields, getPath, validatePredicate, validateRule, applyCommand, dayWords,
   type DocNode, type DocumentType, type FieldDef, type Locale, type Predicate, type Project, type Rule, type RuleAction, type RuleMode, type Scalar, type SyntheticRecord,
 } from '@iss/model';
+import { itemScopeIndex, type ItemsMatch } from '@iss/model';
 import { describePredicate, resolve, type Finding, type TraceEntry } from '@iss/resolver';
 import { EDGE_CASE_PRESETS, impactOf } from '@iss/scenarios';
 import { ScreenHeader, Loading, Empty, SeverityLabel, formatMoney, Tech, Biz, Proof } from '../ui/common';
@@ -640,7 +641,7 @@ function ruleState(r: Rule, t: TraceEntry | undefined): { label: string; cls: st
 /* ------------------------------------------------------------- visual builder */
 
 function VisualBuilder({ when, fields, fieldMap, onChange, onUseAst, tech }: { tech: boolean; when: Predicate; fields: FieldDef[]; fieldMap: Map<string, FieldDef>; onChange: (p: Predicate) => void; onUseAst: () => void }) {
-  const visual = useMemo(() => toVisual(when), [when]);
+  const visual = useMemo(() => toVisual(when, { items: true }), [when]);
   const projectId = useStudio((s) => s.project?.projectId ?? '');
   if (!visual) {
     return (
@@ -664,6 +665,13 @@ function VisualBuilder({ when, fields, fieldMap, onChange, onUseAst, tech }: { t
     const f = pickable.find((x) => x.type === 'bool') ?? pickable[0];
     onChange(fromVisual({ ...visual, conds: [...visual.conds, { path: f.path, op: 'eq', value: defaultValue(f, 'eq'), neg: false }] }));
   };
+  // Richer data shapes (wave 5): a condition about the items of one of the document's lists.
+  const lists = fields.filter((f) => f.type === 'array' && f.path.startsWith('custom.'));
+  const addItems = () => {
+    const list = lists[0];
+    if (!list) return;
+    onChange(fromVisual({ ...visual, conds: [...visual.conds, { path: list.path, op: 'eq', value: null, neg: false, items: { match: 'any', where: firstItemTest(fieldMap, list.path) } }] }));
+  };
   return (
     <div className="rd-builder" data-testid="visual-builder">
       {visual.conds.length > 1 && (
@@ -680,6 +688,14 @@ function VisualBuilder({ when, fields, fieldMap, onChange, onUseAst, tech }: { t
         {visual.conds.map((c, i) => {
           const f = fieldMap.get(c.path);
           const ops = opsFor(f);
+          if (c.items) return (
+            <li key={i} className="rd-cond rd-cond-items" data-testid={`cond-${i}`}>
+              <span className="rd-cond-join" aria-hidden="true">{i === 0 ? 'IF' : visual.combiner.toUpperCase()}</span>
+              <label className="rd-not"><input type="checkbox" checked={c.neg} onChange={(e) => update(i, { neg: e.target.checked })} /> NOT</label>
+              <ItemsCondition c={c} i={i} lists={lists} fieldMap={fieldMap} onChange={(patch) => update(i, patch)} />
+              <button type="button" className="btn ghost sm icon" aria-label={`Remove condition ${i + 1}`} disabled={visual.conds.length < 2} onClick={() => onChange(fromVisual({ ...visual, conds: visual.conds.filter((_, j) => j !== i) }))}><Icon.close /></button>
+            </li>
+          );
           return (
             <li key={i} className="rd-cond" data-testid={`cond-${i}`}>
               <span className="rd-cond-join" aria-hidden="true">{i === 0 ? 'IF' : visual.combiner.toUpperCase()}</span>
@@ -703,7 +719,54 @@ function VisualBuilder({ when, fields, fieldMap, onChange, onUseAst, tech }: { t
           );
         })}
       </ol>
-      <button type="button" className="btn sm" onClick={add} data-testid="add-condition"><Icon.plus /> Add condition</button>
+      <div className="row">
+        <button type="button" className="btn sm" onClick={add} data-testid="add-condition"><Icon.plus /> Add condition</button>
+        {lists.length > 0 && <button type="button" className="btn sm" onClick={addItems} data-testid="add-items-condition"><Icon.plus /> Add a condition about items</button>}
+      </div>
+    </div>
+  );
+}
+
+/** A first test on one item of a list: its first field that is not a list. */
+function firstItemTest(fieldMap: Map<string, FieldDef>, list: string): Predicate {
+  const f = [...itemScopeIndex(fieldMap, list).values()].find((x) => x.item === list && x.type !== 'array' && !x.calculated);
+  if (!f) return { op: 'notNull', path: `${list}[].` };
+  return fromVisual({ combiner: 'and', conds: [{ path: f.path, op: opsFor(f)[0], value: defaultValue(f, opsFor(f)[0]), neg: false }] });
+}
+
+const ITEMS_MATCH_LABEL: Record<ItemsMatch, string> = { any: 'any item', every: 'every item', none: 'no item', atLeast: 'at least' };
+
+/** "Any item of Accounts has Closing balance less than 0" (wave 5): how many items must meet a test on one item. */
+function ItemsCondition({ c, i, lists, fieldMap, onChange }: { c: Cond; i: number; lists: FieldDef[]; fieldMap: Map<string, FieldDef>; onChange: (patch: Partial<Cond>) => void }) {
+  const it = c.items!;
+  const inner = [...itemScopeIndex(fieldMap, c.path).values()].filter((x) => x.item === c.path && x.type !== 'array' && !x.calculated);
+  const leaf = toVisual(it.where);
+  const one = leaf && leaf.conds.length === 1 ? leaf.conds[0] : null;
+  const f = one ? fieldMap.get(one.path) ?? inner.find((x) => x.path === one.path) : undefined;
+  const setWhere = (cond: Cond) => onChange({ items: { ...it, where: fromVisual({ combiner: 'and', conds: [cond] }) } });
+  return (
+    <div className="rd-items" data-testid={`cond-${i}-items`}>
+      <select className="select" aria-label={`Condition ${i + 1}: how many items`} value={it.match} onChange={(e) => onChange({ items: { ...it, match: e.target.value as ItemsMatch, ...(e.target.value === 'atLeast' ? { count: it.count ?? 2 } : {}) } })} data-testid={`cond-${i}-match`}>
+        {(Object.keys(ITEMS_MATCH_LABEL) as ItemsMatch[]).map((m) => <option key={m} value={m}>{ITEMS_MATCH_LABEL[m]}</option>)}
+      </select>
+      {it.match === 'atLeast' && <input className="input rd-items-count" type="number" min={1} max={1000} aria-label={`Condition ${i + 1}: number of items`} value={it.count ?? 1} onChange={(e) => onChange({ items: { ...it, count: Math.max(1, Math.floor(Number(e.target.value) || 1)) } })} data-testid={`cond-${i}-count`} />}
+      <span className="muted">of</span>
+      <select className="select" aria-label={`Condition ${i + 1}: list`} value={c.path} onChange={(e) => onChange({ path: e.target.value, items: { ...it, where: firstItemTest(fieldMap, e.target.value) } })} data-testid={`cond-${i}-list`}>
+        {lists.map((l) => <option key={l.path} value={l.path}>{l.label}</option>)}
+      </select>
+      <span className="muted">has</span>
+      {one && !one.neg ? (
+        <>
+          <select className="select" aria-label={`Condition ${i + 1}: field of the item`} value={one.path} onChange={(e) => { const g = inner.find((x) => x.path === e.target.value); const op = opsFor(g)[0]; setWhere({ path: e.target.value, op, value: defaultValue(g, op), neg: false }); }} data-testid={`cond-${i}-item-field`}>
+            {!inner.some((x) => x.path === one.path) && <option value={one.path}>{f?.label ?? one.path}</option>}
+            {inner.map((x) => <option key={x.path} value={x.path}>{x.label}</option>)}
+          </select>
+          <select className="select rd-op" aria-label={`Condition ${i + 1}: operator`} value={one.op} onChange={(e) => setWhere({ ...one, op: e.target.value as LeafOp, value: defaultValue(f, e.target.value as LeafOp) })} data-testid={`cond-${i}-item-op`}>
+            {opsFor(f).map((o) => <option key={o} value={o}>{OP_LABEL[o]}</option>)}
+          </select>
+          <div className="rd-value"><ValueEditor field={f} op={one.op} value={one.value} onChange={(v) => setWhere({ ...one, value: v })} label={`Condition ${i + 1}: value`} /></div>
+        </>
+      ) : <span className="rd-reads" data-testid={`cond-${i}-items-nested`}>{describePredicate(it.where)} <span className="muted">(edit in the Advanced AST tab)</span></span>}
     </div>
   );
 }

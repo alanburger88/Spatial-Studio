@@ -44,3 +44,5 @@ export type { HouseItem, HouseItemId, HouseLinkPlan } from './houseLibrary';
 export type { SampleNotes } from './notes';
 export type { SampleCustomer } from './kit';
 export { NORTHWIND_ID, MERIDIAN_ID };
+// Richer data shapes (wave 5): the household statement is for tests only, NOT one of the seeded samples above.
+export { HOUSEHOLD_ID, buildHousehold, householdCustomers, ANY_OVERDRAWN, EVERY_ACTIVE } from './household';

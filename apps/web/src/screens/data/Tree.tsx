@@ -52,7 +52,11 @@ function ListBlock({ node }: { node: ListNode }) {
   const [limit, setLimit] = useState(PAGE);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const bodyId = useId();
-  const extra = node.rowFields.length > node.columns.length;
+  // A list whose items hold lists of their own (wave 5): every row opens to show and edit its inner lists.
+  const inner = node.def.innerLists ?? [];
+  const extra = node.rowFields.length > node.columns.length || inner.length > 0;
+  const at = (i: number, key: string) => (key.includes('.') ? getIn(rows[i], key.split('.')) : rows[i]?.[key]);
+  const segsOf = (i: number, key: string): Array<string | number> => [...node.segs, i, ...key.split('.')];
   const bad = ed.problems.filter((p) => p.path && underPath(p.path, path)).length;
   const label = node.def.label;
 
@@ -69,7 +73,7 @@ function ListBlock({ node }: { node: ListNode }) {
   }, [ed.jump, path, node.columns]);
 
   const put = (next: Array<Record<string, unknown>>) => ed.set(node.segs, next);
-  const add = () => { put([...rows, blankRow(node.rowFields)]); setLimit((l) => Math.max(l, rows.length + 1)); };
+  const add = () => { put([...rows, { ...blankRow(node.rowFields), ...Object.fromEntries((node.def.innerLists ?? []).map((l) => [l.key, []])) }]); setLimit((l) => Math.max(l, rows.length + 1)); };
   const del = (i: number) => { put(rows.filter((_, k) => k !== i)); setExpanded(new Set([...expanded].filter((k) => k !== i).map((k) => (k > i ? k - 1 : k)))); };
   const dup = (i: number) => { const copy = [...rows]; copy.splice(i + 1, 0, JSON.parse(JSON.stringify(rows[i]))); put(copy); setExpanded(new Set([...expanded].map((k) => (k > i ? k + 1 : k)))); };
   const move = (i: number, d: -1 | 1) => {
@@ -81,8 +85,8 @@ function ListBlock({ node }: { node: ListNode }) {
   const shown = rows.slice(0, limit);
   const cell = (c: RowField, i: number, compact: boolean) => {
     const p = `${path}[${i}].${c.key}`;
-    return <ScalarInput type={c.type} value={rows[i]?.[c.key]} label={`${c.label}, row ${i + 1}`} path={p} testId={`dx-c-${path}-${i}-${c.key}`} enumValues={c.enumValues} required={c.required}
-      disabled={ed.readOnly} compact={compact} invalid={ed.problems.some((q) => q.path === p)} onChange={(v) => ed.set([...node.segs, i, c.key], v)} />;
+    return <ScalarInput type={c.type} value={at(i, c.key)} label={`${c.label}, row ${i + 1}`} path={p} testId={`dx-c-${path}-${i}-${c.key}`} enumValues={c.enumValues} required={c.required}
+      disabled={ed.readOnly} compact={compact} invalid={ed.problems.some((q) => q.path === p)} onChange={(v) => ed.set(segsOf(i, c.key), v)} />;
   };
 
   return (
@@ -129,8 +133,9 @@ function ListBlock({ node }: { node: ListNode }) {
                                 <div className="dx-nested-title">Row {i + 1} · more fields</div>
                                 {node.rowFields.filter((f) => !node.columns.some((c) => c.key === f.key)).map((f) => (
                                   <FieldRow key={f.key} path={`${path}[${i}].${f.key}`} testId={`dx-x-${path}-${i}-${f.key}`} label={f.fullLabel ?? f.label} type={f.type} required={f.required} enumValues={f.enumValues}
-                                    value={rows[i]?.[f.key]} clearable onChange={(v) => ed.set([...node.segs, i, f.key], v)} />
+                                    value={at(i, f.key)} clearable onChange={(v) => ed.set(segsOf(i, f.key), v)} />
                                 ))}
+                                {inner.map((l) => <ListBlock key={l.key} node={{ kind: 'list', def: { path: `${path}[${i}].${l.key}`, type: 'array', label: l.label, itemFields: l.itemFields }, segs: [...node.segs, String(i), l.key], rowFields: l.itemFields.map((c) => ({ ...c })), columns: l.itemFields.slice(0, 4).map((c) => ({ ...c })) }} />)}
                               </div>
                             </td>
                           </tr>

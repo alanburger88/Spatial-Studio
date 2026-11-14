@@ -2,6 +2,7 @@ import {
   applyJourney, buildContext, deepPatch, digestOf, projectFieldIndex, getPath, inlineFromMarkup, isSafeUrl, projectContentDigest, richToPlain, shortDigest,
   languageShortName, localizeProject, projectLanguages, SOURCE_LANGUAGE, sysText,
   CALC_PREFIX, DOCUMENT_DATE_PATH, documentDateUse, evaluateCalculations, exprDependencies, inEffect, isIsoDay, notInEffectWords, predicateLeafPaths, predicateTri,
+  allFieldIndex, decideItems, isItemPath, itemCalculationMissing, itemContexts, listOfItemPath, readList, scopeCtx, scopeFieldIndex,
   type CalcResults, type ContentPart, type DocNode, type FieldDef, type Missing, type Predicate, type Project, type RichBlock, type RichDoc, type RichInline, type Rule,
 } from '@iss/model';
 import { formatCents, formatValue } from './format';
@@ -19,6 +20,12 @@ export function evaluatePredicate(p: Predicate, ctx: unknown, inputs: Record<str
     case 'and': return p.args.map((a) => evaluatePredicate(a, ctx, inputs)).every(Boolean);
     case 'or': return p.args.map((a) => evaluatePredicate(a, ctx, inputs)).some(Boolean);
     case 'not': return !evaluatePredicate(p.arg, ctx, inputs);
+    case 'items': {
+      // Richer data shapes (wave 5): each item is tested in its own scope; the input recorded is how many match.
+      const results = itemContexts(ctx as Record<string, unknown>, p.path).map((sc) => evaluatePredicate(p.where, sc, {}));
+      inputs[p.path] = results.filter(Boolean).length;
+      return decideItems(p.match, p.count, results) === true;
+    }
     case 'isNull': { const v = getPath(ctx, p.path); inputs[p.path] = v; return v === null; }
     case 'notNull': { const v = getPath(ctx, p.path); inputs[p.path] = v; return v !== null; }
     case 'in': { const v = getPath(ctx, p.path); inputs[p.path] = v; return v !== null && p.value.includes(v); }
@@ -44,6 +51,7 @@ export function predicatePaths(p: Predicate | undefined): string[] {
   if (!p) return [];
   if (p.op === 'and' || p.op === 'or') return p.args.flatMap(predicatePaths);
   if (p.op === 'not') return predicatePaths(p.arg);
+  if (p.op === 'items') return [p.path, ...predicatePaths(p.where)];
   return [(p as any).path];
 }
 
@@ -55,6 +63,7 @@ export function describePredicate(p: Predicate): string {
     case 'isNull': return `${p.path} is empty`;
     case 'notNull': return `${p.path} is present`;
     case 'in': return `${p.path} in [${p.value.join(', ')}]`;
+    case 'items': return `${p.match === 'atLeast' ? `at least ${p.count ?? 1}` : p.match} of ${p.path} where (${describePredicate(p.where)})`;
     default: {
       const sym: Record<string, string> = { eq: '=', ne: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤' };
       return `${(p as any).path} ${sym[p.op]} ${JSON.stringify((p as any).value)}`;
@@ -97,6 +106,15 @@ function valueFor(c: Ctx, path: string, nodeId: string, lineage: string[]): { va
     const what = node?.type === 'repeating-table' || node?.type === 'chart' ? 'a list' : 'a data field';
     c.findings.push({ code: 'INVALID_BINDING', severity: 'blocking', nodeId, source: 'binding', message: `“${node?.name ?? nodeId}” is not bound to ${what} yet.`, suggestion: `Choose ${what} for it in the Inspector.`, details: { path } });
     return { value: null, known: false };
+  }
+  if (!known && isItemPath(path)) {
+    // Richer data shapes (wave 5): a field of a list's items is read inside a repeating section of that list.
+    const all = allFieldIndex(c.project);
+    const list = listOfItemPath(path);
+    if (all.has(path) && list) {
+      c.findings.push({ code: 'INVALID_BINDING', severity: 'blocking', nodeId, source: 'binding', message: `“${all.get(path)!.label}” belongs to each item of “${all.get(list)?.label ?? list}”, so it can only be shown inside a repeating section of that list.`, suggestion: `Move the component into a repeating section of “${all.get(list)?.label ?? list}”, or choose another field.`, details: { path } });
+      return { value: null, known: false };
+    }
   }
   if (!known) {
     // A document with its own data has no built-in schema to name: its fields are the customer's name and language plus the project's own.
@@ -212,9 +230,14 @@ export function resolve(input: ResolveInput): Resolution {
   const NO_DATE: Missing = { code: 'no-date', message: 'The document has no date for this customer.' };
   const askedFor = new WeakMap<Missing, string>();
   /** Whether a path is a calculated value (or the document's date) that is missing for this customer. */
-  const missingAt = (path: string): Missing | null => {
+  const missingAt = (path: string, scoped?: unknown): Missing | null => {
     let m: Missing | null = null;
-    if (calcs && path.startsWith(CALC_PREFIX)) { const k = path.slice(CALC_PREFIX.length); if (k in calcs.values && calcs.values[k] === null) m = calcs.missing[k] ?? null; }
+    if (calcs && path.startsWith(CALC_PREFIX)) {
+      const k = path.slice(CALC_PREFIX.length);
+      if (k in calcs.values && calcs.values[k] === null) m = calcs.missing[k] ?? null;
+      // A calculation that belongs to a list, read in the scope of one of its items (wave 5).
+      else if (scoped && typeof scoped === 'object') m = itemCalculationMissing<Missing>(scoped, k);
+    }
     else if (dateSource && path === DOCUMENT_DATE_PATH && !issueDate) m = NO_DATE;
     if (!m) return null;
     const copy = { ...m };
@@ -222,8 +245,8 @@ export function resolve(input: ResolveInput): Resolution {
     return copy;
   };
   const depthPaths = (p: Predicate | undefined) => predicateLeafPaths(p).some((x) => x.startsWith(CALC_PREFIX) || x === DOCUMENT_DATE_PATH);
-  /** A condition: true, false, or the missing value it could not be decided without. */
-  const test = (p: Predicate, inputs: Record<string, unknown>): boolean | Missing => (depth && depthPaths(p) ? predicateTri(p, ctx, missingAt, inputs) : evaluatePredicate(p, ctx, inputs));
+  /** A condition: true, false, or the missing value it could not be decided without. `at` is the context (an item's scope inside a repeating section). */
+  const test = (p: Predicate, inputs: Record<string, unknown>, at: unknown = ctx): boolean | Missing => (depth && depthPaths(p) ? predicateTri(p, at, missingAt, inputs) : evaluatePredicate(p, at, inputs));
   /** Where each missing calculated value (or the date) is needed, and how badly. */
   const needs = new Map<string, { severity: 'blocking' | 'warning'; where: Set<string>; missing: Missing }>();
   const need = (m: Missing, severity: 'blocking' | 'warning', where: string) => {
@@ -405,7 +428,13 @@ export function resolve(input: ResolveInput): Resolution {
   const requiredSet = new Set(mandatory);
   for (const n of project.nodes) if (n.required) requiredSet.add(n.id);
   const c: Ctx = { project: localized.project, ctx, locale: approvedLocale ?? (effective.customer?.locale as string) ?? 'en-US', approvedLocale, fields: projectFieldIndex(project), sys: localized.system, findings, parts, liabilityConfirmed };
-  if (depth) c.missingValue = (path, nodeId) => { const m = missingAt(path); if (m) need(m, requiredSet.has(nodeId) ? 'blocking' : 'warning', nodeId.startsWith('@email/') ? 'the email' : nodeId.startsWith('@sms/') ? 'the text message (SMS)' : nodes.get(nodeId)?.name ?? nodeId); };
+  const missingValueAt = (at: unknown): Ctx['missingValue'] => (path, nodeId) => {
+    const m = missingAt(path, at);
+    // A component of a later item of a repeating section is `<id>~<n>`: it is named by the component it repeats.
+    const own = nodeId.replace(/~\d+$/, '');
+    if (m) need(m, requiredSet.has(own) ? 'blocking' : 'warning', nodeId.startsWith('@email/') ? 'the email' : nodeId.startsWith('@sms/') ? 'the text message (SMS)' : nodes.get(own)?.name ?? own);
+  };
+  if (depth) c.missingValue = missingValueAt(ctx);
 
   // Email and SMS wording, resolved with the same field formatting and guards as document text. `{{keyFacts}}` and
   // `{{link}}` stay in place for the channel renderers, which know the document's key figures and action links.
@@ -424,12 +453,19 @@ export function resolve(input: ResolveInput): Resolution {
   const ruleTargets = new Map<string, string[]>();
   for (const r of project.rules) if (r.scope === docType && 'targetNodeId' in r.then) ruleTargets.set(r.then.targetNodeId, [...(ruleTargets.get(r.then.targetNodeId) ?? []), r.id]);
 
-  const buildNode = (node: DocNode, ancestorsHidden: boolean): RNode => {
+  /** Richer data shapes (wave 5): the scope of one item of a repeating section (its context, its id suffix, which item). */
+  interface ItemScope { c: Ctx; suffix: string; item: NonNullable<RNode['repeatItem']> }
+  const baseC = c;
+  const buildNode = (node: DocNode, ancestorsHidden: boolean, scope?: ItemScope): RNode => {
+    const c = scope?.c ?? baseC;
+    const at = c.ctx;
+    const rid = scope?.suffix ? `${node.id}${scope.suffix}` : node.id;
     const lineage: string[] = [];
     const reasons: string[] = [];
     let visible = !ancestorsHidden;
     let hiddenReason: string | undefined = ancestorsHidden ? 'Parent section is not rendered.' : undefined;
-    const r: RNode = { id: node.id, type: node.type, name: node.name ?? node.id, visible: true, visibleBecause: reasons, ruleIds: [], dataLineage: lineage, layout: node.layout, decorative: node.decorative, required: requiredSet.has(node.id) || undefined, children: [] };
+    const r: RNode = { id: rid, type: node.type, name: node.name ?? node.id, visible: true, visibleBecause: reasons, ruleIds: [], dataLineage: lineage, layout: node.layout, decorative: node.decorative, required: requiredSet.has(node.id) || undefined, children: [] };
+    if (scope) { r.repeatItem = scope.item; if (scope.suffix) r.instanceOf = node.id; }
     if (requiredSet.has(node.id)) {
       const by = project.rules.filter((x) => x.then.op === 'requireNodes' && x.then.nodeIds.includes(node.id) && matched.includes(x.id)).map((x) => x.id);
       reasons.push(by.length ? `Mandatory: required by ${by.join(', ')}` : 'Mandatory component');
@@ -438,14 +474,14 @@ export function resolve(input: ResolveInput): Resolution {
     if (dateSource && node.effective && visible && !requiredSet.has(node.id) && !inEffect(node.effective, issueDate)) {
       visible = false;
       hiddenReason = notInEffectWords(node.effective, issueDate);
-      trace.push({ ruleId: `${node.id}:period`, kind: 'inline-condition', mode: 'inline', enabled: true, matched: false, predicateInputs: {}, expression: { op: 'and', args: [] }, targetNodeId: node.id, outcome: 'out-of-scope', note: hiddenReason, period: { period: node.effective, issueDate } });
+      trace.push({ ruleId: `${rid}:period`, kind: 'inline-condition', mode: 'inline', enabled: true, matched: false, predicateInputs: {}, expression: { op: 'and', args: [] }, targetNodeId: node.id, outcome: 'out-of-scope', note: hiddenReason, period: { period: node.effective, issueDate } });
     }
     if (node.visibleWhen && visible) {
       const inputs: Record<string, unknown> = {};
-      const tested = test(node.visibleWhen, inputs);
+      const tested = test(node.visibleWhen, inputs, at);
       const ok = tested === true;
       if (typeof tested !== 'boolean' && !requiredSet.has(node.id)) need(tested, 'blocking', node.name ?? node.id);
-      trace.push({ ruleId: `${node.id}:visibleWhen`, kind: 'inline-condition', mode: 'inline', enabled: true, matched: ok, predicateInputs: inputs, expression: node.visibleWhen, targetNodeId: node.id, outcome: ok ? 'applied' : 'not-matched', ...(typeof tested !== 'boolean' ? { undecided: undecided(tested), note: `Could not be decided: ${tested.message}` } : {}) });
+      trace.push({ ruleId: `${rid}:visibleWhen`, kind: 'inline-condition', mode: 'inline', enabled: true, matched: ok, predicateInputs: inputs, expression: node.visibleWhen, targetNodeId: rid, outcome: ok ? 'applied' : 'not-matched', ...(typeof tested !== 'boolean' ? { undecided: undecided(tested), note: `Could not be decided: ${tested.message}` } : {}) });
       lineage.push(...predicatePaths(node.visibleWhen));
       if (!ok && !requiredSet.has(node.id)) { visible = false; hiddenReason = `Condition not met: ${describePredicate(node.visibleWhen)}`; }
       else reasons.push(`Condition met: ${describePredicate(node.visibleWhen)}`);
@@ -501,7 +537,8 @@ export function resolve(input: ResolveInput): Resolution {
         (Array.isArray(value) ? value : []).forEach((item: any, i: number) => {
           const cells: RTableRow['cells'] = {};
           for (const col of node.columns ?? []) {
-            const raw = item?.[col.key] ?? null;
+            // A column of a group in the row is read by its dotted key (`holder.name`, wave 5).
+            const raw = (col.key.includes('.') ? getPath(item, col.key) : item?.[col.key]) ?? null;
             const rowGuard = col.domainRole === 'member-liability' && docType === 'eob' && item?.liabilityConfirmed !== true;
             cells[col.key] = rowGuard ? { raw, display: sysText(c.sys, 'guardUnderReview'), guarded: true } : { raw, display: formatValue(raw, col.format, c.locale), ...(col.format === 'usd-cents' && typeof raw === 'number' ? { cents: raw } : {}) };
           }
@@ -553,7 +590,23 @@ export function resolve(input: ResolveInput): Resolution {
       }
       case 'variant-set':
       case 'conditional-region': {
-        const sel = regionSelections.get(node.id)!;
+        let sel = regionSelections.get(node.id)!;
+        if (scope && node.type === 'conditional-region' && !node.ruleDriven && node.variantConditions && Object.keys(node.variantConditions).length) {
+          // Inside a repeating section (wave 5): the section's own conditions are decided for each item.
+          const ids: string[] = [];
+          for (const vid of node.variantIds ?? []) {
+            const cond = node.variantConditions[vid];
+            if (!cond) continue;
+            const inputs: Record<string, unknown> = {};
+            const tested = test(cond, inputs, at);
+            if (typeof tested !== 'boolean') need(tested, 'blocking', node.name ?? node.id);
+            const ok = tested === true && (node.policy === 'additive' || !ids.length);
+            trace.push({ ruleId: `${rid}:${vid}`, kind: 'inline-condition', mode: 'inline', enabled: true, matched: tested === true, predicateInputs: inputs, expression: cond, targetNodeId: rid, outcome: ok ? 'selected' : tested === true ? 'outranked' : 'not-matched' });
+            if (ok) ids.push(vid);
+          }
+          const fb = !ids.length && node.fallbackVariantId ? [node.fallbackVariantId] : [];
+          sel = { ids: ids.length ? ids : fb, source: ids.length ? 'inline' : fb.length ? 'fallback' : null, ruleIds: ids.map((v) => `${rid}:${v}`), unresolved: false };
+        }
         const items: RVariant[] = (node.variantIds ?? []).map((vid) => {
           const pt = partText(c, vid);
           const candidateRuleIds = project.rules.filter((x) => x.then.op === 'selectVariant' && x.then.targetNodeId === node.id && x.then.variantId === vid).map((x) => x.id);
@@ -634,8 +687,40 @@ export function resolve(input: ResolveInput): Resolution {
     if (!reasons.length && visible) reasons.push('Always rendered (no condition)');
     r.visible = visible;
     if (!visible) r.hiddenReason = hiddenReason;
+    const kids = (node.children ?? []).map((cid) => nodes.get(cid)).filter((n): n is DocNode => !!n);
+    if (node.type === 'container' && node.repeat) {
+      // Richer data shapes (wave 5): a repeating section lays its content out once for each item of its list.
+      const list = node.repeat.list;
+      lineage.push(list);
+      const label = c.fields.get(list)?.label ?? list;
+      const items = itemContexts(at as Record<string, unknown>, list);
+      r.repeat = { list, label, count: items.length, newPage: !!node.repeat.newPage, keepHeading: !!node.repeat.keepHeading };
+      const fields = scopeFieldIndex(project, list);
+      const scoped = (sc: Record<string, unknown>, quiet: boolean): Ctx => ({ ...c, ctx: sc, fields, ...(quiet ? { findings: [] } : {}), ...(depth ? { missingValue: quiet ? undefined : missingValueAt(sc) } : {}) });
+      if (!items.length) {
+        if (visible) { visible = false; hiddenReason = `No items in “${label}” for this customer.`; }
+        // Laid out once, hidden, for an empty item: the components exist (for the canvas and checks) and report nothing.
+        const empty = scoped(scopeCtx(at as Record<string, unknown>, list, {}, -1), true);
+        r.children = kids.map((k, j) => buildNode(k, true, { c: empty, suffix: '', item: { section: rid, index: 1, count: 0, first: j === 0 } }));
+      } else {
+        r.children = items.flatMap((sc, i) => {
+          const ic = scoped(sc, false);
+          return kids.map((k, j) => {
+            const out = buildNode(k, !visible, { c: ic, suffix: i ? `~${i + 1}` : '', item: { section: rid, index: i + 1, count: items.length, first: j === 0 } });
+            if (j === 0 && i > 0 && node.repeat!.newPage) out.layout = { ...out.layout, paged: { ...(out.layout?.paged ?? { mode: 'flow' as const }), breakBefore: 'page' } };
+            return out;
+          });
+        });
+        reasons.push(`Repeated for ${items.length} item${items.length === 1 ? '' : 's'} of “${label}”`);
+      }
+      if (!reasons.length && visible) reasons.push('Always rendered (no condition)');
+      r.visible = visible;
+      if (!visible) r.hiddenReason = hiddenReason;
+      r.dataLineage = [...new Set(lineage)];
+      return r;
+    }
     r.dataLineage = [...new Set(lineage)];
-    r.children = (node.children ?? []).map((cid) => nodes.get(cid)).filter((n): n is DocNode => !!n).map((n) => buildNode(n, !visible));
+    r.children = kids.map((n) => buildNode(n, !visible, scope && { ...scope, item: { ...scope.item, first: false } }));
     return r;
   };
 

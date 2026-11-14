@@ -1,4 +1,5 @@
 import { projectFieldIndex, richToPlain, tokensIn, tokensInText, type Project, type SyntheticRecord } from '@iss/model';
+import { allFieldIndex, isItemPath, repeatListAt, scopeFieldIndex } from '@iss/model';
 import { evaluatePredicate, resolve, type Finding, type Resolution } from '@iss/resolver';
 import { buildContext } from '@iss/model';
 
@@ -57,8 +58,13 @@ export function staticRuleAnalysis(project: Project, records: SyntheticRecord[])
 export function bindingAnalysis(project: Project): Finding[] {
   const fields = projectFieldIndex(project);
   const out: Finding[] = [];
-  const check = (nodeId: string, path: string, where: string) => { if (!fields.has(path)) out.push({ code: 'INVALID_BINDING', severity: 'blocking', nodeId, source: 'binding', message: `${where} references unknown field “${path}”.`, details: { path } }); };
+  // Richer data shapes (wave 5): inside a repeating section a component also reads the fields of the section's items.
+  const sections = project.nodes.some((x) => x.repeat);
+  let scoped = fields;
+  const check = (nodeId: string, path: string, where: string) => { if (!scoped.has(path)) out.push({ code: 'INVALID_BINDING', severity: 'blocking', nodeId, source: 'binding', message: `${where} references unknown field “${path}”.`, details: { path } }); };
   for (const n of project.nodes) {
+    const list = sections ? repeatListAt(project, n.id) : null;
+    scoped = list ? scopeFieldIndex(project, list) : fields;
     if (n.binding) check(n.id, n.binding, 'Binding');
     tokensIn(n.content).forEach((p) => check(n.id, p, 'Token'));
     if (n.headerFooter) tokensInText(n.headerFooter.text).forEach((p) => check(n.id, p, 'Header token'));
@@ -67,7 +73,7 @@ export function bindingAnalysis(project: Project): Finding[] {
   const referenced = new Set<string>();
   for (const n of project.nodes) { (n.variantIds ?? []).forEach((v) => referenced.add(v)); if (n.contentPartId) referenced.add(n.contentPartId); }
   for (const r of project.rules) if (r.then.op === 'showSection') referenced.add(r.then.targetNodeId);
-  for (const c of project.contentParts.filter((x) => referenced.has(x.id))) for (const t of Object.values(c.approvedLocales)) tokensInText(t ?? '').forEach((p) => { if (!fields.has(p)) out.push({ code: 'INVALID_BINDING', severity: 'warning', nodeId: c.id, source: 'binding', message: `Content part ${c.id} references unknown field “${p}”.` }); });
+  for (const c of project.contentParts.filter((x) => referenced.has(x.id))) for (const t of Object.values(c.approvedLocales)) tokensInText(t ?? '').forEach((p) => { if (!fields.has(p) && !(sections && isItemPath(p) && allFieldIndex(project).has(p))) out.push({ code: 'INVALID_BINDING', severity: 'warning', nodeId: c.id, source: 'binding', message: `Content part ${c.id} references unknown field “${p}”.` }); });
   return out;
 }
 

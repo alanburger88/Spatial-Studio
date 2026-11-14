@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react';
-import { CUSTOM_FIELD_KEY, CUSTOM_LIST_MAX_COLUMNS, customFieldUsage, fieldsFor, tokensIn, type CustomField, type CustomListColumn, type Predicate, type Project } from '@iss/model';
+import { CUSTOM_FIELD_KEY, customFieldUsage, fieldsFor, tokensIn, type CustomField, type Predicate, type Project } from '@iss/model';
 import { useStudio } from '../../state/store';
 import { Dialog, Tech } from '../../ui/common';
 import { Icon } from '../../ui/icons';
 import { fieldsImportRefusal } from '@iss/scenarios';
 import { ImportFields } from './ImportFields';
+import { ShapeTree, SubFields, blankSub, cleanSub, subRowsOf, type SubRow } from './ShapeFields';
 import './DataFieldsEditor.css';
 
-const TYPE_LABEL: Record<string, string> = { string: 'Text', int: 'Whole number', cents: 'Amount', points: 'Points', bool: 'Yes / no', date: 'Date', enum: 'Choice', array: 'List', list: 'List' };
+const TYPE_LABEL: Record<string, string> = { string: 'Text', int: 'Whole number', cents: 'Amount', points: 'Points', bool: 'Yes / no', date: 'Date', enum: 'Choice', array: 'List', list: 'List', group: 'Group of fields' };
 const FIELD_TYPES = ['string', 'cents', 'int', 'date', 'enum', 'bool', 'list'] as const;
-const COLUMN_TYPES = ['string', 'int', 'cents', 'date'] as const;
+/** A document with its own data (wave 5) also has groups of fields, and lists with groups and lists inside their items. */
+const OWN_FIELD_TYPES = [...FIELD_TYPES, 'group'] as const;
 
 /** Where each standard field path is used: rule conditions and component bindings/tokens. */
 function usageIndex(project: Project): Map<string, string[]> {
@@ -28,10 +30,8 @@ function usageIndex(project: Project): Map<string, string[]> {
   return new Map([...map].map(([k, v]) => [k, [...v]]));
 }
 
-interface ColRow extends CustomListColumn { _new?: boolean }
-interface Row extends Omit<CustomField, 'itemFields'> { _new?: boolean; _values?: string; _cols?: ColRow[] }
-
-const blankCol = (): ColRow => ({ key: '', label: '', type: 'string', _new: true });
+interface Row extends Omit<CustomField, 'itemFields' | 'fields'> { _new?: boolean; _values?: string; _cols?: SubRow[]; _fields?: SubRow[] }
+const rowOf = (f: CustomField): Row => { const { itemFields, fields, ...rest } = f; return { ...rest, _values: (f.enumValues ?? []).join(', '), _cols: subRowsOf(itemFields), _fields: subRowsOf(fields) }; };
 const blank = (): Row => ({ key: '', label: '', type: 'string', _new: true, _values: '' });
 
 function camel(label: string): string {
@@ -52,14 +52,15 @@ export function DataFieldsEditor({ onClose }: { onClose: () => void }) {
   const customUse = useMemo(() => new Map(customFieldUsage(project).map((u) => [u.path, u.where])), [project]);
   const [tab, setTab] = useState<'custom' | 'standard'>(own || (project.customFields?.length ?? 0) > 0 ? 'custom' : 'standard');
   const [q, setQ] = useState('');
-  const [rows, setRows] = useState<Row[]>(() => (project.customFields ?? []).map((f) => ({ ...f, _values: (f.enumValues ?? []).join(', '), _cols: (f.itemFields ?? []).map((c) => ({ ...c })) })));
+  const [rows, setRows] = useState<Row[]>(() => (project.customFields ?? []).map(rowOf));
   const [error, setError] = useState<string | null>(null);
   const standard = fieldsFor(project.documentType).filter((f) => !q || `${f.label} ${f.path}`.toLowerCase().includes(q.toLowerCase()));
   const original = JSON.stringify(project.customFields ?? []);
-  const toFields = (): CustomField[] => rows.map(({ _new, _values, _cols, ...f }) => {
+  const toFields = (): CustomField[] => rows.map(({ _new, _values, _cols, _fields, ...f }) => {
     const out: CustomField = { key: f.key.trim(), label: f.label.trim(), type: f.type };
     if (f.type === 'enum') out.enumValues = (_values ?? '').split(',').map((v) => v.trim()).filter(Boolean);
-    if (f.type === 'list') out.itemFields = (_cols ?? []).map(({ _new: _n, ...c }) => ({ key: c.key.trim(), label: c.label.trim(), type: c.type }));
+    if (f.type === 'list') out.itemFields = cleanSub(_cols ?? []);
+    if (f.type === 'group') out.fields = cleanSub(_fields ?? []).map((m) => ({ key: m.key, label: m.label, type: m.type as 'string' }));
     if (f.required) out.required = true;
     if (f.dimension && f.type !== 'list') out.dimension = true;
     if (f.example?.trim()) out.example = f.example.trim();
@@ -67,7 +68,6 @@ export function DataFieldsEditor({ onClose }: { onClose: () => void }) {
   });
   const dirty = JSON.stringify(toFields()) !== original;
   const set = (i: number, patch: Partial<Row>) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-  const setCol = (i: number, c: number, patch: Partial<ColRow>) => setRows((r) => r.map((x, j) => (j === i ? { ...x, _cols: (x._cols ?? []).map((y, k) => (k === c ? { ...y, ...patch } : y)) } : x)));
   const move = <T,>(list: T[], from: number, to: number): T[] => { if (to < 0 || to >= list.length) return list; const next = [...list]; const [it] = next.splice(from, 1); next.splice(to, 0, it); return next; };
   const [importing, setImporting] = useState(false);
   const save = () => {
@@ -117,9 +117,10 @@ export function DataFieldsEditor({ onClose }: { onClose: () => void }) {
         {tab === 'custom' && (
           <>
             <p className="muted df-intro">{own
-              ? 'Every customer has a name and a language. Add the data your document is about: text, numbers, amounts, dates, choices, yes/no, and lists (rows of columns, shown as a table). Components, rules and wording can then use them.'
+              ? 'Every customer has a name and a language. Add the data your document is about: text, numbers, amounts, dates, choices, yes/no, groups of fields (an address), and lists (rows of columns, shown as a table; each row may hold a group and one more list, such as accounts with their transactions). Components, rules and wording can then use them.'
               : 'Add fields your own data carries (for example a segment or a campaign code). Rules, text tokens and imports can then use them as custom.<key>. Imported CSVs supply values in a column with that name.'}</p>
             {rows.length === 0 && <p className="df-empty" data-testid="df-empty">No data fields yet.</p>}
+            {own && <ShapeTree fields={toFields()} />}
             <ul className="df-rows">
               {rows.map((r, i) => {
                 const path = `custom.${r.key.trim()}`;
@@ -139,9 +140,9 @@ export function DataFieldsEditor({ onClose }: { onClose: () => void }) {
                     <div className="field"><label htmlFor={`df-type-${i}`}>Type</label>
                       <select id={`df-type-${i}`} className="select" value={r.type} disabled={inUse.length > 0} onChange={(e) => {
                         const type = e.target.value as CustomField['type'];
-                        set(i, { type, ...(type === 'list' && !r._cols?.length ? { _cols: [blankCol()] } : {}), ...(type === 'list' ? { dimension: false } : {}) });
+                        set(i, { type, ...(type === 'list' && !r._cols?.length ? { _cols: [blankSub()] } : {}), ...(type === 'group' && !r._fields?.length ? { _fields: [blankSub()] } : {}), ...(type === 'list' || type === 'group' ? { dimension: false } : {}) });
                       }} data-testid="df-type">
-                        {FIELD_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+                        {(own ? OWN_FIELD_TYPES : FIELD_TYPES).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
                       </select>
                     </div>
                     {r.type === 'enum' && (
@@ -149,39 +150,8 @@ export function DataFieldsEditor({ onClose }: { onClose: () => void }) {
                         <input id={`df-vals-${i}`} className="input" value={r._values ?? ''} placeholder="gold, silver, bronze" onChange={(e) => set(i, { _values: e.target.value })} data-testid="df-values" />
                       </div>
                     )}
-                    {r.type === 'list' && (
-                      <div className="df-list" data-testid="df-list">
-                        <div className="df-list-head"><strong>Columns</strong><span className="muted df-hint-count">{(r._cols ?? []).length} of {CUSTOM_LIST_MAX_COLUMNS}. Each row of the list has a value for every column. Rules can use the number of rows (“{r.label.trim() || 'List'} count”).</span></div>
-                        <ul className="df-cols">
-                          {(r._cols ?? []).map((c, k) => {
-                            const colKeyOk = !c.key || CUSTOM_FIELD_KEY.test(c.key);
-                            return (
-                              <li key={k} className="df-col" data-testid="df-col">
-                                <div className="field"><label htmlFor={`df-col-label-${i}-${k}`}>Column label</label>
-                                  <input id={`df-col-label-${i}-${k}`} className="input" value={c.label} maxLength={60} placeholder="e.g. Price"
-                                    onChange={(e) => setCol(i, k, { label: e.target.value, ...(c._new && (!c.key || c.key === camel(c.label)) ? { key: camel(e.target.value) } : {}) })} data-testid="df-col-label" />
-                                </div>
-                                <div className="field"><label htmlFor={`df-col-key-${i}-${k}`}>Column key</label>
-                                  <input id={`df-col-key-${i}-${k}`} className="input mono" value={c.key} maxLength={40} disabled={!c._new} aria-invalid={!colKeyOk} placeholder="price" onChange={(e) => setCol(i, k, { key: e.target.value })} data-testid="df-col-key" />
-                                  {!colKeyOk && <span className="hint df-bad">Letters and digits only, starting with a letter.</span>}
-                                </div>
-                                <div className="field"><label htmlFor={`df-col-type-${i}-${k}`}>Column type</label>
-                                  <select id={`df-col-type-${i}-${k}`} className="select" value={c.type} onChange={(e) => setCol(i, k, { type: e.target.value as CustomListColumn['type'] })} data-testid="df-col-type">
-                                    {COLUMN_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
-                                  </select>
-                                </div>
-                                <div className="df-col-end">
-                                  <button type="button" className="btn ghost sm icon" aria-label={`Move column ${c.label || k + 1} up`} disabled={k === 0} onClick={() => set(i, { _cols: move(r._cols ?? [], k, k - 1) })}><Icon.chevron width={14} height={14} style={{ transform: 'rotate(-90deg)' }} /></button>
-                                  <button type="button" className="btn ghost sm icon" aria-label={`Move column ${c.label || k + 1} down`} disabled={k === (r._cols ?? []).length - 1} onClick={() => set(i, { _cols: move(r._cols ?? [], k, k + 1) })}><Icon.chevron width={14} height={14} style={{ transform: 'rotate(90deg)' }} /></button>
-                                  <button type="button" className="btn ghost sm icon" aria-label={`Remove column ${c.label || k + 1}`} disabled={(r._cols ?? []).length <= 1} title={(r._cols ?? []).length <= 1 ? 'A list needs at least one column' : 'Remove column'} onClick={() => set(i, { _cols: (r._cols ?? []).filter((_, j) => j !== k) })}><Icon.trash width={14} height={14} /></button>
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                        <div><button type="button" className="btn sm" disabled={(r._cols ?? []).length >= CUSTOM_LIST_MAX_COLUMNS} onClick={() => set(i, { _cols: [...(r._cols ?? []), blankCol()] })} data-testid="df-col-add"><Icon.plus /> Add column</button></div>
-                      </div>
-                    )}
+                    {r.type === 'list' && <SubFields rows={r._cols ?? []} onChange={(_cols) => set(i, { _cols })} kind="columns" nested={own} owner={String(i)} />}
+                    {r.type === 'group' && <SubFields rows={r._fields ?? []} onChange={(_fields) => set(i, { _fields })} kind="members" nested={false} owner={String(i)} />}
                     <div className="df-flags">
                       <label><input type="checkbox" checked={!!r.required} onChange={(e) => set(i, { required: e.target.checked })} /> Required in imports</label>
                       {(r.type === 'enum' || r.type === 'bool') && <label><input type="checkbox" checked={!!r.dimension} onChange={(e) => set(i, { dimension: e.target.checked })} /> Use as a filter</label>}
@@ -207,7 +177,7 @@ export function DataFieldsEditor({ onClose }: { onClose: () => void }) {
         )}
       </div>
     </Dialog>
-    {importing && <ImportFields onClose={() => setImporting(false)} onApplied={() => { const p = useStudio.getState().project; setRows((p?.customFields ?? []).map((f) => ({ ...f, _values: (f.enumValues ?? []).join(', '), _cols: (f.itemFields ?? []).map((c) => ({ ...c })) }))); }} />}
+    {importing && <ImportFields onClose={() => setImporting(false)} onApplied={() => { const p = useStudio.getState().project; setRows((p?.customFields ?? []).map(rowOf)); }} />}
     </>
   );
 }

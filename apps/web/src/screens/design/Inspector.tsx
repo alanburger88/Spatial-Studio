@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { buildContext, itemContexts, repeatListAt, scopeFieldIndex } from '@iss/model';
 import { CATALOG_BY_TYPE, libraryOwnership, isConditionalSection, projectFields, tableColumnsFor, defaultFormatterFor, getPath, nodeMap, requiredNodeIds, applyCommand, effectivePageDesign, pagedProfileOf, type Command, type FieldDef, type DocNode, type Formatter, type Predicate, type Project } from '@iss/model';
 import { describePredicate, indexTree, type Resolution } from '@iss/resolver';
 import { useScenarioEngine, useStudio } from '../../state/store';
@@ -28,15 +29,26 @@ import { otherName, useOthersOnComponent } from '../../shell/presence';
  * a document with its own data also offers its text and date fields (and the calculated row counts of its lists), since
  * those are most of what it has.
  */
-function conditionFields(project: Project): FieldDef[] {
+function conditionFields(project: Project, nodeId?: string): FieldDef[] {
   const own = project.documentType === 'custom';
-  return projectFields(project).filter((f) => f.type !== 'array' && f.path !== 'documentType' && f.path !== 'recordId' && (own || (f.type !== 'string' && f.type !== 'date')));
+  return fieldsAt(project, nodeId).filter((f) => f.type !== 'array' && f.path !== 'documentType' && f.path !== 'recordId' && (own || (f.type !== 'string' && f.type !== 'date')));
+}
+
+/**
+ * Richer data shapes (wave 5): the fields a component can use where it sits. Inside a repeating section, the fields
+ * of one item of its list come first (shown by name: "Account number"), then every field of the document.
+ */
+function fieldsAt(project: Project, nodeId?: string): FieldDef[] {
+  const list = nodeId && project.nodes.some((n) => n.repeat) ? repeatListAt(project, nodeId) : null;
+  if (!list) return projectFields(project);
+  const all = [...scopeFieldIndex(project, list).values()];
+  return [...all.filter((f) => f.item === list), ...all.filter((f) => f.item !== list)];
 }
 
 /** Single-condition editor with a live before-you-save impact preview. */
-function ConditionEditor({ project, initial, command, onDone, label }: { project: Project; initial: Predicate | null | undefined; command: (when: Predicate | null) => Command; onDone: () => void; label: string }) {
+function ConditionEditor({ project, initial, command, onDone, label, nodeId }: { project: Project; initial: Predicate | null | undefined; command: (when: Predicate | null) => Command; onDone: () => void; label: string; nodeId?: string }) {
   const dispatch = useStudio((s) => s.dispatch);
-  const fields = conditionFields(project);
+  const fields = conditionFields(project, nodeId);
   const leaf = initial && 'path' in initial && 'value' in initial && !Array.isArray((initial as any).value) ? (initial as any) : null;
   const [path, setPath] = useState<string>(leaf?.path ?? fields[0]?.path ?? '');
   const [op, setOp] = useState<string>(leaf?.op && ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'].includes(leaf.op) ? leaf.op : 'eq');
@@ -213,7 +225,7 @@ function TextStyleSelect({ node, project }: { node: DocNode; project: Project })
 
 function ContentTab({ node, project, res, onEditText }: { node: DocNode; project: Project; res: Resolution; onEditText: (id: string) => void }) {
   const dispatch = useStudio((s) => s.dispatch);
-  const fields = projectFields(project);
+  const fields = fieldsAt(project, node.id);
   const upd = (patch: Partial<DocNode>) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: patch as any });
   const scalarFields = fields.filter((f) => f.type !== 'array');
   const [library, setLibrary] = useState(false);
@@ -232,7 +244,7 @@ function ContentTab({ node, project, res, onEditText }: { node: DocNode; project
         <>
           <button className="btn primary" onClick={() => onEditText(node.id)} data-testid="edit-rich-text"><Icon.design /> Edit text in place</button>
           <p className="muted" style={{ fontSize: 12 }}>Double-click the text on the page to edit. Raw HTML and scripts are never stored.</p>
-          <TokenPicker project={project} res={res} />
+          <TokenPicker project={project} res={res} nodeId={node.id} />
         </>
       )}
       {(node.type === 'bound-field' || node.type === 'summary-metric') && (
@@ -333,6 +345,7 @@ function ContentTab({ node, project, res, onEditText }: { node: DocNode; project
         </div>
       )}
       {node.type === 'container' && <p className="muted">Section with {node.children?.length ?? 0} children. Set row/column flow in Layout. Drop components onto it to nest them.</p>}
+      {node.type === 'container' && <RepeatEditor node={node} project={project} res={res} />}
     </div>
   );
 }
@@ -341,7 +354,7 @@ function ContentTab({ node, project, res, onEditText }: { node: DocNode; project
 function ChartDataEditor({ node, project }: { node: DocNode; project: Project }) {
   const dispatch = useStudio((s) => s.dispatch);
   const ch = node.chart!;
-  const lists = projectFields(project).filter((f) => f.type === 'array');
+  const lists = fieldsAt(project, node.id).filter((f) => f.type === 'array');
   const list = lists.find((l) => l.path === node.binding);
   const cols = list?.itemFields ?? [];
   const groups = cols.filter((c) => c.type === 'string' || c.type === 'date');
@@ -367,10 +380,13 @@ function ChartDataEditor({ node, project }: { node: DocNode; project: Project })
   );
 }
 
-function TokenPicker({ project, res }: { project: Project; res: Resolution }) {
+function TokenPicker({ project, res, nodeId }: { project: Project; res: Resolution; nodeId?: string }) {
   const [q, setQ] = useState('');
   const ctx = { ...res.effectiveRecord, claim: (res.effectiveRecord as any).claims?.[0] };
-  const fields = projectFields(project).filter((f) => f.type !== 'array' && (!q || f.path.toLowerCase().includes(q.toLowerCase()) || f.label.toLowerCase().includes(q.toLowerCase())));
+  // Inside a repeating section (wave 5): examples come from the customer's first item of the list.
+  const sectionList = nodeId && project.nodes.some((n) => n.repeat) ? repeatListAt(project, nodeId) : null;
+  const firstItem = sectionList ? itemContexts(buildContext(res.effectiveRecord) as Record<string, unknown>, sectionList)[0] ?? null : null;
+  const fields = fieldsAt(project, nodeId).filter((f) => f.type !== 'array' && (!q || f.path.toLowerCase().includes(q.toLowerCase()) || f.label.toLowerCase().includes(q.toLowerCase())));
   return (
     <div data-testid="token-picker">
       <div className="section-title">Field token picker</div>
@@ -378,8 +394,8 @@ function TokenPicker({ project, res }: { project: Project; res: Resolution }) {
       <div className="token-list">
         {fields.map((f) => (
           <button key={f.path} className="token-item" onMouseDown={(e) => e.preventDefault()} onClick={() => { if (!insertToken(f.path)) useStudio.getState().toast({ kind: 'warning', title: 'Open the text editor first', message: 'Double-click the rich text on the page, then pick a field.' }); }} data-testid={`token-${f.path}`}>
-            <span className="mono">{`{{${f.path}}}`}</span>
-            <span className="muted">{f.type}{f.derived ? ' · derived' : ''} · e.g. {JSON.stringify(getPath(ctx, f.path))?.slice(0, 24)}</span>
+            {f.item ? <span>{f.label}</span> : <span className="mono">{`{{${f.path}}}`}</span>}
+            <span className="muted">{f.item ? 'each item · ' : ''}{f.type}{f.derived ? ' · derived' : ''} · e.g. {JSON.stringify(getPath(f.item && firstItem ? firstItem : ctx, f.path))?.slice(0, 24)}</span>
           </button>
         ))}
       </div>
@@ -397,13 +413,46 @@ function variantWhen(project: Project, node: DocNode, vid: string, ruleIds: stri
   return node.ruleDriven ? 'Shown by a rule when its conditions match.' : 'No condition set.';
 }
 
+/**
+ * Richer data shapes (wave 5): a section that repeats for each item of one of the document's lists. Its content is
+ * laid out once; components inside read the item's own fields. Only a section placed straight on the page can repeat.
+ */
+function RepeatEditor({ node, project, res }: { node: DocNode; project: Project; res: Resolution }) {
+  const dispatch = useStudio((s) => s.dispatch);
+  if (project.documentType !== 'custom') return null;
+  const lists = projectFields(project).filter((f) => f.type === 'array' && f.path.startsWith('custom.'));
+  const onPage = node.id !== project.rootNodeId && project.nodes.find((n) => n.id === project.rootNodeId)?.children?.includes(node.id);
+  if (!onPage || (!lists.length && !node.repeat)) return null;
+  const r = node.repeat;
+  const set = (repeat: DocNode['repeat'] | undefined) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: { repeat } as any });
+  const count = indexTree(res.root).get(node.id)?.repeat?.count;
+  return (
+    <div className="insp-repeat" data-testid="repeat-editor">
+      <div className="section-title">Repeat for each item</div>
+      <Field label="Repeat this section for each item of">
+        <select className="select" value={r?.list ?? ''} onChange={(e) => set(e.target.value ? { ...(r ?? {}), list: e.target.value } : undefined)} data-testid="repeat-list">
+          <option value="">Do not repeat</option>
+          {lists.map((l) => <option key={l.path} value={l.path}>{l.label}</option>)}
+        </select>
+      </Field>
+      {r && (
+        <>
+          <label className="row"><input type="checkbox" checked={!!r.newPage} onChange={(e) => set({ ...r, newPage: e.target.checked || undefined })} data-testid="repeat-new-page" /> Start each item on a new page (PDF)</label>
+          <label className="row"><input type="checkbox" checked={!!r.keepHeading} onChange={(e) => set({ ...r, keepHeading: e.target.checked || undefined })} data-testid="repeat-keep-heading" /> Keep each item’s heading with its first rows (PDF)</label>
+          <p className="muted" data-testid="repeat-note">Laid out once, shown {count === undefined ? 'for each item' : `${count} time${count === 1 ? '' : 's'} for this customer`}. Components inside can show the fields of one item, a table of a list inside the item, and its calculations.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function VariantsEditor({ node, project, res }: { node: DocNode; project: Project; res: Resolution }) {
   const dispatch = useStudio((s) => s.dispatch);
   const rnode = indexTree(res.root).get(node.id);
   const parts = new Map(project.contentParts.map((c) => [c.id, c]));
   const [newTitle, setNewTitle] = useState('');
   const [newText, setNewText] = useState('');
-  const fields = conditionFields(project);
+  const fields = conditionFields(project, node.id);
   // The first field to test: a claim or card field for the sample kinds; for a document with its own data, its first own field.
   const [cond, setCond] = useState<{ path: string; op: string; value: string }>({ path: project.documentType === 'custom' ? fields.find((f) => f.path.startsWith('custom.'))?.path ?? fields[0]?.path ?? '' : project.documentType === 'eob' ? 'claim.status' : 'card.missedPayments', op: 'eq', value: '' });
   const [editing, setEditing] = useState<string | null>(null);
@@ -479,7 +528,7 @@ function VariantsEditor({ node, project, res }: { node: DocNode; project: Projec
                 {(node.variantIds?.length ?? 0) > 1 && <button className="btn sm ghost" onClick={() => dispatch({ type: 'REMOVE_VARIANT', nodeId: node.id, variantId: vid })} aria-label={`Remove variant ${vid}`}><Icon.trash width={14} height={14} /></button>}
               </div>
               {project.documentDate && <PeriodEditor compact period={node.variantPeriods?.[vid]} testId={`variant-period-${vid}`} label="In effect" command={(period) => ({ type: 'SET_VARIANT_PERIOD', nodeId: node.id, variantId: vid, period })} />}
-              {editCond === vid && <ConditionEditor project={project} label={`Condition for ${p?.title ?? vid}`} initial={node.variantConditions?.[vid]} command={(when) => ({ type: 'SET_VARIANT_CONDITION', nodeId: node.id, variantId: vid, when })} onDone={() => setEditCond(null)} />}
+              {editCond === vid && <ConditionEditor project={project} nodeId={node.id} label={`Condition for ${p?.title ?? vid}`} initial={node.variantConditions?.[vid]} command={(when) => ({ type: 'SET_VARIANT_CONDITION', nodeId: node.id, variantId: vid, when })} onDone={() => setEditCond(null)} />}
             </li>
           );
         })}
@@ -633,7 +682,7 @@ function TableEditor({ node, project }: { node: DocNode; project: Project }) {
   const dispatch = useStudio((s) => s.dispatch);
   const upd = (patch: Partial<DocNode>) => dispatch({ type: 'UPDATE_NODE', nodeId: node.id, patch: patch as any });
   const own = project.documentType === 'custom';
-  const arrays = projectFields(project).filter((f) => f.type === 'array');
+  const arrays = fieldsAt(project, node.id).filter((f) => f.type === 'array');
   const list = arrays.find((a) => a.path === node.binding);
   const items = list?.itemFields ?? [];
   const typeOf = (key: string) => items.find((it) => it.key === key)?.type;
@@ -719,7 +768,7 @@ function RulesTab({ node, project, res }: { node: DocNode; project: Project; res
         <span className="grow" data-testid="visible-when">{node.visibleWhen ? <><Biz>{predicateSentence(project, node.visibleWhen)}</Biz><Tech><span className="mono">{describePredicate(node.visibleWhen)}</span></Tech></> : <span className="muted">Always (no condition)</span>}</span>
         {!editVis && !node.locked && <button className="btn sm ghost" onClick={() => setEditVis(true)} data-testid="edit-visible-when">Edit condition</button>}
       </div>
-      {editVis && <ConditionEditor project={project} label="Visibility condition" initial={node.visibleWhen} command={(when) => ({ type: 'UPDATE_NODE', nodeId: node.id, patch: { visibleWhen: when ?? undefined } })} onDone={() => setEditVis(false)} />}
+      {editVis && <ConditionEditor project={project} nodeId={node.id} label="Visibility condition" initial={node.visibleWhen} command={(when) => ({ type: 'UPDATE_NODE', nodeId: node.id, patch: { visibleWhen: when ?? undefined } })} onDone={() => setEditVis(false)} />}
       {project.documentDate && isConditionalSection(node) && (
         <>
           <div className="section-title">In effect</div>

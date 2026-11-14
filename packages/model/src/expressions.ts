@@ -1,5 +1,6 @@
 import { getPath } from './data';
-import { CALC_FIELD_TYPE, CALC_PREFIX, DOCUMENT_DATE_PATH, projectFieldIndex, type FieldDef } from './fields';
+import { allFieldIndex, CALC_FIELD_TYPE, CALC_PREFIX, DOCUMENT_DATE_PATH, isItemPath, itemFieldDefs, scopeFieldIndex, type FieldDef } from './fields';
+import { decideItems, itemContexts, readList, setItemCalculations } from './shapes';
 import { addDaysToIso, daysBetweenIso, isIsoDay } from './isoDate';
 import { lookupRowFor } from './lookup';
 import { validatePredicate } from './validate';
@@ -75,6 +76,7 @@ export function predicateLeafPaths(p: Predicate | undefined): string[] {
   if (!p) return [];
   if (p.op === 'and' || p.op === 'or') return p.args.flatMap(predicateLeafPaths);
   if (p.op === 'not') return predicateLeafPaths(p.arg);
+  if (p.op === 'items') return [p.path, ...predicateLeafPaths(p.where)];
   return [(p as { path: string }).path];
 }
 
@@ -130,16 +132,32 @@ export interface ExprScope {
   tables: Map<string, LookupTable>;
   /** The project says where its date comes from. */
   hasDocumentDate: boolean;
+  // Richer data shapes (wave 5). All optional: a scope without them checks exactly as before.
+  /** The list whose items the calculation is worked out for (a calculation that belongs to a list). */
+  list?: string;
+  /** The calculations that belong to a list, by key → the list. */
+  itemCalcs?: Map<string, string>;
+  /** Every field of an item of every list (`custom.accounts[].…`), to name them and to read lists inside lists. */
+  items?: Map<string, FieldDef>;
 }
 
-export function exprScopeOf(project: Pick<Project, 'documentType' | 'customFields' | 'calculatedFields' | 'lookupTables' | 'documentDate'>): ExprScope {
-  return {
-    fields: projectFieldIndex(project),
+export function exprScopeOf(project: Pick<Project, 'documentType' | 'customFields' | 'calculatedFields' | 'lookupTables' | 'documentDate'>, list?: string | null): ExprScope {
+  const scope: ExprScope = {
+    fields: scopeFieldIndex(project, list),
     calcTypes: new Map((project.calculatedFields ?? []).map((c) => [c.key, c.type])),
     tables: new Map((project.lookupTables ?? []).map((t) => [t.id, t])),
     hasDocumentDate: !!project.documentDate,
   };
+  const itemCalcs = (project.calculatedFields ?? []).filter((c) => c.list);
+  const items = itemFieldDefs(project.customFields, project.calculatedFields);
+  if (list) scope.list = list;
+  if (itemCalcs.length) scope.itemCalcs = new Map(itemCalcs.map((c) => [c.key, c.list!]));
+  if (items.length) scope.items = new Map(items.filter((f) => !f.calculated).map((f) => [f.path, f]));
+  return scope;
 }
+
+/** "Accounts": the name of a list, for messages. */
+const listName = (scope: ExprScope, list: string): string => scope.fields.get(list)?.label ?? scope.items?.get(list)?.label ?? list;
 
 /** One problem in a calculation, at a slot path of the tree (see `exprChildren`). */
 export interface ExprProblem { at: string; message: string }
@@ -148,7 +166,8 @@ const q = (s: string) => `“${s}”`;
 
 /** The columns of a list as fields a row condition can test (by column key). */
 export function rowFieldsOf(scope: ExprScope, list: string): Map<string, FieldDef> | null {
-  const f = scope.fields.get(list);
+  // A list inside a list is read for the current item (in its scope), or across every item.
+  const f = scope.fields.get(list) ?? scope.items?.get(list);
   if (!f || f.type !== 'array') return null;
   return new Map((f.itemFields ?? []).map((c) => {
     const twin = list === 'claims' ? scope.fields.get(`claim.${c.key}`) : undefined;
@@ -176,11 +195,15 @@ export function checkExpr(e: Expr, scope: ExprScope): { type: CalcType | null; p
       case 'field': {
         if (typeof x.path !== 'string') return bad(at, 'A field must be named.');
         if (x.path.startsWith(CALC_PREFIX)) {
-          const t = scope.calcTypes.get(x.path.slice(CALC_PREFIX.length));
-          return t ?? bad(at, `There is no calculated field ${q(x.path.slice(CALC_PREFIX.length))}.`);
+          const key = x.path.slice(CALC_PREFIX.length);
+          const t = scope.calcTypes.get(key);
+          const owner = scope.itemCalcs?.get(key);
+          if (t && owner && owner !== scope.list) return bad(at, `${q(scope.items?.get(x.path)?.label ?? key)} is worked out for each item of ${q(listName(scope, owner))}. Use it inside a repeating section of that list or in another calculation that belongs to it.`);
+          return t ?? bad(at, `There is no calculated field ${q(key)}.`);
         }
         if (x.path === DOCUMENT_DATE_PATH) return scope.hasDocumentDate ? 'date' : bad(at, 'This document does not have a date yet. Choose where its date comes from first.');
         const f = scope.fields.get(x.path);
+        if (!f && isItemPath(x.path) && scope.items?.has(x.path)) return bad(at, `${q(scope.items.get(x.path)!.label)} belongs to each item of ${q(listName(scope, scope.items.get(x.path)!.item!))}. Read it in a calculation that belongs to that list, or add it up with SUM.`);
         if (!f) return bad(at, `${q(x.path)} is not a data field of this document.`);
         const t = calcTypeOfField(f);
         return t ?? bad(at, `${q(f.label)} is a list. Use COUNT, SUM, SMALLEST or LARGEST to read it.`);
@@ -275,13 +298,14 @@ export function checkExpr(e: Expr, scope: ExprScope): { type: CalcType | null; p
       case 'count': case 'sum': case 'smallest': case 'largest': {
         const rows = rowFieldsOf(scope, x.list);
         if (!rows) return bad(at, scope.fields.has(x.list) ? `${q(scope.fields.get(x.list)!.label)} is not a list.` : `${q(x.list)} is not a list of this document.`);
+        const listLabel = listName(scope, x.list);
         if (x.where) {
           const errs = validatePredicate(x.where, rows);
           if (errs.length) return bad(at, `The row condition is not valid: ${errs[0]}`);
         }
         if (x.op === 'count') return 'number';
         const col = rows.get(x.column);
-        if (!col) return bad(at, `${q(scope.fields.get(x.list)!.label)} has no column ${q(x.column)}.`);
+        if (!col) return bad(at, `${q(listLabel)} has no column ${q(x.column)}.`);
         const t = calcTypeOfField(col);
         if (x.op === 'sum') return numberish(t) ? t : bad(at, `SUM adds up numbers or amounts; ${q(col.label)} is ${t ? CALC_TYPE_WORDS[t] : 'not a value'}.`);
         return numberish(t) || t === 'date' ? t : bad(at, `${x.op.toUpperCase()} works on numbers, amounts or dates; ${q(col.label)} is ${t ? CALC_TYPE_WORDS[t] : 'not a value'}.`);
@@ -361,13 +385,18 @@ export function validateCalculatedFields(project: Pick<Project, 'documentType' |
     else labels.add(c.label.trim().toLowerCase());
     if (!(c.type in CALC_FIELD_TYPE)) errors.push(`Calculated field ${q(c.label ?? c.key)} must give a number, an amount, a date, text or yes or no.`);
     if (c.description !== undefined && (typeof c.description !== 'string' || c.description.length > 300)) errors.push(`The description of ${q(c.label ?? c.key)} is limited to 300 characters.`);
+    if (c.list !== undefined) {
+      // Richer data shapes (wave 5): a calculation that belongs to a list belongs to one of the document's own lists.
+      const own = (project.customFields ?? []).find((f) => `custom.${f.key}` === c.list);
+      if (typeof c.list !== 'string' || !own || own.type !== 'list') errors.push(`${q(c.label ?? c.key)} belongs to ${q(String(c.list))}, which is not one of this document’s lists.`);
+    }
   }
   if (errors.length) return errors;
   const scope = exprScopeOf({ ...project, calculatedFields: calcs });
   const std = new Set([...scope.fields.values()].filter((f) => !f.calculated).map((f) => f.label.toLowerCase()));
   for (const c of calcs) {
     if (std.has(c.label.trim().toLowerCase())) errors.push(`${q(c.label)} is already the name of a data field.`);
-    const { type, problems } = checkExpr(c.expr, scope);
+    const { type, problems } = checkExpr(c.expr, c.list ? exprScopeOf({ ...project, calculatedFields: calcs }, c.list) : scope);
     if (problems.length) { errors.push(`${q(c.label)}: ${problems[0].message}`); continue; }
     if (type && type !== c.type) errors.push(`${q(c.label)} is set to give ${CALC_TYPE_WORDS[c.type]}, but its calculation gives ${CALC_TYPE_WORDS[type]}.`);
   }
@@ -435,7 +464,7 @@ const fieldName = (env: Pick<EvalEnv, 'fields' | 'calcLabels'>, path: string): s
  * the answer depends on it. Data fields keep the resolver's two-valued meaning (an empty value compares as false).
  * `isMissing` says whether a path is a missing calculated field.
  */
-export function predicateTri(p: Predicate, ctx: unknown, isMissing: (path: string) => Missing | null, inputs?: Record<string, unknown>): boolean | Missing {
+export function predicateTri(p: Predicate, ctx: unknown, isMissing: (path: string, ctx?: unknown) => Missing | null, inputs?: Record<string, unknown>): boolean | Missing {
   switch (p.op) {
     case 'and': {
       let miss: Missing | null = null;
@@ -448,16 +477,22 @@ export function predicateTri(p: Predicate, ctx: unknown, isMissing: (path: strin
       return miss ?? false;
     }
     case 'not': { const r = predicateTri(p.arg, ctx, isMissing, inputs); return typeof r === 'boolean' ? !r : r; }
+    case 'items': {
+      // Richer data shapes (wave 5): each item is tested in its own scope; the number that match is the input.
+      const results = itemContexts(ctx as Record<string, unknown>, p.path).map((sc) => predicateTri(p.where, sc, isMissing));
+      if (inputs) inputs[p.path] = results.filter((r) => r === true).length;
+      return decideItems(p.match, p.count, results);
+    }
     case 'isNull': { const v = getPath(ctx, p.path); if (inputs) inputs[p.path] = v; return v === null; }
     case 'notNull': { const v = getPath(ctx, p.path); if (inputs) inputs[p.path] = v; return v !== null; }
     case 'in': {
       const v = getPath(ctx, p.path); if (inputs) inputs[p.path] = v;
-      const m = isMissing(p.path); if (m) return m;
+      const m = isMissing(p.path, ctx); if (m) return m;
       return v !== null && p.value.includes(v);
     }
     default: {
       const v = getPath(ctx, p.path); if (inputs) inputs[p.path] = v;
-      const m = isMissing(p.path); if (m) return m;
+      const m = isMissing(p.path, ctx); if (m) return m;
       const val = p.value;
       if (v === null) return false;
       switch (p.op) {
@@ -476,7 +511,7 @@ export function predicateTri(p: Predicate, ctx: unknown, isMissing: (path: strin
 const missing = (code: MissingCode, message: string, path?: string): Evaluated => ({ ok: false, missing: { code, message, ...(path ? { path } : {}) } });
 
 /** One evaluation: the environment, whether steps are recorded, and how a condition learns that a value is missing. */
-interface Run { env: EvalEnv; steps: boolean; isMissing: (path: string) => Missing | null }
+interface Run { env: EvalEnv; steps: boolean; isMissing: (path: string, ctx?: unknown) => Missing | null }
 
 const OUT_OF_RANGE = 'The result is too large to work with.';
 const NO_DATE_MESSAGE = 'The document has no date for this customer.';
@@ -574,11 +609,12 @@ function evalNode(x: Expr, at: string, run: Run): Evaluated {
       break;
     }
     case 'count': case 'sum': case 'smallest': case 'largest': {
-      const list = getPath(env.ctx, x.list);
-      const rows: Array<Record<string, unknown>> = Array.isArray(list) ? list.filter((row) => row && typeof row === 'object') : [];
+      // A list inside a list (`custom.accounts[].transactions`) is the current item's rows, or every item's rows (`readList`).
+      const list = readList(env.ctx as Record<string, unknown>, x.list);
+      const rows: Array<Record<string, unknown>> = Array.isArray(list) ? list.filter((row) => row && typeof row === 'object') as Array<Record<string, unknown>> : [];
       const kept = x.where ? rows.filter((row) => predicateTri(x.where!, row, NEVER_MISSING) === true) : rows;
       if (x.op === 'count') { r = { ok: true, value: kept.length }; break; }
-      const vals = kept.map((row) => row[x.column]).filter((v) => v !== null && v !== undefined && v !== '');
+      const vals = kept.map((row) => (x.column.includes('.') ? getPath(row, x.column) : row[x.column])).filter((v) => v !== null && v !== undefined && v !== '');
       if (x.op === 'sum') {
         let total = 0;
         for (const v of vals) if (typeof v === 'number' && Number.isFinite(v)) total += v;
@@ -682,7 +718,7 @@ function compiled(project: Pick<Project, 'documentType' | 'customFields' | 'calc
     calcs,
     order: cycle ? calcs : order.map((k) => byKey.get(k)!),
     cycle: new Set(cycle ?? []),
-    fields: projectFieldIndex(project),
+    fields: allFieldIndex(project),
     tables: new Map((project.lookupTables ?? []).map((t) => [t.id, t])),
     labels: new Map(calcs.map((x) => [x.key, x.label])),
     calcTypes: new Map(calcs.map((x) => [x.key, x.type])),
@@ -710,23 +746,47 @@ export function evaluateCalculations(project: Pick<Project, 'documentType' | 'cu
   ctx.calc = values;
   if (project.documentDate && !ctx.document) ctx.document = { date: issueDate };
   const env: EvalEnv = { ctx, calcMissing: missingBy, issueDate, tables: c.tables, fields: c.fields, calcLabels: c.labels, calcTypes: c.calcTypes };
-  for (const calc of c.order) {
+  const one = (calc: CalculatedField, into: Record<string, CalcValue | null>, missingInto: Map<string, Missing>, e: EvalEnv) => {
     if (c.cycle.size && c.cycle.has(calc.key)) {
-      values[calc.key] = null;
-      missingBy.set(calc.key, { code: 'invalid', message: 'It depends on its own result.' });
-      continue;
+      into[calc.key] = null;
+      missingInto.set(calc.key, { code: 'invalid', message: 'It depends on its own result.' });
+      return;
     }
-    const r = evaluateExpr(calc.expr, env);
+    const r = evaluateExpr(calc.expr, e);
     let value: CalcValue | null = r.ok ? r.value : null;
     let miss: Missing | null = r.ok ? null : r.missing;
     // A value of the wrong kind (only possible in a project that skipped the checks) is missing, never shown.
     if (value !== null && !valueFits(calc.type, value)) { value = null; miss = { code: 'invalid', message: `It did not give ${CALC_TYPE_WORDS[calc.type]}.` }; }
-    values[calc.key] = value;
-    if (miss) missingBy.set(calc.key, miss);
+    into[calc.key] = value;
+    if (miss) missingInto.set(calc.key, miss);
+  };
+  for (const calc of c.order) if (!calc.list) one(calc, values, missingBy, env);
+  // Richer data shapes (wave 5): a calculation that belongs to a list is worked out for each of its items, in that item's scope.
+  const perList = new Map<string, CalculatedField[]>();
+  for (const calc of c.order) if (calc.list) perList.set(calc.list, [...(perList.get(calc.list) ?? []), calc]);
+  if (perList.size) {
+    const itemValues = new Map<string, Array<Record<string, unknown>>>();
+    const itemMissing = new Map<string, Array<Record<string, unknown>>>();
+    for (const [list, calcs] of perList) {
+      const vs: Array<Record<string, unknown>> = [];
+      const ms: Array<Record<string, unknown>> = [];
+      for (const sc of itemContexts(ctx, list)) {
+        const own: Record<string, CalcValue | null> = {};
+        sc.calc = { ...values };
+        const ownMissing = new Map(missingBy);
+        const e: EvalEnv = { ...env, ctx: sc, calcMissing: ownMissing };
+        for (const calc of calcs) { one(calc, own, ownMissing, e); (sc.calc as Record<string, unknown>)[calc.key] = own[calc.key]; }
+        vs.push(own);
+        ms.push(Object.fromEntries(calcs.filter((k) => ownMissing.has(k.key)).map((k) => [k.key, ownMissing.get(k.key)])));
+      }
+      itemValues.set(list, vs);
+      itemMissing.set(list, ms);
+    }
+    setItemCalculations(ctx, itemValues, itemMissing);
   }
   const missingOut: Record<string, Missing> = {};
   for (const [k, m] of missingBy) missingOut[k] = m;
-  return { values, missing: missingOut, order: c.order.map((x) => x.key) };
+  return { values, missing: missingOut, order: c.order.filter((x) => !x.list).map((x) => x.key) };
 }
 
 /** Whether a value is of a calculation type (money: whole cents). */

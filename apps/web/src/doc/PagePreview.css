@@ -56,3 +56,6 @@
 .pv-col-guide { position: absolute; top: 0; bottom: 0; border-left: 1px dashed color-mix(in srgb, var(--iss-green-medium) 35%, transparent); border-right: 1px dashed color-mix(in srgb, var(--iss-green-medium) 35%, transparent); pointer-events: none; }
 .pv-flow-cols { position: relative; }
 .pv-flow-note { position: relative; margin-top: 8pt; padding: 8pt 10pt; border: 1px dashed color-mix(in srgb, var(--iss-paper-ink) 30%, transparent); border-radius: 4px; font: 600 8pt/1.4 var(--iss-font-ui); color: color-mix(in srgb, var(--iss-paper-ink) 72%, var(--iss-paper)); background: color-mix(in srgb, var(--iss-paper-ink) 3%, transparent); }
+/* Richer data shapes (wave 5): the items of a repeating section on the canvas. */
+.pv-repeat-item { position: relative; padding: 2px 0 6px 6pt; border-left: 1.5px dashed color-mix(in srgb, var(--iss-green-medium) 55%, transparent); margin: 4pt 0; }
+.pv-repeat-label { font: 600 7pt/1.4 var(--iss-font-ui); color: var(--iss-green-medium); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 2pt; }
