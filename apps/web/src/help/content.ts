@@ -82,7 +82,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     actions: [
       'Select a component on the page or in the Layers list, then edit it in the panel on the right.',
       'Add components from the Components list, or a building block with From the library (it stays linked and read-only until you unlink it). Open Page setup to choose the paper, margins, page templates, columns and backgrounds, and whether an accessible PDF is required; drag the edges of the flow area or the letterhead zone, or type the measurements.',
-      'Edit text, and add an alternative version of a message for a section that changes by customer.',
+      'Edit text, and add an alternative version of a message for a section that changes by customer. A section can repeat for each item of a list, such as one part per account with its own table.',
       'Open Styles & brand to change text styles and brand settings.',
       'Use Explore variants to see every alternative a selected section can show.',
     ],
@@ -143,7 +143,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     purpose: 'See, edit, add and remove the customers this document is tested with. Each customer is shown the way the data is built: sections inside sections, with lists such as transactions inside them.',
     actions: [
       'Pick a customer and read what that customer gets: the language, message versions, sections and any blocking issues.',
-      'Edit values in the form, or in the JSON. Sample customers are shared by every document, so make an editable copy first.',
+      'Edit values in the form, or in the JSON. Open a row of a list to edit its group of fields and the list inside it. Sample customers are shared by every document, so make an editable copy first.',
       'Add a customer: blank (empty values built from the data fields) or a copy of the selected one.',
       'Remove a customer you added.',
     ],
@@ -458,6 +458,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   { term: 'Synthetic customer', screen: 'S16', means: 'A made-up customer the document is tested with. Every customer, account and claim in the studio is fictional, and counts of customers say "synthetic" so you do not read them as real people.' },
   { term: 'Alternative (variant)', screen: 'S03', means: 'One of the named versions a section or message can show, for example a standard reminder or a payment support message. Rules choose which alternative a customer gets.' },
   { term: 'The document\'s date', screen: 'S24', means: 'The day a document is issued on, as far as its rules are concerned: a date in the customer\'s data or a date given for each run, never today\'s date. Rules, alternatives and sections can be in effect from or until a day; "As issued on" previews the studio on a day you pick.' },
+  { term: 'Repeating section', screen: 'S02', means: 'A section of the page that is laid out once and shown for each item of a list, for example one part per account with that account\'s own transactions and subtotal. Inside it, components show the fields of one item; a rule can ask whether any, every, no or at least a number of items meet a condition.' },
   { term: 'Coverage', screen: 'S07', means: 'Whether every rule, message version and section is reached by at least one customer. A gap is one that no customer reaches, so nobody has checked it. "Find coverage gaps" in Rules lists them and can generate customers who reach them.' },
 ];
 
