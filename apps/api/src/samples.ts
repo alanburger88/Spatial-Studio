@@ -1,4 +1,4 @@
-import { projectContentDigest, type Project, type SyntheticRecord } from '@iss/model';
+import { diffProjects, projectContentDigest, type Project, type SyntheticRecord } from '@iss/model';
 import { EXTRA_SAMPLES, type ExtraSample } from '@iss/model/samples/index';
 import { resolve } from '@iss/resolver';
 import { blockerIdOf } from '@iss/scenarios';
@@ -42,6 +42,13 @@ function seedRelease(store: Store, sample: ExtraSample): void {
   promoteRelease(store, made.release, { ...SAMPLE_ACTOR }, 'Release 1 of the example document, in Production from the start.');
   // The working version differs from release 1 (one wording change, one rule change). Saving it returns the document to Draft.
   store.putProject({ ...working, modelVersion: 2 }, projectContentDigest(working), { by: { ...SAMPLE_ACTOR }, label: 'Working version of the example (differs from release 1)' });
+  // The same history in the Activity log, in the words the studio's own routes record (ids and numbers only).
+  const who = { user: SAMPLE_ACTOR.id, userName: SAMPLE_ACTOR.name, projectId: released.projectId };
+  const named = { releaseId: made.release.id, number: made.release.number, title: made.release.title };
+  store.audit({ ...who, action: 'workflow.approve', modelVersion: 1, detail: { from: 'in-review', to: 'approved', withComment: true, release: { number: made.release.number, created: true } } });
+  store.audit({ ...who, action: 'release.create', modelVersion: 1, detail: { ...named, stage: 'Test', origin: 'approval', approvedBy: SAMPLE_ACTOR.name, supersededAtTest: [] } });
+  store.audit({ ...who, action: 'release.promote', modelVersion: 1, detail: { ...named, stage: 'Production', superseded: [], withNote: true } });
+  store.audit({ ...who, action: 'project.save', modelVersion: 2, detail: { fromVersion: 1, toVersion: 2, contentDigest: projectContentDigest(working), changes: diffProjects(released, working).summary.counts, workflow: { from: 'approved', to: 'draft' } } });
 }
 
 /**

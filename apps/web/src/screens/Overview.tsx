@@ -353,7 +353,7 @@ function DatesGlance({ project, base }: { project: Project; base: string }) {
   return (
     <div><dt>Dates</dt><dd data-testid="glance-dates">
       {sourceWords(project)}{issueDate ? <> Previewing as issued on <strong>{dayWords(issueDate)}</strong>.</> : null}{' '}
-      {next ? <>Next change{issueDate ? ' after that' : ''}: <strong>{dayWords(next)}</strong>.</> : issueDate ? 'Nothing changes after that day.' : 'Nothing starts or ends on a day yet.'}{' '}
+      {next ? <>{issueDate ? 'Next change after that' : 'First dated change'}: <strong>{dayWords(next)}</strong>.</> : issueDate ? 'Nothing changes after that day.' : 'Nothing starts or ends on a day yet.'}{' '}
       <Link to={`${base}/dates`} data-testid="glance-dates-open">Open Dates</Link>
     </dd></div>
   );
