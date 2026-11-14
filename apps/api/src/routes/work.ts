@@ -10,6 +10,7 @@ import {
 import {
   clearProjectNotifications, ensureNotificationTables, markAllNotificationsRead, markNotificationRead, notificationTarget, notificationText, notificationsOf, notify,
 } from '../notifications';
+import { unansweredLinkComments } from '../reviewLinks';
 import type { RouteDeps } from './deps';
 
 /**
@@ -259,6 +260,8 @@ export function registerWorkRoutes(app: FastifyInstance, deps: RouteDeps, opts: 
       const submitted = store.workflowHistory(s.projectId).find((e) => e.action === 'submit');
       return [{ projectId: s.projectId, documentTitle: docTitle(s.projectId) ?? s.projectId, state: wf.state, label: WORKFLOW_LABEL[wf.state], modelVersion: wf.modelVersion, submittedBy: submitted?.user ?? null, submittedAt: submitted?.at ?? wf.updatedAt, canApprove: roleCan(role, 'approve'), mine: !!submitted && submitted.userId === userId }];
     }) : [];
-    return { user: { id: userId, name: req.user?.name ?? LOCAL_ADMIN.name, role, roleLabel: ROLE_LABEL[role] }, authEnabled, blockers, reviews };
+    // Comments that came through review links this person made and that nobody in the studio has answered yet.
+    const linkComments = unansweredLinkComments(store, userId).map((c) => ({ ...c, documentTitle: docTitle(c.projectId) ?? c.projectId }));
+    return { user: { id: userId, name: req.user?.name ?? LOCAL_ADMIN.name, role, roleLabel: ROLE_LABEL[role] }, authEnabled, blockers, reviews, linkComments };
   });
 }

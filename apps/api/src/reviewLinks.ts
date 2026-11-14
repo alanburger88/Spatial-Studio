@@ -134,6 +134,22 @@ export function onReviewLinkComment(_link: StoredReviewLink, _comment: { id: str
   /* intentionally empty: the notifications work connects here */
 }
 
+/**
+ * Comments that came through links a person made and that still wait for an answer: not resolved, and nobody in the
+ * studio has replied. For "My work". Ids and the link's label only; the typed name and the text are not returned.
+ */
+export function unansweredLinkComments(store: Store, userId: string): Array<{ projectId: string; commentId: string; nodeId: string; linkId: string; label: string; createdAt: string }> {
+  const rows = store.db.prepare(
+    `SELECT c.id AS comment_id, c.project_id, c.node_id, c.created_at, l.link_id, l.label
+       FROM review_link_comments m
+       JOIN review_links l ON l.link_id = m.link_id
+       JOIN comments c ON c.id = m.comment_id
+      WHERE l.created_by_id = ? AND c.resolved_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM comments r WHERE r.parent_id = c.id AND r.id NOT IN (SELECT comment_id FROM review_link_comments))
+      ORDER BY c.created_at DESC, c.id`).all(userId) as any[];
+  return rows.map((r) => ({ projectId: r.project_id, commentId: r.comment_id, nodeId: r.node_id, linkId: r.link_id, label: r.label, createdAt: r.created_at }));
+}
+
 /* ------------------------------------------------------------------ the frozen target (rule 1) */
 
 /** The project the link shows, exactly as frozen, with every unapproved draft removed (rule 3). Undefined when it is gone. */

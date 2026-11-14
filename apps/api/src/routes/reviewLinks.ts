@@ -11,6 +11,7 @@ import {
   approvedLanguages, cleanLinkLabel, cleanReviewerName, commentParts, customerChoices, customerName, languageChoice, linkStatus, linkTemplate,
   newReviewToken, onReviewLinkComment, reviewTokenHash, type ReviewOutput, type StoredReviewLink,
 } from '../reviewLinks';
+import { notify } from '../notifications';
 import type { RouteDeps } from './deps';
 
 /**
@@ -295,6 +296,8 @@ export function registerReviewLinkRoutes(app: FastifyInstance, deps: RouteDeps, 
     // Ids and counts only: never the typed name or the text.
     linkAudit(req, 'review-link.comment', link, { commentId: comment.id, recordId: record.recordId, output, locale, nodeId: nodeId || null, nodeName: nodeId ? commentParts(template).find((p) => p.nodeId === nodeId)?.name ?? null : null, length: body.length });
     onReviewLinkComment(link, comment);
+    // Tell the person who made the link (ids only; the commenter is outside the studio, so there is no actor).
+    notify(store, { userId: link.createdBy?.id, kind: 'review_link.comment', projectId: link.projectId, data: { commentId: comment.id, linkId: link.id, ...(comment.nodeId ? { nodeId: comment.nodeId } : {}), modelVersion: link.modelVersion }, actor: null });
     reply.status(201);
     return { comment: { id: comment.id, author: comment.authorName, body: comment.body, createdAt: comment.createdAt, resolved: false, customer: { key: record.recordId, name: customerName(record) }, output: { id: output, label: REVIEW_OUTPUT_LABEL[output] }, language: languageChoice(locale), part: nodeId ? commentParts(template).find((p) => p.nodeId === nodeId)?.name ?? null : null, replies: [] } };
   });

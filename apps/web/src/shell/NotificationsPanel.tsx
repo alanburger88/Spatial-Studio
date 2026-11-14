@@ -82,7 +82,7 @@ export function NotificationsPanel() {
     setTab(next);
     window.setTimeout(() => root.current?.querySelector<HTMLElement>(`#notify-tab-${next}`)?.focus(), 0);
   };
-  const workCount = work ? work.blockers.length + work.reviews.length : null;
+  const workCount = work ? work.blockers.length + work.reviews.length + work.linkComments.length : null;
 
   return (
     <div className="notify-panel" ref={root} role="dialog" aria-label="Notifications and My work" data-testid="notify-panel">
@@ -165,6 +165,23 @@ export function NotificationsPanel() {
                           <button type="button" className="notify-item" onClick={() => go({ screen: 'review', projectId: r.projectId })} data-testid="my-work-review" data-project={r.projectId}>
                             <span className="notify-text"><strong>{r.documentTitle}</strong>{r.modelVersion ? <span className="muted"> · version {r.modelVersion}</span> : null}</span>
                             <span className="notify-meta muted">{r.canApprove ? 'Review or approve' : 'Review'}{r.submittedBy ? ` · submitted by ${r.mine ? 'you' : r.submittedBy}` : ''} · <When iso={r.submittedAt} /></span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+              </section>
+              <section aria-labelledby="mw-links">
+                <h3 id="mw-links" className="section-title">Review link comments to answer <span className="chip count">{work.linkComments.length}</span></h3>
+                {work.linkComments.length === 0
+                  ? <p className="muted notify-none" data-testid="my-work-no-link-comments">No comment from a review link you made is waiting for an answer.</p>
+                  : (
+                    <ul className="list-rows notify-list">
+                      {work.linkComments.map((c) => (
+                        <li key={c.commentId}>
+                          <button type="button" className="notify-item" onClick={() => go({ screen: 'comment', projectId: c.projectId, nodeId: c.nodeId || null, commentId: c.commentId })} data-testid="my-work-link-comment" data-project={c.projectId}>
+                            <span className="notify-text"><strong>{c.documentTitle}</strong><span className="muted"> · review link “{c.label}”</span></span>
+                            <span className="notify-meta muted">Not answered yet · <When iso={c.createdAt} /></span>
                           </button>
                         </li>
                       ))}

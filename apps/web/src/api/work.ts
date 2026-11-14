@@ -27,6 +27,8 @@ export interface MyWorkDto {
   user: { id: string; name: string; role: Role; roleLabel: string }; authEnabled: boolean;
   blockers: Array<{ projectId: string; documentTitle: string; blockerId: string; title: string; kind: BlockerKind; speed: 'fast' | 'full-check'; status: WorkStatus; customerCount: number | null; updatedAt: string }>;
   reviews: Array<{ projectId: string; documentTitle: string; state: WorkflowState; label: string; modelVersion: number | null; submittedBy: string | null; submittedAt: string | null; canApprove: boolean; mine: boolean }>;
+  /** Comments through review links you made that nobody in the studio has answered yet. */
+  linkComments: Array<{ projectId: string; documentTitle: string; commentId: string; nodeId: string; linkId: string; label: string; createdAt: string }>;
 }
 
 const enc = encodeURIComponent;
