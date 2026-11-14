@@ -1,6 +1,6 @@
 # Wave 4: teams
 
-Status: **design for roadmap wave 4 (`docs/ROADMAP.md`). Not built yet.** Written on 2026-11-14 after the check-in
+Status: **built in roadmap wave 4 (`docs/ROADMAP.md`); see the "As built" note at the end of each section.** Written on 2026-11-14 after the check-in
 (decision D111).
 
 Wave 4 is about more than one person working on a document: someone outside the studio reviewing it, people owning

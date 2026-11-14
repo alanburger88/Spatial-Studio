@@ -99,7 +99,7 @@ Paused by the product owner before wave 4, to work on the example documents firs
 | 1 — Trust, proof and finding your way | Built and verified (v0.11) |
 | 2 — Real documents | Built and verified (v0.12) |
 | 3 — Bringing documents in, and handing them over | Built and verified (v0.13), except the first adapter, which waits for a named target system |
-| 4 — Teams | **Resumed on 2026-11-14 at the product owner's instruction. Check-in done (D111), design written (`docs/design/WAVE4_TEAMS.md`), build in progress; nothing in it is verified yet.** |
+| 4 — Teams | Built and verified (v0.15, decisions D111–D117) on 2026-11-14: 1,220 unit tests, 384 browser tests |
 | 5 — Reach and depth | Not started |
 
 **To resume wave 4**, start with its check-in. Two questions are still open:
@@ -161,6 +161,8 @@ What a production statement, bill or letter needs that the samples do not.
 | First CCM adapter (template phase 6) | L | Needs a named CCM and sample files | Phase 3 |
 
 ### Wave 4 — Teams
+
+**Status: built and verified on 2026-11-14** (1,220 unit tests, 384 browser tests; 2 more need sign-in on). What was and was not verified is in `reports/BUILD_PROGRESS.md` (v0.15) and decisions D111–D117. Not proven: any live AI call for the two new model-backed paths, and an outside security review of review links.
 
 | Item | Size | Notes | Depends on |
 |---|---|---|---|
