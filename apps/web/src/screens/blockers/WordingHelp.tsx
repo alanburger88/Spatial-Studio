@@ -207,7 +207,7 @@ function BeforeAfter({ before, after, source, note, blockedReason, onUse, testId
         <span className="bl-ba-lbl">Suggested <SourceChip source={source} /></span>
         <p data-testid="bl-ba-after">{d.after.map((p, i) => (p.changed ? <ins key={i} className="bl-ins">{p.text}</ins> : <span key={i}>{p.text}</span>))}</p>
       </div>
-      <p className="muted bl-ba-note">{d.changedWords} {d.changedWords === 1 ? 'word changes' : 'words change'}. {note}</p>
+      <p className="muted bl-ba-note">The words that change are struck out and underlined. {note}</p>
       <div className="row wrap">
         <button type="button" className="btn primary sm" onClick={onUse} disabled={!!blockedReason} title={blockedReason ?? undefined} data-testid="bl-wording-use">Use this wording</button>
       </div>
