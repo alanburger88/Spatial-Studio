@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { applyCommand, type Command, type Project, type WordingRule } from '@iss/model';
-import { RECORDS } from '@iss/model/fixtures';
+import { RECORDS, seedProjects } from '@iss/model/fixtures';
 import { buildApp } from '../src/app';
 import { compliantRewrite, type AssistModel, type AssistTask } from '../src/assistAi';
 import type { PackageComposer } from '../src/releasePackage';
@@ -70,19 +70,25 @@ describe('wording rules in approval, validation, the AI route and releases (sign
     expect(ok.statusCode, ok.body).toBe(200);
     const id = ok.json().release.release.id;
     const lib = (await inj('GET', `/api/v1/releases/${id}/library`)).json();
-    expect(lib.wordingRules).toMatchObject({ house: null, own: [{ id: 'plain' }, { id: 'claim-word' }], mustFindings: 0 });
+    // the EOB sample's own four rules (D106) come first, then the two added here
+    const sampleOwn = [{ id: 'harbor-not-a-bill' }, { id: 'harbor-no-patient' }, { id: 'harbor-no-insurance-company' }, { id: 'harbor-short-sentences' }];
+    expect(lib.wordingRules).toMatchObject({ house: null, own: [...sampleOwn, { id: 'plain' }, { id: 'claim-word' }], mustFindings: 0 });
     expect(lib.wordingRules.shouldFindings).toBeGreaterThan(0);
     const z = await inj('GET', `/api/v1/releases/${id}/package?wait=1`);
     expect(z.statusCode).toBe(200);
     const files = new Map(zipEntries(z.rawPayload).map((e) => [e.name, zipRead(z.rawPayload, e)]));
     const manifest = JSON.parse(files.get('manifest.json')!.toString('utf8'));
     expect(manifest.formatVersion).toBe(1);
-    expect(manifest.wordingRules).toMatchObject({ house: null, houseKept: 0, mustFindings: 0, own: [{ id: 'plain', kind: 'banned', severity: 'must', phrase: 'adjudication', replacement: 'review' }, { id: 'claim-word' }] });
+    expect(manifest.wordingRules).toMatchObject({ house: null, houseKept: 0, mustFindings: 0, own: [...sampleOwn, { id: 'plain', kind: 'banned', severity: 'must', phrase: 'adjudication', replacement: 'review' }, { id: 'claim-word' }] });
     expect(files.get('README.html')!.toString('utf8')).toMatch(/<h2>Wording rules<\/h2>[\s\S]*no finding against a “must” rule/);
   });
 
   it('a document without wording rules has no wording entry anywhere', async () => {
-    const r = (await inj('GET', '/api/v1/projects/aster-card-demo/workflow')).json().readiness;
+    // Both samples have wording rules of their own since D106: a new document from the card starter has none.
+    const made = await inj('POST', '/api/v1/projects', { templateId: 'credit-card-statement', title: 'Without wording rules' });
+    expect(made.statusCode).toBe(201);
+    expect(made.json().project.wordingRules).toBeUndefined();
+    const r = (await inj('GET', `/api/v1/projects/${made.json().project.projectId}/workflow`)).json().readiness;
     expect(r.blocking.some((g: any) => g.code.startsWith('WORDING_'))).toBe(false);
   });
 
@@ -95,7 +101,9 @@ describe('wording rules in approval, validation, the AI route and releases (sign
     const ok = await compliantRewrite(LIVE as any, good.model, p.project, { text, scope: 'messages', locale: 'en-US' });
     expect(ok.mode).toBe('ai');
     expect(ok.options.map((o) => o.text)).toEqual(['Your account is past due, {{customer.givenName}}.']);
-    expect(good.seen[0].user).toBe(`House wording rules:\n- The text must not use “delinquent” (write “past due” instead).\nKind of text: message.\nText:\n${text}`);
+    // the card sample's own rules (D106) are in force too, before the one added here
+    const sampleRules = '- The document must include “not a legal statement”; keep it if the text has it.\n- The text should not use “kindly” (write “please” instead).\n- No sentence should have more than 25 words.\n- The text should not use “relationship specialist” (write “relationship team” instead).\n';
+    expect(good.seen[0].user).toBe(`House wording rules:\n${sampleRules}- The text must not use “delinquent” (write “past due” instead).\nKind of text: message.\nText:\n${text}`);
     for (const r of RECORDS.slice(0, 20)) expect(good.seen[0].user + good.seen[0].system).not.toContain((r as any).customer?.familyName ?? '§');
     // an answer that still breaks a "must" rule is refused, saying why
     const bad = await compliantRewrite(LIVE as any, fake({ options: ['Your DELINQUENT account, {{customer.givenName}}.'] }).model, p.project, { text, scope: 'messages', locale: 'en-US' });
@@ -115,8 +123,8 @@ describe('wording rules in approval, validation, the AI route and releases (sign
     expect(route.statusCode).toBe(200);
     expect(route.json().mode).toBe('unavailable');
     expect((await inj('POST', '/api/v1/projects/aster-card-demo/assist/rewrite', { text, style: 'compliant', scope: 'poster', project: p.project })).statusCode).toBe(400);
-    // a document with no rule for this text: nothing to meet
-    expect((await compliantRewrite(LIVE as any, good.model, await project('aster-card-demo'), { text, scope: 'messages', locale: 'en-US' })).message).toMatch(/No wording rule applies/);
+    // a document with no rule for this text: nothing to meet (the card as the fixtures build it; the stored sample has rules since D106)
+    expect((await compliantRewrite(LIVE as any, good.model, seedProjects()[0], { text, scope: 'messages', locale: 'en-US' })).message).toMatch(/No wording rule applies/);
   });
 
   it('a project file with invalid own rules is refused', async () => {

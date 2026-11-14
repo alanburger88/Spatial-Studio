@@ -1,14 +1,19 @@
 import { test, expect, type Page } from '@playwright/test';
-import { open, pickRecord, resetAll, setView } from './helpers';
+import { API, open, pickRecord, plainCopy, resetAll, setView } from './helpers';
 
 test.beforeEach(async ({ request }) => { await resetAll(request); });
+const plain: string[] = [];
+test.afterEach(async ({ request }) => { while (plain.length) await request.delete(`${API}/projects/${plain.pop()}`); });
 
 const frameBody = (page: Page) => page.frameLocator('[data-testid="ch-email-preview"]').locator('body');
 const channelsOf = (page: Page) => page.evaluate(() => (window as any).__iss.store.getState().project.channels ?? null);
 const bodyText = async (page: Page) => (await frameBody(page).innerText()).replace(/\s+/g, ' ');
 
-test('default wording is shown with the composed preview for the previewed customer', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'channels');
+test('default wording is shown with the composed preview for the previewed customer', async ({ page, request }) => {
+  // The stored card sample has an email opening line of its own since D106: the defaults are on the card as the fixtures build it.
+  const { projectId } = await plainCopy(request, 'aster-card-demo', 'Aster Card statement');
+  plain.push(projectId);
+  await open(page, projectId, 'channels');
   await expect(page.getByTestId('channels-view')).toBeVisible();
   await expect(page.getByTestId('ch-email-subject')).toHaveValue(/\{\{issuer\.product\}\} statement is ready/);
   await expect(page.getByTestId('ch-email-title')).toHaveValue('Your statement is ready');
@@ -35,11 +40,13 @@ test('changing the subject updates the preview and Undo restores it', async ({ p
 
 test('an unknown {{token}} is flagged and refused, and the model is unchanged', async ({ page }) => {
   await open(page, 'aster-card-demo', 'channels');
+  const before = await channelsOf(page);
   await page.getByTestId('ch-email-title').fill('Hi {{card.nothingHere}}');
   await expect(page.getByTestId('ch-token-warning')).toContainText('card.nothingHere');
   await page.getByTestId('ch-email-title').blur();
   await expect(page.getByTestId('ch-email-title-error')).toContainText('not a data field');
-  expect(await channelsOf(page)).toBeNull();
+  // (the stored card sample has its own channel wording since D106: unchanged, rather than absent)
+  expect(await channelsOf(page)).toEqual(before);
   await expect(page.getByTestId('save-state')).toContainText('Saved');
 });
 

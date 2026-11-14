@@ -78,13 +78,13 @@ test('PA03 "Accessible PDF is required" in Page setup: one undoable command; fai
   await open(page, 'harborcare-demo', 'design');
   await page.getByTestId('open-page-panel').click();
   const box = page.getByTestId('accessible-pdf-required');
-  await expect(box).not.toBeChecked();
-  await box.check();
-  expect((await project(page)).accessiblePdfRequired).toBe(true);
-  await page.getByTestId('undo').click();
+  // The EOB sample requires an accessible PDF since D106 (every customer's PDF passes): turning it off and back is one undoable command each.
+  await expect(box).toBeChecked();
+  await box.uncheck();
   await expect.poll(async () => (await project(page)).accessiblePdfRequired ?? false).toBe(false);
-  await expect(box).not.toBeChecked();
-  await box.check();
+  await page.getByTestId('undo').click();
+  await expect.poll(async () => (await project(page)).accessiblePdfRequired ?? false).toBe(true);
+  await expect(box).toBeChecked();
   // A brand text colour too pale to read: every customer's PDF fails the contrast check.
   await dispatch(page, { type: 'SET_BRAND', brand: { primary: '#277656', accent: '#4EAF60', text: '#BBBBBB' } });
 

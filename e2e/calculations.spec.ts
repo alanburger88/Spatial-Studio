@@ -10,10 +10,20 @@ import {
   type CalculatedField, type Project, type SyntheticRecord,
 } from '../packages/model/src';
 import { gymProject } from '../packages/model/test/helpers/customProject';
-import { API, open, resetAll } from './helpers';
+import { API, open, plainCopy, resetAll } from './helpers';
 
 const created: string[] = [];
-test.beforeEach(async ({ request }) => { created.length = 0; await resetAll(request); });
+// The stored samples have calculations of their own since D106: every test here starts from documents made from the
+// built-in starters (the samples as the fixtures build them, with no calculation yet).
+let CARD = '';
+let EOB = '';
+test.beforeEach(async ({ request }) => {
+  created.length = 0;
+  await resetAll(request);
+  CARD = (await plainCopy(request, 'aster-card-demo', 'Calculations card')).projectId;
+  EOB = (await plainCopy(request, 'harborcare-demo', 'Calculations EOB')).projectId;
+  created.push(CARD, EOB);
+});
 test.afterEach(async ({ request }) => {
   for (const id of created) await request.delete(`${API}/projects/${id}`);
   await resetAll(request);
@@ -39,7 +49,7 @@ const HALF_MIN: CalculatedField = { key: 'halfMinimum', label: 'Half of the mini
 const PER_MISS: CalculatedField = { key: 'minPerMiss', label: 'Minimum per missed payment', type: 'money', expr: { op: 'round', places: 2, arg: { op: 'div', a: { op: 'field', path: 'card.minimumDueCents' }, b: { op: 'field', path: 'card.missedPayments' } } } };
 
 test('CA01 an example creates a real calculation; the builder, formula and plain words follow each other', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'calculations');
+  await open(page, CARD, 'calculations');
   await expect(page.getByTestId('calc-empty')).toBeVisible();
   await page.getByTestId('calc-add').click();
   await page.getByTestId('calc-add-name').fill('Days to due date');
@@ -76,7 +86,7 @@ test('CA01 an example creates a real calculation; the builder, formula and plain
 });
 
 test('CA02 a mistake in the formula is pointed at, in words, and never saved; the builder keeps the last good version', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'calculations');
+  await open(page, CARD, 'calculations');
   await dispatch(page, { type: 'UPSERT_CALCULATED_FIELD', field: DAYS });
   await expect(page.getByTestId('calc-editor')).toBeVisible();
   const before = await page.getByTestId('calc-formula').inputValue();
@@ -118,7 +128,7 @@ test('CA02 a mistake in the formula is pointed at, in words, and never saved; th
 });
 
 test('CA03 the value for the current customer and each step match the engine; the list shows the same value', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'calculations');
+  await open(page, CARD, 'calculations');
   for (const field of [DAYS, HALF_MIN, PER_MISS]) await dispatch(page, { type: 'UPSERT_CALCULATED_FIELD', field });
 
   for (const [calc, expected] of [[HALF_MIN, 'halfMinimum'], [DAYS, 'daysToDue']] as const) {
@@ -141,7 +151,7 @@ test('CA03 the value for the current customer and each step match the engine; th
 });
 
 test('CA04 across all customers: smallest, largest, spread, and who has no value and why, equal the engine; each customer is a link', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'calculations');
+  await open(page, CARD, 'calculations');
   for (const field of [HALF_MIN, PER_MISS]) await dispatch(page, { type: 'UPSERT_CALCULATED_FIELD', field });
   const { project, records } = await store(page);
   const per = (key: string) => records.map((r) => { const c = buildContext(r) as Record<string, unknown>; const o = evaluateCalculations(project, c, null); return { id: r.recordId, v: o.values[key], m: o.missing[key] }; });
@@ -177,7 +187,7 @@ test('CA04 across all customers: smallest, largest, spread, and who has no value
 });
 
 test('CA05 a calculation a rule uses cannot be removed; the engine says why and where it is used; undo takes a save back', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'calculations');
+  await open(page, CARD, 'calculations');
   await dispatch(page, { type: 'UPSERT_CALCULATED_FIELD', field: DAYS });
   const rule = await page.evaluate(() => {
     const r = (window as any).__iss.store.getState().project.rules[0];
@@ -219,7 +229,7 @@ test('CA05 a calculation a rule uses cannot be removed; the engine says why and 
 });
 
 test('CA06 duplicate, rename and an IF step with the condition builder', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'calculations');
+  await open(page, CARD, 'calculations');
   await dispatch(page, { type: 'UPSERT_CALCULATED_FIELD', field: HALF_MIN });
   await page.getByTestId('calc-duplicate').click();
   await expect(page.getByTestId('calc-editor')).toHaveAttribute('data-key', 'halfOfTheMinimumPaymentCopy');
@@ -262,9 +272,9 @@ async function gymDocument(request: APIRequestContext, title: string) {
   return blank.projectId;
 }
 
-for (const [name, projectId] of [['a card statement', 'aster-card-demo'], ['an explanation of benefits', 'harborcare-demo']] as const) {
+for (const [name, which] of [['a card statement', 'card'], ['an explanation of benefits', 'eob']] as const) {
   test(`CA07 examples on ${name} create valid calculations from the document's own fields`, async ({ page }) => {
-    await open(page, projectId, 'calculations');
+    await open(page, which === 'card' ? CARD : EOB, 'calculations');
     const n = await page.locator('[data-testid^="calc-example-"]').count();
     expect(n).toBeGreaterThan(0);
     expect(n).toBeLessThanOrEqual(3);
@@ -303,25 +313,25 @@ test('CA07 examples on a document with its own data use only its own fields; all
 const goTo = (page: Page, url: string) => page.evaluate((u) => { window.history.pushState({}, '', u); window.dispatchEvent(new PopStateEvent('popstate')); }, url);
 
 test('CA08 deep link ?calc=<key> selects that calculation; the first is pre-selected otherwise', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'calculations');
+  await open(page, CARD, 'calculations');
   for (const field of [DAYS, HALF_MIN, PER_MISS]) await dispatch(page, { type: 'UPSERT_CALCULATED_FIELD', field });
   await expect(page.getByTestId('calc-editor')).toHaveAttribute('data-key', 'daysToDue');
-  await goTo(page, '/studio/aster-card-demo/calculations?calc=minPerMiss');
+  await goTo(page, `/studio/${CARD}/calculations?calc=minPerMiss`);
   await expect(page.getByTestId('calc-editor')).toHaveAttribute('data-key', 'minPerMiss');
   await expect(page.getByTestId('calc-row-minPerMiss')).toHaveAttribute('aria-current', 'true');
   // The same from a fresh page load, once the calculations are saved to the server.
   await page.getByTestId('save-project').click();
   await expect(page.getByTestId('save-state')).toContainText('Saved');
-  await page.goto('/studio/aster-card-demo/calculations?calc=halfMinimum');
+  await page.goto(`/studio/${CARD}/calculations?calc=halfMinimum`);
   await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
   await expect(page.getByTestId('calc-editor')).toHaveAttribute('data-key', 'halfMinimum');
   // An unknown key falls back to the first calculation.
-  await goTo(page, '/studio/aster-card-demo/calculations?calc=nothingHere');
+  await goTo(page, `/studio/${CARD}/calculations?calc=nothingHere`);
   await expect(page.getByTestId('calc-editor')).toHaveAttribute('data-key', 'daysToDue');
 });
 
 test('CA09 choosing another calculation with unsaved changes asks first', async ({ page }) => {
-  await open(page, 'aster-card-demo', 'calculations');
+  await open(page, CARD, 'calculations');
   for (const field of [DAYS, HALF_MIN]) await dispatch(page, { type: 'UPSERT_CALCULATED_FIELD', field });
   await page.getByTestId('calc-formula').fill('=DAYS(card.statementStart, card.dueDate)');
   await page.getByTestId('calc-row-halfMinimum').click();

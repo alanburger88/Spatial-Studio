@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { checkTokens, languageName, translationStatus, type Project, type TokenCheck } from '@iss/model';
-import { seedProjects } from '@iss/model/fixtures';
+import { sampleProjects as seedProjects } from '@iss/model/fixtures'; // the stored samples (D106): their English is what the sample drafts were written for
 import { providerStatus, type ProviderConfig } from './assistant';
 import { SAMPLE_TRANSLATIONS } from './sampleTranslations';
 

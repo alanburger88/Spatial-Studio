@@ -5,15 +5,14 @@
  */
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { API, open, resetAll } from './helpers';
+import { API, open, plainCopy, resetAll } from './helpers';
 import { gotoScreen } from './nav-helper';
 
 let pid = '';
 test.beforeEach(async ({ request }) => {
   await resetAll(request);
-  const r = await request.post(`${API}/projects/harborcare-demo/duplicate`, { data: { title: `Mapping E2E ${Date.now().toString(36)}` } });
-  expect(r.ok()).toBeTruthy();
-  pid = (await r.json()).project.projectId;
+  // The stored EOB sample has a complete mapping of its own since D106: start from the EOB as the fixtures build it.
+  pid = (await plainCopy(request, 'harborcare-demo', `Mapping E2E ${Date.now().toString(36)}`)).projectId;
 });
 test.afterEach(async ({ request }) => { if (pid) await request.delete(`${API}/projects/${pid}`); });
 

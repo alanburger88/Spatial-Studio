@@ -284,7 +284,8 @@ describe('the runnable package (composition replaced by a stub)', () => {
     const scenarios = JSON.parse(files.get('release/tests/scenarios.json')!.toString('utf8'));
     const refs = scenarios.scenarios.filter((s: any) => s.reference);
     expect(refs.length).toBeGreaterThan(0);
-    const refLines = refs.map((s: any) => JSON.stringify({ customerRef: s.id, data: s.data }));
+    // a scenario on a date boundary (the card sample has dates since D106) is run as issued on its date
+    const refLines = refs.map((s: any) => JSON.stringify({ customerRef: s.id, data: s.data, ...(s.issueDate ? { issueDate: s.issueDate } : {}) }));
     writeFileSync(path.join(work, 'refs.jsonl'), refLines.join('\n') + '\n');
     const rr = node(pkgDir, ['run', '--data', path.join(work, 'refs.jsonl'), '--out', path.join(work, 'out-refs')]);
     expect(rr.code, rr.err).toBe(0);
@@ -620,8 +621,11 @@ describe('the runnable package with the real page composer', () => {
       expect(pdf.length).toBeGreaterThan(20_000);
       const res = resolve({ project: template, record: c });
       const proof = proofs.find((p) => p.customerRef === c.recordId)!;
-      // This release carries no draft, so the studio's stored copy resolves to the very same run ID as the package's template.
-      expect(resolve({ project: frozen, record: c }).runId).toBe(res.runId);
+      // This release carries no draft, so the studio's stored copy resolves to the very same run ID as the package's template,
+      // once what template.json leaves out is left out: the sample's mapping (D106) is handed over as data/mapping files.
+      const { mappings: _mappings, ...frozenAsTemplate } = frozen;
+      expect(frozen.mappings?.length).toBe(1);
+      expect(resolve({ project: frozenAsTemplate as typeof frozen, record: c }).runId).toBe(res.runId);
       expect(proof.runId).toBe(res.runId);
       const pdfOut = proof.outputs.find((o) => o.channel === 'pdf')!;
       expect(pdfOut).toMatchObject({ kind: 'content', sha256: sha(renderPagedDocument(res, template, { profileId: 'paged-pdf', watermark: '' })), pages: countPdfPages(pdf) });

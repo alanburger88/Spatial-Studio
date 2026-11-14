@@ -540,5 +540,6 @@ test('AT-36 Guided demo start → finish → reset twice: no stale state, determ
   await page.getByTestId('reset-demo').click();
   await expect(page.getByTestId('demo-status')).toHaveText('Ready', { timeout: 30000 });
   const s = await page.evaluate(() => { const st = (window as any).__iss.store.getState(); return { overrides: st.ctx.overrides, cursor: st.ctx.journeyCursor, record: st.ctx.recordId, nodes: st.project.nodes.length }; });
-  expect(s).toEqual({ overrides: {}, cursor: null, record: 'CARD-0001', nodes: 30 });
+  // 30 sample components plus the four the showcase adds (D106): spending summary, payment timing, two dated notices
+  expect(s).toEqual({ overrides: {}, cursor: null, record: 'CARD-0001', nodes: 34 });
 });

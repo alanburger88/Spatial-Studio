@@ -297,7 +297,21 @@ export interface NamedDecision { nodeId: string; part: string; variantId: string
 
 /** A variant's title from the template (it is a content part), or null when the release has no such message. */
 const variantTitle = (t: Project, id: string): string | null => t.contentParts.find((c) => c.id === id)?.title?.trim() || null;
-const ruleTitleOf = (t: Project, id: string): string | null => { const r = t.rules.find((x) => x.id === id); return r ? ruleWords(t, r) : null; };
+const ruleTitleOf = (t: Project, id: string): string | null => { const r = t.rules.find((x) => x.id === id); return r ? ruleWords(t, r) : inlineConditionWords(t, id); };
+/**
+ * A section's own condition is in the trace as `<node>:<alternative>` (an inline condition choosing an alternative) or
+ * `<node>:visibleWhen` (a condition on the section): named from the release like a rule, never by its id.
+ */
+export function inlineConditionWords(t: Project, id: string): string | null {
+  const at = id.lastIndexOf(':');
+  if (at <= 0) return null;
+  const node = t.nodes.find((n) => n.id === id.slice(0, at));
+  const what = id.slice(at + 1);
+  if (!node) return null;
+  if (what === 'visibleWhen' && node.visibleWhen) return `The condition on “${nodeWords(t, node.id)}”`;
+  if (node.variantConditions?.[what]) return `The condition for “${variantTitle(t, what) ?? what}” in “${nodeWords(t, node.id)}”`;
+  return null;
+}
 
 /**
  * Why, for each part: the message shown and the rules that chose it, named from the frozen release. Ids and names

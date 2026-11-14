@@ -278,7 +278,8 @@ describe('releases (sign-in off: the local admin)', () => {
     // the frozen template is the approved project as a project file: same content, no save time
     const tpl = await inj('GET', `/api/v1/releases/${CARD}-r1/template`);
     expect(tpl.headers['content-disposition']).toBe(`attachment; filename="${CARD}-r1-template.json"`);
-    const { lastSavedAt: _saved, ...approvedContent } = approvedProject as Project & { lastSavedAt?: string };
+    // (mappings are handed over as data/mapping-<name> files, never in template.json; the card sample has one since D106)
+    const { lastSavedAt: _saved, mappings: _mappings, ...approvedContent } = approvedProject as Project & { lastSavedAt?: string };
     expect(tpl.json()).toEqual(approvedContent);
   });
 
@@ -290,7 +291,9 @@ describe('releases (sign-in off: the local admin)', () => {
     expect(after).toEqual(before);
     expect(after.title).not.toBe(edited.title);
     const info = (await json('GET', `/api/v1/releases/${CARD}-r1`)).release;
-    expect(info).toMatchObject({ title: before.title, modelVersion: before.modelVersion, contentDigest: projectContentDigest(before) });
+    // the digest is of the frozen project, which also holds the sample's mapping (template.json leaves mappings out)
+    expect(info).toMatchObject({ title: before.title, modelVersion: before.modelVersion, contentDigest: projectContentDigest(ctx.store.releaseProject(`${CARD}-r1`)!) });
+    expect({ ...ctx.store.releaseProject(`${CARD}-r1`)!, mappings: undefined, lastSavedAt: undefined }).toEqual({ ...before, mappings: undefined, lastSavedAt: undefined });
     // the store has no way to change a release, and the table refuses a direct write to any frozen column
     for (const column of ['json', 'content_digest', 'number', 'title', 'approved_by_name', 'approved_at', 'versions', 'pinned']) {
       expect(() => ctx.store.db.prepare(`UPDATE releases SET ${column}=? WHERE release_id=?`).run('tampered', `${CARD}-r1`), column).toThrow(/A release is frozen/);
@@ -781,8 +784,9 @@ describe('the release package (composition replaced by a stub)', () => {
     }
     for (const fixed of ['template.json', 'wording/en-US.csv', 'wording/es-US.xlf', 'wording/es-US.csv', 'data/dictionary.json', 'assets/index.json', 'assets/fonts.json', 'tests/scenarios.json', 'README.html']) expect(paths, fixed).toContain(fixed);
     expect(new Set(paths.map((p) => p.split('/')[0]))).toEqual(new Set(['manifest.json', 'README.html', 'template.json', 'wording', 'data', 'assets', 'tests', 'reference']));
-    // nothing from later phases
-    expect(paths.some((p) => p.startsWith('library/') || p.startsWith('data/mapping'))).toBe(false);
+    // nothing from later phases; the card sample's own complete mapping (D106) is handed over as JSON and CSV
+    expect(paths.some((p) => p.startsWith('library/'))).toBe(false);
+    expect(paths.filter((p) => p.startsWith('data/mapping'))).toEqual(['data/mapping-mapping-for-the-print-house.csv', 'data/mapping-mapping-for-the-print-house.json']);
 
     const release = (await json('GET', `/api/v1/releases/${REL}`)).release;
     expect(manifest).toMatchObject({
@@ -851,7 +855,7 @@ describe('the release package (composition replaced by a stub)', () => {
     // apart from the drafts it is exactly what was approved
     const frozen = ctx.store.releaseProject(REL)!;
     const stripped = JSON.parse(JSON.stringify(frozen));
-    delete stripped.lastSavedAt; delete stripped.translationOrigins; delete stripped.strings['@payment-due/label'];
+    delete stripped.lastSavedAt; delete stripped.translationOrigins; delete stripped.strings['@payment-due/label']; delete stripped.mappings;
     for (const c of stripped.contentParts) delete c.draftLocales;
     expect(template).toEqual(stripped);
 
@@ -962,7 +966,7 @@ describe('the release package (composition replaced by a stub)', () => {
     expect(byPath.get('card.dueDate')).toMatchObject({ type: 'date', format: 'ISO 8601 date, YYYY-MM-DD', required: true });
     expect(byPath.get('card.paymentStatus')).toMatchObject({ type: 'enum', allowedValues: ['current', 'overdue'] });
     expect(byPath.get('card.transactions.count')).toMatchObject({ calculated: true, calculatedFrom: ['card.transactions'], needed: true });
-    expect(byPath.get('card.transactions')).toMatchObject({ type: 'array', needed: true, usedIn: { calculatedFields: ['card.transactions.count'] } });
+    expect(byPath.get('card.transactions')).toMatchObject({ type: 'array', needed: true, usedIn: { calculatedFields: ['card.transactions.count', 'calc.listedTotal'] } });
     expect(byPath.get('card.transactions').columns.map((c: any) => c.key)).toEqual(['id', 'date', 'merchant', 'amountCents']);
     expect(dictionary.fields.some((f: any) => !f.needed)).toBe(true);
   });
@@ -1021,15 +1025,17 @@ describe('the release package (composition replaced by a stub)', () => {
     // every outcome the engine can reach is covered by a generated scenario
     expect(s.outcomes).toMatchObject({ reached: s.outcomes.total, notReached: [] });
     expect(s.outcomes.total).toBeGreaterThan(15);
-    const covered = new Set(s.scenarios.flatMap((x: any) => x.covers ?? []));
+    // (the scenarios on each side of a date boundary cover that boundary, not an outcome: the card sample has dates since D106)
+    const covered = new Set(s.scenarios.filter((x: any) => !x.dateBoundary).flatMap((x: any) => x.covers ?? []));
     expect(covered.size).toBe(s.outcomes.total);
+    expect(s.scenarios.filter((x: any) => x.dateBoundary).every((x: any) => x.issueDate && x.covers.length === 1)).toBe(true);
     for (const r of template.rules.filter((x) => x.enabled !== false)) expect([...covered].some((c: any) => c.includes(r.title!)), r.title).toBe(true);
 
     // what is written as expected is what a fresh run of the engine on template.json gives
     const customers = new Map<string, any>(s.customers.map((c: any) => [c.id, c.record]));
     expect(new Set(s.scenarios.map((x: any) => x.id)).size).toBe(s.scenarios.length);
     for (const x of s.scenarios) {
-      const res = resolve({ project: template, record: customers.get(x.customerId), overrides: x.overrides, journeyCursor: x.journeyCursor, profileId: 'paged-pdf' });
+      const res = resolve({ project: template, record: customers.get(x.customerId), overrides: x.overrides, journeyCursor: x.journeyCursor, profileId: 'paged-pdf', ...(x.issueDate ? { issueDate: x.issueDate } : {}) });
       expect(x.expected.runId, x.id).toBe(res.runId);
       expect(x.expected.contentDigest, x.id).toBe(res.contentDigest);
       expect(Object.fromEntries(x.expected.messages.map((m: any) => [m.sectionId, m.chosenId])), x.id).toEqual(res.result.selectedVariants);
@@ -1044,8 +1050,8 @@ describe('the release package (composition replaced by a stub)', () => {
       // names beside ids
       for (const m of x.expected.messages) { expect(m.section).toBe(template.nodes.find((n) => n.id === m.sectionId)!.name); if (m.chosenId) expect(m.chosen).toBe(template.contentParts.find((c) => c.id === m.chosenId)!.title); }
       expect(x.expected.sections.length).toBeGreaterThan(0);
-      // the data alone is enough: the same document comes out of it with no what-if on top
-      expect(resolve({ project: template, record: x.data, profileId: 'paged-pdf' }).contentDigest, x.id).toBe(res.contentDigest);
+      // the data alone is enough: the same document comes out of it with no what-if on top (as issued on the scenario's date, if any)
+      expect(resolve({ project: template, record: x.data, profileId: 'paged-pdf', ...(x.issueDate ? { issueDate: x.issueDate } : {}) }).contentDigest, x.id).toBe(res.contentDigest);
       expect(x.customerName).toBe(`${customers.get(x.customerId).customer.givenName} ${customers.get(x.customerId).customer.familyName}`);
     }
     // Spanish is fully approved for what a Spanish-preferring customer needs, so that customer's document is produced, in Spanish
@@ -1078,7 +1084,7 @@ describe('the release package (composition replaced by a stub)', () => {
       expect(text(`${x.reference}email.txt`).length).toBeGreaterThan(100);
       expect(text(`${x.reference}sms.txt`)).toMatch(/^DEMO /);
       const facts = parsed(`${x.reference}facts.json`);
-      const res = resolve({ project: template, record: customers.get(x.customerId), overrides: x.overrides, journeyCursor: x.journeyCursor, profileId: 'paged-pdf' });
+      const res = resolve({ project: template, record: customers.get(x.customerId), overrides: x.overrides, journeyCursor: x.journeyCursor, profileId: 'paged-pdf', ...(x.issueDate ? { issueDate: x.issueDate } : {}) });
       expect(facts).toMatchObject({ scenario: { id: x.id, name: x.name }, customer: { id: x.customerId, name: x.customerName }, runId: res.runId, contentDigest: res.contentDigest, projectDigest: manifest.templateDigest, engine: 'iss-resolver/1.0.0', language: res.locale });
       expect(facts.expected).toEqual(JSON.parse(JSON.stringify(res.semanticManifest)));
       for (const f of manifest.reference.files.filter((n: string) => n !== 'facts.json')) expect(facts.outputs[f], f).toMatchObject({ sha256: sha(files.get(`${x.reference}${f}`)!), bytes: files.get(`${x.reference}${f}`)!.length });
