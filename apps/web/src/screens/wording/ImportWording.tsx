@@ -52,7 +52,7 @@ export function ImportWording({ onClose, onApplied }: { onClose: () => void; onA
   };
 
   const rows = plan?.rows ?? [];
-  const visible = rows.filter((r) => view === 'all' ? true : view === 'changes' ? r.changes.length > 0 : view === 'skipped' ? r.skipped.length > 0 && r.decision !== 'unmatched' : view === 'unmatched' ? r.decision === 'unmatched' || (r.match?.how === 'guess') : r.problems.length > 0);
+  const visible = rows.filter((r) => view === 'all' ? true : view === 'changes' ? r.changes.length > 0 : view === 'skipped' ? r.skipped.length > 0 && r.decision !== 'unmatched' : view === 'unmatched' ? r.decision === 'unmatched' || r.match?.how === 'guess' || !!decisions[r.index] : r.problems.length > 0);
   const c = plan?.counts;
   return (
     <Dialog title="Import wording" onClose={onClose} labelledBy="wi-title"

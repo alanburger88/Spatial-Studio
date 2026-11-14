@@ -49,15 +49,15 @@ The format is final as **format version 1** and is specified file by file in [`R
   reference/<scenario>/    document.pdf, document.html, email.html, email.txt, sms.txt, facts.json (up to 8 scenarios)
 ```
 
-Changes from the sketch, each for a reason given in `RELEASE_PACKAGE.md`: the **stage is not in the manifest** (it changes while the release does not; the studio keeps it); `library/` and `data/mapping-<ccm>.json` are **not written yet** (phases 4 and 3) and will be added without a format version change; unapproved translation drafts are left out of `template.json`.
+Changes from the sketch, each for a reason given in `RELEASE_PACKAGE.md`: the **stage is not in the manifest** (it changes while the release does not; the studio keeps it); `library/` and `data/mapping-<ccm>.json` were **not written in phase 2** (phases 4 and 3; phase 3 now writes `data/mapping-<slug>.json` for each complete mapping) and will be added without a format version change; unapproved translation drafts are left out of `template.json`.
 
 ## Phases
 
 1. **Save as template and project import/export.** Publish a document as a starter template; import a studio project file (validated, as a new draft). Small, useful on its own, and the base for everything else.
 2. **Releases and the package.** Frozen numbered releases on approval, stages, the Releases page, the package format with manifest, XLIFF, tests and reference outputs, and the read-only API.
-3. **Data dictionary and mappings.** Dictionary per template, mapping per target CCM, the "every required field is mapped" gate, validation of sample files.
+3. **Data dictionary and mappings.** Dictionary per template, mapping per target CCM, the "every required field is mapped" gate, validation of sample files. *Built (wave 3): the dictionary on the Mapping screen (the package's own function), neutral named mappings with checks and a target-list import, and complete mappings in the release package as `data/mapping-<slug>.json` and `.csv`. Not built: the approval gate (with no target named, D100, an incomplete mapping is left out of the package instead) and validating sample files against the dictionary. See section 3 "As built" of [`WAVE3_BRINGING_DOCUMENTS_IN.md`](WAVE3_BRINGING_DOCUMENTS_IN.md).*
 4. **Shared library.** Library items, linking, pinned versions, impact list on update. *Built (wave 2): see section 3 "As built" of [`WAVE2B_PAGES_LIBRARY_WORDING.md`](WAVE2B_PAGES_LIBRARY_WORDING.md) and [`docs/api/LIBRARY.md`](../api/LIBRARY.md). A document pins each item at an approved version; a release records them, and the package lists them in its manifest (`library`) instead of a `library/` folder, because the content is already in `template.json`.*
-5. **Assisted import.** Draft a template from wording tables, a data dictionary and a sample PDF, with the list of what was not brought across.
+5. **Assisted import.** Draft a template from wording tables, a data dictionary and a sample PDF, with the list of what was not brought across. *Built (wave 3) for wording tables and data dictionaries: see section 4 "As built" of [`WAVE3_BRINGING_DOCUMENTS_IN.md`](WAVE3_BRINGING_DOCUMENTS_IN.md). The sample PDF is section 1 of that document.*
 6. **First adapter**, for whichever CCM is named first; and optionally Git as a release destination.
 7. **Runnable package.** An extra export per release that an external system runs to produce documents itself, with no rebuild of the template (see below).
 

@@ -16,6 +16,8 @@ Builder: `apps/api/src/releasePackage.ts`. Routes: `docs/api/RELEASES.md`. Desig
   wording/<locale>.xlf              the same texts with their approved translations, XLIFF 2.0   (one per target language)
   wording/<locale>.csv              the same rows as a spreadsheet                                (one per target language)
   data/dictionary.json              every data field: type, format, required, example, where it is used
+  data/mapping-<slug>.json          each mapping to a production system that was complete when the release was made (wave 3)
+  data/mapping-<slug>.csv           the same mapping as a spreadsheet
   assets/<sha256>.<ext>             each image as a file, named by the SHA-256 of its bytes
   assets/index.json                 which image is which, and where the template uses it
   assets/fonts.json                 the fonts required (font files are not included)
@@ -30,7 +32,7 @@ Builder: `apps/api/src/releasePackage.ts`. Routes: `docs/api/RELEASES.md`. Desig
 
 Entries are stored with `manifest.json` first and the rest in path order. Text files are UTF-8. JSON files are pretty-printed with two spaces and end with a newline.
 
-Not in the package, by decision: customer data; draft wording and unapproved translations; the release's stage and handover record (the studio keeps those, because they change and the release does not); `library/` (phase 4 lists what came from the library in the manifest instead; the content is in `template.json`); `data/mapping-<ccm>.json` (phase 3); font files; an AFP print stream; the engine (phase 7).
+Not in the package, by decision: customer data; draft wording and unapproved translations; the release's stage and handover record (the studio keeps those, because they change and the release does not); `library/` (phase 4 lists what came from the library in the manifest instead; the content is in `template.json`); a mapping that was not complete when the release was made (see "Additions for mappings"); font files; an AFP print stream; the engine (phase 7).
 
 ## Rules the package keeps
 
@@ -94,7 +96,7 @@ Not verified: repeatability across different machines, browser versions or Node.
 - The stage (Test or Production) is not here on purpose.
 - `knownDataProblems` (added after format 1 was published; an addition, so `formatVersion` stays 1 and a reader that does not know it ignores it): the customers' data problems an approver set aside when the release was made, each for one customer and one problem in that customer's own data, with the reason (see `docs/api/KNOWN_DATA_PROBLEMS.md`). **No customer data:** a built-in sample customer or one the engine generated is named by `id` (`kind` `sample` or `generated`); any other customer (`kind` `imported` or `supplied`, which includes an edited generated customer) has no id and no name, only that one such customer was set aside, and that customer's name and id are replaced by “the customer” in the reason. The list is frozen with the release, so `markedAt` (when it was set aside) is one of the release's own moments, like `approvedAt`. An empty list means none were set aside; the field is absent on releases made before it was recorded. When the list is not empty, `README.html` has a "Known data problems" section with the same rows.
 
-`role` values: `readme`, `template`, `wording-source`, `wording`, `data-dictionary`, `asset`, `asset-index`, `fonts`, `tests`, `reference-pdf`, `reference-html`, `reference-email-html`, `reference-email-text`, `reference-sms`, `reference-facts`.
+`role` values: `readme`, `template`, `wording-source`, `wording`, `data-dictionary`, `mapping`, `mapping-csv`, `asset`, `asset-index`, `fonts`, `tests`, `reference-pdf`, `reference-html`, `reference-email-html`, `reference-email-text`, `reference-sms`, `reference-facts`.
 
 ## template.json
 
@@ -374,12 +376,81 @@ rules produces exactly the package it did before.
   customer's data.
 - `README.html` gains a "Wording rules" paragraph (and the document's own rules as a list) when there are rules.
 
+### Additions for mappings to production systems (wave 3, section 3)
+
+No reader of format 1 can misread a package because of these, so `formatVersion` stays **1**. A document with no mappings
+produces exactly the package it did before (tested byte for byte against the package made before mappings existed).
+
+A **mapping** is a named, neutral profile kept with the document (`project.mappings`): for one production system, what
+that system calls each data field, its type and format there, or that it does not need the field and why. No system is
+built in (decision D100). A mapping is **complete** when every field the document reads or its data contract requires
+(except the kind of document) is mapped or marked "not needed" with a reason, every column the document reads of a list
+that is mapped is decided too, no target field is mapped from two fields, and no type clashes (rules below). Calculated
+fields are listed with their formula in plain words: the target must supply or compute them, so mapping one is optional.
+
+- **Frozen with the release.** The release's frozen project holds its mappings; whether each is complete is worked out
+  from that frozen content by the same pure checks (`mappingChecks` in `@iss/scenarios`), so the package is still a
+  function of the release alone and the release detail (`GET /api/v1/releases/:id` → `mappings`) always agrees with it.
+- **`template.json` carries no mappings.** Complete ones are in `data/`; an incomplete one is not handed over.
+- `data/mapping-<slug>.json` (role `mapping`) and `data/mapping-<slug>.csv` (role `mapping-csv`) for each complete
+  mapping. `<slug>` is the mapping's name in lower case, letters and digits joined by dashes (at most 40); a name that
+  repeats gets `-2`, `-3`… in the document's order.
+- `manifest.json`: `mappings`, absent when the document has none, one entry per mapping in the document's order:
+  `{ id, name, system, included: true, file, csv, fields, mapped, notNeeded }` or
+  `{ id, name, system, included: false, reason, unmapped, typeClashes, mappedTwice }`. `notIncluded` names
+  "mappings that were not complete" when one was left out (and no longer names `data/mapping-<ccm>.json` once a document
+  has mappings).
+- `README.html` gains "Mappings to production systems": every mapping, the files of each complete one, and for each
+  one left out, what was missing.
+- **No customer data.** Examples come from the data dictionary (a synthetic customer generated by the engine, or the
+  example the author typed for a field). The names and notes are typed by studio users, like any other template text.
+
+The mapping file, for an adapter:
+
+```jsonc
+{
+  "formatVersion": 1,
+  "mapping":  { "id": "map-mapping-for-core", "name": "Mapping for Core", "system": "Core Banking", "description": "…",
+                "created": { "by": "Ada Approver", "at": "2026-11-14T09:00:00.000Z" }, "changed": { "by": "…", "at": "…" } },
+  "document": { "id": "aster-card-demo", "title": "…", "kind": "credit-statement", "kindLabel": "Credit-card statement" },
+  "complete": true,
+  "counts":   { "required": 28, "mapped": 27, "notNeeded": 1, "unmapped": 0, "clashes": 0, "mappedTwice": 0, "optionalMapped": 0 },
+  "note": "…", "typeRules": "…",
+  "targetFields": [{ "name": "NEW_BAL", "type": "DECIMAL(10,2)", "description": "New balance" }],   // the target's own list, when imported
+  "fields": [
+    { "path": "card.newBalanceCents", "label": "New balance", "type": "cents", "format": "Whole number of cents (integer, never a decimal amount)",
+      "calculated": false, "needed": true, "required": true, "status": "mapped", "example": 124800,
+      "target": { "name": "NEW_BAL", "type": "DECIMAL(10,2)", "typeReadAs": "decimal", "format": "divide by 100" } },
+    { "path": "card.transactions[].amountCents", "list": "card.transactions", "label": "Transactions · Amount", "type": "cents", "…": "…" },
+    { "path": "card.tier", "…": "…", "status": "not-needed", "notNeeded": { "reason": "The target has one tier" } },
+    { "path": "card.availableCreditCents", "…": "…", "calculated": true, "required": false, "status": "optional" }
+  ],
+  "calculated":   [{ "path": "card.availableCreditCents", "label": "Available credit", "inWords": "Worked out by the studio from “Credit limit” and “New balance”.", "formula": null, "targetMust": "supply or compute this" }],
+  "lookupTables": [{ "id": "feeByTier", "title": "Late fee by tier", "usedBy": ["calc.lateFee"] }],
+  "documentDate": { "source": "field", "path": "card.issuedAt" },     // or { "source": "run" }, or null
+  "findings":     [{ "kind": "calculated", "severity": "note", "paths": ["…"], "message": "…" }]
+}
+```
+
+`status` is `mapped`, `not-needed`, `unmapped` (never in a package: the mapping would not be complete) or `optional`
+(a calculated field, or a column of a list that is not needed, with no decision). A row for a list's column has
+`list` and a path `<list path>[].<column key>`. `typeReadAs` is how the studio read the target's type: `text`,
+`integer`, `decimal`, `number`, `money`, `date`, `datetime`, `boolean`, `list` or `unknown`.
+
+**Type rules** (a clash stops a mapping being complete): text and choices go to text; an amount in whole cents to a
+whole-number, money, decimal or number field (the format note should say cents or dollars); a whole number or points to
+a whole-number, number or decimal field; a date to a date or date-and-time field; yes-or-no to yes-or-no; a list to a
+list, and a single value never to a list. A type the studio does not recognise is never a clash.
+
+The CSV has the columns `path, label, type, calculated, required, status, target, targetType, format, notNeededReason,
+note, example`, CRLF rows, cells quoted when they hold a comma, a quote or a line break.
+
 ## Limits
 
 - **Caps.** 24 scenarios and 8 sets of reference outputs. A document with many rules will have outcomes that are in `scenarios.json` but have no reference output, and may have scenarios named in `omittedByCap`.
 - **Blocked scenarios have no reference output.** The scenario says why the document is not produced.
 - **A pinned test on a non-synthetic customer is left out**, even though the document was approved with it passing. This is deliberate.
 - **The reference PDF's bytes are specific to the studio machine** (browser build and fonts). Compare PDFs by facts.
-- **`data/dictionary.json` describes the studio's field names.** Mapping them to a CCM's names is phase 3.
+- **`data/dictionary.json` describes the studio's field names.** A CCM's names are in `data/mapping-<slug>.json`, for each mapping that was complete when the release was made.
 - **No signature.** The manifest's checksums detect damage, not tampering by someone who can rewrite the manifest. The studio keeps the ZIP's SHA-256 and returns it with every download (`X-Sha256`).
 - **The planner's search is bounded**, so for a very large document an outcome can be reported as not reached within the limit.
