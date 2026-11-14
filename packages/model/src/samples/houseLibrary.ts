@@ -5,10 +5,12 @@ import { MERIDIAN_LOGO, NORTHWIND_LOGO } from './logos';
 
 /**
  * The house library the studio is seeded with, beside the example documents: a brand for each new issuer, a shared
- * accessible-formats panel, a required notice with its approved Spanish, a Spanish glossary, the energy rate table and
- * the house wording rules. Each item is approved at version 1; the customer-rights notice also has a version 2, so the
- * Northwind bill (which links version 1) shows "Update available". The example documents link to these items with
- * exactly this content, so "where used" is populated from the first start.
+ * accessible-formats panel, a required notice with its approved Spanish, a Spanish glossary, the energy rate table, the
+ * card late-fee table, the claim review-time table and the house wording rules. Each item is approved at version 1; the
+ * customer-rights notice also has a version 2, so the Northwind bill (which links version 1) shows "Update available".
+ * The example documents link to these items with exactly this content, so "where used" is populated from the first
+ * start. The two original examples (Aster Card, HarborCare) link the glossary, the house wording rules and their own
+ * table (`showcaseExisting.ts`); their resolved documents are the same as without the links, for every fixture customer.
  *
  * Pure data. The server seeds an item only when the library has no item of that id (`apps/api/src/library.ts`).
  */
@@ -33,6 +35,33 @@ export const RATE_BANDS: LookupTable = {
     { keys: { usage: { from: 500, until: 1000 } }, values: { rate: 6.88, band: '500–999 kWh' } },
     { keys: { usage: { from: 1000 } }, values: { rate: 7.41, band: '1,000+ kWh' } },
   ],
+};
+
+/** Aster Card: the most a late payment can cost, by account tier (the card's own table, shared through the library). */
+export const CARD_LATE_FEES: LookupTable = {
+  id: 'lateFeeByTier',
+  title: 'Late fee by account tier',
+  description: 'The most a late payment can cost, by account tier (fictional amounts for the synthetic demonstration).',
+  keys: [{ key: 'tier', label: 'Account tier', match: 'text' }],
+  columns: [{ key: 'lateFee', label: 'Late fee', type: 'money' }, { key: 'returnedPayment', label: 'Returned payment fee', type: 'money' }],
+  rows: [
+    { keys: { tier: 'standard' }, values: { lateFee: 2900, returnedPayment: 2900 } },
+    { keys: { tier: 'premium' }, values: { lateFee: 2500, returnedPayment: 2500 } },
+  ],
+};
+
+/** HarborCare: how long a claim review usually takes, by the billed amount (shared through the library). */
+export const EOB_REVIEW_TIMES: LookupTable = {
+  id: 'reviewTimeByAmount',
+  title: 'Review time by billed amount',
+  description: 'How long a review usually takes, by the amount the provider billed (fictional service levels).',
+  keys: [{ key: 'billed', label: 'Billed amount', match: 'number-range', unit: 'money' }],
+  columns: [{ key: 'days', label: 'Days to finish a review', type: 'number' }],
+  rows: [
+    { keys: { billed: { from: 0, until: 50000 } }, values: { days: 30 } },
+    { keys: { billed: { from: 50000 } }, values: { days: 45 } },
+  ],
+  defaultRow: { days: 45 },
 };
 
 export const HOUSE_WORDING_RULES: WordingRule[] = [
@@ -91,10 +120,12 @@ const ITEMS: HouseItem[] = [
   { id: 'customer-rights-notice', kind: 'wording', title: 'Customer rights notice (utilities)', description: 'The required notice on every utility bill, with its approved Spanish.', versions: [{ note: 'First approved notice.', content: rights(false) }, { note: 'Adds the right to a free copy of two years of meter readings.', content: rights(true) }] },
   { id: 'glossary-es', kind: 'glossary', title: 'Spanish glossary', description: 'Preferred Spanish for the terms our bills and statements use.', versions: [{ note: 'First approved glossary.', content: glossary }] },
   { id: 'energy-rate-bands', kind: 'lookup-table', title: 'Electricity delivery rate bands', description: 'The delivery rate for each band of monthly electricity use, in cents per kWh.', versions: [{ note: 'Rates approved for 2026.', content: RATE_BANDS }] },
+  { id: 'card-late-fees', kind: 'lookup-table', title: 'Card late fees by account tier', description: 'The most a late payment can cost on a card account, by account tier (fictional amounts).', versions: [{ note: 'Fees approved for 2026.', content: CARD_LATE_FEES }] },
+  { id: 'claim-review-times', kind: 'lookup-table', title: 'Claim review time by billed amount', description: 'How many days a claim review usually takes, by the amount the provider billed (fictional service levels).', versions: [{ note: 'Service levels approved for 2026.', content: EOB_REVIEW_TIMES }] },
   { id: 'house-wording-rules', kind: 'wording-rules', title: 'House wording rules', description: 'Three “must” rules and three “should” rules every customer document follows.', versions: [{ note: 'First approved rules.', content: { rules: HOUSE_WORDING_RULES } }] },
 ];
 
-export type HouseItemId = 'brand-northwind' | 'brand-meridian' | 'accessible-formats-panel' | 'customer-rights-notice' | 'glossary-es' | 'energy-rate-bands' | 'house-wording-rules';
+export type HouseItemId = 'brand-northwind' | 'brand-meridian' | 'accessible-formats-panel' | 'customer-rights-notice' | 'glossary-es' | 'energy-rate-bands' | 'card-late-fees' | 'claim-review-times' | 'house-wording-rules';
 /** Which version of each item the example documents link to. */
 export type HouseLinkPlan = Record<HouseItemId, number>;
 
@@ -102,7 +133,7 @@ export const HOUSE = {
   items: Object.fromEntries(ITEMS.map((i) => [i.id, i])) as Record<HouseItemId, HouseItem>,
   list: ITEMS,
   /** Every link is at the latest version except the customer-rights notice, which stays at version 1 on purpose. */
-  linkPlan: { 'brand-northwind': 1, 'brand-meridian': 1, 'accessible-formats-panel': 1, 'customer-rights-notice': 1, 'glossary-es': 1, 'energy-rate-bands': 1, 'house-wording-rules': 1 } as HouseLinkPlan,
+  linkPlan: { 'brand-northwind': 1, 'brand-meridian': 1, 'accessible-formats-panel': 1, 'customer-rights-notice': 1, 'glossary-es': 1, 'energy-rate-bands': 1, 'card-late-fees': 1, 'claim-review-times': 1, 'house-wording-rules': 1 } as HouseLinkPlan,
 };
 
 /** A fresh copy of one approved version's content. */

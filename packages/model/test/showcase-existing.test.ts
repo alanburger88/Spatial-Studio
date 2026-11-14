@@ -7,7 +7,8 @@ import { describe, expect, it } from 'vitest';
 import { resolve, indexTree } from '@iss/resolver';
 import { checkWording, mappingChecks, planTestData, runTestCases } from '@iss/scenarios';
 import { EXPECTED_SCENARIOS, RECORDS, recordById, sampleProjects, seedProjects } from '../src/fixtures';
-import { buildContext, deepPatch, digestOf, evaluateCalculations, type Project, type SyntheticRecord } from '../src';
+import { buildContext, deepPatch, digestOf, evaluateCalculations, libraryContentFingerprint, type Project, type SyntheticRecord } from '../src';
+import { CARD_LATE_FEES, EOB_REVIEW_TIMES, HOUSE, HOUSE_WORDING_RULES, houseContent, type HouseItemId } from '../src/samples/houseLibrary';
 import { CARD_CALCULATIONS, EOB_CALCULATIONS, enrichCard, enrichEob, enrichSamples } from '../src/samples/showcaseExisting';
 import { DELIBERATE_SCENARIO_FINDINGS, EXISTING_EXAMPLES, cardArithmetic, eobArithmetic, eobTotals } from '../src/samples/showcaseExistingAudit';
 
@@ -217,6 +218,50 @@ describe('domain arithmetic of the examples', () => {
       const blocked = customersOf(p).filter((r) => resolve({ project: p, record: r }).result.diagnostics.some((d) => d.severity === 'blocking')).map((r) => r.recordId);
       expect(blocked).toEqual(ex.blockedCustomers.map((b) => b.recordId));
       expect(ex.notes.length).toBeGreaterThan(3);
+    }
+  });
+});
+
+describe('links to the house library (glossary, house wording rules, each example’s own table)', () => {
+  /** The same enriched sample as if nothing came from the library: the table kept as the document's own, no glossary, no house rules. */
+  const unlinked = (p: Project): Project => {
+    const q = JSON.parse(JSON.stringify(p)) as Project;
+    delete q.libraryLinks; delete q.glossary; delete q.houseWordingRules;
+    return q;
+  };
+  const without = (res: ReturnType<typeof resolve>) => ({ ...res, runId: undefined, projectDigest: undefined });
+
+  it('each example links exactly the house items the plan names, with the library’s content', () => {
+    expect(card.libraryLinks!.map((l) => [l.itemId, l.version])).toEqual([['card-late-fees', 1], ['glossary-es', 1], ['house-wording-rules', 1]]);
+    expect(eob.libraryLinks!.map((l) => [l.itemId, l.version])).toEqual([['claim-review-times', 1], ['glossary-es', 1], ['house-wording-rules', 1]]);
+    for (const p of [card, eob]) for (const l of p.libraryLinks!) {
+      expect(l.version).toBe(HOUSE.linkPlan[l.itemId as HouseItemId]);
+      expect(l.fingerprint).toBe(libraryContentFingerprint(houseContent(l.itemId as HouseItemId, l.version)));
+    }
+    expect(card.lookupTables).toEqual([CARD_LATE_FEES]);
+    expect(eob.lookupTables).toEqual([EOB_REVIEW_TIMES]);
+    expect(card.houseWordingRules).toEqual(HOUSE_WORDING_RULES);
+    expect(card.wordingRules!.map((r) => r.id)).toEqual(['aster-not-legal', 'aster-no-kindly', 'aster-short-sentences', 'aster-relationship-team']);
+  });
+
+  it('every fixture customer and every oracle scenario resolves exactly as without the links (only the run id, a hash of the document, differs)', () => {
+    for (const r of RECORDS) {
+      const p = pick(rich, r.recordId);
+      expect(without(resolve({ project: p, record: r })), r.recordId).toEqual(without(resolve({ project: unlinked(p), record: r })));
+    }
+    for (const [name, gc] of Object.entries(EXPECTED_SCENARIOS)) {
+      const p = pick(rich, gc.recordId);
+      const record = recordById(gc.recordId)!;
+      expect(without(resolve({ project: p, record, overrides: gc.overrides })), name).toEqual(without(resolve({ project: unlinked(p), record, overrides: gc.overrides })));
+    }
+  });
+
+  it('no house “must” rule is broken by any text, and the only wording finding of each example is its deliberate “should”', () => {
+    for (const ex of EXISTING_EXAMPLES) {
+      const p = ex.projectId === 'aster-card-demo' ? card : eob;
+      const w = checkWording(p);
+      expect(w.rules.length).toBe(HOUSE_WORDING_RULES.length + 4);
+      expect(w.findings.map((f) => `${f.severity} ${f.ruleId}`)).toEqual([`should ${ex.deliberateShould.ruleId}`]);
     }
   });
 });
