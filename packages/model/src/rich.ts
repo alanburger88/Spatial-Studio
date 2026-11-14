@@ -97,7 +97,9 @@ export function sanitizeRichDoc(input: unknown): { doc: RichDoc; problems: strin
     if (n.type === 'token') {
       const path = String(n.attrs?.path ?? '');
       if (!/^[a-zA-Z0-9_.]+$/.test(path)) { problems.push(`Removed malformed token`); return null; }
-      return { type: 'token', attrs: { path } };
+      // A data value may be bold or italic like the words around it (`**{{custom.amount}}**`); links stay on text only.
+      const tokenMarks = (Array.isArray(n.marks) ? n.marks : []).filter((m: any) => m?.type === 'bold' || m?.type === 'italic').map((m: any) => ({ type: m.type as 'bold' | 'italic' }));
+      return tokenMarks.length ? { type: 'token', attrs: { path }, marks: tokenMarks } : { type: 'token', attrs: { path } };
     }
     if (n.type === 'hardBreak') return { type: 'hardBreak' };
     const marks: RichMark[] = [];

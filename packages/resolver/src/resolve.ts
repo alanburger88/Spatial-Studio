@@ -541,7 +541,10 @@ export function resolve(input: ResolveInput): Resolution {
             const key = String(item?.[ch.groupBy ?? 'merchant'] ?? 'Other');
             groups.set(key, (groups.get(key) ?? 0) + (Number.isInteger(item?.[ch.valueKey ?? 'amountCents']) ? item[ch.valueKey ?? 'amountCents'] : 0));
           }
-          [...groups.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, ch.limit ?? 5).forEach(([label, v]) => data.push({ label, value: v, display: shown(v, valueType) }));
+          // A series over time keeps the order of the list's rows (the last `limit` of them); otherwise the biggest come first.
+          const entries = [...groups.entries()];
+          const ordered = ch.order === 'data' ? entries.slice(Math.max(0, entries.length - (ch.limit ?? 5))) : entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, ch.limit ?? 5);
+          ordered.forEach(([label, v]) => data.push({ label, value: v, display: shown(v, valueType) }));
         }
         const summary = data.length ? `${ch.title ?? 'Chart'}: ` + data.map((d) => `${d.label} ${d.display}`).join('; ') + '.' : `${ch.title ?? 'Chart'}: no data for this scenario.`;
         r.chart = { kind: ch.kind, title: ch.title ?? 'Chart', data, summary };

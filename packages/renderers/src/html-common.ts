@@ -122,7 +122,11 @@ export function projectStyleCss(project?: Project): string {
 
 const CHART_COLORS = ['#277656', '#4EAF60', '#80D100', '#1D5941', '#94A3B8', '#DBE64C'];
 
-export function chartSvg(node: RNode, interactive: boolean): string {
+/**
+ * `colors`: the palette to draw with (default: the studio's chart colours, one per bar or slice). A chart whose palette
+ * is `mono` passes the document's own colour only.
+ */
+export function chartSvg(node: RNode, interactive: boolean, colors: readonly string[] = CHART_COLORS): string {
   const ch = node.chart!;
   if (!ch.data.length) return `<p class="iss-chart-empty">${esc(ch.summary)}</p>`;
   if (ch.kind === 'donut') {
@@ -131,20 +135,26 @@ export function chartSvg(node: RNode, interactive: boolean): string {
     const R = 40, C = 2 * Math.PI * R;
     const arcs = ch.data.map((d, i) => {
       const frac = d.value / total;
-      const seg = `<circle r="${R}" cx="60" cy="60" fill="none" stroke="${CHART_COLORS[i % CHART_COLORS.length]}" stroke-width="22" stroke-dasharray="${(frac * C).toFixed(2)} ${(C - frac * C).toFixed(2)}" stroke-dashoffset="${(-acc * C).toFixed(2)}" transform="rotate(-90 60 60)" data-label="${esc(d.label)}" data-display="${esc(d.display)}" tabindex="${interactive ? 0 : -1}"><title>${esc(d.label)}: ${esc(d.display)}</title></circle>`;
+      const seg = `<circle r="${R}" cx="60" cy="60" fill="none" stroke="${colors[i % colors.length]}" stroke-width="22" stroke-dasharray="${(frac * C).toFixed(2)} ${(C - frac * C).toFixed(2)}" stroke-dashoffset="${(-acc * C).toFixed(2)}" transform="rotate(-90 60 60)" data-label="${esc(d.label)}" data-display="${esc(d.display)}" tabindex="${interactive ? 0 : -1}"><title>${esc(d.label)}: ${esc(d.display)}</title></circle>`;
       acc += frac;
       return seg;
     }).join('');
-    const legend = ch.data.map((d, i) => `<li><span class="sw" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></span>${esc(d.label)} <strong>${esc(d.display)}</strong></li>`).join('');
+    const legend = ch.data.map((d, i) => `<li><span class="sw" style="background:${colors[i % colors.length]}"></span>${esc(d.label)} <strong>${esc(d.display)}</strong></li>`).join('');
     return `<div class="iss-chart iss-chart--donut"><svg viewBox="0 0 120 120" role="img" aria-label="${esc(ch.summary)}">${arcs}</svg><ul class="iss-legend">${legend}</ul></div>`;
   }
   const max = Math.max(...ch.data.map((d) => d.value), 1);
   const rowH = 18;
   const bars = ch.data.map((d, i) => {
     const w = Math.max(2, Math.round((d.value / max) * 150));
-    return `<g transform="translate(0 ${i * rowH})"><text x="0" y="12" font-size="9" fill="#334155">${esc(d.label.length > 22 ? d.label.slice(0, 21) + '…' : d.label)}</text><rect x="110" y="3" width="${w}" height="11" rx="2" fill="${CHART_COLORS[i % CHART_COLORS.length]}" data-label="${esc(d.label)}" data-display="${esc(d.display)}" tabindex="${interactive ? 0 : -1}"><title>${esc(d.label)}: ${esc(d.display)}</title></rect><text x="${116 + w}" y="12" font-size="9" fill="#0F172A" font-weight="600">${esc(d.display)}</text></g>`;
+    return `<g transform="translate(0 ${i * rowH})"><text x="0" y="12" font-size="9" fill="#334155">${esc(d.label.length > 22 ? d.label.slice(0, 21) + '…' : d.label)}</text><rect x="110" y="3" width="${w}" height="11" rx="2" fill="${colors[i % colors.length]}" data-label="${esc(d.label)}" data-display="${esc(d.display)}" tabindex="${interactive ? 0 : -1}"><title>${esc(d.label)}: ${esc(d.display)}</title></rect><text x="${116 + w}" y="12" font-size="9" fill="#0F172A" font-weight="600">${esc(d.display)}</text></g>`;
   }).join('');
   return `<div class="iss-chart iss-chart--bar"><svg viewBox="0 0 330 ${ch.data.length * rowH + 4}" role="img" aria-label="${esc(ch.summary)}">${bars}</svg></div>`;
+}
+
+/** The colours a chart is drawn with: the studio's palette, or only the document's own colour when the chart asks for `mono`. */
+export function chartPalette(project: Project, nodeId: string, accent: string): readonly string[] {
+  const palette = project.nodes.find((x) => x.id === nodeId)?.chart?.palette;
+  return palette === 'mono' ? [project.brand?.primary ?? accent] : CHART_COLORS;
 }
 
 export interface RenderMode {
@@ -220,7 +230,7 @@ function nodeInnerHtmlBase(n: RNode, mode: RenderMode, renderChild: (c: RNode) =
     }
     case 'chart':
       // Paged: as for the QR code, the chart drawing is the tagged figure and its description is the chart summary.
-      return `<figure class="iss-figure"${mode.target === 'paged' ? ' role="group"' : ''}><figcaption class="iss-chart-title">${esc(n.chart!.title)}</figcaption>${chartSvg(n, mode.target === 'html')}<p class="iss-sr">${esc(n.chart!.summary)}</p></figure>`;
+      return `<figure class="iss-figure"${mode.target === 'paged' ? ' role="group"' : ''}><figcaption class="iss-chart-title">${esc(n.chart!.title)}</figcaption>${chartSvg(n, mode.target === 'html', chartPalette(mode.project, n.id, accent))}<p class="iss-sr">${esc(n.chart!.summary)}</p></figure>`;
     case 'image': {
       const brand = mode.project.brand;
       const useBrandLogo = !!brand?.logoDataUri && n.image!.src.startsWith('asset:');
