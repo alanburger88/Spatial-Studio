@@ -122,7 +122,11 @@ function matchThing(project: Project, vocab: QueryVocabulary, raw: string, opts:
   const lang = languageOf(vocab, x.replace(/\s+(?:version|documents?|wording|text|letters?)$/i, ''));
   if (lang) return { status: 'one', target: { kind: 'language', locale: lang } };
   const cands = candidatesOf(project, vocab, opts);
-  const scored = cands.map((c) => ({ c, score: Math.max(...c.names.map((n) => nameScore(x, n))) })).filter((s) => s.score >= 0.6);
+  // "the past due message", "the payment support text": a generic last word people add that the name may not have
+  // counts a little less than the words as typed.
+  const bare = x.replace(/\s+(?:message|messages|text|wording|version|letter|one)$/i, '').trim();
+  const scoreOf = (n: string) => Math.max(nameScore(x, n), bare && bare !== x ? nameScore(bare, n) * 0.97 : 0);
+  const scored = cands.map((c) => ({ c, score: Math.max(...c.names.map(scoreOf)) })).filter((s) => s.score >= 0.6);
   if (!scored.length) return { status: 'none' };
   // One entry per outcome; then a rule gives way to what it chooses or shows when both are named about as well.
   const best = new Map<string, { c: Candidate; score: number }>();
