@@ -83,6 +83,15 @@ export class Store {
     // Releases made before known data problems existed have no such column; NULL means "not recorded" (older releases).
     if (!(this.db.prepare('PRAGMA table_info(releases)').all() as any[]).some((c) => c.name === 'known_data_problems')) this.db.exec('ALTER TABLE releases ADD COLUMN known_data_problems TEXT');
     this.db.exec(`CREATE TRIGGER IF NOT EXISTS releases_known_data_problems_frozen BEFORE UPDATE OF known_data_problems ON releases BEGIN SELECT RAISE(ABORT, 'A release is frozen: only its stage and whether its document still exists can change.'); END;`);
+    /* ---- review links (wave 4, docs/api/REVIEW_LINKS.md; the methods are in reviewLinks.ts) ---- */
+    // Only the SHA-256 of a link's token is kept, never the token. No IP address or browser detail is stored anywhere.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS review_links(link_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, label TEXT NOT NULL, release_id TEXT, model_version INTEGER NOT NULL, issue_date TEXT, customers TEXT NOT NULL, languages TEXT NOT NULL, outputs TEXT NOT NULL, created_by_id TEXT, created_by_name TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, revoked_at TEXT, revoked_by_name TEXT, opens INTEGER NOT NULL DEFAULT 0, first_opened_at TEXT, last_opened_at TEXT);
+      CREATE INDEX IF NOT EXISTS review_links_by_project ON review_links(project_id, created_at);
+      CREATE TABLE IF NOT EXISTS review_link_comments(comment_id TEXT PRIMARY KEY, link_id TEXT NOT NULL, record_id TEXT NOT NULL, output TEXT NOT NULL, locale TEXT NOT NULL, created_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS review_link_comments_by_link ON review_link_comments(link_id, created_at);
+    `);
+    /* ---- end review links ---- */
     this.ensureSeeds();
     this.backfillVersions();
   }
@@ -257,6 +266,8 @@ export class Store {
   deleteProject(projectId: string, by: { id: string; name: string } | null = null) {
     for (const t of ['projects', 'snapshots', 'project_versions', 'workflow', 'workflow_events', 'comments', 'project_records', 'project_test_data', 'known_data_problems']) this.db.prepare(`DELETE FROM ${t} WHERE project_id=?`).run(projectId);
     const now = new Date().toISOString();
+    // Review links: deleting the document revokes its links (wave 4).
+    this.db.prepare("UPDATE review_links SET revoked_at=?, revoked_by_name=? WHERE project_id=? AND revoked_at IS NULL").run(now, by?.name ?? 'Document deleted', projectId);
     for (const r of this.releases(projectId).filter((x) => !x.documentRemovedAt)) {
       this.db.prepare('UPDATE releases SET document_removed_at=? WHERE release_id=?').run(now, r.id);
       this.addReleaseEvent(r.id, { kind: 'document-removed', stage: null, note: 'The document was deleted. This release is kept.', by, at: now });

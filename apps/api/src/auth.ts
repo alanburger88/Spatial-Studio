@@ -151,6 +151,18 @@ const ROUTES: Record<string, Need> = {
   'POST /api/v1/library/duplicates/keep': 'edit',
   'POST /api/v1/library/:itemId/link-preview': 'any',
   'POST /api/v1/library/:itemId/link-drafts': 'edit',
+  /* ---- review links (wave 4, docs/api/REVIEW_LINKS.md) ---- */
+  // Making a link needs `comment`; revoking one is checked in the handler (its creator, an approver or an admin).
+  'POST /api/v1/projects/:projectId/review-links': 'comment',
+  'POST /api/v1/projects/:projectId/review-links/:linkId/revoke': 'comment',
+  // The five public review routes. The token in the address is their only key: it is accepted by no other route and
+  // never becomes a session (these handlers never read req.user and set no cookie).
+  'GET /api/v1/review/:token': 'public',
+  'GET /api/v1/review/:token/output': 'public',
+  'GET /api/v1/review/:token/comments': 'public',
+  'POST /api/v1/review/:token/comments': 'public',
+  'GET /api/v1/review/:token/pdf': 'public',
+  /* ---- end review links ---- */
 };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Routes not listed above: reads need a session; anything that writes needs edit rights (safe default for new modules). */

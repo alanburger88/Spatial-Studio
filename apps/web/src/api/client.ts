@@ -444,3 +444,37 @@ export interface LibraryImpactDto {
   content: LibraryContent;
   version: LibraryVersionInfo;
 }
+
+/* ------------------------------------------------------------------ review links (wave 4, docs/api/REVIEW_LINKS.md) */
+
+export type ReviewOutputId = 'pdf' | 'html' | 'email' | 'sms';
+export interface ReviewLinkDto {
+  id: string; label: string;
+  target: { kind: 'release' | 'version'; releaseId: string | null; releaseNumber: number | null; version: number };
+  customers: string[]; languages: string[]; outputs: ReviewOutputId[];
+  createdBy: { id: string | null; name: string } | null; createdAt: string; expiresAt: string;
+  status: 'active' | 'expired' | 'revoked'; revokedAt: string | null; revokedBy: string | null;
+  opens: number; firstOpenedAt: string | null; lastOpenedAt: string | null; comments: number; mayRevoke: boolean;
+}
+export interface ReviewLinkLimitsDto { customersMin: number; customersMax: number; expiryDefaultDays: number; expiryMinDays: number; expiryMaxDays: number; activePerDocument: number; commentsPerHour: number; commentsTotal: number; outputsPerMinute: number; nameMax: number; commentMax: number; labelMax: number }
+export interface ReviewLinkOptionsDto {
+  target: { kind: 'release' | 'version'; releaseId: string | null; releaseNumber: number | null; version: number; title: string };
+  customers: Array<{ recordId: string; name: string; kind: 'sample' | 'generated' | 'imported' | 'supplied' | 'missing'; allowed: boolean; reason: string | null }>;
+  languages: Array<{ code: string; name: string }>;
+  outputs: Array<{ id: ReviewOutputId; label: string }>;
+  limits: ReviewLinkLimitsDto; active: number;
+}
+export interface ReviewLinkCreateBody { releaseId?: string; version?: number; label?: string; customers: string[]; languages?: string[]; outputs?: ReviewOutputId[]; expiresInDays?: number }
+/** A comment that came through a review link, as the studio's comment list marks it. */
+export interface ReviewLinkCommentMark { linkId: string; label: string; status: 'active' | 'expired' | 'revoked'; recordId: string; output: ReviewOutputId; outputLabel: string; locale: string }
+export type CommentWithLinkDto = CommentDto & { reviewLink?: ReviewLinkCommentMark };
+
+/** Review links for signed-in users. The public review page has its own small client (apps/web/src/review). */
+export const reviewLinksApi = {
+  list: (projectId: string) => json<{ links: ReviewLinkDto[]; active: number; limits: ReviewLinkLimitsDto }>(`/api/v1/projects/${projectId}/review-links`),
+  options: (projectId: string, target: { releaseId?: string; version?: number }) => json<ReviewLinkOptionsDto>(`/api/v1/projects/${projectId}/review-links/options${target.releaseId ? `?releaseId=${encodeURIComponent(target.releaseId)}` : `?version=${target.version}`}`),
+  /** The answer holds the token, once: it is not stored and cannot be shown again. */
+  create: (projectId: string, body: ReviewLinkCreateBody) => json<{ link: ReviewLinkDto; token: string; path: string }>(`/api/v1/projects/${projectId}/review-links`, { method: 'POST', body: JSON.stringify(body) }),
+  revoke: (projectId: string, linkId: string) => json<{ link: ReviewLinkDto; alreadyRevoked: boolean }>(`/api/v1/projects/${projectId}/review-links/${linkId}/revoke`, { method: 'POST', body: '{}' }),
+};
+/* ------------------------------------------------------------------ end review links */

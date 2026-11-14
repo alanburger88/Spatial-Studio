@@ -23,6 +23,7 @@ const CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'release.', label: 'Releases' },
   { id: 'proof.', label: 'Proof records' },
   { id: 'comment.', label: 'Comments' },
+  { id: 'review-link.', label: 'Review links' }, // wave 4
   { id: 'records.', label: 'Imported records' },
   { id: 'known-data.', label: 'Known data problems' },
   { id: 'asset.', label: 'Images' },
@@ -111,10 +112,17 @@ export function auditSentence(e: AuditEventDto, project: Project | null, names: 
     case 'workflow.publish': return `Published ${v}`;
     case 'workflow.reopen': return `Moved ${v} back to draft`;
     case 'comment.create': return `Commented on ${node(d.nodeId)}`;
-    case 'comment.reply': return `Replied to a comment on ${node(d.nodeId)}`;
-    case 'comment.resolve': return `Resolved a comment thread on ${node(d.nodeId)}`;
-    case 'comment.reopen': return `Reopened a comment thread on ${node(d.nodeId)}`;
+    // A comment from a review link may be about the whole document (no component): wave 4.
+    case 'comment.reply': return `Replied to a comment on ${d.nodeId === '' ? 'the whole document' : node(d.nodeId)}`;
+    case 'comment.resolve': return `Resolved a comment thread on ${d.nodeId === '' ? 'the whole document' : node(d.nodeId)}`;
+    case 'comment.reopen': return `Reopened a comment thread on ${d.nodeId === '' ? 'the whole document' : node(d.nodeId)}`;
     case 'comment.delete': return `Deleted a comment on ${node(d.nodeId)}`;
+    /* ---- review links (wave 4): ids and counts only; the typed name and the text stay with the comment ---- */
+    case 'review-link.create': return `Made a review link to ${d.target === 'release' ? `release ${d.releaseNumber} (${v})` : `saved version ${d.version}`} for ${plural(Number(d.customers ?? 0), 'customer')}, open for ${plural(Number(d.expiresInDays ?? 0), 'day')}`;
+    case 'review-link.revoke': return `Revoked a review link to ${d.target === 'release' ? 'a release' : 'a saved version'} (${v})`;
+    case 'review-link.open': return `A review link to ${v} was opened for the first time`;
+    case 'review-link.comment': return `Received a comment through a review link on ${d.nodeId ? node(d.nodeId) : 'the whole document'} (${v}), for ${forWho}, ${({ pdf: 'PDF', html: 'web page', email: 'email', sms: 'text message' } as Record<string, string>)[String(d.output)] ?? 'an output'}`;
+    /* ---- end review links ---- */
     case 'records.import': return `Imported ${plural(Number(d.imported ?? 0), 'record')}${d.rejected ? ` (${d.rejected} rejected)` : ''} from ${String(d.format ?? 'a file').toUpperCase()}`;
     case 'records.clear': return `Removed ${plural(Number(d.removed ?? 0), 'imported record')}`;
     case 'asset.upload': return d.duplicate ? `Re-uploaded image “${d.name}” (already in the library)` : `Uploaded image “${d.name}”`;
@@ -174,6 +182,8 @@ const ROUTE_WORDS: Record<string, string> = {
 };
 const libKind = (k: unknown): string => (LIBRARY_KIND_LABEL as Record<string, string>)[String(k)]?.toLowerCase() ?? 'item';
 const ACTION_WORDS: Record<string, string> = { 'library.create': 'Library items added', 'library.draft': 'Library drafts', 'library.approve': 'Library approvals', 'library.discard': 'Library drafts discarded', 'library.link': 'Documents linked to library wording', 'project.save': 'Saves', 'project.restore': 'Restores', 'workflow.approve': 'Approvals', 'workflow.submit': 'Submissions for review', 'workflow.publish': 'Publishing', 'workflow.request_changes': 'Requests for changes', 'comment.create': 'New comments', 'records.import': 'Record imports', 'auth.login': 'Sign-ins', 'batch.start': 'Batch runs', 'release.create': 'New releases', 'release.promote': 'Moves to Production', 'release.withdraw': 'Withdrawn releases', 'release.handover': 'Handover entries', 'release.package': 'Release packages', 'release.runtime': 'Runnable packages', 'known-data.add': 'Known data problems set aside', 'known-data.remove': 'Known data problems removed', 'known-data.lapse': 'Known data problems that lapsed', 'proof.produce': 'Documents produced from a release', 'proof.import': 'Proof records added', 'proof.verify': 'Proof checks' };
+// Review links (wave 4)
+Object.assign(ACTION_WORDS, { 'review-link.create': 'Review links made', 'review-link.revoke': 'Review links revoked', 'review-link.open': 'Review links opened', 'review-link.comment': 'Comments from review links' });
 const actionLabel = (a: string): string => ACTION_WORDS[a] ?? CATEGORIES.find((c) => c.id === a)?.label ?? a;
 
 /* ------------------------------------------------------------------ grouping */

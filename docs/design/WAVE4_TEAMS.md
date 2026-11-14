@@ -135,6 +135,33 @@ showing that customer. A link to version N keeps showing version N after the doc
 not shown. Comment limits. The stored row holds no token. No IP or user agent is stored. The reply headers. A link
 holder sees only this link's comments.
 
+### As built
+
+Built as designed; routes, shapes and limits are in `docs/api/REVIEW_LINKS.md`. Where the build adds to or reads the
+design in a particular way:
+
+- **"Approved languages"** means English plus every language of the frozen version that has at least one approved
+  translation. A language with drafts only is not offered. The chosen language is applied by setting the customer's
+  preferred language for that request (the same way a customer's own language chooses the document's language).
+- **Version links** come from Before & after when its After side is the working version: the link is to the saved
+  version (never to unsaved changes, and the dialog says so when there are some). Any saved version can be the target
+  through the API.
+- **A customer that is no longer allowed** (it became supplied, or was removed) drops out of the summary; asking for
+  it answers `404 CUSTOMER_NOT_AVAILABLE`. This is not the dead-link answer, because the token itself is valid.
+- **Withdrawn release**: the page says so and the link keeps working, as designed. A link to a release whose document
+  was deleted is revoked with the document.
+- **Comment parts** are the document's top-level parts (and their children when the top level is only a page or two),
+  under opaque keys (`p1`, `p2`, …).
+- **Output requests** are limited per link in memory, so the count starts again when the studio restarts. Comment
+  limits are counted from the database.
+- **Documents dated by the run** are shown as issued on the day the link was made, the same for every request.
+- **The PDF** is shown inside the page where the browser can (desktop browsers), with an "Open the PDF" button; on a
+  phone only the button is shown.
+- **The review page** is served by the web server with the same three headers as the API replies, plus `referrer` and
+  `robots` meta tags. It is a separate download: the studio's first download does not include it.
+- **Notifications** are not built here. `onReviewLinkComment(link, comment)` is called when a link comment is stored
+  and does nothing yet.
+
 ---
 
 ## 2. Blockers phase 4: owner, status and notes

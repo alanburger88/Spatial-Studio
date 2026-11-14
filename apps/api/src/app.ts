@@ -32,6 +32,8 @@ import { registerProofRoutes } from './routes/proofs';
 import { registerPdfAccessibilityRoutes } from './routes/pdfAccessibility';
 import { checkDocumentPdf, type PdfAccessibilityResult } from './pdfAccessibility';
 import { registerLibraryRoutes } from './routes/library';
+// Review links (wave 4)
+import { registerReviewLinkRoutes, reviewLinkCommentInfo } from './routes/reviewLinks';
 import { seedHouseLibrary } from './library';
 import { restoreExtraSample, seedExtraSamples, seedSampleProofs } from './samples';
 import { ReleasePackages, createRelease, releaseInfo } from './releases';
@@ -284,6 +286,8 @@ export async function buildApp(opts: AppOptions = {}) {
   registerProofRoutes(app, deps, { composer: opts.releasePackage?.composer ?? chromiumPackageComposer(composer) });
   registerPdfAccessibilityRoutes(app, deps);
   registerLibraryRoutes(app, deps);
+  // Review links (wave 4): the studio routes and the five public routes under /api/v1/review/:token/.
+  registerReviewLinkRoutes(app, deps, { composer: opts.releasePackage?.composer ?? chromiumPackageComposer(composer) });
 
   /* ------------------------------------------------ version history, review workflow, comments, audit */
 
@@ -418,7 +422,8 @@ export async function buildApp(opts: AppOptions = {}) {
     const roots = all.filter((c) => !c.parentId);
     const status = req.query.status ?? 'all';
     const keep = new Set(roots.filter((r) => status === 'all' || (status === 'open' ? !r.resolvedAt : !!r.resolvedAt)).map((r) => r.id));
-    const comments = all.filter((c) => keep.has(c.parentId ?? c.id)).map((c) => ({ ...c, mine: c.author === req.user?.id }));
+    const fromLink = reviewLinkCommentInfo(deps, p.projectId); // review links (wave 4): which threads came through a link
+    const comments = all.filter((c) => keep.has(c.parentId ?? c.id)).map((c) => ({ ...c, mine: c.author === req.user?.id, ...fromLink(c.id) }));
     return { comments, counts: { open: roots.filter((r) => !r.resolvedAt).length, resolved: roots.filter((r) => !!r.resolvedAt).length } };
   });
   app.post<{ Params: { projectId: string }; Body: Record<string, any> }>('/api/v1/projects/:projectId/comments', async (req, reply) => {
