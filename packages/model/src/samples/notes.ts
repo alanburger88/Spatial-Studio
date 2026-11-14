@@ -25,6 +25,29 @@ export interface SampleNotes {
   mappings: Record<string, 'complete' | 'incomplete'>;
   /** Pages of the PDF for customers whose page count is part of the design (others: 1 or 2). */
   pages: Record<string, number>;
-  /** Outcomes (rules, alternatives, sections) that no customer reaches on purpose, with the reason. */
-  unreached?: Array<{ id: string; reason: string }>;
+  /**
+   * Outcomes (rules, alternatives, sections, languages) that no customer reaches on purpose, with the reason. `via`
+   * names one way the outcome IS reached (a pinned test, an oracle scenario, or a customer with overrides); the check
+   * resolves it and fails if it does not reach the outcome.
+   */
+  unreached?: Array<{ id: string; reason: string; via?: OutcomeWitness }>;
+  /**
+   * When "Accessible PDF is required" is deliberately off: why, and the studio's PDF check findings that are a known
+   * limitation (by code). Any other finding still fails.
+   */
+  accessiblePdf?: { required: false; reason: string; knownFailures: Array<{ code: string; reason: string }> };
+  /** Page counts of oracle scenarios (`fixtures/expected_scenarios.json`, read only) that are part of the design. */
+  scenarioPages?: Array<{ scenario: string; pages: number; reason: string }>;
+}
+
+/** One way to reach an outcome no customer reaches as issued. Exactly one of `testId`, `scenario` or `recordId`. */
+export interface OutcomeWitness {
+  /** A pinned test of the document (its customer, overrides and "as issued on" date). */
+  testId?: string;
+  /** An oracle scenario of `fixtures/expected_scenarios.json` (its customer, overrides and rule patches). */
+  scenario?: string;
+  /** A customer with overrides, for an outcome no test or scenario shows. */
+  recordId?: string;
+  overrides?: Record<string, unknown>;
+  issueDate?: string;
 }

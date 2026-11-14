@@ -6,8 +6,12 @@
  * runs the same checks and fails on any unintended finding.
  *
  * To add an example: `registerExample({ id, title, kind, project, customers, notes, domain?, recompute?, pages? })` before
- * `runAudit()` (see `EXAMPLES` below for the two built-in ones). Read-only checks of the approved card and benefits
- * fixtures (`fixtures/customers_100.json`) are reported separately and never change those files.
+ * `runAudit()`. Four are registered below: the two original examples as the studio stores them (Aster Card and
+ * HarborCare, enriched by `showcaseExisting.ts`, with the fixture customers of their kind and the notes in
+ * `showcaseExistingAudit.ts`) and the two extra samples (Northwind Energy, Meridian Wealth). A check, or part of one,
+ * that cannot apply to an example says "does not apply" with the reason; it is never counted as a pass. Read-only
+ * checks of the approved card and benefits fixtures (`fixtures/customers_100.json`) are also reported separately and
+ * never change those files.
  */
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,12 +19,17 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
-  RECORD_ID_PATTERN, customFieldDefs, daysBetweenIso, libraryContentFingerprint, libraryLinkProblems, lookupTableProblems, projectFileProblems,
+  RECORD_ID_PATTERN, customFieldDefs, daysBetweenIso, deepPatch, projectFields, projectLanguages, libraryContentFingerprint, libraryLinkProblems, lookupTableProblems, projectFileProblems,
   projectMappingProblems, roundHalfUp, validateRecordShape, validateRule,
   type Project, type SyntheticRecord,
 } from '@iss/model';
 import { EXTRA_SAMPLES, HOUSE, houseContent, type HouseItemId, type SampleNotes } from '@iss/model/samples/index';
 import { translationCounts } from '../packages/model/src/samples/counts';
+import { EXPECTED_SCENARIOS, RECORDS, sampleProjects } from '@iss/model/fixtures';
+import {
+  CARD_NOTES, DELIBERATE_SCENARIO_FINDINGS, EOB_NOTES, EXISTING_EXAMPLES, eobTotals, type ArithmeticFinding,
+} from '../packages/model/src/samples/showcaseExistingAudit';
+import type { OutcomeWitness } from '../packages/model/src/samples/notes';
 import { NW_RATES, RATE_CHANGE_DAY } from '../packages/model/src/samples/northwind';
 import { feeBps, unitsOf } from '../packages/model/src/samples/meridian';
 import { resolve, type Resolution } from '@iss/resolver';
@@ -35,7 +44,7 @@ const REPO = path.resolve(here, '..');
 
 export type Group = 'Data' | 'Template and rules' | 'Outcomes' | 'Outputs' | 'Settings';
 export const GROUPS: Group[] = ['Data', 'Template and rules', 'Outcomes', 'Outputs', 'Settings'];
-export type Status = 'pass' | 'intended' | 'failed' | 'not-run';
+export type Status = 'pass' | 'intended' | 'failed' | 'not-applicable' | 'not-run';
 
 export interface AuditExample {
   id: string;
@@ -44,8 +53,14 @@ export interface AuditExample {
   project: Project;
   customers: SyntheticRecord[];
   notes: SampleNotes;
-  /** Domain arithmetic for one customer: what does not add up, in plain words (empty when everything does). */
-  domain?: (record: SyntheticRecord, project: Project) => string[];
+  /**
+   * Domain arithmetic for one customer: what does not add up, in plain words (empty when everything does). A finding
+   * given with `intended` is deliberate data (the reason); a plain string is a failure unless the customer is a listed
+   * demonstration blocker of code CALCULATION_MISSING.
+   */
+  domain?: (record: SyntheticRecord, project: Project) => Array<string | { message: string; intended: string }>;
+  /** Records the domain arithmetic also runs on: oracle scenarios (overrides applied), with what is deliberate in each. */
+  domainScenarios?: Array<{ name: string; record: SyntheticRecord; intendedChecks: string[]; why: string; check: (r: SyntheticRecord) => Array<{ check: string; message: string; intended?: boolean; why?: string }> }>;
   /** The calculated values worked out independently of the studio's engine, by key (only the ones it can work out). */
   recompute?: (record: SyntheticRecord) => Record<string, unknown>;
   /** Page counts: every customer in [min, max] unless named; the last page holds the slip (a text it must contain). */
@@ -54,7 +69,8 @@ export interface AuditExample {
   release?: Project;
 }
 
-export interface CheckOutcome { status: Status; summary: string; failures: string[]; intended: string[] }
+/** `notApplicable`: parts of the check that cannot apply to this example, each with the reason (shown in the report). */
+export interface CheckOutcome { status: Status; summary: string; failures: string[]; intended: string[]; notApplicable?: string[] }
 export interface AuditCheck {
   id: string;
   group: Group;
@@ -69,8 +85,10 @@ export interface AuditContext {
   composer?: import('../apps/api/src/composer').Composer;
 }
 
-const outcome = (failures: string[], intended: string[], summary: string): CheckOutcome =>
-  ({ status: failures.length ? 'failed' : intended.length ? 'intended' : 'pass', summary, failures, intended });
+const outcome = (failures: string[], intended: string[], summary: string, notApplicable: string[] = []): CheckOutcome =>
+  ({ status: failures.length ? 'failed' : intended.length ? 'intended' : 'pass', summary, failures, intended, ...(notApplicable.length ? { notApplicable } : {}) });
+/** The whole check cannot apply to this example: says so, with the reason (never a silent pass). */
+const doesNotApply = (why: string): CheckOutcome => ({ status: 'not-applicable', summary: `Does not apply: ${why}`, failures: [], intended: [], notApplicable: [why] });
 const nameOf = (r: SyntheticRecord) => `${r.recordId} (${r.customer.givenName} ${r.customer.familyName})`;
 const custom = (r: SyntheticRecord) => (r.custom ?? {}) as Record<string, any>;
 
@@ -222,6 +240,62 @@ for (const s of EXTRA_SAMPLES()) {
   });
 }
 
+/* ---- The two original examples (built-in kinds), as the studio stores them: enriched by showcaseExisting.ts */
+
+/** Whole days from one ISO day to another, by the calendar (worked out here, not by the studio's date helpers). */
+const isoDays = (from: string, to: string) => {
+  const ms = (d: string) => Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)));
+  return Math.round((ms(to) - ms(from)) / 86_400_000);
+};
+/** a ÷ b rounded half up to `places` decimals, for a ≥ 0 and b > 0, in integer arithmetic (no floating-point ties). */
+const ratioHalfUp = (a: number, b: number, places: number) => { const k = 10 ** places; return Math.floor((a * 2 * k + b) / (2 * b)) / k; };
+
+/** Card: the five added calculations, from the customer's own card data. */
+function cardRecompute(r: SyntheticRecord): Record<string, unknown> {
+  const c = (r as any).card ?? {};
+  const tx: any[] = c.transactions ?? [];
+  const available = Math.max(0, c.creditLimitCents - c.newBalanceCents);
+  return {
+    daysUntilDue: isoDays(c.issuedAt, c.dueDate),
+    listedTotal: tx.reduce((s, t) => s + t.amountCents, 0),
+    largestTransaction: tx.length ? Math.max(...tx.map((t) => t.amountCents)) : 0,
+    availableCreditPct: c.creditLimitCents > 0 ? ratioHalfUp(available * 100, c.creditLimitCents, 0) : 0,
+    lateFee: c.arrangementStatus === 'approved' ? 0 : ({ standard: 2900, premium: 2500 } as Record<string, number>)[c.tier],
+  };
+}
+
+/** Explanation of benefits: the four added calculations, from the claims (the first claim is the one the document is about). */
+function eobRecompute(r: SyntheticRecord): Record<string, unknown> {
+  const first = ((r as any).claims ?? [])[0] ?? {};
+  const totals = eobTotals(r);
+  return {
+    memberSharePct: first.billedCents > 0 ? ratioHalfUp(first.patientResponsibilityCents * 100, first.billedCents, 1) : 0,
+    totalPlanPaid: totals.planPaidCents,
+    claimCount: totals.claims,
+    reviewDays: typeof first.billedCents === 'number' && first.billedCents < 50_000 ? 30 : 45,
+  };
+}
+
+/** The arithmetic findings of one customer, deliberate ones carrying their reason. */
+const arithmeticOf = (check: (r: SyntheticRecord) => ArithmeticFinding[]) => (r: SyntheticRecord) =>
+  check(r).map((x) => (x.intended ? { message: `${x.check}: ${x.message}`, intended: x.why ?? 'deliberate' } : `${x.check}: ${x.message}`));
+
+const ORIGINAL_NOTES: Record<string, SampleNotes> = { 'aster-card-demo': CARD_NOTES, 'harborcare-demo': EOB_NOTES };
+for (const p of sampleProjects()) {
+  const ex = EXISTING_EXAMPLES.find((e) => e.projectId === p.projectId);
+  if (!ex) continue;
+  const customers = RECORDS.filter((r) => r.documentType === p.documentType);
+  const scenarios = Object.entries(EXPECTED_SCENARIOS)
+    .filter(([, c]) => Object.keys(c.overrides ?? {}).length && customers.some((r) => r.recordId === c.recordId))
+    .map(([name, c]) => ({ name, record: deepPatch(customers.find((r) => r.recordId === c.recordId)!, c.overrides as any), intendedChecks: DELIBERATE_SCENARIO_FINDINGS[name]?.checks ?? [], why: DELIBERATE_SCENARIO_FINDINGS[name]?.why ?? '', check: ex.arithmetic }));
+  registerExample({
+    id: p.projectId, title: ORIGINAL_NOTES[p.projectId].title, kind: ORIGINAL_NOTES[p.projectId].kind, project: p, customers, notes: ORIGINAL_NOTES[p.projectId],
+    domain: arithmeticOf(ex.arithmetic), domainScenarios: scenarios,
+    recompute: p.documentType === 'eob' ? eobRecompute : cardRecompute,
+    pages: p.documentType === 'eob' ? { min: 1, max: 2 } : { min: 2, max: 3 },
+  });
+}
+
 /* ================================================================== the checks */
 
 const notRun = (why: string): CheckOutcome => ({ status: 'not-run', summary: why, failures: [], intended: [] });
@@ -235,7 +309,8 @@ function outcomesOf(project: Project): string[] {
     if (n.type === 'variant-set' || n.type === 'conditional-region') for (const v of n.variantIds ?? []) out.push(`alternative ${n.id}/${v}`);
     if (n.visibleWhen || n.type === 'conditional-region' || n.ruleDriven) out.push(`shown ${n.id}`, `hidden ${n.id}`);
   }
-  for (const l of ['en-US', ...(project.languages ?? [])]) out.push(`language ${l}`);
+  // projectLanguages: a document without a language list (the two original examples) behaves as English and Spanish.
+  for (const l of ['en-US', ...projectLanguages(project)]) out.push(`language ${l}`);
   return out;
 }
 function reachedBy(project: Project, res: Resolution): Set<string> {
@@ -252,7 +327,33 @@ function reachedBy(project: Project, res: Resolution): Set<string> {
   return got;
 }
 
+/** Resolves the declared way to reach an outcome (a pinned test, an oracle scenario or a customer with overrides). */
+function witness(ex: AuditExample, via: OutcomeWitness): { res: Resolution; label: string } | { error: string } {
+  let project = ex.project;
+  let recordId = via.recordId;
+  let overrides = via.overrides ?? {};
+  let issueDate = via.issueDate;
+  let label = `${via.recordId} with overrides ${JSON.stringify(via.overrides ?? {}).slice(0, 120)}`;
+  if (via.testId) {
+    const t = (project.testCases ?? []).find((x) => x.id === via.testId);
+    if (!t) return { error: `the pinned test ${via.testId} is not in the document` };
+    ({ recordId } = t); overrides = (t.overrides ?? {}) as Record<string, unknown>; issueDate = t.issueDate ?? undefined;
+    label = `the pinned test “${t.name}” (${t.id})`;
+  } else if (via.scenario) {
+    const c = EXPECTED_SCENARIOS[via.scenario];
+    if (!c) return { error: `the oracle scenario ${via.scenario} does not exist` };
+    recordId = c.recordId; overrides = c.overrides ?? {};
+    if (c.rulePatches) project = { ...project, rules: project.rules.map((r) => { const pt = c.rulePatches!.find((x) => x.id === r.id); return pt ? ({ ...r, ...pt } as typeof r) : r; }) };
+    label = `the oracle scenario “${via.scenario}” (fixtures/expected_scenarios.json)`;
+  }
+  const record = ex.customers.find((r) => r.recordId === recordId);
+  if (!record) return { error: `${recordId} is not a customer of this example` };
+  return { res: resolve({ project, record, overrides, ...(issueDate ? { issueDate } : {}) }), label };
+}
+
 const UNFORMATTED = [/\bundefined\b/, /\bNaN\b/, /\bnull\b/, /\[object Object\]/, /\{\{[^}]*\}\}/, /\b\d{4}-\d{2}-\d{2}\b/, /\bcalc\.\w+/, /\bcustom\.\w+/];
+/** “—” standing for a value: not between two words (after a colon, a currency sign, or before punctuation or the end). */
+export const MISSING_DASH = /(?<![\p{L}\p{N}.,)]\s)—|—(?!\s[\p{L}\p{N}$(])/u;
 const rawValues = (text: string): string[] => UNFORMATTED.filter((re) => re.test(text)).map((re) => String(text.match(re)?.[0]));
 
 export const CHECKS: AuditCheck[] = [
@@ -281,7 +382,9 @@ export const CHECKS: AuditCheck[] = [
       const req = (ex.project.customFields ?? []).filter((x) => x.required);
       for (const r of ex.customers) for (const x of req) if (custom(r)[x.key] === undefined || custom(r)[x.key] === null || custom(r)[x.key] === '') f.push(`${nameOf(r)} has no ${x.label}`);
       for (const r of ex.customers) for (const x of ex.project.customFields ?? []) if (x.type === 'enum' && custom(r)[x.key] !== undefined && !(x.enumValues ?? []).includes(custom(r)[x.key])) f.push(`${nameOf(r)}: ${x.label} “${custom(r)[x.key]}” is not one of the choices`);
-      return outcome(f, [], `${ex.customers.length} customers against ${defs.length} field definitions (${req.length} required)`);
+      // A built-in kind's fields (card, claims) are the approved data contract: validateRecordShape checks those too.
+      const contract = projectFields(ex.project).filter((x) => !x.derived && x.path !== 'documentType' && x.path !== 'recordId');
+      return outcome(f, [], `${ex.customers.length} customers against ${contract.length} field definitions (${contract.filter((x) => x.required).length} required)`);
     },
   },
   {
@@ -293,9 +396,20 @@ export const CHECKS: AuditCheck[] = [
       for (const r of ex.customers) {
         const problems = ex.domain(r, ex.project);
         const meant = ex.notes.intendedBlockers.find((b) => b.recordId === r.recordId && b.code === 'CALCULATION_MISSING');
-        for (const p of problems) (meant ? intended : f).push(`${nameOf(r)}: ${p}${meant ? ` — intended: ${meant.reason}` : ''}`);
+        for (const p of problems) {
+          if (typeof p !== 'string') intended.push(`${nameOf(r)}: ${p.message} — intended: ${p.intended}`);
+          else (meant ? intended : f).push(`${nameOf(r)}: ${p}${meant ? ` — intended: ${meant.reason}` : ''}`);
+        }
       }
-      return outcome(f, intended, `${ex.customers.length} customers checked`);
+      // The oracle's scenarios (overrides applied): only the inconsistencies the fixtures make on purpose may be found.
+      const scen = ex.domainScenarios ?? [];
+      for (const sc of scen) for (const x of sc.check(sc.record)) {
+        if (x.intended) intended.push(`scenario “${sc.name}”: ${x.check}: ${x.message} — intended: ${x.why}`);
+        else if (sc.intendedChecks.includes(x.check)) intended.push(`scenario “${sc.name}”: ${x.check}: ${x.message} — intended: ${sc.why}`);
+        else f.push(`scenario “${sc.name}”: ${x.check}: ${x.message}`);
+      }
+      for (const sc of scen) for (const c of sc.intendedChecks) if (!sc.check(sc.record).some((x) => x.check === c)) f.push(`scenario “${sc.name}”: its deliberate ${c} inconsistency is no longer found`);
+      return outcome(f, intended, `${ex.customers.length} customers checked${scen.length ? `, and ${scen.length} oracle scenarios with overrides (${scen.map((x) => x.name).join(', ')})` : ''}`);
     },
   },
   /* ---------------------------------------------------------------- Template and rules */
@@ -321,9 +435,19 @@ export const CHECKS: AuditCheck[] = [
       const got = new Set<string>();
       for (const res of ctx.resolutions(ex).values()) for (const o of reachedBy(ex.project, res)) got.add(o);
       const missing = want.filter((o) => !got.has(o));
-      const unreached = new Map((ex.notes.unreached ?? []).map((u) => [u.id, u.reason]));
+      const unreached = new Map((ex.notes.unreached ?? []).map((u) => [u.id, u]));
       const f = missing.filter((m) => !unreached.has(m)).map((m) => `${m} is reached by no customer`);
-      const intended = missing.filter((m) => unreached.has(m)).map((m) => `${m}: ${unreached.get(m)}`);
+      const intended: string[] = [];
+      for (const m of missing.filter((x) => unreached.has(x))) {
+        const u = unreached.get(m)!;
+        if (!u.via) { intended.push(`${m}: ${u.reason}`); continue; }
+        // The declared way to reach it must reach it.
+        const w = witness(ex, u.via);
+        if ('error' in w) f.push(`${m}: ${w.error}`);
+        else if (!reachedBy(ex.project, w.res).has(m)) f.push(`${m}: declared as reached by ${w.label}, which does not reach it`);
+        else intended.push(`${m}: ${u.reason} Reached by ${w.label}.`);
+      }
+      for (const u of ex.notes.unreached ?? []) if (got.has(u.id)) f.push(`${u.id} is declared unreached but a customer reaches it`);
       const gaps = coverageGaps(ex.project, ex.customers);
       return outcome(f, intended, `${want.length - missing.length} of ${want.length} outcomes reached by the customers; the studio’s coverage engine lists ${gaps.length} gap${gaps.length === 1 ? '' : 's'}`);
     },
@@ -412,8 +536,11 @@ export const CHECKS: AuditCheck[] = [
       const results = runTestCases(ex.project, ex.customers);
       const f = results.filter((t) => !t.pass).map((t) => `${t.testId} ${t.name}: ${t.diffs.map((d) => d.message).join('; ')}`);
       if (results.length < 5) f.push(`only ${results.length} pinned tests`);
-      if (!(ex.project.testCases ?? []).some((t) => t.issueDate)) f.push('no pinned test runs “as issued on” a date');
-      return outcome(f, [], `${results.length} pinned tests, ${results.filter((t) => t.pass).length} passing`);
+      const na: string[] = [];
+      // “As issued on” needs a document that says where its date comes from; a document without one has nothing to date.
+      if (!ex.project.documentDate) na.push('A pinned test “as issued on” a date: this document has no date of its own (its data has no issue or processing date), so a test cannot run on another day.');
+      else if (!(ex.project.testCases ?? []).some((t) => t.issueDate)) f.push('no pinned test runs “as issued on” a date');
+      return outcome(f, [], `${results.length} pinned tests, ${results.filter((t) => t.pass).length} passing`, na);
     },
   },
   {
@@ -492,7 +619,9 @@ export const CHECKS: AuditCheck[] = [
         if (email.subject.length > 100) problems.push(`the email subject is ${email.subject.length} characters`);
         if (sms.segments > 2) problems.push(`the SMS takes ${sms.segments} parts`);
         for (const [what, text] of [['subject', email.subject], ['SMS', sms.text], ['email', email.text]] as const) for (const v of rawValues(text.replace(/https:\/\/\S+/g, ''))) problems.push(`the ${what} contains “${v}”`);
-        if (/—/.test(email.subject + sms.text)) problems.push('a value is shown as “—” (missing)');
+        // A missing value is shown as “—” on its own (after a label or at the end of a sentence); a dash between two words
+        // is punctuation in the wording (the original examples' approved subject and footer use it).
+        if (MISSING_DASH.test(email.subject) || MISSING_DASH.test(sms.text)) problems.push('a value is shown as “—” (missing)');
         for (const p of problems) (blocked ? intended : f).push(`${nameOf(r)}: ${p}${blocked ? ' — a demonstration customer whose data is incomplete on purpose' : ''}`);
       }
       return outcome(f, intended, `${ex.customers.length} customers; longest subject ${longest} characters; SMS at most ${segments} part${segments === 1 ? '' : 's'}`);
@@ -501,7 +630,7 @@ export const CHECKS: AuditCheck[] = [
   {
     id: 'released-version', group: 'Settings', title: 'The seeded release was approvable: no blocker but the known data problem, its pinned tests pass',
     run(ex) {
-      if (!ex.release) return outcome([], [], 'Seeded without a release (it starts as a Draft): nothing to check.');
+      if (!ex.release) return doesNotApply('the example is seeded without a release (it starts as a Draft), so there is no released version to check. The release made from it is checked under Settings.');
       const f: string[] = [];
       const known = new Set(ex.notes.knownDataProblems.map((k) => key(k.recordId, k.code)));
       const intended: string[] = [];
@@ -548,7 +677,19 @@ export const CHECKS: AuditCheck[] = [
         for (const v of rawValues(text.join('\n').replace(/https:\/\/\S+/g, '').replace(/example\.com\S*/g, ''))) problems.push(`the PDF contains “${v}”`);
         for (const p of problems) (blocked && /“—”|null|parity/.test(p) ? intended : f).push(`${nameOf(r)}: ${p}`);
       }
-      return outcome(f, intended, `${reps.length} representative customers composed (every outcome once); pages: ${pages.join(', ')}`);
+      // Oracle scenarios whose page count is part of the design (the card's 250-row case).
+      for (const sp of ex.notes.scenarioPages ?? []) {
+        const c = EXPECTED_SCENARIOS[sp.scenario];
+        const record = c && ex.customers.find((r) => r.recordId === c.recordId);
+        if (!record) { f.push(`scenario ${sp.scenario}: not found for this example`); continue; }
+        const res = resolve({ project: ex.project, record, overrides: c.overrides ?? {} });
+        const comp = await ctx.composer.composePaged(renderPagedDocument(res, ex.project, { profileId: 'paged-pdf', watermark: '' }), { pdf: true });
+        pages.push(`scenario ${sp.scenario}: ${comp.metrics.pageCount}`);
+        if (comp.metrics.pageCount !== sp.pages) f.push(`scenario ${sp.scenario}: ${comp.metrics.pageCount} pages, declared ${sp.pages} (${sp.reason})`);
+        if (comp.metrics.pdfPageCount !== undefined && comp.metrics.pdfPageCount !== comp.metrics.pageCount) f.push(`scenario ${sp.scenario}: the PDF has ${comp.metrics.pdfPageCount} pages, the composer measured ${comp.metrics.pageCount}`);
+        for (const d of comp.metrics.diagnostics) if (d.severity === 'blocking' || d.severity === 'error' || /OVERFLOW|CLIPPED|CANNOT_FIT|OFF_PAGE/.test(d.code)) f.push(`scenario ${sp.scenario}: ${d.code}: ${d.message}`);
+      }
+      return outcome(f, intended, `${reps.length} representative customers composed (every outcome once)${ex.notes.scenarioPages?.length ? ` and ${ex.notes.scenarioPages.length} oracle scenario` : ''}; pages: ${pages.join(', ')}`);
     },
   },
   {
@@ -557,15 +698,28 @@ export const CHECKS: AuditCheck[] = [
       if (!ctx.composer) return notRun('Composition was not run (--no-outputs).');
       const { checkDocumentPdf } = await import('../apps/api/src/pdfAccessibility');
       const f: string[] = [];
-      if (!ex.project.accessiblePdfRequired) f.push('“Accessible PDF is required” is off');
-      const reps = representatives(ex, ctx).filter((r) => !ex.notes.intendedBlockers.some((b) => b.recordId === r.recordId)).slice(0, 4);
+      const intended: string[] = [];
+      const declared = ex.notes.accessiblePdf;
+      if (!ex.project.accessiblePdfRequired) {
+        if (declared) intended.push(`“Accessible PDF is required” is off. ${declared.reason}`);
+        else f.push('“Accessible PDF is required” is off');
+      } else if (declared) f.push('“Accessible PDF is required” is on, but the notes say it is off on purpose');
+      // Checked as if it were required, so a known limitation shows exactly what would fail.
+      const project = { ...ex.project, accessiblePdfRequired: true };
+      const known = new Map((declared?.knownFailures ?? []).map((k) => [k.code, k.reason]));
+      const reps = representatives(ex, ctx).filter((r) => !ex.notes.intendedBlockers.some((b) => b.recordId === r.recordId));
+      // Customers whose page count is declared are checked too (a longer document is where a continued table appears).
+      const chosen = [...reps.slice(0, 4), ...reps.slice(4).filter((r) => ex.notes.pages[r.recordId] !== undefined)];
       let passed = 0;
-      for (const r of reps) {
-        const result = await checkDocumentPdf(ctx.composer, ctx.resolutions(ex).get(r.recordId)!, ex.project);
-        if (result.studio.summary.failed) f.push(`${nameOf(r)}: ${result.studio.findings.map((x) => `${x.code} ${x.message}`).slice(0, 3).join(' | ')}`);
-        else passed++;
+      for (const r of chosen) {
+        const result = await checkDocumentPdf(ctx.composer, ctx.resolutions(ex).get(r.recordId)!, project);
+        const failedFindings = result.studio.findings.filter((x: any) => x.severity !== 'info' && x.status !== 'passed');
+        if (!result.studio.summary.failed) { passed++; continue; }
+        for (const x of failedFindings) (known.has(x.code) ? intended : f).push(`${nameOf(r)}: ${x.code} ${x.message}${known.has(x.code) ? ` — known limitation: ${known.get(x.code)}` : ''}`);
+        if (!failedFindings.length) f.push(`${nameOf(r)}: the studio's checks failed without a finding`);
       }
-      return outcome(f, [], `${passed} of ${reps.length} composed PDFs pass every check the studio runs (veraPDF not run)`);
+      for (const code of known.keys()) if (!intended.some((i) => i.includes(code))) f.push(`the known limitation ${code} no longer occurs: turn “Accessible PDF is required” on and remove it from the notes`);
+      return outcome(f, [...new Set(intended)], `${passed} of ${chosen.length} composed PDFs pass every check the studio runs (veraPDF not run)${declared ? '; checked as if “Accessible PDF is required” were on' : ''}`);
     },
   },
 ];
@@ -615,7 +769,8 @@ export async function settingsChecks(): Promise<SettingsResult[]> {
   const inj = async (method: any, url: string, payload?: any) => ctx.app.inject({ method, url, payload });
   const out: SettingsResult[] = [];
   try {
-    for (const ex of EXAMPLES.filter((e) => EXTRA_SAMPLES().some((s) => s.project.projectId === e.id))) {
+    // Every registered example the studio stores (the two original ones and the extra samples).
+    for (const ex of EXAMPLES.filter((e) => ctx.store.getProject(e.id))) {
       const checks: SettingsResult['checks'] = [];
       let release = ctx.store.releases(ex.id).find((r) => r.stages.production?.status === 'current' || r.stages.test.status === 'current');
       // An example seeded without a release gets one made by this check from its saved version (in the temporary studio only).
@@ -781,7 +936,7 @@ export function failuresOf(r: AuditReport): string[] {
   ]);
 }
 
-const STATUS_WORD: Record<Status, string> = { pass: 'pass', intended: 'intended exception', failed: '**FAILED**', 'not-run': 'not run' };
+const STATUS_WORD: Record<Status, string> = { pass: 'pass', intended: 'intended exception', failed: '**FAILED**', 'not-applicable': 'does not apply', 'not-run': 'not run' };
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
 
 export function reportMarkdown(r: AuditReport): string {
@@ -794,9 +949,15 @@ export function reportMarkdown(r: AuditReport): string {
   L.push('- **Outcomes**: every customer resolves and the only blocking findings are the intended ones; pinned tests; wording rules; translation counts; library links; mappings; the email subject and SMS.');
   L.push(`- **Outputs**${r.options.outputs ? '' : ' (not run in this pass)'}: real PDFs and web pages for one customer of each outcome: no overflow or clipped content, page counts, the payment slip on the last page, PDF and web page in parity, the studio’s PDF accessibility checks, nothing unformatted.`);
   L.push(`- **Settings**${r.options.settings ? '' : ' (not run in this pass)'}: a release and its package with no customer data, the runnable package’s own verify, a proof record verified as the same.`, '');
-  L.push('Each check is a pass, an intended exception (deliberate, listed in the example’s notes with the reason) or FAILED.', '');
+  L.push('Each check is a pass, an intended exception (deliberate, listed in the example’s notes with the reason) or FAILED. A check, or part of one, that cannot apply to an example says “does not apply” and why (listed under each example); it is never counted as a pass.', '');
   const total = (s: Status) => r.examples.reduce((n, e) => n + e.results.filter((x) => x.outcome.status === s).length + (e.settings ?? []).filter((x) => x.outcome.status === s).length, 0);
-  L.push(`**Overall:** ${total('pass')} passed, ${total('intended')} with intended exceptions only, ${total('failed')} failed, ${total('not-run')} not run.`, '');
+  L.push(`**Overall:** ${total('pass')} passed, ${total('intended')} with intended exceptions only, ${total('failed')} failed, ${total('not-applicable')} do not apply, ${total('not-run')} not run.`, '');
+  L.push('| Example | Pass | Intended exceptions | Failed | Does not apply | Not run |', '|---|---|---|---|---|---|');
+  for (const e of r.examples) {
+    const n = (s: Status) => e.results.filter((x) => x.outcome.status === s).length + (e.settings ?? []).filter((x) => x.outcome.status === s).length;
+    L.push(`| ${e.title} | ${n('pass')} | ${n('intended')} | ${n('failed')} | ${n('not-applicable')} | ${n('not-run')} |`);
+  }
+  L.push('');
   for (const e of r.examples) {
     L.push(`## ${e.title} — ${e.kind}`, '', `${e.customers} synthetic customers. Document \`${e.id}\`.`, '');
     L.push('| Group | Check | Result | Counts |', '|---|---|---|---|');
@@ -807,6 +968,12 @@ export function reportMarkdown(r: AuditReport): string {
     if (intended.length) {
       L.push('**Intended exceptions**', '');
       for (const x of intended) { L.push(`- ${x.title}:`); for (const i of x.o.intended) L.push(`  - ${i}`); }
+      L.push('');
+    }
+    const na = e.results.filter((x) => x.outcome.notApplicable?.length);
+    if (na.length) {
+      L.push('**Does not apply**', '');
+      for (const x of na) { L.push(`- ${x.check.title}${x.outcome.status === 'not-applicable' ? '' : ' (this part only; the rest of the check ran)'}:`); for (const i of x.outcome.notApplicable!) L.push(`  - ${i}`); }
       L.push('');
     }
     const failed = [...e.results.map((x) => ({ title: x.check.title, o: x.outcome })), ...(e.settings ?? []).map((x) => ({ title: x.title, o: x.outcome }))].filter((x) => x.o.failures.length);
