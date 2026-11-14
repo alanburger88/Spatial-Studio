@@ -18,6 +18,7 @@ import { applyCommand, type Command } from '../commands';
 import { mappablePaths, LIST_COLUMN_MARK } from '../mapping';
 import type { CalculatedField, ChannelConfig, DocNode, LookupTable, MappingEntry, Predicate, Project, TestCase, WordingRule } from '../types';
 import { channelConfig } from '../channels';
+import { richFromMarkup } from '../rich';
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -158,22 +159,23 @@ export const CARD_WORDING_RULES: WordingRule[] = [
   { id: 'aster-not-legal', kind: 'required', severity: 'must', phrase: 'not a legal statement', appliesTo: 'anywhere', note: 'Every synthetic statement says it is not a legal statement.' },
   { id: 'aster-no-kindly', kind: 'banned', severity: 'should', phrase: 'kindly', replacement: 'please', appliesTo: 'anywhere', note: 'House style: a plain “please”.' },
   { id: 'aster-short-sentences', kind: 'sentence-length', severity: 'should', limit: 25, appliesTo: 'messages', note: 'Short sentences read better on a statement.' },
-  // Deliberately not met by one existing message (the relationship team message says "relationship specialist"): the example's one "should" finding.
-  { id: 'aster-relationship-team', kind: 'preferred', severity: 'should', phrase: 'relationship specialist', replacement: 'relationship team', appliesTo: 'messages', note: 'Premium customers have a team, as the section title says, not one specialist.' },
+  // Deliberately not met by one existing message (the relationship team message says "relationship specialist"): the
+  // example's one "should" finding. A banned phrase's replacement is "review first", so "Fix all safe issues" leaves it.
+  { id: 'aster-relationship-team', kind: 'banned', severity: 'should', phrase: 'relationship specialist', replacement: 'relationship team', appliesTo: 'messages', note: 'Premium customers have a team, as the section title says, not one specialist.' },
 ];
 
-export const CARD_TEST_IDS = ['aster-standard-on-time', 'aster-premium-team', 'aster-arrangement-no-fee', 'aster-spanish-blocked', 'aster-long-list', 'aster-issued-december', 'aster-issued-january'] as const;
+export const CARD_TEST_IDS = ['aster-standard-on-time', 'aster-premium-team', 'aster-arrangement-no-fee', 'aster-spanish-blocked', 'aster-paper-holiday', 'aster-issued-december', 'aster-issued-january'] as const;
 
 function cardTests(): TestCase[] {
-  const always = ['payment-timing', 'spending-summary'];
+  const always = ['payment-timing'];
   return [
-    { id: 'aster-standard-on-time', name: 'Up-to-date customer: standard guidance, payment timing and the holiday notice', recordId: 'CARD-0001', expect: { selectedVariants: { 'payment-guidance': 'payment-standard' }, visibleNodeIds: [...always, 'notice-holiday-posting'], hiddenNodeIds: ['notice-agreement-update', 'relationship-manager'], approvedLocale: null, noBlocking: true } },
+    { id: 'aster-standard-on-time', name: 'Up-to-date customer by email: standard guidance and payment timing, no paper-only notice', recordId: 'CARD-0001', expect: { selectedVariants: { 'payment-guidance': 'payment-standard' }, visibleNodeIds: always, hiddenNodeIds: ['notice-holiday-posting', 'notice-agreement-update', 'relationship-manager'], approvedLocale: null, noBlocking: true } },
     { id: 'aster-premium-team', name: 'Premium customer asking for help: assistance message and the relationship team', recordId: 'CARD-0002', expect: { selectedVariants: { 'payment-guidance': 'payment-assistance-requested' }, visibleNodeIds: [...always, 'relationship-manager', 'high-volume-note'], noBlocking: true } },
     { id: 'aster-arrangement-no-fee', name: 'Approved arrangement: arrangement message, no late fee', recordId: 'CARD-0001', overrides: { card: { missedPayments: 2, paymentStatus: 'overdue', assistanceRequested: true, arrangementStatus: 'approved' } }, expect: { selectedVariants: { 'payment-guidance': 'payment-arrangement-active' }, visibleNodeIds: always, noBlocking: true } },
     { id: 'aster-spanish-blocked', name: 'Spanish-speaking customer stays blocked until the required Spanish is approved', recordId: 'CARD-0005', expect: { selectedVariants: { 'payment-guidance': 'payment-standard' }, approvedLocale: 'es-US' } },
-    { id: 'aster-long-list', name: 'Long transaction list: high-volume help and the spending summary', recordId: 'CARD-0008', expect: { visibleNodeIds: ['high-volume-note', 'spending-summary', 'notice-holiday-posting'], noBlocking: true } },
-    { id: 'aster-issued-december', name: 'As issued on 15 Dec 2026: the agreement notice starts, the holiday notice still shows', recordId: 'CARD-0001', issueDate: '2026-12-15', expect: { visibleNodeIds: ['notice-agreement-update', 'notice-holiday-posting'], noBlocking: true } },
-    { id: 'aster-issued-january', name: 'As issued on 10 Jan 2027: the holiday notice has ended', recordId: 'CARD-0001', issueDate: '2027-01-10', expect: { visibleNodeIds: ['notice-agreement-update'], hiddenNodeIds: ['notice-holiday-posting'], noBlocking: true } },
+    { id: 'aster-paper-holiday', name: 'Paper statement: the holiday mail notice shows; the agreement notice has not started', recordId: 'CARD-0007', expect: { visibleNodeIds: [...always, 'notice-holiday-posting'], hiddenNodeIds: ['notice-agreement-update'], noBlocking: true } },
+    { id: 'aster-issued-december', name: 'As issued on 15 Dec 2026: the agreement notice starts, the holiday notice still shows', recordId: 'CARD-0007', issueDate: '2026-12-15', expect: { visibleNodeIds: ['notice-agreement-update', 'notice-holiday-posting'], noBlocking: true } },
+    { id: 'aster-issued-january', name: 'As issued on 10 Jan 2027: the holiday notice has ended', recordId: 'CARD-0007', issueDate: '2027-01-10', expect: { visibleNodeIds: ['notice-agreement-update'], hiddenNodeIds: ['notice-holiday-posting'], noBlocking: true } },
   ];
 }
 
@@ -185,22 +187,26 @@ export function enrichCard(project: Project): Project {
   p = run(p, { type: 'UPSERT_LOOKUP_TABLE', table: CARD_LATE_FEES });
   for (const f of CARD_CALCULATIONS) p = run(p, { type: 'UPSERT_CALCULATED_FIELD', field: f });
 
-  // Payment timing, after the payment guidance: an inline choice between two alternatives (not a rule, not a Variant
-  // Set), shown only when a minimum payment is due.
+  // Everything new goes after the transaction table, so the first page and the table's pages stay exactly as they were
+  // (the oracle's 250-row case still starts its table on page 1 and keeps its continuation headings).
+  // A one-sentence spending summary right under the transactions (plain text, like a note to the table), shown when at
+  // least one transaction is listed.
+  p = run(p, insertAt(p, {
+    id: 'spending-summary', type: 'rich-text', name: 'Spending summary', layout: flow(6),
+    visibleWhen: { op: 'gt', path: 'card.transactions.count', value: 0 },
+    content: richFromMarkup('The {{card.transactions.count}} transactions on this statement total {{calc.listedTotal}}; the largest was {{calc.largestTransaction}}. {{calc.availableCreditPct}}% of your credit limit is available.'),
+  }, { after: 'transaction-table' }));
+  // Payment timing: an inline choice between two alternatives (not a rule, not a Variant Set), shown only when a minimum
+  // payment is due.
   const owing: Predicate = { op: 'gt', path: 'card.minimumDueCents', value: 0 };
   const timing: DocNode = { id: 'payment-timing', type: 'conditional-region', name: 'Payment timing', policy: 'exclusive', variantIds: [], layout: flow(8) };
-  p = run(p, insertAt(p, timing, { after: 'payment-guidance' }));
-  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-late-fee', title: 'When to pay', when: { op: 'and', args: [owing, { op: 'gt', path: 'calc.lateFee', value: 0 }] }, text: 'Your payment is due in **{{calc.daysUntilDue}} days**, on {{card.dueDate}}. If the minimum payment arrives after that date, a late fee of up to {{calc.lateFee}} may apply.' });
-  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-arrangement', title: 'When to pay — arrangement in place', when: { op: 'and', args: [owing, { op: 'eq', path: 'card.arrangementStatus', value: 'approved' }] }, text: 'Your payment is due in **{{calc.daysUntilDue}} days**, on {{card.dueDate}}. While your payment arrangement is in place, no late fee is charged.' });
-  // A spending summary just before the transactions, shown when at least one transaction is listed.
-  p = conditionalSection(p, { before: 'transaction-table' }, { id: 'spending-summary', name: 'Spending summary', spaceBeforePt: 14 }, {
-    variantId: 'spending-at-a-glance', title: 'This period at a glance', when: { op: 'gt', path: 'card.transactions.count', value: 0 },
-    text: 'The {{card.transactions.count}} transactions listed below total {{calc.listedTotal}}. The largest was {{calc.largestTransaction}}. {{calc.availableCreditPct}}% of your credit limit is available.',
-  });
+  p = run(p, insertAt(p, timing, { after: 'spending-summary' }));
+  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-late-fee', title: 'When to pay', when: { op: 'and', args: [owing, { op: 'gt', path: 'calc.lateFee', value: 0 }] }, text: 'You have **{{calc.daysUntilDue}} days** to pay. If the minimum payment is late, a late fee of up to {{calc.lateFee}} may apply.' });
+  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-arrangement', title: 'When to pay — arrangement in place', when: { op: 'and', args: [owing, { op: 'eq', path: 'card.arrangementStatus', value: 'approved' }] }, text: 'You have **{{calc.daysUntilDue}} days** to pay. While your arrangement is in place, no late fee is charged.' });
   // Two dated notices before the disclosures: one in effect until a date, one from a date.
-  p = conditionalSection(p, { before: 'sample-disclosure-set' }, { id: 'notice-holiday-posting', name: 'Holiday posting notice', spaceBeforePt: 12 }, {
-    variantId: 'holiday-posting', title: 'Holiday payment posting', when: { op: 'gt', path: 'card.newBalanceCents', value: 0 },
-    text: 'Payments made between 24 December and 1 January may take one extra business day to post. Pay early to be sure your payment arrives by {{card.dueDate}}.',
+  p = conditionalSection(p, { before: 'sample-disclosure-set' }, { id: 'notice-holiday-posting', name: 'Holiday mail notice', spaceBeforePt: 12 }, {
+    variantId: 'holiday-posting', title: 'Paying by mail over the holidays', when: { op: 'eq', path: 'card.channelPreference', value: 'print' },
+    text: 'Payments mailed between 24 December and 1 January may take an extra business day to arrive. Mail yours early so it arrives by {{card.dueDate}}.',
   });
   p = conditionalSection(p, { before: 'sample-disclosure-set' }, { id: 'notice-agreement-update', name: 'Cardholder agreement update', spaceBeforePt: 8 }, {
     variantId: 'agreement-update', title: 'Your cardholder agreement is changing', when: { op: 'gt', path: 'card.creditLimitCents', value: 0 },
@@ -213,7 +219,7 @@ export function enrichCard(project: Project): Project {
 
   // Email: an opening line with a calculated value (the SMS is unchanged: it is sized to one message).
   const ch: ChannelConfig = channelConfig(p);
-  p = run(p, { type: 'SET_CHANNELS', channels: { ...ch, email: { ...ch.email, intro: 'Your payment is due in {{calc.daysUntilDue}} days, on {{card.dueDate}}.' } } });
+  p = run(p, { type: 'SET_CHANNELS', channels: { ...ch, email: { ...ch.email, intro: 'You have {{calc.daysUntilDue}} days to pay. Every transaction is in your full statement.' } } });
 
   for (const rule of CARD_WORDING_RULES) p = run(p, { type: 'ADD_WORDING_RULE', rule });
   p = run(p, { type: 'ADD_MAPPING', mapping: { id: 'print-house', name: 'Mapping for the print house', system: 'the print house', description: 'Field names of the print house’s statement data file (fictional).' } });
@@ -320,9 +326,10 @@ export function enrichEob(project: Project): Project {
   const confirmed: Predicate = { op: 'eq', path: 'claim.liabilityConfirmed', value: true };
   const notConfirmed: Predicate = { op: 'eq', path: 'claim.liabilityConfirmed', value: false };
   const summary: DocNode = { id: 'claim-summary', type: 'conditional-region', name: 'Claim summary', policy: 'exclusive', variantIds: [], layout: flow(8) };
-  p = run(p, insertAt(p, summary, { after: 'eob-claim-message' }));
-  p = run(p, { type: 'ADD_VARIANT', nodeId: 'claim-summary', variantId: 'summary-confirmed', title: 'Claim summary', when: confirmed, text: 'Claims in this explanation: {{calc.claimCount}}. Your plan paid {{calc.totalPlanPaid}} in total. Your share is {{calc.memberSharePct}}% of the amount the provider billed.' });
-  p = run(p, { type: 'ADD_VARIANT', nodeId: 'claim-summary', variantId: 'summary-in-review', title: 'Claim summary — under review', when: notConfirmed, text: 'Claims in this explanation: {{calc.claimCount}}. This claim is still being reviewed, so no amount is shown for you yet. Reviews of claims of this size usually take up to {{calc.reviewDays}} days.' });
+  // After the claim details table, so the first page's top half (banner, amounts, message, chart) does not move.
+  p = run(p, insertAt(p, summary, { after: 'claim-table' }));
+  p = run(p, { type: 'ADD_VARIANT', nodeId: 'claim-summary', variantId: 'summary-confirmed', title: 'Claim summary', when: confirmed, text: 'Your plan paid {{calc.totalPlanPaid}} for the claims in this explanation. Your share is {{calc.memberSharePct}}% of the amount the provider billed.' });
+  p = run(p, { type: 'ADD_VARIANT', nodeId: 'claim-summary', variantId: 'summary-in-review', title: 'How long the review takes', when: notConfirmed, text: 'Reviews of claims of this size usually take up to {{calc.reviewDays}} days. No amount is shown for you until it is done.' });
   // Keep the four claim amounts together on one page.
   p = run(p, { type: 'SET_LAYOUT', nodeId: 'claim-facts', profile: 'paged', layout: { keepTogether: true } });
   p = run(p, { type: 'SET_PAGE_DESIGN', patch: { pageTemplates: { first: { background: EOB_FIRST_PAGE_TINT } } } });

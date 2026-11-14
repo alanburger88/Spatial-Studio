@@ -102,7 +102,7 @@ describe('wording rules in approval, validation, the AI route and releases (sign
     expect(ok.mode).toBe('ai');
     expect(ok.options.map((o) => o.text)).toEqual(['Your account is past due, {{customer.givenName}}.']);
     // the card sample's own rules (D106) are in force too, before the one added here
-    const sampleRules = '- The document must include “not a legal statement”; keep it if the text has it.\n- The text should not use “kindly” (write “please” instead).\n- No sentence should have more than 25 words.\n- Write “relationship team”, not “relationship specialist” (should).\n';
+    const sampleRules = '- The document must include “not a legal statement”; keep it if the text has it.\n- The text should not use “kindly” (write “please” instead).\n- No sentence should have more than 25 words.\n- The text should not use “relationship specialist” (write “relationship team” instead).\n';
     expect(good.seen[0].user).toBe(`House wording rules:\n${sampleRules}- The text must not use “delinquent” (write “past due” instead).\nKind of text: message.\nText:\n${text}`);
     for (const r of RECORDS.slice(0, 20)) expect(good.seen[0].user + good.seen[0].system).not.toContain((r as any).customer?.familyName ?? '§');
     // an answer that still breaks a "must" rule is refused, saying why

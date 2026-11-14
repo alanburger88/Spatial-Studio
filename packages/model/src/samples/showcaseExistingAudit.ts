@@ -138,7 +138,7 @@ export const EXISTING_EXAMPLES: ExistingExample[] = [
       'The fixture scenarios card-inconsistent-payment-state (contradictory payment state), and card-tie-defect (a rule patch that ties R03 and R04 at priority 400) are deliberate defects the oracle expects. card-250-rows replaces the list with 250 stress rows that still sum exactly to purchases.',
       'Rules R03 and R05 are reached by no customer as issued (only through scenario overrides or the journey): coverage reports them on purpose.',
       'One deliberate “should” wording finding: the relationship team message says “relationship specialist” (rule aster-relationship-team prefers “relationship team”).',
-      'The holiday posting notice is in effect until 5 Jan 2027 and the cardholder agreement notice from 1 Dec 2026; every sample statement is issued 1 Nov 2026, so the agreement notice shows only “as issued on” a later day.',
+      'The holiday mail notice (paper-statement customers only) is in effect until 5 Jan 2027 and the cardholder agreement notice from 1 Dec 2026; every sample statement is issued 1 Nov 2026, so the agreement notice shows only “as issued on” a later day.',
       'The minimum payment, fees and late fees are illustrative synthetic values, not compliant calculations.',
     ],
     deliberateShould: { ruleId: 'aster-relationship-team', textId: 'relationship-manager', why: 'An existing approved message; the finding shows a “should” rule warning without blocking.' },

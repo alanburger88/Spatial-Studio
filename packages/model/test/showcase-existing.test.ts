@@ -101,10 +101,10 @@ describe('the additions work for every customer', () => {
     expect(EOB_CALCULATIONS.map((c) => c.key)).toEqual(eob.calculatedFields!.map((c) => c.key));
   });
 
-  it('card: the date comes from the statement issue date, which every customer has; the notices follow their periods', () => {
+  it('card: the date comes from the statement issue date, which every customer has; the notices follow their periods (CARD-0007 gets a paper statement)', () => {
     expect(card.documentDate).toEqual({ source: 'field', path: 'card.issuedAt' });
     for (const r of customersOf(card)) expect(resolve({ project: card, record: r }).documentDate?.date, r.recordId).toBe((r as any).card.issuedAt);
-    const shown = (issueDate?: string) => { const t = indexTree(resolve({ project: card, record: recordById('CARD-0001')!, ...(issueDate ? { issueDate } : {}) }).root); return ['notice-holiday-posting', 'notice-agreement-update'].map((id) => t.get(id)!.visible); };
+    const shown = (issueDate?: string) => { const t = indexTree(resolve({ project: card, record: recordById('CARD-0007')!, ...(issueDate ? { issueDate } : {}) }).root); return ['notice-holiday-posting', 'notice-agreement-update'].map((id) => t.get(id)!.visible); };
     expect(shown()).toEqual([true, false]);
     expect(shown('2026-12-01')).toEqual([true, true]);
     expect(shown('2027-01-05')).toEqual([false, true]);
@@ -159,7 +159,7 @@ describe('the additions work for every customer', () => {
 
   it('email wording uses a calculated value; the SMS is unchanged', () => {
     const r = resolve({ project: card, record: recordById('CARD-0001')! });
-    expect(r.channelTexts.intro.map((b) => b.inlines!.map((i) => i.text).join('')).join(' ')).toBe('Your payment is due in 24 days, on Nov 25, 2026.');
+    expect(r.channelTexts.intro.map((b) => b.inlines!.map((i) => i.text).join('')).join(' ')).toBe('You have 24 days to pay. Every transaction is in your full statement.');
     expect(card.channels!.sms).toEqual(base[0].channels?.sms ?? card.channels!.sms);
     expect(resolve({ project: card, record: recordById('CARD-0001')! }).channelTexts.sms).toBe(resolve({ project: base[0], record: recordById('CARD-0001')! }).channelTexts.sms);
   });
