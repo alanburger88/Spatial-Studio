@@ -1,5 +1,5 @@
 /* Review links in the studio: the share dialog, the panel on Releases. */
-.rl-dialog { width: min(640px, calc(100vw - 64px)); display: flex; flex-direction: column; gap: 10px; }
+.rl-dialog { width: 100%; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .rl-form { display: flex; flex-direction: column; gap: 10px; }
 .rl-form .field { margin: 0; }
 .rl-lead { margin: 0; font-size: 13px; }

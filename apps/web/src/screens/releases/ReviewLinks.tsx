@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { ApiFailure, reviewLinksApi, type ReviewLinkDto, type ReviewLinkOptionsDto, type ReviewOutputId } from '../../api/client';
 import { useStudio } from '../../state/store';
 import { Dialog } from '../../ui/common';
-import { fmtAbs, When } from '../../ui/time';
+import { fmtAbs } from '../../ui/time';
 import './ReviewLinks.css';
 
 /**
@@ -257,7 +257,7 @@ export function ReviewLinksPanel({ projectId }: { projectId: string }) {
                       <td className="rl-label"><span title={l.label}>{l.label}</span> {l.status !== 'active' && <span className={`chip ${STATUS[l.status].cls}`}>{STATUS[l.status].label}</span>}</td>
                       <td>{targetWords(l.target)}</td>
                       <td title={l.customers.map((id) => names.get(id) ?? id).join(', ')}>{plural(l.customers.length, 'customer')}</td>
-                      <td>{l.status === 'revoked' ? <span className="muted">Revoked{l.revokedBy ? ` by ${l.revokedBy}` : ''}</span> : <time dateTime={l.expiresAt} title={fmtAbs(l.expiresAt)}>{l.status === 'expired' ? 'Expired ' : ''}<When iso={l.expiresAt} /></time>}</td>
+                      <td>{l.status === 'revoked' ? <span className="muted">Revoked{l.revokedBy ? ` by ${l.revokedBy}` : ''}</span> : <time dateTime={l.expiresAt} title={fmtAbs(l.expiresAt)}>{l.status === 'expired' ? 'Expired ' : ''}{new Date(l.expiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</time>}</td>
                       <td className="num" title={l.lastOpenedAt ? `Last opened ${fmtAbs(l.lastOpenedAt)}` : 'Not opened yet'}>{l.opens}</td>
                       <td className="num">{l.comments}</td>
                       <td>{l.createdBy?.name ?? '—'}</td>

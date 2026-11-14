@@ -24,7 +24,17 @@ async function approve(request: APIRequestContext) {
   }
 }
 
+/** Gives the copy approved Spanish wording, so a link can offer a second language. */
+async function addSpanish(request: APIRequestContext) {
+  const p = (await (await request.get(`${API}/projects/${pid}`)).json()).project;
+  for (const c of p.contentParts) c.approvedLocales['es-US'] = `ES: ${c.approvedLocales['en-US']}`;
+  p.languages = ['es-US'];
+  const r = await request.put(`${API}/projects/${pid}`, { data: { project: { ...p, modelVersion: p.modelVersion + 1 } }, headers: { 'If-Match': `"${p.modelVersion}"` } });
+  expect(r.ok(), await r.text()).toBeTruthy();
+}
+
 test('RL01 make a link, review through it without a session, comment, answer, revoke', async ({ page, browser, request }) => {
+  await addSpanish(request);
   await approve(request);
   await open(page, pid, 'releases');
 
@@ -78,12 +88,12 @@ test('RL01 make a link, review through it without a session, comment, answer, re
   await expect(output.getByTestId('review-email-subject')).not.toBeEmpty();
   await rp.getByTestId('review-output-sms').click();
   await expect(output.getByTestId('review-sms')).toContainText('characters');
-  const language = rp.getByTestId('review-language');
-  if (await language.count()) {
-    await language.selectOption('es-US');
-    await expect(output).toHaveAttribute('data-language', 'es-US');
-    await expect(output.getByTestId('review-output-language')).toContainText('Spanish');
-  }
+  await rp.getByTestId('review-output-html').click();
+  await expect(rp.frameLocator('[data-testid="review-html"]').locator('body')).not.toContainText('ES: ');
+  await rp.getByTestId('review-language').selectOption('es-US');
+  await expect(output).toHaveAttribute('data-language', 'es-US');
+  await expect(output.getByTestId('review-output-language')).toContainText('Spanish');
+  await expect(rp.frameLocator('[data-testid="review-html"]').locator('body')).toContainText('ES: ');
   const pdf = await rp.request.get(new URL(`/api/v1/review/${url.split('/review/')[1]}/pdf?customer=${customers[0]}`, url).toString());
   expect(pdf.headers()['content-type']).toBe('application/pdf');
 

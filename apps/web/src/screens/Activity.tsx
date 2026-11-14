@@ -112,9 +112,10 @@ export function auditSentence(e: AuditEventDto, project: Project | null, names: 
     case 'workflow.publish': return `Published ${v}`;
     case 'workflow.reopen': return `Moved ${v} back to draft`;
     case 'comment.create': return `Commented on ${node(d.nodeId)}`;
-    case 'comment.reply': return `Replied to a comment on ${node(d.nodeId)}`;
-    case 'comment.resolve': return `Resolved a comment thread on ${node(d.nodeId)}`;
-    case 'comment.reopen': return `Reopened a comment thread on ${node(d.nodeId)}`;
+    // A comment from a review link may be about the whole document (no component): wave 4.
+    case 'comment.reply': return `Replied to a comment on ${d.nodeId === '' ? 'the whole document' : node(d.nodeId)}`;
+    case 'comment.resolve': return `Resolved a comment thread on ${d.nodeId === '' ? 'the whole document' : node(d.nodeId)}`;
+    case 'comment.reopen': return `Reopened a comment thread on ${d.nodeId === '' ? 'the whole document' : node(d.nodeId)}`;
     case 'comment.delete': return `Deleted a comment on ${node(d.nodeId)}`;
     /* ---- review links (wave 4): ids and counts only; the typed name and the text stay with the comment ---- */
     case 'review-link.create': return `Made a review link to ${d.target === 'release' ? `release ${d.releaseNumber} (${v})` : `saved version ${d.version}`} for ${plural(Number(d.customers ?? 0), 'customer')}, open for ${plural(Number(d.expiresInDays ?? 0), 'day')}`;

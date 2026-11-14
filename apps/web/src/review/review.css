@@ -16,6 +16,9 @@
 .rv-field { margin: 0; min-width: 0; }
 .rv-field .select { min-width: 220px; max-width: 100%; }
 .rv-seg { flex-wrap: wrap; }
+.rv-only { display: inline-flex; align-items: center; min-height: 32px; }
+.rv-output, .rv-comments, .rv-intro { scroll-margin-top: 48px; }
+.rv-frame-pdf > p { margin: 0; padding: 40px 16px; text-align: center; }
 .rv-seg button { min-height: 32px; padding: 0 14px; font-size: 13px; }
 
 .rv-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 16px; align-items: start; }
@@ -75,5 +78,7 @@
   .rv-controls { flex-direction: column; align-items: stretch; }
   .rv-field .select { min-width: 0; width: 100%; }
   .rv-output { min-height: 0; }
-  .rv-frame-web, .rv-frame-pdf { height: 70vh; min-height: 360px; }
+  .rv-frame-web { height: 70vh; min-height: 360px; }
+  /* Phones rarely show a PDF inside a page: the "Open the PDF" button is the way in. */
+  .rv-frame-pdf { display: none; }
 }

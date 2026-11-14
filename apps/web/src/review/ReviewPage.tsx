@@ -162,7 +162,7 @@ function Review({ token, s }: { token: string; s: Summary }) {
                   {s.languages.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
                 </select>
               </label>
-            ) : <p className="field rv-field"><span className="label">Language</span><span data-testid="review-language-only">{s.languages[0]?.name}</span></p>}
+            ) : <div className="field rv-field"><span className="label">Language</span><span className="rv-only" data-testid="review-language-only">{s.languages[0]?.name}</span></div>}
           </div>
 
           <div className="rv-layout">
@@ -273,7 +273,7 @@ function Comments({ token, s, customer, customerName, output, language }: { toke
       <div className="panel-head"><h2 className="section-title" id="rv-comments-h">Comments {list && <span className="chip count">{list.length}</span>}</h2></div>
       <div className="rv-comments-body">
         <form className="rv-form" onSubmit={submit} aria-describedby="rv-form-about" data-testid="review-comment-form">
-          <p className="muted rv-about" id="rv-form-about">About <strong>{customerName}</strong>, {outputLabel.toLowerCase()}, {languageName}.</p>
+          <p className="muted rv-about" id="rv-form-about">Your comment is about <strong>{customerName}</strong> · {outputLabel} · {languageName}</p>
           <label className="field">
             <span className="label">Your name</span>
             <input className="input" value={name} maxLength={s.limits.nameMax} onChange={(e) => setName(e.target.value)} autoComplete="name" required data-testid="review-name" />
