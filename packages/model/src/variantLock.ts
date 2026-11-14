@@ -65,6 +65,8 @@ export function variantLockProblem(reference: Project, candidate: Project, varia
     if (!r) return { part: 'component', nodeId: n.id, message: `“${named(n)}” is a component of the base document “${variantOf.baseTitle}” that this variant hides. Bring it back with “Use the base’s again” on Overview, or detach this variant.` };
     if (r.type !== n.type) return { part: 'component', nodeId: n.id, message: variantLockedMessage(variantOf, `The kind of component “${named(n)}”`) };
     if (!same(r.layout, n.layout)) return { part: 'layout', nodeId: n.id, message: variantLockedMessage(variantOf, `The position and size of “${named(n)}”`, true) };
+    // A repeating section (richer data shapes): which list a base section repeats over, and how, is part of the page's structure.
+    if (!same(r.repeat, n.repeat)) return { part: 'repeat', nodeId: n.id, message: variantLockedMessage(variantOf, `What “${named(n)}” repeats for`) };
     if ((pr.get(n.id) ?? null) !== (pc.get(n.id) ?? null)) return { part: 'place', nodeId: n.id, message: variantLockedMessage(variantOf, `The place of “${named(n)}” in the document`) };
   }
   // The order of the base's components inside each container (the variant's own components and hidden ones aside).

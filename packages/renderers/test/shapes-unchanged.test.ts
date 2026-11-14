@@ -14,7 +14,10 @@ describe('documents without the new data shapes are unchanged', () => {
     const now = examplesFingerprint();
     if (process.env.CAPTURE === '1') writeFileSync(FILE, JSON.stringify(now, null, 1) + '\n');
     const before = JSON.parse(readFileSync(FILE, 'utf8')) as Record<string, string>;
-    expect(Object.keys(now).length).toBeGreaterThan(150);
-    expect(now).toEqual(before);
+    expect(Object.keys(before).length).toBeGreaterThan(150);
+    // Only documents that existed before the feature are compared; an example added later (the Lakeshore variant) has
+    // no "before". Every baseline entry must still be produced, and must be identical.
+    const compared = Object.fromEntries(Object.keys(before).map((k) => [k, now[k]]));
+    expect(compared).toEqual(before);
   }, 300000);
 });
