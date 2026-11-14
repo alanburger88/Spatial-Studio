@@ -1,6 +1,6 @@
 import {
   DERIVED_FIELDS_VERSION, RECORD_ID_PREFIX, SOURCE_LANGUAGE, buildContext, dateBoundaries, defaultFormatterFor, evaluateCalculations, exprDependencies,
-  formulaInWords, getPath, itemFieldDefs, scopeFieldIndex, lookupTableProblems, printFormula, projectFieldIndex, projectFields, tokensIn, tokensInText, translatableStrings, translationStatus, wordsScopeOf,
+  formulaInWords, getPath, itemFieldDefs, scopeFieldIndex, usesRicherShapes, lookupTableProblems, printFormula, projectFieldIndex, projectFields, tokensIn, tokensInText, translatableStrings, translationStatus, wordsScopeOf,
   type DocNode, type FieldDef, type Predicate, type Project, type SyntheticRecord,
 } from '@iss/model';
 import { predicatePaths } from '@iss/resolver';
@@ -86,7 +86,8 @@ export function dataDictionary(project: Project) {
   if (project.documentDate) sample.document = { date: exampleDate };
   if (project.calculatedFields?.length) evaluateCalculations(project, sample, exampleDate);
   const fields = projectFields(project);
-  const itemDefs = itemFieldDefs(project.customFields, project.calculatedFields);
+  // Only for a document that uses the richer shapes: every other dictionary stays exactly as it was.
+  const itemDefs = usesRicherShapes(project) ? itemFieldDefs(project.customFields, project.calculatedFields) : [];
   const calcs = new Map((project.calculatedFields ?? []).map((c) => [`calc.${c.key}`, c]));
   const words = wordsScopeOf(project, projectFieldIndex(project));
   // A calculated field needs the fields it is calculated from (a row count needs its list; the document's date its source field).
