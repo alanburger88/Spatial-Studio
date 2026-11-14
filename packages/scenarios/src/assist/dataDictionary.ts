@@ -35,7 +35,8 @@ export interface FieldUse { rules: Map<string, string>; conditions: Set<string>;
 
 /** Where every data field is read: rule conditions, conditions on components, bindings, text tokens and journey steps. */
 export function fieldUsage(project: Project): { used: Map<string, FieldUse>; unknown: Array<{ path: string; where: string }> } {
-  const known = new Set(projectFields(project).map((f) => f.path));
+  // Richer data shapes (wave 5): the fields of the items of the lists are known too (read inside repeating sections).
+  const known = new Set([...projectFields(project), ...(usesRicherShapes(project) ? itemFieldDefs(project.customFields, project.calculatedFields) : [])].map((f) => f.path));
   const used = new Map<string, FieldUse>();
   const unknown: Array<{ path: string; where: string }> = [];
   const at = (path: string, where: string): FieldUse | null => {
