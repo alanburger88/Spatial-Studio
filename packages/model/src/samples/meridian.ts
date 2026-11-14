@@ -495,7 +495,8 @@ export function meridianCustomers(): SampleCustomer[] {
     const d = (k: number) => addDays(q.start, k);
     if (!s.noTransactions) {
       if (contributions) tx.push({ date: d(9), type: w.contribution, fund: 'Meridian Cash Reserve', units: unitsText(contributions * 10), amountCents: contributions });
-      const income1 = Math.floor(income / 2);
+      // About three fifths of the income is the dividend and the rest is interest, so the two lines do not read as a copy.
+      const income1 = Math.floor((income * 62) / 100);
       tx.push({ date: d(30), type: w.dividend, fund: holdings.filter((h) => h.valueCents > 0)[0].fund, units: '', amountCents: income1 });
       tx.push({ date: d(61), type: w.interest, fund: 'Meridian Cash Reserve', units: '', amountCents: income - income1 });
       if (fees) tx.push({ date: d(88), type: w.fee, fund: 'Meridian Cash Reserve', units: '', amountCents: fees });
