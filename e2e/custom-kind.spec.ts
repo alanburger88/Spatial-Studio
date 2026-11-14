@@ -1,0 +1,499 @@
+/**
+ * Browser tests for the third kind of document, "Your own data" (kind `custom`): a blank project with the
+ * customer's name and language plus data fields the user defines. Projects are created through the UI or the API
+ * and ALWAYS deleted afterwards. Runs against the real local stack like the other specs.
+ */
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { API } from './helpers';
+import { gymProject } from '../packages/model/test/helpers/customProject';
+import { gotoScreen } from './nav-helper';
+
+const created: string[] = [];
+test.beforeEach(() => { created.length = 0; });
+test.afterEach(async ({ request }) => {
+  for (const id of created) await request.delete(`${API}/projects/${id}`);
+});
+
+const STUDIO_SCREENS = ['design', 'rules-data', 'data', 'content', 'channels', 'cube', 'landscape', 'page-stack', 'journey', 'validate', 'outputs', 'demo', 'assistant', 'activity'];
+/** Wording that belongs to the card and claim samples. */
+const SAMPLE_WORDING = /\b(card|cardholder|claims?|statement|member responsibility|explanation of benefits|aster|harborcare)\b/i;
+
+/** A blank project made through the API. */
+async function blankProject(request: APIRequestContext, title: string, extra: Record<string, unknown> = {}) {
+  const r = await request.post(`${API}/projects`, { data: { templateId: 'blank-project', title, ...extra } });
+  expect(r.status()).toBe(201);
+  const body = await r.json();
+  created.push(body.project.projectId);
+  return body.project as { projectId: string; modelVersion: number; title: string };
+}
+
+/** The "gym membership" document from the model tests, stored under a fresh id, with customers generated for it. */
+async function gymDocument(request: APIRequestContext, title: string) {
+  const blank = await blankProject(request, title, { issuerName: 'Northside Gym', accent: '#1f4e79' });
+  const p = { ...gymProject({ withSpanish: true }), projectId: blank.projectId, title, modelVersion: blank.modelVersion };
+  const put = await request.put(`${API}/projects/${blank.projectId}`, { data: { project: p }, headers: { 'If-Match': `"${blank.modelVersion}"` } });
+  expect(put.ok(), await put.text()).toBeTruthy();
+  const gen = await request.post(`${API}/projects/${blank.projectId}/test-data`, { data: { outcomes: true, edges: true } });
+  expect(gen.ok(), await gen.text()).toBeTruthy();
+  return blank.projectId;
+}
+
+async function openStudio(page: Page, id: string, view: string) {
+  await page.goto(`/studio/${id}/${view}`);
+  await expect(page.getByRole('main')).toBeVisible();
+  await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
+  await expect(page.locator('#main section.screen').first()).toBeVisible();
+}
+
+test('C05 every studio screen opens for a document with its own data, without errors or card and claim wording', async ({ page, request }) => {
+  test.setTimeout(240_000);
+  const errors: string[] = [];
+  const problems: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const full = await gymDocument(request, 'Gym notice screens');
+  const empty = await blankProject(request, 'Empty notice screens');
+  for (const id of [full, empty.projectId]) {
+    for (const view of STUDIO_SCREENS) {
+      await openStudio(page, id, view);
+      await page.waitForTimeout(600);
+      const where = `${id}/${view}`;
+      if (await page.locator('#main .error-state').count()) problems.push(`${where}: error state: ${(await page.locator('#main .error-state').first().innerText()).replace(/\s+/g, ' ').slice(0, 160)}`);
+      const text = (await page.locator('#main').innerText()).replace(/Synthetic data/g, '');
+      for (const m of text.matchAll(new RegExp(SAMPLE_WORDING.source, 'gi'))) problems.push(`${where}: “${text.slice(Math.max(0, m.index! - 40), m.index! + 60).replace(/\s+/g, ' ')}”`);
+    }
+    // The exploded view of a component.
+    const node = id === full ? 'renewal-note' : null;
+    if (node) { await openStudio(page, id, `exploded/${node}`); await page.waitForTimeout(500); if (await page.locator('#main .error-state').count()) problems.push(`${id}/exploded: error state`); }
+  }
+  expect(errors).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
+/* ------------------------------------------------------------------------------------------------ helpers */
+
+const idFromUrl = (page: Page) => /\/studio\/([^/]+)\//.exec(page.url())![1];
+/** Reads from the studio store in the page. */
+const store = async <T>(page: Page, fn: (s: any) => T): Promise<T> => {
+  const h = await page.evaluateHandle(() => (window as any).__iss.store.getState());
+  try { return await h.evaluate(fn); } finally { await h.dispose(); }
+};
+const dispatch = (page: Page, cmd: unknown) => page.evaluate((c) => { const r = (window as any).__iss.store.getState().dispatch(c); return r.ok ? null : r.message as string; }, cmd);
+const customersOf = async (request: APIRequestContext, id: string) => ((await (await request.get(`${API}/records?documentType=custom&full=1&projectId=${id}`)).json()).records as any[]);
+const saved = async (page: Page) => { await page.getByTestId('save-project').click(); await expect(page.getByTestId('save-state')).toContainText('Saved'); };
+
+/** The data fields of the small "membership" document built in C03. */
+const MEMBER_FIELDS = [
+  { key: 'planName', label: 'Plan name', type: 'string' },
+  { key: 'monthlyFeeCents', label: 'Monthly fee', type: 'cents' },
+  { key: 'tier', label: 'Membership tier', type: 'enum', enumValues: ['basic', 'pro'] },
+  { key: 'autoRenew', label: 'Renews automatically', type: 'bool' },
+  { key: 'sessions', label: 'Booked sessions', type: 'list', itemFields: [{ key: 'day', label: 'Day', type: 'date' }, { key: 'className', label: 'Class', type: 'string' }, { key: 'priceCents', label: 'Price', type: 'cents' }] },
+];
+
+/* ------------------------------------------------------------------------------------------------ C01 */
+
+test('C01 New project, Blank project: issuer name and colour, an empty page, a generated customer, and the gallery says “Your own data”', async ({ page, request }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/projects');
+  await page.getByTestId('new-project').click();
+  const card = page.getByTestId('template-blank-project');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Your own data');
+  // the thumbnail is an empty page (it is drawn, not a spinner)
+  await expect(card.locator('.pv-wrap, .pv-page, [class*="pv-"]').first()).toBeVisible();
+  await expect(page.getByTestId('template-blank-letter')).toBeVisible();
+  await card.click();
+  await expect(page.getByTestId('blank-project-options')).toContainText('your own data fields');
+  await expect(page.getByTestId('blank-accent-hex')).toHaveValue('#475569');
+  await page.getByTestId('new-project-title').fill('Membership notice C01');
+  // who the document is from defaults to the project name; 2 to 60 characters
+  await expect(page.getByTestId('blank-issuer-name')).toHaveValue('Membership notice C01');
+  await page.getByTestId('blank-issuer-name').fill('N');
+  await expect(page.getByTestId('create-project')).toBeDisabled();
+  await page.getByTestId('blank-issuer-name').fill('Northside Gym');
+  await page.getByTestId('blank-accent').fill('#1f4e79');
+  await expect(page.getByTestId('blank-accent-hex')).toHaveValue('#1f4e79');
+  await page.getByTestId('create-project').click();
+  await page.waitForURL(/\/studio\/membership-notice-c01\/overview/);
+  await gotoScreen(page, 'S02');
+  created.push(idFromUrl(page));
+  await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
+
+  // an empty page with a way to start, and the first generated customer selected
+  await expect(page.getByTestId('design-empty')).toBeVisible();
+  await expect(page.getByTestId('design-empty')).toContainText('Add your first component');
+  await page.getByTestId('design-empty-add').click();
+  await expect(page.getByRole('complementary', { name: 'Components and layers' })).toBeVisible();
+  const st = await store(page, (s) => ({ type: s.project.documentType, issuer: s.project.issuer, rec: s.ctx.recordId, count: s.records.length, kids: s.project.nodes.find((n: any) => n.id === s.project.rootNodeId).children.length }));
+  expect(st).toMatchObject({ type: 'custom', issuer: { name: 'Northside Gym', accent: '#1f4e79' }, kids: 0 });
+  expect(st.rec).toMatch(/^REC-/);
+  expect(st.count).toBeGreaterThanOrEqual(1);
+  await expect(page.getByTestId('record-selector')).toHaveAttribute('data-value', st.rec);
+  // the customer picker names it by what it is, and marks it as generated
+  await page.getByTestId('record-selector').click();
+  await expect(page.getByTestId('record-generated-chip').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // the gallery card names the kind
+  await page.goto('/projects');
+  const gcard = page.getByTestId('project-card-membership-notice-c01');
+  await expect(gcard).toContainText('Your own data');
+  await expect(gcard).toContainText('Your own document');
+  await expect(gcard.locator('.gal-paper')).toBeVisible();
+  expect(errors).toEqual([]);
+  expect((await customersOf(request, 'membership-notice-c01')).length).toBe(st.count);
+});
+
+/* ------------------------------------------------------------------------------------------------ C02 */
+
+test('C02 data fields: text, amount, choice, yes/no and a list with three columns; they appear in the pickers; a bad key is rejected with a plain message', async ({ page, request }) => {
+  const blank = await blankProject(request, 'Fields C02');
+  await openStudio(page, blank.projectId, 'rules-data');
+  // an empty project points at the editor
+  await expect(page.getByTestId('no-data-fields')).toContainText('no data fields yet');
+  await expect(page.getByTestId('edge-case-generator')).toHaveCount(0);
+  await page.getByTestId('no-data-fields-open').click();
+  await expect(page.getByTestId('data-fields')).toBeVisible();
+  const add = async (label: string, type: string, extra?: (row: ReturnType<Page['getByTestId']>) => Promise<void>) => {
+    await page.getByTestId('df-add').click();
+    const row = page.getByTestId('df-row').last();
+    await row.getByTestId('df-label').fill(label);
+    await row.getByTestId('df-type').selectOption(type);
+    if (extra) await extra(row);
+  };
+  await add('Plan name', 'string');
+  await add('Monthly fee', 'cents');
+  await add('Membership tier', 'enum', async (row) => { await row.getByTestId('df-values').fill('basic, pro'); });
+  await add('Renews automatically', 'bool');
+  await add('Booked sessions', 'list', async (row) => {
+    await expect(row.getByTestId('df-col')).toHaveCount(1);
+    await row.getByTestId('df-col-add').click();
+    await row.getByTestId('df-col-add').click();
+    const cols = row.getByTestId('df-col');
+    await expect(cols).toHaveCount(3);
+    const specs: Array<[string, string]> = [['Day', 'date'], ['Class', 'string'], ['Price', 'cents']];
+    for (let i = 0; i < 3; i++) { await cols.nth(i).getByTestId('df-col-label').fill(specs[i][0]); await cols.nth(i).getByTestId('df-col-type').selectOption(specs[i][1]); }
+    // a column can be moved: Class up, then back
+    await cols.nth(1).getByRole('button', { name: /Move column Class up/ }).click();
+    await expect(cols.nth(0).getByTestId('df-col-label')).toHaveValue('Class');
+    await cols.nth(0).getByRole('button', { name: /Move column Class down/ }).click();
+    await expect(cols.nth(0).getByTestId('df-col-label')).toHaveValue('Day');
+  });
+  await expect(page.getByTestId('df-row').nth(1).getByTestId('df-key')).toHaveValue('monthlyFee');
+  await page.getByTestId('df-row').last().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${SHOTS}/c02-data-fields-list.png` });
+  await page.getByTestId('save-data-fields').click();
+  await expect(page.getByTestId('data-fields')).toHaveCount(0);
+  await expect(page.getByTestId('no-data-fields')).toHaveCount(0);
+  const fields = await store(page, (s) => s.project.customFields);
+  expect(fields.map((f: any) => `${f.key}:${f.type}`)).toEqual(['planName:string', 'monthlyFee:cents', 'membershipTier:enum', 'renewsAutomatically:bool', 'bookedSessions:list']);
+  expect(fields[4].itemFields).toEqual([{ key: 'day', label: 'Day', type: 'date' }, { key: 'class', label: 'Class', type: 'string' }, { key: 'price', label: 'Price', type: 'cents' }]);
+
+  // they are offered where rules are written, with the calculated number of rows
+  await page.getByTestId('add-rule').click();
+  const options = await page.getByTestId('cond-0-field').locator('option').allInnerTexts();
+  expect(options).toEqual(expect.arrayContaining(['Plan name', 'Monthly fee', 'Membership tier', 'Renews automatically', 'Booked sessions count (derived)']));
+  expect(options.join(' ')).not.toMatch(/payment|claim|balance/i);
+
+  // a bad key is refused, with the reason in plain words, and the model is unchanged
+  await page.getByTestId('open-data-fields').click();
+  await page.getByTestId('df-add').click();
+  const row = page.getByTestId('df-row').last();
+  await row.getByTestId('df-label').fill('Bad one');
+  await row.getByTestId('df-key').fill('1 bad-key');
+  await page.getByTestId('save-data-fields').click();
+  await expect(page.getByTestId('df-error')).toContainText('must start with a letter and use only letters and digits');
+  await expect(page.getByTestId('data-fields')).toBeVisible();
+  expect((await store(page, (s) => s.project.customFields)).length).toBe(5);
+  // the server refuses the same thing when a project file with it is saved
+  const proj = await store(page, (s) => s.project);
+  const bad = { ...proj, customFields: [...proj.customFields, { key: '1 bad-key', label: 'Bad one', type: 'string' }] };
+  const put = await request.put(`${API}/projects/${blank.projectId}`, { data: { project: bad }, headers: { 'If-Match': `"${blank.modelVersion}"` } });
+  expect(put.ok()).toBeFalsy();
+  expect(await put.text()).toMatch(/letter|key/i);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+
+  // the list shows up in the design pickers: a table bound to it, with its columns
+  await openStudio(page, blank.projectId, 'design');
+});
+
+/* ------------------------------------------------------------------------------------------------ C03 */
+
+test('C03 a small document: heading with the customer’s name, a bound amount, a table with a total, a message with two versions and a rule; regenerated customers change the message', async ({ page, request }) => {
+  test.setTimeout(75_000);
+  const blank = await blankProject(request, 'Membership C03', { issuerName: 'Northside Gym', accent: '#1f4e79' });
+  await openStudio(page, blank.projectId, 'design');
+  expect(await dispatch(page, { type: 'SET_CUSTOM_FIELDS', fields: MEMBER_FIELDS })).toBeNull();
+  // the customers were made before the document had data fields: generate them again so they carry values
+  await saved(page);
+  expect((await request.post(`${API}/projects/${blank.projectId}/test-data`, { data: { outcomes: true, edges: true } })).ok()).toBeTruthy();
+  await openStudio(page, blank.projectId, 'design');
+  await showLeft(page);
+
+  // 1. heading text with the customer's name token
+  await page.getByTestId('insert-rich-text').click();
+  const heading = (await store(page, (s) => s.ctx.selectedNodeId)) as string;
+  await page.getByTestId('edit-rich-text').click();
+  await page.getByTestId('rich-text-editor').press('End');
+  await page.getByTestId('token-customer.givenName').click();
+  await page.getByTestId('rich-text-done').click();
+  await expect(page.getByTestId(`node-${heading}`)).not.toContainText('{{');
+  const name = await store(page, (s) => s.records.find((r: any) => r.recordId === s.ctx.recordId).customer.givenName);
+  await expect(page.getByTestId(`node-${heading}`)).toContainText(name);
+  // the token picker offers the document's own fields and the customer's, never card or claim fields
+  const tokens = await page.locator('[data-testid^="token-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+  expect(tokens).toEqual(expect.arrayContaining(['token-custom.planName', 'token-custom.monthlyFeeCents', 'token-custom.sessions.count', 'token-customer.familyName']));
+  expect(tokens.filter((t) => /token-(card|claim)/.test(t ?? ''))).toEqual([]);
+
+  // 2. a bound amount
+  await page.getByTestId('insert-bound-field').click();
+  const amount = (await store(page, (s) => s.ctx.selectedNodeId)) as string;
+  const sel = page.getByTestId('binding-select');
+  const bindings = await sel.locator('option').evaluateAll((els) => els.map((e) => (e as HTMLOptionElement).value));
+  expect(bindings).toEqual(expect.arrayContaining(['custom.monthlyFeeCents', 'custom.planName', 'custom.sessions.count']));
+  expect(bindings.filter((b) => /^(card|claim)\./.test(b))).toEqual([]);
+  await sel.selectOption('custom.monthlyFeeCents');
+  await expect(page.getByTestId(`node-${amount}`)).toContainText('$');
+
+  // 3. a table bound to the list, with a total
+  await page.getByTestId('insert-repeating-table').click();
+  const table = (await store(page, (s) => s.ctx.selectedNodeId)) as string;
+  await expect(page.getByTestId('table-binding')).toHaveValue('custom.sessions');
+  await expect(page.getByTestId('column-total-day')).toHaveCount(0);
+  await page.getByTestId('column-total-priceCents').check();
+  await expect(page.getByTestId(`node-${table}`)).toContainText(/total/i);
+  expect((await store(page, (s) => s.project.nodes.find((n: any) => n.binding === 'custom.sessions').columns.filter((c: any) => c.total).map((c: any) => c.key)))).toEqual(['priceCents']);
+
+  // 4. a message with two versions
+  await page.getByTestId('insert-variant-set').click();
+  const msg = (await store(page, (s) => s.ctx.selectedNodeId)) as string;
+  await page.getByTestId('new-variant-title').fill('Pro members');
+  await page.getByTestId('new-variant-text').fill('As a Pro member you keep priority booking, {{customer.givenName}}.');
+  await page.getByTestId('add-variant').click();
+  await expect(page.getByTestId('variants-editor')).toContainText('Pro members');
+
+  // 5. a rule on the choice field picks the second version
+  await saved(page);
+  await openStudio(page, blank.projectId, 'rules-data');
+  await page.getByTestId('add-rule').click();
+  await page.getByTestId('cond-0-field').selectOption({ label: 'Membership tier' });
+  await page.getByTestId('cond-0-value').locator('select').selectOption('pro');
+  await page.getByTestId('action-op').selectOption('selectVariant');
+  const proVersion = await store(page, (s) => s.project.nodes.find((n: any) => n.type === 'variant-set').variantIds.find((v: string) => /pro/.test(v)));
+  await page.getByTestId('action-variant').selectOption(proVersion);
+  await page.getByTestId('rule-title').fill('Pro members get the Pro note');
+  await page.getByTestId('apply-rule-change').click();
+  await expect(page.getByTestId('rule-errors')).toHaveCount(0);
+  await saved(page);
+
+  // 6. generate customers for it: every outcome once
+  await page.getByTestId('testdata-open').click();
+  await page.getByTestId('testdata-generate').click();
+  await expect(page.getByTestId('testdata-done')).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  const generated = (await customersOf(request, blank.projectId)).filter((r) => r.generated);
+  expect(generated.length).toBeGreaterThanOrEqual(2);
+
+  // 7. the picker lists them; switching customers changes the message
+  await openStudio(page, blank.projectId, 'design');
+  await page.getByTestId('record-selector').click();
+  const listed = await page.locator('[data-testid^="record-option-"]').count();
+  expect(listed).toBe((await customersOf(request, blank.projectId)).length);
+  await page.keyboard.press('Escape');
+  const text = async (recordId: string) => {
+    await page.evaluate((id) => (window as any).__iss.store.getState().setRecord(id), recordId);
+    await expect(page.getByTestId('record-selector')).toHaveAttribute('data-value', recordId);
+    return page.getByTestId(`node-${msg}`).innerText();
+  };
+  const pro = generated.find((r) => r.custom?.tier === 'pro');
+  const basic = generated.find((r) => r.custom?.tier === 'basic');
+  expect(pro && basic).toBeTruthy();
+  const forPro = await text(pro.recordId);
+  const forBasic = await text(basic.recordId);
+  expect(forPro).toContain('Pro member');
+  expect(forBasic).not.toContain('Pro member');
+  expect(forBasic).toContain('Write the message here');
+  await page.screenshot({ path: `${SHOTS}/c03-design.png` });
+});
+
+const SHOTS = '/tmp/claude-0/-home-user-Spatial-Studio/60b1a659-14d2-561c-bbb9-5044a0a4d3ba/scratchpad/custom-ui';
+async function showLeft(page: Page) {
+  if (!(await page.getByRole('complementary', { name: 'Components and layers' }).count())) await page.getByTestId('toggle-palette').click();
+  await expect(page.getByRole('complementary', { name: 'Components and layers' })).toBeVisible();
+}
+
+/* ------------------------------------------------------------------------------------------------ C04 */
+
+test('C04 Preview & Export: PDF, web page, email and SMS all render for a document with its own data, without card or claim wording', async ({ page, request }) => {
+  test.setTimeout(150_000);
+  const id = await gymDocument(request, 'Outputs C04');
+  const first = (await customersOf(request, id))[0].recordId;
+  await openStudio(page, id, 'outputs');
+  const noSample = (text: string, where: string) => { const m = SAMPLE_WORDING.exec(text); expect(m ? `${where}: ${text.slice(Math.max(0, m.index - 40), m.index + 50)}` : null).toBeNull(); };
+  await page.getByTestId('tab-pdf').click();
+  await page.getByTestId('export-pdf').click();
+  await expect(page.getByTestId('pdf-page-count')).toHaveText(/^[1-9]/);
+  await expect(page.getByTestId('compose-error')).toHaveCount(0);
+  await expect(page.getByTestId('blocking-issues')).toHaveCount(0);
+  await page.screenshot({ path: `${SHOTS}/c04-pdf.png` });
+  // the PDF itself
+  const pdf = await request.post(`${API}/compose/pdf`, { data: { projectId: id, recordId: first } });
+  expect(pdf.ok()).toBeTruthy();
+  const { pdfText } = await import('./helpers');
+  noSample((await pdfText(await pdf.body())).pages.join(' '), 'pdf');
+
+  await page.getByTestId('tab-html').click();
+  await page.getByTestId('export-html').click();
+  await expect(page.getByTestId('html-iframe')).toBeVisible();
+  noSample(await page.frameLocator('[data-testid=html-iframe]').locator('body').innerText(), 'web page');
+  await page.screenshot({ path: `${SHOTS}/c04-web.png` });
+
+  await page.getByTestId('tab-email').click();
+  await expect(page.getByTestId('email-iframe')).toBeVisible();
+  await expect(page.getByTestId('email-subject')).not.toBeEmpty();
+  noSample(`${await page.getByTestId('email-subject').innerText()} ${await page.getByTestId('email-preheader').innerText()}`, 'email subject');
+  noSample(await page.frameLocator('[data-testid=email-iframe]').locator('body').innerText(), 'email');
+  await page.screenshot({ path: `${SHOTS}/c04-email.png` });
+
+  await page.getByTestId('tab-sms').click();
+  await expect(page.getByTestId('sms-text')).toBeVisible();
+  noSample(await page.getByTestId('sms-text').innerText(), 'sms');
+  await expect(page.getByTestId('compose-error')).toHaveCount(0);
+  await page.screenshot({ path: `${SHOTS}/c04-sms.png` });
+});
+
+/* ------------------------------------------------------------------------------------------------ C06 */
+
+test('C06 supply customers by JSON import (with list rows) and remove them; removing all generated customers leaves one and says so', async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const id = await gymDocument(request, 'Customers C06');
+  const before = (await customersOf(request, id)).length;
+  await openStudio(page, id, 'rules-data');
+  await page.getByTestId('import-customers').click();
+  await page.getByText('…or paste data').click();
+  await page.getByRole('group', { name: 'Pasted format' }).getByRole('button', { name: 'JSON' }).click();
+  const rows = [
+    { customer: { givenName: 'Sam', familyName: 'Rivera', locale: 'en-US' }, custom: { planName: 'Flex', monthlyFeeCents: 4900, renewalDate: '2026-12-01', tier: 'pro', autoRenew: true, visits: 4, sessions: [{ day: '2026-11-03', className: 'Spin', priceCents: 1200, spots: 2 }, { day: '2026-11-04', className: 'Yoga', priceCents: 900, spots: 1 }, { day: '2026-11-05', className: 'Box', priceCents: 1500, spots: 3 }, { day: '2026-11-06', className: 'Row', priceCents: 700, spots: 0 }] } },
+    { customer: { givenName: 'Kim', familyName: 'Lee', locale: 'en-US' }, custom: { planName: 'Basic', monthlyFeeCents: 2900, renewalDate: '2026-12-15', tier: 'basic', autoRenew: false, visits: 1, sessions: [] } },
+  ];
+  await page.getByTestId('import-text').fill(JSON.stringify(rows));
+  await page.getByTestId('import-check').click();
+  await expect(page.getByTestId('import-result')).toContainText('2 valid');
+  await page.getByTestId('import-commit').click();
+  await expect(page.getByTestId('import-result')).toHaveCount(0);
+  const mine = await customersOf(request, id);
+  expect(mine.length).toBe(before + 2);
+  const supplied = mine.filter((r) => r.projectId === id && !r.generated);
+  expect(supplied.map((r) => r.customer.givenName).sort()).toEqual(['Kim', 'Sam']);
+  expect(supplied.find((r) => r.customer.givenName === 'Sam').custom.sessions).toHaveLength(4);
+  // the picker marks them as supplied
+  await page.getByTestId('record-selector').click();
+  await expect(page.getByTestId('record-supplied-chip')).toHaveCount(2);
+  await page.getByTestId(`record-option-${supplied[0].recordId}`).click();
+  await page.screenshot({ path: `${SHOTS}/c06-picker.png` });
+
+  // a CSV cannot hold a list: the server says so
+  await page.getByTestId('import-customers').click();
+  await page.getByText('…or paste data').click();
+  await page.getByRole('group', { name: 'Pasted format' }).getByRole('button', { name: 'CSV' }).click();
+  await page.getByTestId('import-text').fill('customer.givenName,customer.familyName,customer.locale,custom.sessions\nA,B,en-US,[]\n');
+  await expect(page.getByTestId('import-mapping')).toBeVisible();
+  await page.getByTestId('map-3').selectOption('custom.sessions');
+  await page.getByTestId('import-check').click();
+  await expect(page.getByTestId('import-error')).toContainText('a CSV row cannot hold a list');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+
+  // remove the supplied ones: the generated ones stay
+  await page.getByTestId('remove-supplied').click();
+  await page.getByTestId('remove-supplied-confirm').click();
+  await expect(page.getByTestId('remove-supplied-note')).toContainText('2 supplied customers removed');
+  expect((await customersOf(request, id)).length).toBe(before);
+
+  // remove every generated customer: one is kept, and the dialog says so
+  await page.getByTestId('testdata-open').click();
+  await page.getByTestId('testdata-clear').click();
+  await page.getByTestId('testdata-clear-confirm').click();
+  await expect(page.getByTestId('testdata-kept-note')).toContainText('one starting customer');
+  await expect(page.getByTestId('testdata-kept')).toBeVisible();
+  expect((await customersOf(request, id)).length).toBe(1);
+  await page.screenshot({ path: `${SHOTS}/c06-kept.png` });
+});
+
+/* ------------------------------------------------------------------------------------------------ C07 */
+
+test('C07 save it as a template, start a project from it (it gets its own customers), export the project file and import it', async ({ page, request }) => {
+  test.setTimeout(150_000);
+  const id = await gymDocument(request, 'Source C07');
+  await page.goto('/projects');
+  await page.getByTestId(`card-menu-${id}`).click();
+  await page.getByTestId(`save-template-${id}`).click();
+  await page.getByTestId('save-template-name').fill('Gym notice C07');
+  await page.getByTestId('save-template-confirm').click();
+  await expect(page.getByText('Saved as template “Gym notice C07” (version 1)')).toBeVisible();
+
+  await page.getByTestId('new-project').click();
+  const card = page.getByTestId('template-saved-gym-notice-c07');
+  await expect(card).toContainText('Your own data');
+  await card.click();
+  await page.getByTestId('new-project-title').fill('From template C07');
+  await page.getByTestId('create-project').click();
+  await page.waitForURL(/\/studio\/from-template-c07\/overview/);
+  created.push(idFromUrl(page));
+  await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
+  const fromTemplate = await customersOf(request, 'from-template-c07');
+  expect(fromTemplate.length).toBeGreaterThanOrEqual(1);
+  expect(fromTemplate.every((r) => r.projectId === 'from-template-c07')).toBe(true);
+  expect(await store(page, (s) => s.records.length)).toBe(fromTemplate.length);
+  await expect(page.getByTestId('record-selector')).toHaveAttribute('data-value', fromTemplate[0].recordId);
+  await expect(page.getByTestId('design-empty')).toHaveCount(0);
+
+  // export the project file and import it again
+  const file = await request.get(`${API}/projects/${id}/export`);
+  expect(file.ok()).toBeTruthy();
+  await page.goto('/projects');
+  await page.getByTestId('import-project').click();
+  await page.getByTestId('import-project-file').setInputFiles({ name: 'gym.json', mimeType: 'application/json', buffer: Buffer.from(await file.body()) });
+  await expect(page.getByTestId('import-project-report')).toBeVisible();
+  await page.getByTestId('import-project-title').fill('Imported C07');
+  await page.getByTestId('import-project-confirm').click();
+  await page.waitForURL(/\/studio\/imported-c07\/overview/);
+  await gotoScreen(page, 'S02');
+  created.push(idFromUrl(page));
+  await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
+  expect(await store(page, (s) => s.project.documentType)).toBe('custom');
+  const imported = await customersOf(request, 'imported-c07');
+  expect(imported.length).toBeGreaterThanOrEqual(1);
+  await expect(page.getByTestId('record-selector')).toHaveAttribute('data-value', imported[0].recordId);
+  await expect(page.getByTestId('node-heading')).toContainText('Your membership');
+});
+test.afterEach(async ({ request }) => { await request.post(`${API}/templates/reset`, { data: { confirm: true } }); });
+
+/* ------------------------------------------------------------------------------------------------ C08 */
+
+test('C08 the two sample projects are unaffected: their customers, and New project → Blank letter', async ({ page, request }) => {
+  for (const [project, first, type] of [['aster-card-demo', 'CARD-0001', 'credit-statement'], ['harborcare-demo', 'EOB-0001', 'eob']] as const) {
+    await openStudio(page, project, 'design');
+    await expect(page.getByTestId('record-selector')).toHaveAttribute('data-value', first);
+    expect(await store(page, (s) => s.project.documentType)).toBe(type);
+    await page.getByTestId('record-selector').click();
+    await expect(page.getByTestId('record-supplied-chip')).toHaveCount(0);
+    expect(await page.locator('[data-testid^="record-option-"]').count()).toBeGreaterThan(10);
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('design-empty')).toHaveCount(0);
+  }
+  await page.goto('/projects');
+  await expect(page.getByTestId('project-card-aster-card-demo')).toContainText('Credit-card statement');
+  await page.getByTestId('new-project').click();
+  await page.getByTestId('template-blank-letter').click();
+  await expect(page.getByTestId('blank-project-options')).toHaveCount(0);
+  await page.getByTestId('blank-letter-data').selectOption('eob');
+  await page.getByTestId('new-project-title').fill('Letter C08');
+  await page.getByTestId('create-project').click();
+  await page.waitForURL(/\/studio\/letter-c08\/overview/);
+  created.push(idFromUrl(page));
+  await page.waitForFunction(() => (window as any).__iss?.store.getState().projectStatus === 'ready');
+  expect(await store(page, (s) => s.project.documentType)).toBe('eob');
+  await expect(page.getByTestId('record-selector')).toHaveAttribute('data-value', 'EOB-0001');
+  expect((await customersOf(request, 'letter-c08')).length).toBe(0);
+});

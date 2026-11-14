@@ -1,0 +1,25 @@
+{
+  "name": "@iss/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/server.ts",
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@fastify/cors": "10.0.2",
+    "@iss/model": "workspace:*",
+    "@iss/renderers": "workspace:*",
+    "@iss/resolver": "workspace:*",
+    "@iss/runtime": "workspace:*",
+    "@iss/scenarios": "workspace:*",
+    "@iss/validation": "workspace:*",
+    "axe-core": "4.10.2",
+    "fastify": "5.2.1",
+    "pdfjs-dist": "4.9.155",
+    "playwright": "1.63.0",
+    "zod": "3.25.76"
+  }
+}

@@ -1,0 +1,17 @@
+# One-command run:  docker compose up --build   →  open http://localhost:5173/projects
+services:
+  studio:
+    build: .
+    image: infoslips-spatial-studio:local
+    ports:
+      - "127.0.0.1:5173:5173"   # bound to this computer only
+    volumes:
+      - studio-data:/data
+    # Optional live AI: create a local .env (never committed) with AI_PROVIDER / AI_MODEL / AI_API_KEY.
+    env_file:
+      - path: .env
+        required: false
+    shm_size: "1gb"            # Chromium needs more than Docker's 64 MB default /dev/shm
+    restart: unless-stopped
+volumes:
+  studio-data:

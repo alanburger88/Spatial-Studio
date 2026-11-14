@@ -1,0 +1,49 @@
+/* Rules & Data: decision table */
+.rdt { flex: 1 1 0; min-height: 470px; display: flex; flex-direction: column; min-width: 0; }
+.rdt .panel-head { flex-wrap: wrap; }
+.rdt-grouplbl { font-size: 12px; font-weight: 700; color: var(--iss-text-muted); }
+.rdt-group { min-width: 220px; max-width: 100%; }
+.rdt-scroll { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.rdt-note { margin: 0; }
+
+.rdt-analysis { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--iss-border); border-radius: 10px; background: var(--iss-surface-sunken); font-size: 12.5px; }
+.rdt-an-head { font-size: 12.5px; }
+.rdt-ok { margin: 0; color: var(--iss-success); font-weight: 600; }
+.rdt-issue { display: flex; flex-direction: column; gap: 4px; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--iss-border); border-left-width: 4px; background: var(--iss-surface-raised); line-height: 1.45; }
+.rdt-issue.bad { border-color: var(--iss-error-line); border-left-color: var(--iss-error); background: var(--iss-error-soft); }
+.rdt-issue.warn { border-color: var(--iss-warning-line); border-left-color: var(--iss-warning); background: var(--iss-warning-soft); }
+.rdt-issue.info { border-left-color: var(--iss-info); }
+.rdt-basis { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 12px; }
+.rdt-basis .chip { font-size: 10.5px; padding: 0 7px; }
+.rdt-ids { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rdt-link { display: inline; border: 0; background: transparent; padding: 0 2px; font: inherit; font-weight: 700; color: var(--iss-accent-strong); text-decoration: underline; cursor: pointer; border-radius: 4px; }
+.rdt-link:hover { background: var(--iss-row-hover); }
+.rdt-link:focus-visible { outline: none; box-shadow: var(--iss-focus); }
+.rdt-ex summary { cursor: pointer; font-size: 12px; color: var(--iss-text-muted); }
+.rdt-ex ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
+
+.rdt-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.rdt-table th, .rdt-table td { vertical-align: top; padding: 7px 8px; font-size: 12.5px; }
+.rdt-table thead th { position: sticky; top: -10px; background: var(--iss-surface); z-index: 1; text-align: left; }
+.rdt-table thead th.num, .rdt-table td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rdt-rank { width: 92px; white-space: nowrap; }
+.rdt-beats { display: block; font-size: 10.5px; color: var(--iss-text-faint); line-height: 1.25; white-space: normal; }
+.rdt-fld-l { display: block; max-width: 150px; overflow-wrap: normal; }
+.rdt-fld .mono { text-transform: none; font-size: 10.5px; letter-spacing: 0; }
+.rdt-sub { display: block; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--iss-text-muted); }
+.rdt-rule { min-width: 170px; }
+.rdt-open { display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%; border: 0; background: transparent; padding: 0; text-align: left; font: inherit; font-weight: 600; color: var(--iss-text); cursor: pointer; border-radius: 4px; }
+.rdt-open:hover .rdt-title { text-decoration: underline; }
+.rdt-open:focus-visible { outline: none; box-shadow: var(--iss-focus); }
+.rdt-title { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.rdt-flags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+.rdt-flags .chip { font-size: 10.5px; padding: 0 6px; }
+.rdt-cell { min-width: 70px; overflow-wrap: anywhere; }
+.rdt-cell.any { color: var(--iss-text-muted); }
+.rdt-out { min-width: 120px; max-width: 200px; font-weight: 600; overflow-wrap: anywhere; }
+.rdt-wins strong { font-size: 14px; }
+.rdt-off td { opacity: .7; }
+.rdt-bad td { background: var(--iss-error-soft); }
+.rdt-fallback td, .rdt-fallback th { border-top: 2px solid var(--iss-border-strong); background: var(--iss-surface-sunken); font-weight: 500; text-align: left; }
+.rdt-fallback td.num { text-align: right; }
+.rdt-foot { color: var(--iss-error-fg); font-weight: 600; }

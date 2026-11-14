@@ -1,0 +1,36 @@
+export * from './types';
+export * from './digest';
+export * from './fields';
+export * from './rich';
+export * from './catalog';
+export * from './commands';
+export * from './validate';
+export * from './seed';
+export * from './data';
+export * from './importRecords';
+export * from './languages';
+export * from './systemStrings';
+export * from './strings';
+export * from './channels';
+export * from './translations';
+export * from './templates';
+export * from './setupSpec';
+export * from './diff';
+export * from './collab';
+export * from './releases';
+export * from './pageDesign';
+export * from './isoDate';
+export * from './expressions';
+export * from './formula';
+export * from './formulaWords';
+export * from './lookup';
+export * from './lookupPaste';
+export * from './effective';
+export * from './library';
+export * from './mapping';
+// Richer data shapes (wave 5, section 2)
+export * from './shapes';
+// Variants by brand or region (wave 5, section 1). The comparison and update (`variants.ts`) are exported here too;
+// the web imports them only from screens that load on demand, so they stay out of the first download.
+export * from './variantLock';
+export * from './variants';

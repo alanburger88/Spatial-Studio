@@ -40,7 +40,7 @@
     {
       "id": "S02",
       "route": "/studio/:project/design",
-      "title": "2D Design Studio",
+      "title": "Design Studio",
       "mode": "design",
       "primaryAction": "Insert / move / edit component",
       "requiredTestIds": [

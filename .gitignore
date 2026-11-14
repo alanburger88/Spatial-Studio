@@ -11,3 +11,10 @@ artifacts/
 reports/generated/
 *.log
 .DS_Store
+scripts/_*.mjs
+reports/evidence/e2e-results.json.tmp
+apps/web/node_modules/.vite/
+*.bundle
+
+# Temporary working copies used by parallel builders
+.claude/worktrees/

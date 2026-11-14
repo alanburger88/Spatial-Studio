@@ -1,0 +1,224 @@
+/*
+ * InfoSlips Spatial Studio design tokens.
+ * Brand palette and typography from the InfoSlips brand system (greens, slate scale, Inter).
+ * Logo artwork: official InfoSlips PNGs in src/assets/brand, rendered by ui/Brand.tsx.
+ * Functional status colours (warning amber, error coral) are retained for unambiguous diagnostics.
+ */
+:root {
+  /* Brand */
+  --iss-green: #4EAF60;
+  --iss-green-dark: #1D5941;
+  --iss-green-medium: #277656;
+  --iss-acorn: #80D100;
+  --iss-lime: #DBE64C;
+  --iss-slate-1: #0F172A;
+  --iss-slate-2: #334155;
+  --iss-slate-3: #64748B;
+  --iss-slate-4: #94A3B8;
+  --iss-slate-5: #CBD5E1;
+  --iss-slate-6: #E2E8F0;
+  --iss-slate-7: #F1F5F9;
+
+  /* Workstation surfaces (dark slate shell, bright paper) */
+  --iss-shell: #0A1120;
+  --iss-surface: #111B2E;
+  --iss-surface-raised: #17233A;
+  --iss-surface-hover: #1D2B45;
+  --iss-surface-sunken: #0C1526;
+  --iss-border: #26344D;
+  --iss-border-strong: #34466A;
+  --iss-paper: #ffffff;
+  --iss-paper-ink: #0F172A;
+  --iss-text: #F1F5F9;
+  --iss-text-muted: #94A3B8;
+  --iss-text-faint: #64748B;
+
+  /* Semantics */
+  --iss-accent: var(--iss-green);
+  --iss-accent-strong: #63C774;
+  --iss-accent-soft: rgba(78, 175, 96, 0.16);
+  --iss-variant: var(--iss-lime);
+  --iss-variant-soft: rgba(219, 230, 76, 0.14);
+  --iss-success: #57C6A5;
+  --iss-warning: #F0AD4E;
+  --iss-warning-soft: rgba(240, 173, 78, 0.15);
+  --iss-error: #ED7474;
+  --iss-error-soft: rgba(237, 116, 116, 0.15);
+  --iss-info: #7FB3F5;
+
+  /* Derived surface/status tokens (themeable) */
+  --iss-topbar-bg: linear-gradient(180deg, #0D1729, #0A1120);
+  --iss-main-bg: radial-gradient(1200px 600px at 60% -10%, rgba(78,175,96,.07), transparent 60%), var(--iss-shell);
+  --iss-stage-bg: radial-gradient(900px 500px at 50% 30%, #13213A 0%, #0B1424 70%);
+  --iss-grid-line: rgba(148,163,184,.06);
+  --iss-row-border: rgba(38,52,77,.6);
+  --iss-row-hover: rgba(29,43,69,.6);
+  --iss-border-hover: #46597F;
+  --iss-overlay-1: rgba(255,255,255,.03);
+  --iss-overlay-2: rgba(255,255,255,.06);
+  --iss-overlay-3: rgba(255,255,255,.12);
+  --iss-backdrop: rgba(4, 8, 16, .62);
+  --iss-primary-bg: linear-gradient(180deg, #57B968, #3F9C51);
+  --iss-primary-bg-hover: linear-gradient(180deg, #63C774, #47A85A);
+  --iss-primary-border: #5CC06E;
+  --iss-on-accent: #04130A;
+  --iss-accent-line: rgba(78,175,96,.5);
+  --iss-variant-line: rgba(219,230,76,.55);
+  --iss-warning-line: rgba(240,173,78,.55);
+  --iss-error-line: rgba(237,116,116,.55);
+  --iss-info-line: rgba(127,179,245,.5);
+  --iss-info-soft: rgba(127,179,245,.12);
+  --iss-accent-fg: #BFF0C8;
+  --iss-variant-fg: #F2F6B5;
+  --iss-warning-fg: #FFDDA8;
+  --iss-error-fg: #FFC9C9;
+  --iss-info-fg: #CFE2FF;
+  --iss-sim-fg: #FFD18C;
+  color-scheme: dark;
+  --iss-radius-sm: 6px;
+  --iss-radius-md: 10px;
+  --iss-radius-lg: 14px;
+  --iss-shadow-plane: 0 18px 45px rgba(0, 0, 0, 0.38);
+  --iss-shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --iss-shadow-paper: 0 2px 4px rgba(0, 0, 0, 0.25), 0 24px 60px rgba(0, 0, 0, 0.45);
+  --iss-font-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --iss-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --iss-motion-fast: 140ms;
+  --iss-motion-mid: 260ms;
+  --iss-motion-depth: 420ms;
+  --iss-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --iss-focus: 0 0 0 2px var(--iss-shell), 0 0 0 4px var(--iss-accent);
+
+  --topbar-h: 58px;
+  --nav-w: 212px;
+  --inspector-w: 320px;
+  --dock-h: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --iss-motion-fast: 0ms; --iss-motion-mid: 0ms; --iss-motion-depth: 0ms; }
+}
+:root[data-reduced-motion='true'] { --iss-motion-fast: 0ms; --iss-motion-mid: 0ms; --iss-motion-depth: 0ms; }
+
+/* Light theme is the default for stakeholder sessions; dark remains available from the top bar. */
+:root[data-theme='light'] {
+  /* Light theme (default): brand-first white surfaces, slate text, green accents. */
+  --iss-shell: #F4F6F9;
+  --iss-surface: #FFFFFF;
+  --iss-surface-raised: #F8FAFC;
+  --iss-surface-hover: #EEF2F6;
+  --iss-surface-sunken: #F1F5F9;
+  --iss-border: #E2E8F0;
+  --iss-border-strong: #CBD5E1;
+  --iss-paper: #ffffff;
+  --iss-paper-ink: #0F172A;
+  --iss-text: #0F172A;
+  --iss-text-muted: #475569;
+  --iss-text-faint: #64748B;
+  --iss-accent: #3F9C51;
+  --iss-accent-strong: #277656;
+  --iss-accent-soft: rgba(78, 175, 96, 0.12);
+  --iss-variant: #9AA51A;
+  --iss-variant-soft: rgba(219, 230, 76, 0.22);
+  --iss-success: #13795B;
+  --iss-warning: #A35A00;
+  --iss-warning-soft: rgba(240, 173, 78, 0.16);
+  --iss-error: #B42318;
+  --iss-error-soft: rgba(237, 116, 116, 0.13);
+  --iss-info: #1D5FBF;
+  --iss-shadow-plane: 0 12px 30px rgba(15, 23, 42, 0.12);
+  --iss-shadow-pop: 0 10px 30px rgba(15, 23, 42, 0.16);
+  --iss-shadow-paper: 0 1px 3px rgba(15, 23, 42, 0.12), 0 16px 40px rgba(15, 23, 42, 0.12);
+  --iss-topbar-bg: #FFFFFF;
+  --iss-main-bg: var(--iss-shell);
+  --iss-grid-line: rgba(100,116,139,.08);
+  --iss-row-border: #EDF1F5;
+  --iss-row-hover: #F6F8FB;
+  --iss-border-hover: #94A3B8;
+  --iss-overlay-1: rgba(15,23,42,.025);
+  --iss-overlay-2: rgba(15,23,42,.05);
+  --iss-overlay-3: rgba(15,23,42,.09);
+  --iss-backdrop: rgba(15, 23, 42, .38);
+  --iss-primary-bg: #3F9C51;
+  --iss-primary-bg-hover: #378A47;
+  --iss-primary-border: #378A47;
+  --iss-on-accent: #FFFFFF;
+  --iss-accent-line: rgba(63,156,81,.45);
+  --iss-variant-line: rgba(154,165,26,.6);
+  --iss-warning-line: rgba(163,90,0,.4);
+  --iss-error-line: rgba(180,35,24,.4);
+  --iss-info-line: rgba(29,95,191,.35);
+  --iss-info-soft: rgba(29,95,191,.08);
+  --iss-accent-fg: #1D5941;
+  --iss-variant-fg: #4A5200;
+  --iss-warning-fg: #7A4300;
+  --iss-error-fg: #912018;
+  --iss-info-fg: #174EA6;
+  --iss-sim-fg: #7A4300;
+  color-scheme: light;
+}
+
+/*
+ * Spatial stages (2.5D/3D viewports) stay a deep-slate viewport in both themes, like a 3D tool's canvas:
+ * re-scoping the dark tokens keeps glass panels, glows and depth cues legible.
+ */
+:root[data-theme='light'] .stage,
+:root[data-theme='light'] .dark-scope {
+  /* Workstation surfaces (dark slate shell, bright paper) */
+  --iss-shell: #0A1120;
+  --iss-surface: #111B2E;
+  --iss-surface-raised: #17233A;
+  --iss-surface-hover: #1D2B45;
+  --iss-surface-sunken: #0C1526;
+  --iss-border: #26344D;
+  --iss-border-strong: #34466A;
+  --iss-paper: #ffffff;
+  --iss-paper-ink: #0F172A;
+  --iss-text: #F1F5F9;
+  --iss-text-muted: #94A3B8;
+  --iss-text-faint: #64748B;
+
+  /* Semantics */
+  --iss-accent: var(--iss-green);
+  --iss-accent-strong: #63C774;
+  --iss-accent-soft: rgba(78, 175, 96, 0.16);
+  --iss-variant: var(--iss-lime);
+  --iss-variant-soft: rgba(219, 230, 76, 0.14);
+  --iss-success: #57C6A5;
+  --iss-warning: #F0AD4E;
+  --iss-warning-soft: rgba(240, 173, 78, 0.15);
+  --iss-error: #ED7474;
+  --iss-error-soft: rgba(237, 116, 116, 0.15);
+  --iss-info: #7FB3F5;
+
+  /* Derived surface/status tokens (themeable) */
+  --iss-topbar-bg: linear-gradient(180deg, #0D1729, #0A1120);
+  --iss-main-bg: radial-gradient(1200px 600px at 60% -10%, rgba(78,175,96,.07), transparent 60%), var(--iss-shell);
+  --iss-stage-bg: radial-gradient(900px 500px at 50% 30%, #13213A 0%, #0B1424 70%);
+  --iss-grid-line: rgba(148,163,184,.06);
+  --iss-row-border: rgba(38,52,77,.6);
+  --iss-row-hover: rgba(29,43,69,.6);
+  --iss-border-hover: #46597F;
+  --iss-overlay-1: rgba(255,255,255,.03);
+  --iss-overlay-2: rgba(255,255,255,.06);
+  --iss-overlay-3: rgba(255,255,255,.12);
+  --iss-backdrop: rgba(4, 8, 16, .62);
+  --iss-primary-bg: linear-gradient(180deg, #57B968, #3F9C51);
+  --iss-primary-bg-hover: linear-gradient(180deg, #63C774, #47A85A);
+  --iss-primary-border: #5CC06E;
+  --iss-on-accent: #04130A;
+  --iss-accent-line: rgba(78,175,96,.5);
+  --iss-variant-line: rgba(219,230,76,.55);
+  --iss-warning-line: rgba(240,173,78,.55);
+  --iss-error-line: rgba(237,116,116,.55);
+  --iss-info-line: rgba(127,179,245,.5);
+  --iss-info-soft: rgba(127,179,245,.12);
+  --iss-accent-fg: #BFF0C8;
+  --iss-variant-fg: #F2F6B5;
+  --iss-warning-fg: #FFDDA8;
+  --iss-error-fg: #FFC9C9;
+  --iss-info-fg: #CFE2FF;
+  --iss-sim-fg: #FFD18C;
+  color-scheme: dark;
+  color: var(--iss-text);
+}

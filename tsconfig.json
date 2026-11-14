@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": false,
+    "noEmit": true,
+    "types": ["node", "vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@iss/model": ["packages/model/src/index.ts"], "@iss/model/*": ["packages/model/src/*"],
+      "@iss/resolver": ["packages/resolver/src/index.ts"], "@iss/resolver/*": ["packages/resolver/src/*"],
+      "@iss/renderers": ["packages/renderers/src/index.ts"], "@iss/renderers/*": ["packages/renderers/src/*"],
+      "@iss/scenarios": ["packages/scenarios/src/index.ts"], "@iss/scenarios/*": ["packages/scenarios/src/*"],
+      "@iss/validation": ["packages/validation/src/index.ts"], "@iss/validation/*": ["packages/validation/src/*"],
+      "@iss/runtime": ["packages/runtime/src/index.ts"], "@iss/runtime/*": ["packages/runtime/src/*"]
+    }
+  },
+  "include": ["packages/*/src", "packages/*/test", "apps/api/src", "apps/web/src", "e2e", "vitest.config.ts", "playwright.config.ts"]
+}

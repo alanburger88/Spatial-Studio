@@ -1,0 +1,14 @@
+/* Section tabs (shell/SectionTabs.tsx) and the eight-entry left menu. Tokens only. */
+.section-tabs { flex: none; display: flex; flex-wrap: wrap; gap: 2px 4px; padding: 6px 16px 0; border-bottom: 1px solid var(--iss-border); background: var(--iss-main-bg); }
+.section-tab { display: inline-flex; align-items: center; padding: 7px 12px 8px; margin-bottom: -1px; border: 1px solid transparent; border-bottom: 0; border-radius: 9px 9px 0 0; color: var(--iss-text-muted); font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.section-tab:hover { background: var(--iss-surface-hover); color: var(--iss-text); }
+.section-tab.current { background: var(--iss-surface); color: var(--iss-text); border-color: var(--iss-border); box-shadow: inset 0 2px 0 var(--iss-accent); }
+.section-tab:focus-visible { box-shadow: var(--iss-focus); }
+.section-tab.current:focus-visible { box-shadow: var(--iss-focus), inset 0 2px 0 var(--iss-accent); }
+
+.nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.nav .nav-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.nav .nav-label { font-weight: 600; color: var(--iss-text); white-space: nowrap; }
+.nav .nav-hint { font-size: 11.5px; color: var(--iss-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav a { align-items: center; }
+.nav a:not(.active) .nav-label { color: var(--iss-text-muted); }

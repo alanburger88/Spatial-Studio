@@ -1,0 +1,30 @@
+/* Writing help control and its suggestion cards (assist/WritingHelp.tsx). */
+.wh { display: inline-block; max-width: 100%; }
+.wh[data-open='true'] { display: block; }
+.wh-btn { gap: 4px; }
+.wh-panel { container-type: inline-size; margin: 6px 0 4px; padding: 8px 10px; border-radius: var(--iss-radius-md); background: var(--iss-surface-sunken); border: 1px solid var(--iss-border); display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.wh-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.wh-level { font-size: 12.5px; color: var(--iss-text); font-variant-numeric: tabular-nums; }
+.wh-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.wh-note { margin: 0; font-size: 12px; }
+.wh-results { display: flex; flex-direction: column; gap: 8px; }
+.wh-results:empty { display: none; }
+.wh-reason { display: block; margin-top: 2px; color: var(--iss-warning-fg); font-weight: 600; }
+.wh-guarded .as-compare button:disabled { opacity: .55; cursor: not-allowed; }
+@container (max-width: 520px) { .wh-panel .as-compare { grid-template-columns: 1fr; } }
+
+/* Small shared pieces used by the screens that host the control. */
+.wh-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+.wh-block { display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
+.wh-form { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: var(--iss-radius-md); background: var(--iss-surface-sunken); border: 1px solid var(--iss-border); }
+.wh-form label { font-size: 12.5px; font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
+.wh-count { font-size: 11px; color: var(--iss-text-muted); font-variant-numeric: tabular-nums; align-self: flex-end; }
+.wh-changes { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.5; }
+.wh-measure { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.wh-stillnot { color: var(--iss-warning-fg); font-weight: 600; font-size: 12.5px; margin: 0; }
+.wh-options { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.wh-option { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 6px 2px; border-bottom: 1px solid var(--iss-row-border); }
+.wh-option:last-child { border-bottom: 0; }
+.wh-option-text { overflow-wrap: anywhere; font-size: 13px; }
+.wh-option-meta { grid-column: 1 / -1; font-size: 11.5px; color: var(--iss-text-muted); }
+.wh-option-meta.warn { color: var(--iss-warning-fg); font-weight: 600; }

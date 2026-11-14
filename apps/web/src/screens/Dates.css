@@ -1,0 +1,39 @@
+/* S24 Dates. Tokens only; light and dark. */
+.dt-body { grid-template-columns: 320px minmax(0, 1fr) 320px; }
+.dt-body-empty { grid-template-columns: 320px minmax(0, 1fr); align-content: start; }
+.dt-empty-text { max-width: 640px; text-align: left; line-height: 1.55; }
+.dt-source-options { display: flex; flex-direction: column; gap: 8px; }
+.dt-option { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.dt-option > span { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.dt-option input { margin-top: 3px; }
+.dt-field-pick { display: flex; flex-direction: column; gap: 4px; margin: 0 0 4px 24px; font-size: 12.5px; color: var(--iss-text-muted); }
+.dt-issued { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--iss-border); }
+.dt-today { font-size: 13px; line-height: 1.5; margin: 0 0 8px; }
+.dt-issued-row { gap: 8px; flex-wrap: wrap; align-items: center; }
+.dt-issued-label { font-size: 13px; font-weight: 600; }
+.dt-issued-row .input { width: 160px; }
+.dt-subtitle { font-size: 12.5px; font-weight: 700; margin: 12px 0 6px; }
+.dt-picks { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.dt-main .panel-body { padding-top: 6px; }
+.dt-timeline > li { padding: 12px 12px 10px; }
+.dt-day-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dt-day { margin: 0; font-size: 15px; font-weight: 800; }
+.dt-what { margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--iss-text-muted); }
+.dt-changes { margin: 2px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+.dt-reached { margin-top: 6px; font-size: 13px; }
+.dt-reached summary { cursor: pointer; color: var(--iss-text-muted); }
+.dt-reached ul { margin: 4px 0 0; padding-left: 18px; columns: 2; }
+.dt-day-actions { margin-top: 8px; gap: 6px; flex-wrap: wrap; }
+.dt-strip { position: relative; height: 68px; margin: 6px 8px 10px; }
+.dt-strip-line { position: absolute; left: 0; right: 0; top: 14px; height: 2px; background: var(--iss-border-strong); border-radius: 2px; }
+.dt-strip-mark { position: absolute; top: 6px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.dt-strip-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--iss-surface); border: 2px solid var(--iss-info); }
+.dt-strip-mark.on .dt-strip-dot { background: var(--iss-accent); border-color: var(--iss-accent); }
+.dt-strip-label { font-size: 11.5px; color: var(--iss-text-muted); white-space: nowrap; }
+.dt-strip-mark.low .dt-strip-label { margin-top: 15px; }
+.dt-strip-preview { position: absolute; top: 4px; width: 2px; height: 22px; background: var(--iss-accent); transform: translateX(-1px); }
+.dt-problems > li { display: flex; flex-direction: column; gap: 6px; }
+.dt-problem-msg { margin: 0; font-size: 13px; line-height: 1.5; }
+@media (max-width: 1280px) { .dt-body { grid-template-columns: 280px minmax(0, 1fr) 280px; } }
+.dt-problems .btn { white-space: normal; text-align: left; height: auto; min-height: 28px; padding-top: 4px; padding-bottom: 4px; max-width: 100%; }
+.dt-day-actions .btn[aria-pressed='true'], .dt-picks .btn[aria-pressed='true'] { box-shadow: inset 0 0 0 2px var(--iss-accent); }

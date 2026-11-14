@@ -1,0 +1,37 @@
+/* The bell's panel: notifications and My work (wave 4). */
+.notify-panel {
+  position: fixed; z-index: 320; top: 54px; right: 12px; width: min(420px, calc(100vw - 24px)); max-height: min(620px, calc(100vh - 70px));
+  display: flex; flex-direction: column; background: var(--iss-surface); color: var(--iss-text);
+  border: 1px solid var(--iss-border-strong); border-radius: 12px; box-shadow: var(--iss-shadow-pop); overflow: hidden;
+}
+.notify-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 0 12px; border-bottom: 1px solid var(--iss-border); }
+.notify-tabs { display: flex; gap: 2px; flex: 1; }
+.notify-tabs [role=tab] {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 0; border-bottom: 2px solid transparent; background: none;
+  color: var(--iss-text-muted); font: inherit; font-weight: 600; cursor: pointer;
+}
+.notify-tabs [role=tab][aria-selected=true] { color: var(--iss-text); border-bottom-color: var(--iss-accent); }
+.notify-tabs [role=tab]:focus-visible { outline: 2px solid var(--iss-focus); outline-offset: -2px; }
+.notify-body { overflow: auto; padding: 8px 0 10px; }
+.notify-actions { display: flex; align-items: center; justify-content: space-between; padding: 0 12px 6px; font-size: 12.5px; }
+.notify-list { margin: 0; padding: 0; list-style: none; }
+.notify-item {
+  display: grid; grid-template-columns: 10px 1fr; column-gap: 8px; row-gap: 2px; width: 100%; padding: 9px 12px; border: 0; background: none;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.notify-item:hover:not(:disabled) { background: var(--iss-row-hover); }
+.notify-item:focus-visible { outline: 2px solid var(--iss-focus); outline-offset: -2px; }
+.notify-item:disabled { cursor: default; }
+.notify-dot { width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: transparent; }
+li.unread .notify-dot { background: var(--iss-accent); }
+li.unread .notify-text { font-weight: 600; }
+.notify-text { grid-column: 2; line-height: 1.4; overflow-wrap: anywhere; }
+.notify-meta { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
+.notify-work .notify-item { grid-template-columns: 1fr; padding-left: 14px; }
+.notify-work .notify-text, .notify-work .notify-meta { grid-column: 1; }
+.notify-work .section-title { display: flex; align-items: center; gap: 6px; margin: 8px 14px 4px; }
+.notify-none, .notify-local { margin: 2px 14px 8px; font-size: 13px; }
+.notify-empty { padding: 6px 16px 4px; }
+.notify-empty p { margin: 0 0 8px; }
+.notify-wait, .notify-error { margin: 8px 14px; }
+@media (max-width: 700px) { .notify-panel { top: 50px; right: 8px; } }

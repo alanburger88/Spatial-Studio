@@ -1,0 +1,43 @@
+/* Variants by brand or region (wave 5). Tokens only: both themes. */
+/* On Overview the panels sit in a column that scrolls: they keep their height. */
+.vr-panel, .vr-family-panel { flex: none; }
+.vr-panel .vr-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vr-panel .vr-head .right { margin-left: auto; gap: 6px; }
+.vr-body { display: grid; gap: 16px; }
+.vr-update { border: 1px solid var(--iss-warning-line, var(--iss-border)); background: var(--iss-warning-soft); border-radius: 8px; padding: 12px 14px; display: grid; gap: 10px; }
+.vr-update h3, .vr-diffs h3, .vr-family h3 { font-size: 15px; margin: 0; }
+.vr-update-head p { margin: 4px 0 0; }
+.vr-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1180px) { .vr-groups { grid-template-columns: 1fr; } }
+.vr-group { background: var(--iss-surface); border: 1px solid var(--iss-border); border-radius: 6px; padding: 8px 10px; min-width: 0; }
+.vr-group h4, .vr-diff-group h4 { font-size: 13px; margin: 0 0 2px; display: flex; align-items: center; gap: 6px; }
+.vr-group > p.muted { font-size: 12px; margin: 0 0 6px; }
+.vr-entries { margin: 0; padding: 0; list-style: none; }
+.vr-groups .vr-entries { max-height: 320px; overflow: auto; }
+.vr-entry { padding: 6px 0; display: grid; gap: 4px; min-width: 0; }
+.vr-entry-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 13px; }
+.vr-entry-head .right { margin-left: auto; }
+.vr-values { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; font-size: 12px; }
+.vr-values > div { min-width: 0; }
+.vr-values dt { color: var(--iss-text-muted); font-weight: 600; }
+.vr-values dd { margin: 0; overflow-wrap: anywhere; color: var(--iss-text); }
+.vr-note { font-size: 12px; margin: 0; color: var(--iss-text-muted); }
+.vr-none { font-size: 12px; margin: 0; }
+.vr-actions { gap: 8px; }
+.vr-stay { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px dashed var(--iss-border); border-radius: 6px; }
+.vr-diffs { display: grid; gap: 10px; }
+.vr-diff-group { border-top: 1px solid var(--iss-row-border, var(--iss-border)); padding-top: 8px; }
+.vr-family { display: grid; gap: 8px; }
+.vr-table-wrap { overflow-x: auto; }
+.vr-table td, .vr-table th { white-space: nowrap; }
+.vr-table tr[aria-current="true"] td { background: var(--iss-overlay-1); }
+.vr-new-line { align-items: center; gap: 10px; justify-content: space-between; margin-top: 6px; }
+.vr-new-line .muted { font-size: 13px; flex: 1 1 320px; }
+.vr-new { display: grid; gap: 12px; }
+.vr-purpose { border: 0; padding: 0; margin: 0; display: flex; gap: 16px; flex-wrap: wrap; }
+.vr-purpose legend { font-weight: 600; margin-bottom: 4px; }
+.vr-purpose label { gap: 6px; }
+/* Design Studio: the mark on components that differ, and the note on a base component. */
+.vr-mark { font-size: 11px; }
+.vr-insp-note { margin-top: 8px; font-size: 12px; }
+.vr-insp-note a { white-space: nowrap; }

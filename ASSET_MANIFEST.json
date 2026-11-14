@@ -19,8 +19,8 @@
     },
     {
       "path": "contracts/SCREEN_CONTRACT.json",
-      "bytes": 7887,
-      "sha256": "fdb5bad4d05080c4cb01e6562e5b6117f90389111d30972452559a51fa54a297"
+      "bytes": 7884,
+      "sha256": "2b9f79feb789b3dc014d7b44bf0fb3996586dbdab7a75b2990b4349b9dd7aaa0"
     },
     {
       "path": "contracts/examples/assistant_proposal.json",
@@ -109,8 +109,8 @@
     },
     {
       "path": "docs/approved/UX_BLUEPRINT.md",
-      "bytes": 35513,
-      "sha256": "56209435fcf3f6e17a723bab965a245b5689d48967e5367b2ca674e5ec5e029d"
+      "bytes": 35504,
+      "sha256": "26a50c99d0832820e80ecfe77bc93d44c585c243021dc1f51ddb416f3d3aa254"
     },
     {
       "path": "fixtures/README.txt",

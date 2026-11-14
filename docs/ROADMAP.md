@@ -1,0 +1,201 @@
+# Roadmap: from proof of concept to a product that leads
+
+Status: **wave order approved by the product owner on 2026-11-13 ("as proposed"). Nothing in this document is built unless it says so.**
+Written 2026-11-13 after a critical review and ten decisions taken one by one with the product owner.
+A comparison with named competitors is in `docs/research/COMPETITORS.md`. **It rests on search-result summaries only:** the vendors' own pages could not be opened from the build environment (their sites are outside its allowed network), so every finding there needs confirming on the source page before it is used in a sales claim.
+
+## The critical review in brief
+
+**Where the studio is already strong**
+
+- **It can explain itself.** For any customer it says which message was chosen and why, in plain words, and shows every alternative (Exploded, Cube, Landscape). No public evidence was found of a per-customer explanation in Quadient Inspire, OpenText Exstream, SmartCOMM, Messagepoint or Papyrus; Messagepoint's rule check against sample data is the closest.
+- **Testing is built in and confirmed by the engine.** Coverage gaps, generated test customers with edge values, pinned tests, journeys, and a Blockers list with the effect of each fix shown before it is applied.
+- **The assistant proposes; people approve.** Every suggestion shows its effect on all customers, is one undoable step, and is labelled built-in or AI.
+- **Outputs are deterministic and releases are frozen.** PDF, web page, email and SMS come from one model with parity checks; a release is a self-describing package.
+
+**Where it is weak**
+
+- **It is a local proof of concept.** Nothing is deployed, nothing larger than about 100 customers has been tried, only one browser has been tested, and there is no automated build.
+- **Page design and print are thin.** One page model, a fixed letterhead zone, no master pages or columns; AFP is a simulation; the PDF is tagged by the browser but has never been checked against the accessibility standard; no mailing barcodes; left-to-right Latin languages only.
+- **Rules and data are simple.** No calculations, no dates that switch wording, no rate tables, one level of list.
+- **Wording lives in one document at a time.** No shared library, no brand or regional variants, no house rules enforced.
+- **There is no way in for existing documents.** Every template has to be rebuilt by hand.
+- **Teamwork is basic.** Nobody is notified, reviewers need an account, two editors collide on save.
+- **Eighteen screens and no guided path.**
+- **Live AI has been seen on screen for four flows only.**
+
+## What the comparison with named products showed
+
+Source: `docs/research/COMPETITORS.md` (107 public sources, search-result summaries only, researched 2026-11-13). "No public evidence" means searched and not found; it does not prove a product lacks a feature.
+
+**Where the studio is, or would be, ahead (no public evidence found for any of the five products)**
+
+- Explaining to a business user why one customer gets one message. *Built.*
+- Generating test customers to cover every rule outcome, with coverage shown. *Built.*
+- Seeing every alternative at once (Exploded, Cube, Landscape). Messagepoint's master-to-variation hierarchy is the nearest. *Built.*
+- Wording and rules that start and end on a date. *Wave 2.*
+- Reviewers proofing without an account. *Wave 4.*
+- A release another system runs as-is, with a proof pack it can verify itself. *Wave 1.*
+
+**Where competitors are clearly ahead today**
+
+| Their strength | Who | The studio today | In the roadmap? |
+|---|---|---|---|
+| Comparing whole output runs between versions, in a release pipeline | Quadient (Compare Bundle, StreamDiff, DocDiff), OpenText (Output Compare) | One customer at a time; change summary in words | Partly: "Before and after" (wave 1). The whole-base check is held for later |
+| Print streams and finishing (AFP, PostScript, PCL, barcodes, OMR, inserts, postal presort) | Quadient, OpenText, Papyrus | PDF only; AFP is a simulation | Wave 5, needs a print partner |
+| Finding duplicate wording across thousands of templates; AI-assisted migration | Messagepoint (Rationalizer), Quadient (InspireXpress+), Precisely | Nothing | Wave 3 |
+| Variants that inherit from a master | Messagepoint (patented) | Nothing | Wave 5; the patent needs a legal look before design |
+| AI writing help with governance: tone and sentiment scoring, 80–100+ languages, personal-data detection, a record of AI changes | All four main vendors | Rewrite, translation, proposals a person approves, AI labelled in Activity. No sentiment score, no personal-data check on what is sent to the model | Partly: wording checker (wave 2). The guard is held for later |
+| Business users editing only the regions a designer unlocks, for one-off letters | OpenText (Empower), SmartCOMM (Draft Editor), Quadient | Nothing | Held for later |
+| Approval chains: several approvers, in parallel or in sequence, observers | SmartCOMM, OpenText, Quadient | One approval by one person with the right role | Held for later |
+| Accessible PDF at volume, with a validator | Papyrus, OpenText, Quadient (as a separate product) | Tagged by the browser, never validated | Wave 2 |
+| Archive with retention and legal holds | Quadient | Nothing | Partly: "Proof for any customer" (wave 1) is a record, not an archive |
+| Right-to-left languages | Papyrus only | None | Wave 5 |
+| Hosted service, containers, managed operation | All | Local proof of concept | **Not chosen** (security and operations plan) |
+
+**Reported weaknesses of the competitors** (review sites, small samples): steep learning curve, licence cost and complexity, the need for specialists, and painful migration. Ease of use and a clear path in are therefore worth as much as any single feature, which supports doing navigation and the guided path first.
+
+## What was chosen
+
+| # | Area | Chosen |
+|---|---|---|
+| 1 | Competitors | Research named products and write a comparison, alongside the work |
+| 2 | Signature strengths | Proof for any customer · Before and after, visually · Ask questions of the whole base · Message experiments |
+| 3 | Bringing documents in | Rebuild from an existing PDF or Word file (AI) · Find duplicate wording across documents |
+| 4 | Page and print | Page design depth · Accessible PDF, proven · Print production features · More languages (right-to-left, East Asian) |
+| 5 | Rules and data | Calculated fields · Effective dates · Lookup tables · Richer data shapes |
+| 6 | Content | Shared library now · Wording rules and checker · Variants by brand or region |
+| 7 | Teamwork | Proof links for reviewers · Notifications and assignments · See who else is editing |
+| 8 | Readiness | Runnable package now |
+| 9 | Navigation | Document home with next steps · Fewer, grouped screens · New guided tour and help |
+| 10 | How | Roadmap first, then build in waves, with a verified report after each wave |
+
+Already agreed and carried into the waves: **blockers phases 2–6** (`docs/design/BLOCKERS.md`) and **template phases 3–7** (`docs/design/TEMPLATES_AND_CCM.md`).
+
+## Not chosen, and what that leaves open
+
+- **Scale and speed test.** Without it, any claim about large documents or large customer bases is unproven. Recommended before the studio is described as production-ready; the runnable package (wave 1) includes a throughput test of its own, which covers producing documents but not the studio's screens.
+- **Security and operations plan** (single sign-on, API keys for other systems, encryption, backups, automated build). Needed before any deployment; deployment itself needs explicit approval.
+- **Studio accessibility and other browsers.** Only Chromium has been tested and no screen-reader pass has been done.
+- **Four-eyes approval.** Today a person with the right role can approve their own change.
+
+## Held for later: to be raised when all five waves are done
+
+Decided by the product owner on 2026-11-13: record these four, do not add them to a wave, and bring them up again at the end of the current waves.
+
+| Item | What it is | Who has it today |
+|---|---|---|
+| Whole-base check before Production | Compare every customer's documents between two releases and show who changes and how, as a gate before Production | Quadient, OpenText |
+| Personal-data guard and AI record | Check what is sent to the AI model for personal data, mask or block it, and keep a record of every AI-assisted change | Quadient, Smart Communications, Precisely |
+| Approval chains | Several approvers in sequence or in parallel, observers, no approving your own change | SmartCOMM, OpenText, Quadient |
+| Editing in unlocked regions | A business user writes a one-off letter and can change only what a designer unlocked | OpenText, SmartCOMM, Quadient |
+
+## Where the roadmap is paused (2026-11-14)
+
+Paused by the product owner before wave 4, to work on the example documents first (decision D105). **That work is done (v0.14, decisions D106–D110): four example documents and an accuracy check of them, verified on 2026-11-14 (1,117 unit tests, 358 browser tests).** The roadmap resumes at wave 4 when the product owner says so.
+
+| Wave | State |
+|---|---|
+| 1 — Trust, proof and finding your way | Built and verified (v0.11) |
+| 2 — Real documents | Built and verified (v0.12) |
+| 3 — Bringing documents in, and handing them over | Built and verified (v0.13), except the first adapter, which waits for a named target system |
+| 4 — Teams | Built and verified (v0.15, decisions D111–D117) on 2026-11-14: 1,220 unit tests, 384 browser tests |
+| 5 — Reach and depth | **Started on 2026-11-14. Check-in done (D118): three of the six items are being built (variants, richer data shapes, message experiments); the other three wait for a print partner or native-language reviewers. Design: `docs/design/WAVE5_REACH_AND_DEPTH.md`. Nothing in it is verified yet.** |
+
+**To resume wave 4**, start with its check-in. Two questions are still open:
+
+1. **Proof links** for reviewers without an account: what may a person with a link do? Options put to the product owner, not yet answered: view and comment, expiring and revocable (recommended); view only; view, comment and sign off (an acknowledgement, not a studio approval). A short security design is written before any build.
+2. **Notifications:** in-app only, or also email (email needs a mail service, which is an external service and needs approval to configure).
+
+Wave 4's items are listed under "Wave 4 — Teams" below: proof links, blockers phase 4 (owner, status and notes), notifications and assignments, seeing who else is editing, blockers phase 5 (AI drafts for wording blockers), blockers phase 6 (warn before saving), and asking questions of the whole base.
+
+Also waiting, not tied to a wave: the first adapter (needs a named system, a sample template export and its field names); the four items held from the competitor comparison (raised again after wave 5); a real veraPDF run; live AI checks for "Suggest compliant wording" and "Rebuild from a file".
+
+## Waves
+
+Sizes: S = about a day of build and verification, M = a few days, L = a week or more of equivalent effort. Each wave ends with the full gate, evidence, and a report of what was and was not verified. Items in a wave are built in parallel where they touch different parts of the studio.
+
+### Wave 1 — Trust, proof and finding your way
+
+**Status: built and verified on 2026-11-13** (709 unit tests, 285 browser tests, lint, build, pack and app checks). What was and was not verified is in `reports/BUILD_PROGRESS.md` (v0.11) and decisions D87–D91.
+
+The things that make the studio unlike a template tool, plus the navigation they will live in.
+
+| Item | Size | Why first | Depends on |
+|---|---|---|---|
+| Document home with next steps | M | Every later feature needs a place to surface; a new user gets a path | — |
+| Fewer, grouped screens (about eight menu entries, tabs inside) | M | Done before more screens are added, not after | Document home |
+| Blockers phase 2: data problems (open in Data Explorer, known data problem) | M | Agreed; completes the blocker story for approvals and releases | Blockers screen (built) |
+| Blockers phase 3: resolve one by one, pin a test when fixed | M | Agreed; turns a list into a workflow | Phase 2 |
+| Before and after, visually (two versions or releases as pages, differences highlighted, customers visibly affected) | M | Reviewers approve what they can see; no rebuild needed | Releases (built) |
+| Proof for any customer (what was sent, when, from which release, why) | M | For complaints, audits and regulators; builds on releases and the engine's explanations | Releases (built) |
+| Runnable package (template phase 7): the engine and a release in one self-contained package with a proof pack and a throughput test | L | The precision guarantee: another system produces exactly what was approved | Releases (built) |
+| New guided tour and help | S | After the navigation settles | Navigation |
+
+### Wave 2 — Real documents
+
+**Status: built and verified on 2026-11-13** (949 unit tests, 335 browser tests, lint, build, pack and app checks). What was and was not verified is in `reports/BUILD_PROGRESS.md` (v0.12) and decisions D92–D99. Not proven: a real veraPDF run, and PDF/UA conformance (the composing browser cannot write the identifier).
+
+What a production statement, bill or letter needs that the samples do not.
+
+| Item | Size | Notes | Depends on |
+|---|---|---|---|
+| Calculated fields (arithmetic, days between dates, joined text, counts and sums of rows) | L | Usable in rules, wording and tables; deterministic, no free-form code | — |
+| Effective dates (wording and rules from/until a date; preview "as issued on") | M | Changes what a release means on a given day; the release package must state it | Releases |
+| Lookup tables (rate by tier, notice by state) | M | Versioned with the document | Calculated fields |
+| Page design depth (master pages, resizable letterhead zone, backgrounds, columns, keep-together) | L | The page composer's biggest change so far | — |
+| Accessible PDF, proven (checked against PDF/UA; failures become blockers) | M | Needs a checker; the studio's own checks first, an external validator if one can be bundled | Page design |
+| Shared library (template phase 4) | L | Brand, header and footer, notices, common messages; pinned versions; impact list on update | — |
+| Wording rules and checker (required and banned phrases, reading level, tone; AI review) | M | Failures can be blockers | Shared library for where the rules live |
+
+### Wave 3 — Bringing documents in, and handing them over
+
+**Status: built and verified on 2026-11-14** (1,051 unit tests, 354 browser tests), except the first adapter, which waits for a named target system. What was and was not verified is in `reports/BUILD_PROGRESS.md` (v0.13) and decisions D100–D103. Not proven: a live AI call for rebuilding from a file, and any real-world PDF or Word file.
+
+| Item | Size | Notes | Depends on |
+|---|---|---|---|
+| Rebuild from an existing PDF or Word file (AI) | L | Builds on "Describe your document"; always produces a report of what was not brought across | Setup from a description (built), page design depth |
+| Find duplicate wording across documents | M | Consolidates into the shared library | Shared library |
+| Data dictionary and mapping per CCM (template phase 3) | M | Needs the first target CCM's name and field names | Releases (built) |
+| Assisted import of wording tables and data dictionaries (template phase 5) | M | The non-AI half of import | Phase 3 |
+| First CCM adapter (template phase 6) | L | Needs a named CCM and sample files | Phase 3 |
+
+### Wave 4 — Teams
+
+**Status: built and verified on 2026-11-14** (1,220 unit tests, 384 browser tests; 2 more need sign-in on). What was and was not verified is in `reports/BUILD_PROGRESS.md` (v0.15) and decisions D111–D117. Not proven: any live AI call for the two new model-backed paths, and an outside security review of review links.
+
+| Item | Size | Notes | Depends on |
+|---|---|---|---|
+| Proof links for reviewers without an account | M | A new, deliberately narrow kind of access; needs a security design before build | Before and after |
+| Blockers phase 4: owner, status and notes | M | Agreed | Blockers phase 3 |
+| Notifications and assignments (in-app; email needs a mail service) | M | Email is an external service: needs approval to configure | Blockers phase 4 |
+| See who else is editing | M | Presence and a warning before two people edit the same component | — |
+| Blockers phase 5: AI drafts for wording blockers | S | Agreed | Wording checker |
+| Blockers phase 6: warn before saving | S | Agreed | — |
+| Ask questions of the whole base ("who gets the hardship message and why?") | M | Answered by the engine; the AI only turns the question into a query | — |
+
+### Wave 5 — Reach and depth
+
+| Item | Size | Notes | Depends on |
+|---|---|---|---|
+| Variants by brand or region (inheritance from a base document) | L | Changes the document model; needs its own design workshop | Shared library |
+| Richer data shapes (nested records, more than one level of list) | L | Touches rules, tables, Data Explorer, generation and import | Calculated fields |
+| Print production features (mailing barcodes, OMR marks, duplex and tray, inserts) | L | Needs a print partner's requirements to test against | Page design depth |
+| More languages (right-to-left, East Asian) | L | Fonts, line breaking, mirrored layout; needs native reviewers | Page design depth |
+| Message experiments (A/B versions designed in the document) | M | The studio designs and assigns; results come from the producing system | Runnable package |
+| Native AFP writer | L | Recorded direction: only once a print partner is named | Print production features |
+
+## What I need from the product owner
+
+1. **Approval of this order**, or the changes you want to it.
+2. **For wave 3:** the name of the first target CCM, and a sample of its field names and a template export.
+3. **For wave 4:** whether a mail service may be configured for email notifications (an external service), and agreement to a short security design for proof links before they are built.
+4. **For wave 5:** a print partner for the print features and AFP, and native reviewers for new languages.
+5. **A decision on the four items not chosen**, at least the scale test, before anything is called production-ready.
+
+## How each wave is run
+
+- A check-in at the start of the wave for decisions that are genuinely yours, taken one by one with options.
+- Parallel builders on separate parts, each verified by its own tests, then the full gate on the combined result.
+- A report after the wave: what works, with screenshots; what was not verified; what needs you.
+- Automated tests never use the live AI key; live checks are run on purpose and counted.

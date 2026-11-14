@@ -1,0 +1,36 @@
+/* Help sheet: a searchable list of every screen, the selected screen's help, shortcuts and glossary. Tokens only. */
+.dialog.help-dialog { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: hidden; display: flex; flex-direction: column; }
+.help-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 0; flex: 1; overflow: hidden; border-top: 1px solid var(--iss-border); }
+.help-rail { display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow: auto; border-right: 1px solid var(--iss-border); background: var(--iss-surface-sunken); min-height: 0; }
+.help-search .input { width: 100%; }
+.help-tour { width: 100%; justify-content: center; }
+.help-jumps { display: flex; flex-wrap: wrap; gap: 4px; }
+.help-list h3 { margin: 12px 0 4px; font-size: 12px; font-weight: 700; color: var(--iss-text-muted); }
+.help-list ul { list-style: none; margin: 0; padding: 0; }
+.help-item { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; padding: 6px 8px; border: 0; border-radius: 7px; background: transparent; color: var(--iss-text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.help-item:hover { background: var(--iss-row-hover); }
+.help-item.selected { background: var(--iss-accent-soft); font-weight: 600; box-shadow: inset 3px 0 0 var(--iss-accent); }
+.help-item:focus-visible { box-shadow: var(--iss-focus); }
+.help-here { flex: none; }
+.help-main { overflow: auto; padding: 16px 22px 22px; min-height: 0; }
+.help-main h2 { margin: 0 0 8px; font-size: 18px; letter-spacing: -.01em; }
+.help-main h2:focus { outline: none; }
+.help-main h3 { margin: 16px 0 4px; font-size: 13px; font-weight: 700; }
+.help-main p, .help-main li, .help-main dd { font-size: 13px; line-height: 1.55; }
+.help-main ul { margin: 4px 0; padding-left: 20px; }
+.help-main li { margin: 3px 0; }
+.help-crumb { margin: 0 0 2px; color: var(--iss-text-muted); font-size: 12px; }
+.help-read, .help-words { margin: 4px 0; }
+.help-read > div, .help-words > div { padding: 6px 0; border-bottom: 1px solid var(--iss-row-border); }
+.help-read dt, .help-words dt { font-weight: 700; font-size: 13px; }
+.help-read dd, .help-words dd { margin: 2px 0 0; color: var(--iss-text); }
+.help-words > div.flash { background: var(--iss-accent-soft); }
+.help-words > div:focus { outline: none; }
+.help-block { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--iss-border); }
+.help-block:focus { outline: none; }
+.help-linkbtn { border: 0; padding: 0; background: none; color: var(--iss-accent-strong); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
+.help-linkbtn:focus-visible { box-shadow: var(--iss-focus); border-radius: 3px; }
+@media (max-width: 760px) {
+  .help-layout { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+  .help-rail { border-right: 0; border-bottom: 1px solid var(--iss-border); max-height: 40vh; }
+}

@@ -1,0 +1,11 @@
+/* Effective periods: chips, the "In effect from / until" fields. Tokens only. */
+.dt-period { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0; }
+.dt-period-label { font-weight: 600; font-size: 13px; color: var(--iss-text); }
+.dt-period-field { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--iss-text-muted); }
+.dt-period-field .input { width: 150px; }
+.dt-period.compact .dt-period-field .input { width: 138px; padding-top: 3px; padding-bottom: 3px; }
+.dt-period-hint { flex-basis: 100%; }
+.dt-period-error { flex-basis: 100%; margin: 0; }
+.dt-period-chip, .dt-off-chip { white-space: nowrap; }
+.dt-check-date { display: flex; flex-direction: column; gap: 6px; margin: 0 0 10px; font-size: 13px; }
+.dt-check-picks { gap: 6px; }

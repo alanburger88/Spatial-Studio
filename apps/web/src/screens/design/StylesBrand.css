@@ -1,0 +1,29 @@
+.dialog:has(.sb-root) { width: min(900px, calc(100vw - 32px)); }
+.sb-root .tabs { margin-bottom: 12px; }
+.sb-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 14px; }
+.sb-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sb-list > .row { flex-wrap: wrap; }
+.sb-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow: auto; }
+.sb-item { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; border: 1px solid var(--iss-border); border-radius: 8px; background: var(--iss-surface); color: var(--iss-text); cursor: pointer; font: inherit; }
+.sb-item:hover { background: var(--iss-row-hover); }
+.sb-item.on { border-color: var(--iss-accent); background: var(--iss-accent-soft); }
+.sb-item-name { font-weight: 700; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-item-sub { font-size: 11.5px; }
+.sb-edit { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.sb-row { align-items: flex-end; gap: 10px; }
+.sb-row .grow, .sb-logo-row .grow { flex: 1; min-width: 0; }
+.sb-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.sb-fields .input, .sb-fields .select { width: 100%; }
+.sb-swatch { width: 36px; height: 32px; padding: 0; border: 1px solid var(--iss-border-strong); border-radius: 6px; background: none; cursor: pointer; }
+.sb-contrast { font-size: 12px; margin: 2px 0 10px; color: var(--iss-text-muted); }
+.sb-contrast.low { color: var(--iss-warning-fg, var(--iss-text)); font-weight: 600; }
+.sb-sample-paper { background: var(--iss-paper); color: var(--iss-paper-ink); border: 1px solid var(--iss-border); border-radius: 8px; padding: 12px 16px; }
+.sb-sample-paper p { margin: 0; }
+.sb-foot { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--iss-border); padding-top: 10px; margin-top: 4px; }
+.sb-brand-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; }
+.sb-brand-preview { position: sticky; top: 0; align-self: start; }
+.sb-bp-head { padding-bottom: 8px; min-height: 40px; display: flex; align-items: center; }
+.sb-bp-btn { display: inline-block; color: #fff; font-weight: 700; font-size: 12.5px; padding: 6px 12px; border-radius: 8px; }
+.sb-logo { max-height: 44px; max-width: 180px; object-fit: contain; }
+.sb-logo-row { display: flex; gap: 10px; align-items: flex-end; margin-top: 8px; }
+@media (max-width: 760px) { .sb-grid, .sb-brand-grid { grid-template-columns: 1fr; } .sb-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

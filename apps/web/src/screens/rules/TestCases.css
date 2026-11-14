@@ -1,0 +1,30 @@
+/* Rules & Data: regression tests */
+.rdtest { flex: 1 1 0; min-height: 470px; display: flex; flex-direction: column; min-width: 0; }
+.rdtest .panel-head { flex-wrap: wrap; }
+.rdtest-pin { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.rdtest-pin .select { max-width: 220px; min-height: 28px; font-size: 12.5px; }
+.rdtest-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+.rdtest-form .row { display: flex; gap: 6px; margin-top: 4px; }
+.rdtest-form .input { flex: 1; min-width: 0; }
+.rdtest-form { padding: 8px 10px; border: 1px solid var(--iss-accent-line); border-radius: 10px; background: var(--iss-accent-soft); font-size: 12.5px; font-weight: 600; }
+.rdtest-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rdtest-row { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--iss-border); border-left-width: 4px; border-radius: 10px; background: var(--iss-surface-raised); }
+.rdtest-row.pass { border-left-color: var(--iss-success); }
+.rdtest-row.fail { border-color: var(--iss-error-line); border-left-color: var(--iss-error); background: var(--iss-error-soft); }
+.rdtest-main { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.rdtest-name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.rdtest-who { font-size: 12px; }
+.rdtest-status { font-size: 12px; font-weight: 700; white-space: nowrap; }
+.rdtest-status.pass { color: var(--iss-success); }
+.rdtest-status.fail { color: var(--iss-error-fg); }
+.rdtest-diffs { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--iss-text); }
+.rdtest-exp summary { cursor: pointer; font-size: 12px; color: var(--iss-text-muted); }
+.rdtest-exp ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
+.rdtest-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.rdtest-chip { cursor: pointer; font-weight: 700; border: 1px solid var(--iss-border); }
+.rdtest-chip:focus-visible { outline: none; box-shadow: var(--iss-focus); }
+.rdtest-draft { font-size: 12px; line-height: 1.35; flex: 1 1 260px; min-width: 0; }
+.rdtest-draft.ok { color: var(--iss-success); font-weight: 600; }
+.rdtest-draft.bad { color: var(--iss-error-fg); }
+.rdtest-draft-item { display: inline; margin-right: 6px; }

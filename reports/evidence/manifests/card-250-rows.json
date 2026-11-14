@@ -1,0 +1,623 @@
+{
+  "name": "card-250-rows",
+  "projectId": "aster-card-demo",
+  "recordId": "CARD-0001",
+  "runId": "run-8767a8a980df1938",
+  "contentDigest": "5d9f66a56f2c7f4a7d3a7006d6acd1540d14a659033bd777d41bfee3e57f858d",
+  "rulesDigest": "66a1591e0926e1f990ad80dce344c39ed395d153b02c22a300f1774cddafa393",
+  "modelVersion": 117,
+  "engine": "iss-resolver/1.0.0",
+  "result": {
+    "recordId": "CARD-0001",
+    "documentType": "credit-statement",
+    "selectedVariants": {
+      "payment-guidance": "payment-standard"
+    },
+    "matchedRuleIds": [
+      "R01",
+      "R10",
+      "R12"
+    ],
+    "additiveRuleIds": [
+      "R10"
+    ],
+    "requiredNodes": [
+      "billing-summary",
+      "payment-due",
+      "sample-disclosure-set"
+    ],
+    "diagnostics": [],
+    "documentFacts": {
+      "newBalanceCents": 124800,
+      "minimumDueCents": 4500,
+      "transactionCount": 250
+    },
+    "resultDigest": "c75ebb728f1964bdc5bfa5e3775d1869f96f4bb303616397deaae1452bdba610"
+  },
+  "trace": [
+    {
+      "ruleId": "R01",
+      "matched": true,
+      "outcome": "selected",
+      "inputs": {
+        "card.paymentStatus": "current"
+      }
+    },
+    {
+      "ruleId": "R02",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.missedPayments": 0
+      }
+    },
+    {
+      "ruleId": "R03",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.missedPayments": 0,
+        "card.assistanceRequested": false
+      }
+    },
+    {
+      "ruleId": "R04",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.assistanceRequested": false
+      }
+    },
+    {
+      "ruleId": "R05",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.arrangementStatus": "none"
+      }
+    },
+    {
+      "ruleId": "R06",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.tier": "standard"
+      }
+    },
+    {
+      "ruleId": "R07",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "customer.locale": "en-US"
+      }
+    },
+    {
+      "ruleId": "R08",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.channelPreference": "email"
+      }
+    },
+    {
+      "ruleId": "R09",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.channelPreference": "email"
+      }
+    },
+    {
+      "ruleId": "R10",
+      "matched": true,
+      "outcome": "applied",
+      "inputs": {
+        "card.transactions.count": 250
+      }
+    },
+    {
+      "ruleId": "R11",
+      "matched": false,
+      "outcome": "not-matched",
+      "inputs": {
+        "card.rewardsBalance": 0
+      }
+    },
+    {
+      "ruleId": "R12",
+      "matched": true,
+      "outcome": "required",
+      "inputs": {
+        "documentType": "credit-statement"
+      }
+    },
+    {
+      "ruleId": "high-volume-note:high-volume-help",
+      "matched": true,
+      "outcome": "selected",
+      "inputs": {
+        "card.transactions.count": 250
+      }
+    }
+  ],
+  "semanticManifest": {
+    "schema": "semantic-manifest/1",
+    "producer": "resolver",
+    "projectId": "aster-card-demo",
+    "modelVersion": 117,
+    "recordId": "CARD-0001",
+    "documentType": "credit-statement",
+    "locale": "en-US",
+    "selectedVariants": {
+      "payment-guidance": "payment-standard"
+    },
+    "requiredNodeIds": [
+      "billing-summary",
+      "payment-due",
+      "sample-disclosure-set"
+    ],
+    "visibleNodeIds": [
+      "available-credit",
+      "billing-summary",
+      "customer-address",
+      "document-header",
+      "fees-interest",
+      "greeting",
+      "high-volume-note",
+      "interest-explainer",
+      "issuer-logo",
+      "page-footer",
+      "payment-action",
+      "payment-due",
+      "payment-due-date",
+      "payment-guidance",
+      "payment-qr",
+      "payments-credits",
+      "previous-balance",
+      "purchases-total",
+      "running-header",
+      "sample-disclosure-set",
+      "spend-chart",
+      "statement-title",
+      "transaction-table"
+    ],
+    "money": {
+      "billing-summary": 124800,
+      "payment-due": 4500,
+      "available-credit": 675200,
+      "previous-balance": 104000,
+      "purchases-total": 50800,
+      "payments-credits": 30000,
+      "fees-interest": 0
+    },
+    "guardedLiabilityNodeIds": [],
+    "disclosures": [
+      {
+        "nodeId": "sample-disclosure-set",
+        "contentPartId": "sample-disclosure-set",
+        "version": 1,
+        "contentHash": "91249b11f4427414"
+      }
+    ],
+    "identity": {
+      "name": "Jordan Mercer",
+      "account": "•••• 1842",
+      "statementDate": "2026-11-01"
+    },
+    "tableRows": {
+      "transaction-table": 250
+    },
+    "tableTotalsCents": {
+      "transaction-table": 50800
+    },
+    "actions": [
+      {
+        "nodeId": "payment-action",
+        "url": "https://example.com/aster/payments"
+      }
+    ],
+    "facts": {
+      "newBalanceCents": 124800,
+      "minimumDueCents": 4500,
+      "transactionCount": 250
+    }
+  },
+  "composition": {
+    "engine": "iss-paged-composer/1",
+    "pageCount": 8,
+    "pdfPageCount": 8,
+    "pages": [
+      {
+        "index": 1,
+        "nodeIds": [
+          "greeting",
+          "account-summary",
+          "balance-breakdown",
+          "payment-guidance",
+          "high-volume-note",
+          "payment-actions",
+          "spend-chart",
+          "transaction-table"
+        ],
+        "fixedNodeIds": [
+          "issuer-logo",
+          "document-header",
+          "statement-title",
+          "customer-address",
+          "header-rule",
+          "page-footer"
+        ],
+        "tables": {
+          "transaction-table": {
+            "rows": 5,
+            "firstRowId": "STRESS-0001",
+            "lastRowId": "STRESS-0005",
+            "continued": false,
+            "headerRepeated": false
+          }
+        },
+        "flowTopPt": 184,
+        "flowBottomPt": 738,
+        "usedPt": 552
+      },
+      {
+        "index": 2,
+        "nodeIds": [
+          "transaction-table"
+        ],
+        "fixedNodeIds": [
+          "running-header",
+          "page-footer"
+        ],
+        "tables": {
+          "transaction-table": {
+            "rows": 37,
+            "firstRowId": "STRESS-0006",
+            "lastRowId": "STRESS-0042",
+            "continued": true,
+            "headerRepeated": true
+          }
+        },
+        "flowTopPt": 84,
+        "flowBottomPt": 738,
+        "usedPt": 639
+      },
+      {
+        "index": 3,
+        "nodeIds": [
+          "transaction-table"
+        ],
+        "fixedNodeIds": [
+          "running-header",
+          "page-footer"
+        ],
+        "tables": {
+          "transaction-table": {
+            "rows": 37,
+            "firstRowId": "STRESS-0043",
+            "lastRowId": "STRESS-0079",
+            "continued": true,
+            "headerRepeated": true
+          }
+        },
+        "flowTopPt": 84,
+        "flowBottomPt": 738,
+        "usedPt": 639
+      },
+      {
+        "index": 4,
+        "nodeIds": [
+          "transaction-table"
+        ],
+        "fixedNodeIds": [
+          "running-header",
+          "page-footer"
+        ],
+        "tables": {
+          "transaction-table": {
+            "rows": 37,
+            "firstRowId": "STRESS-0080",
+            "lastRowId": "STRESS-0116",
+            "continued": true,
+            "headerRepeated": true
+          }
+        },
+        "flowTopPt": 84,
+        "flowBottomPt": 738,
+        "usedPt": 639
+      },
+      {
+        "index": 5,
+        "nodeIds": [
+          "transaction-table"
+        ],
+        "fixedNodeIds": [
+          "running-header",
+          "page-footer"
+        ],
+        "tables": {
+          "transaction-table": {
+            "rows": 37,
+            "firstRowId": "STRESS-0117",
+            "lastRowId": "STRESS-0153",
+            "continued": true,
+            "headerRepeated": true
+          }
+        },
+        "flowTopPt": 84,
+        "flowBottomPt": 738,
+        "usedPt": 639
+      },
+      {
+        "index": 6,
+        "nodeIds": [
+          "transaction-table"
+        ],
+        "fixedNodeIds": [
+          "running-header",
+          "page-footer"
+        ],
+        "tables": {
+          "transaction-table": {
+            "rows": 37,
+            "firstRowId": "STRESS-0154",
+            "lastRowId": "STRESS-0190",
+            "continued": true,
+            "headerRepeated": true
+          }
+        },
+        "flowTopPt": 84,
+        "flowBottomPt": 738,
+        "usedPt": 639
+      },
+      {
+        "index": 7,
+        "nodeIds": [
+          "transaction-table"
+        ],
+        "fixedNodeIds": [
+          "running-header",
+          "page-footer"
+        ],
+        "tables": {
+          "transaction-table": {
+            "rows": 37,
+            "firstRowId": "STRESS-0191",
+            "lastRowId": "STRESS-0227",
+            "continued": true,
+            "headerRepeated": true
+          }
+        },
+        "flowTopPt": 84,
+        "flowBottomPt": 738,
+        "usedPt": 639
+      },
+      {
+        "index": 8,
+        "nodeIds": [
+          "transaction-table",
+          "interest-explainer",
+          "sample-disclosure-set"
+        ],
+        "fixedNodeIds": [
+          "running-header",
+          "page-footer"
+        ],
+        "tables": {
+          "transaction-table": {
+            "rows": 23,
+            "firstRowId": "STRESS-0228",
+            "lastRowId": "STRESS-0250",
+            "continued": true,
+            "headerRepeated": true
+          }
+        },
+        "flowTopPt": 84,
+        "flowBottomPt": 738,
+        "usedPt": 546.8
+      }
+    ],
+    "diagnostics": [],
+    "durationMs": 149
+  },
+  "pdf": {
+    "file": "exports/card-250-rows.pdf",
+    "sha256": "2632d459c48ea12ceec63efe8477775555f7d23d655851308b907098a05d6a86",
+    "pageCount": 8,
+    "artifactId": "art-pdf-2632d459c48ea12c",
+    "wallMs": 369
+  },
+  "html": {
+    "file": "exports/card-250-rows.html",
+    "sha256": "46cedd24eee3058c343db5d21ae78b34340683a4b331e66291ab026a0dd01f4c"
+  },
+  "parity": {
+    "ok": true,
+    "checks": [
+      {
+        "id": "selected-variants",
+        "label": "Selected variants",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "payment-guidance": "payment-standard"
+        },
+        "pdf": {
+          "payment-guidance": "payment-standard"
+        },
+        "html": {
+          "payment-guidance": "payment-standard"
+        }
+      },
+      {
+        "id": "money",
+        "label": "Monetary values (integer cents) by node",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "billing-summary": 124800,
+          "payment-due": 4500,
+          "available-credit": 675200,
+          "previous-balance": 104000,
+          "purchases-total": 50800,
+          "payments-credits": 30000,
+          "fees-interest": 0
+        },
+        "pdf": {
+          "billing-summary": 124800,
+          "payment-due": 4500,
+          "available-credit": 675200,
+          "previous-balance": 104000,
+          "purchases-total": 50800,
+          "payments-credits": 30000,
+          "fees-interest": 0
+        },
+        "html": {
+          "billing-summary": 124800,
+          "payment-due": 4500,
+          "available-credit": 675200,
+          "previous-balance": 104000,
+          "purchases-total": 50800,
+          "payments-credits": 30000,
+          "fees-interest": 0
+        }
+      },
+      {
+        "id": "member-liability",
+        "label": "Guarded (unconfirmed) member liability",
+        "status": "match",
+        "blocking": true,
+        "expected": [],
+        "pdf": [],
+        "html": []
+      },
+      {
+        "id": "disclosures",
+        "label": "Mandatory disclosures (id, version, content hash)",
+        "status": "match",
+        "blocking": true,
+        "expected": [
+          {
+            "nodeId": "sample-disclosure-set",
+            "contentPartId": "sample-disclosure-set",
+            "version": 1,
+            "contentHash": "91249b11f4427414"
+          }
+        ],
+        "pdf": [
+          {
+            "nodeId": "sample-disclosure-set",
+            "contentPartId": "sample-disclosure-set",
+            "version": 1,
+            "contentHash": "91249b11f4427414"
+          }
+        ],
+        "html": [
+          {
+            "nodeId": "sample-disclosure-set",
+            "contentPartId": "sample-disclosure-set",
+            "version": 1,
+            "contentHash": "91249b11f4427414"
+          }
+        ]
+      },
+      {
+        "id": "required-nodes",
+        "label": "Required semantic nodes present",
+        "status": "match",
+        "blocking": true,
+        "expected": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "pdf": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ],
+        "html": [
+          "billing-summary",
+          "payment-due",
+          "sample-disclosure-set"
+        ]
+      },
+      {
+        "id": "table-rows",
+        "label": "Table row counts",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "transaction-table": 250
+        },
+        "pdf": {
+          "transaction-table": 250
+        },
+        "html": {
+          "transaction-table": 250
+        }
+      },
+      {
+        "id": "table-totals",
+        "label": "Table totals (cents)",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "transaction-table": 50800
+        },
+        "pdf": {
+          "transaction-table": 50800
+        },
+        "html": {
+          "transaction-table": 50800
+        }
+      },
+      {
+        "id": "identity",
+        "label": "Customer identity",
+        "status": "match",
+        "blocking": true,
+        "expected": {
+          "name": "Jordan Mercer",
+          "account": "•••• 1842"
+        },
+        "pdf": {
+          "name": "Jordan Mercer",
+          "account": "•••• 1842"
+        },
+        "html": {
+          "name": "Jordan Mercer",
+          "account": "•••• 1842"
+        }
+      },
+      {
+        "id": "actions",
+        "label": "Action destinations",
+        "status": "match",
+        "blocking": false,
+        "expected": [
+          "https://example.com/aster/payments"
+        ],
+        "pdf": [
+          "https://example.com/aster/payments"
+        ],
+        "html": [
+          "https://example.com/aster/payments"
+        ],
+        "note": "HTML renders an active link; PDF prints the URL/QR fallback."
+      }
+    ],
+    "allowedDifferences": [
+      "HTML profile omits presentation-only nodes: payment-qr, running-header",
+      "Page geometry, page count and pagination differ by design (paged vs responsive).",
+      "HTML adds sorting, filtering, expandable explanations and chart tooltips; PDF shows explanations expanded."
+    ]
+  },
+  "afpSimulation": {
+    "simulationOnly": true,
+    "afpBytesGenerated": 0,
+    "label": "AFP simulation only — no MO:DCA / AFP print stream generated",
+    "pageCount": 8
+  }
+}

@@ -1,0 +1,11 @@
+node_modules
+**/node_modules
+.data
+.git
+.env
+.env.*
+!.env.example
+test-results
+reports/evidence/screens
+**/dist
+*.bundle

@@ -1,0 +1,54 @@
+.df { display: flex; flex-direction: column; gap: 10px; min-height: 320px; }
+.df-intro { margin: 0; font-size: 12.5px; }
+.df-empty { margin: 0; color: var(--iss-text-faint); font-size: 13px; }
+.df-table-wrap { max-height: 52vh; overflow: auto; border: 1px solid var(--iss-border); border-radius: 10px; }
+.df-table td { font-size: 12.5px; }
+.df-table .mono { font-size: 11px; }
+.df-req { margin-left: 6px; font-size: 10.5px; padding: 0 6px; }
+.df-vals { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+.df-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 52vh; overflow: auto; }
+.df-row { display: grid; grid-template-columns: 1.3fr 1fr 0.9fr auto; gap: 4px 10px; align-items: start; padding: 10px; border: 1px solid var(--iss-border); border-radius: 10px; background: var(--iss-surface-raised); }
+.df-row .field { margin: 0; min-width: 0; }
+.df-row .df-wide { grid-column: 1 / 4; }
+.df-flags { grid-column: 1 / 4; display: flex; gap: 14px; font-size: 12.5px; color: var(--iss-text-muted); }
+.df-flags label { display: inline-flex; gap: 6px; align-items: center; }
+.df-row-end { grid-column: 4; grid-row: 1; display: flex; align-items: center; gap: 6px; padding-top: 20px; }
+.df-use { font-size: 11.5px; }
+.df-bad { color: var(--iss-error); }
+.df-foot-note { margin-right: auto; font-size: 12px; }
+.dialog:has(.df) { width: min(820px, calc(100vw - 32px)); }
+
+/* List fields: their columns (1 to 8), each with label, key and type, in order. */
+.df-list { grid-column: 1 / 5; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px dashed var(--iss-border); border-radius: 10px; }
+.df-list-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.df-list-head strong { font-size: 12.5px; }
+.df-cols { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.df-col { display: grid; grid-template-columns: 1.3fr 1fr 1fr auto; gap: 6px 8px; align-items: end; }
+.df-col .field { margin: 0; min-width: 0; }
+.df-col-end { display: flex; gap: 2px; align-items: center; padding-bottom: 2px; }
+.df-row-end { flex-wrap: wrap; justify-content: flex-end; }
+.df-hint-count { font-size: 11.5px; }
+.df-getting-started { margin: 0; }
+@media (max-width: 720px) { .df-row { grid-template-columns: 1fr 1fr; } .df-col { grid-template-columns: 1fr 1fr; } .df-row-end { grid-column: 2; } }
+/* Import fields (wave 3): the entry point and its dialog. */
+.df-import-refused { font-size: 12px; max-width: 520px; }
+.dialog:has(.if) { width: min(920px, calc(100vw - 32px)); }
+.if { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.if-text { width: 100%; font-family: var(--iss-font-mono, monospace); margin-top: 6px; }
+.if-rows { max-height: 40vh; overflow: auto; border: 1px solid var(--iss-border); border-radius: 10px; }
+.if-table { width: 100%; font-size: 12.5px; }
+.if-table td { vertical-align: top; }
+.if-table thead th { position: sticky; top: 0; background: var(--iss-surface-sunken); }
+.if-small { font-size: 12px; }
+.if-note { color: var(--iss-warning-fg, var(--iss-text-muted)); }
+.if-problems { margin: 0; padding-left: 24px; font-size: 12.5px; }
+.if-cust { display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; flex-wrap: wrap; }
+/* Richer data shapes (wave 5): a group's fields and a list inside a list, indented under their column; the shape tree. */
+.df-sub { grid-column: 1 / -1; margin-left: 16px; padding-left: 10px; border-left: 2px solid var(--iss-border); }
+.df-sub .df-list { margin: 4px 0; }
+.df-tree { margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--iss-border); border-radius: 6px; background: var(--iss-surface-2); }
+.df-tree summary { cursor: pointer; font-weight: 600; }
+.df-tree ul { margin: 4px 0 0; padding-left: 18px; }
+.df-tree > ul { columns: 2 220px; column-gap: 24px; }
+.df-tree > ul > li { break-inside: avoid; }
+.df-tree li { margin: 1px 0; }
