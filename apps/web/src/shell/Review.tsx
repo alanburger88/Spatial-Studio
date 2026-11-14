@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ACTION_LABEL, WORKFLOW_LABEL, WORKFLOW_STATES, type WorkflowAction, type WorkflowState } from '@iss/model';
 import { api, ApiFailure, type BlockingGroup, type CommentDto, type VersionDto, type WorkflowDto } from '../api/client';
+import type { CommentWithLinkDto } from '../api/client'; // review links (wave 4)
+import { ReviewLinkThreads } from './ReviewLinkThreads'; // review links (wave 4)
 import { ChangeSummaryCard, lastApprovedVersion } from '../assist/ChangeSummaryCard';
 import { useIsDirty, useStudio } from '../state/store';
 import { Biz, Proof, Tech } from '../ui/common';
@@ -80,7 +82,8 @@ function ReviewPanelInner() {
   };
 
   const grouped = useMemo(() => {
-    const roots = (comments ?? []).filter((c) => !c.parentId);
+    // Comments from review links have their own section ("From review links", below).
+    const roots = (comments ?? []).filter((c) => !c.parentId && !(c as CommentWithLinkDto).reviewLink);
     const by = new Map<string, CommentDto[]>();
     for (const c of roots) by.set(c.nodeId, [...(by.get(c.nodeId) ?? []), c]);
     return [...by.entries()].map(([nodeId, list]) => ({ nodeId, list, replies: (comments ?? []).filter((c) => c.parentId && list.some((r) => r.id === c.parentId)).length }));
@@ -196,6 +199,8 @@ function ReviewPanelInner() {
                 </>
               )}
             </section>
+
+            <ReviewLinkThreads pid={pid} onNavigate={close} />
 
             <section className="drawer-section" aria-labelledby="wf-cmt-h">
               <h3 id="wf-cmt-h">Open comments <span className="count">{comments ? `${grouped.reduce((n, g) => n + g.list.length, 0)} thread${grouped.reduce((n, g) => n + g.list.length, 0) === 1 ? '' : 's'}` : ''}</span></h3>

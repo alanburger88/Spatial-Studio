@@ -8,6 +8,7 @@ import { useWorkflow } from '../shell/workflow';
 import { LiveCards } from './releases/LiveCards';
 import { ReleaseList } from './releases/ReleaseList';
 import { ReleaseDetail } from './releases/ReleaseDetail';
+import { ReviewLinksPanel } from './releases/ReviewLinks'; // review links (wave 4)
 import './Releases.css';
 
 /**
@@ -113,6 +114,7 @@ export function Releases() {
                   {Number.isFinite(asked) && asked > 0 && !releases.some((r) => r.number === asked) && <p className="muted rel-create-why" role="status">There is no release {asked}: showing release {selected?.number}.</p>}
                   <div className="panel-body flush"><ReleaseList releases={releases} selected={selected?.number ?? null} onSelect={select} /></div>
                 </div>
+                <ReviewLinksPanel projectId={project.projectId} />
               </div>
               <aside className="panel rel-detail" aria-label="Release details" data-side="right" data-side-title="Release details">
                 <div className="panel-body">

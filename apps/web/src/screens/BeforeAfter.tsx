@@ -11,6 +11,7 @@ import { DocChanges } from './compare/DocChanges';
 import { SideBySide, type SideData } from './compare/SideBySide';
 import { WhoChanges } from './compare/WhoChanges';
 import { WORKING, defaultCustomer, defaultPair, isOutput, otherSideFor, releaseNumberOf, releaseSide, sideLabel, sideShort, validSide, type Output, type SideId } from './compare/model';
+import { ShareForReview } from './releases/ReviewLinks'; // review links (wave 4)
 import './BeforeAfter.css';
 
 /**
@@ -188,6 +189,11 @@ export function BeforeAfter() {
             {picker('before', 'Before')}
             <button type="button" className="btn cmp-swap" data-testid="cmp-swap" onClick={swap} title="Swap Before and After"><span aria-hidden="true">⇄</span> Swap sides</button>
             {picker('after', 'After')}
+            {/* Review links (wave 4): share the After side, frozen: a release, or the saved version (never unsaved changes). */}
+            {sides!.after === WORKING
+              ? <ShareForReview projectId={project.projectId} target={{ version: savedVersion }} testId="cmp-share-review" className="btn cmp-share"
+                  note={dirty ? `You have unsaved changes. The link shows saved version ${savedVersion}, without them.` : undefined} />
+              : rel(sides!.after) && <ShareForReview projectId={project.projectId} target={{ releaseId: rel(sides!.after)!.id }} testId="cmp-share-review" className="btn cmp-share" />}
           </div>
           <Tech>
             <p className="muted cmp-tech" data-testid="cmp-tech">

@@ -14,6 +14,7 @@ import { clockTime, fullCheckOf, useFullCheck } from './blockers/fullCheck';
 import { auditSentence, customerNamesOf } from './Activity';
 import './Overview.css';
 import { LibraryUpdatesLine } from './library/OverviewLine';
+import { ReviewLinksGlance } from './releases/ReviewLinks'; // review links (wave 4)
 
 /**
  * Overview (S19): the document's home. Where it stands, what to do next, and a few facts at a glance.
@@ -315,6 +316,7 @@ export function Overview() {
                     : tests.total === 0 ? <>None yet. <Link to={`${base}/rules-data`}>Pin one from Rules</Link></>
                     : <><strong>{tests.passed}</strong> of {tests.total} pass{tests.failed > 0 ? <>, <strong>{tests.failed}</strong> fail</> : ''} <Link to={`${base}/rules-data`}>Open rules</Link></>}
                 </dd></div>
+                <ReviewLinksGlance projectId={pid} />
               </dl>
             </section>
 

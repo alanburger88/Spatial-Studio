@@ -290,6 +290,7 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
       'Download its package and see what is inside.',
       'Move a release to Production, if you are an administrator, or withdraw it.',
       'Compare a release with the working version or another release.',
+      'Share a release for review: someone without an account can look at it for chosen test customers and comment. Revoke the link under Review links when you are done.',
     ],
     next: [
       { screen: 'S20', why: 'see what customers would see differently' },

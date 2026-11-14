@@ -98,7 +98,23 @@ function AuthGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/* ---- review links (wave 4): the public review page is outside the studio (no shell, no sign-in, no studio data, no
+   screen prefetching). It is its own download, so the studio's first download does not grow. ---- */
+const ReviewPage = lazy(() => import('./review/ReviewPage').then((m) => ({ default: m.ReviewPage })));
+function reviewTokenOf(pathname: string): string | null {
+  const m = /^\/review\/([^/]+)\/?$/.exec(pathname);
+  if (!m) return null;
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; }
+}
+
 export function App() {
+  const reviewToken = typeof window === 'undefined' ? null : reviewTokenOf(window.location.pathname);
+  if (reviewToken !== null) return <Suspense fallback={<div className="login-page"><Loading label="Opening the review…" /></div>}><ReviewPage token={reviewToken} /></Suspense>;
+  return <StudioApp />;
+}
+/* ---- end review links ---- */
+
+function StudioApp() {
   usePrefetchScreens();
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
