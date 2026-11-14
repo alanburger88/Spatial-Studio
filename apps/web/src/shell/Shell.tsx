@@ -260,7 +260,7 @@ function TopBar() {
   const { pathname } = useLocation();
   const inStudio = pathname.startsWith('/studio/');
   // Wave 4 (who else is editing): this window tells the server where it is; the others are shown beside the document name.
-  usePresenceReporting(inStudio ? screenOfPath(pathname)?.id ?? null : null);
+  usePresenceReporting(inStudio, inStudio ? screenOfPath(pathname)?.id ?? null : null);
   // A language switch has its own control in the bar; the chip is for every other what-if change.
   const hasOverrides = Object.keys(ctx.overrides).some((k) => k !== 'customer') || Object.keys((ctx.overrides as { customer?: Record<string, unknown> }).customer ?? {}).some((k) => k !== 'locale');
   // "Show me where" from the gallery: once the project and its picker exist, focus the picker and ring it briefly.

@@ -77,11 +77,14 @@ function leave(beacon = false): void {
 }
 
 /**
- * Mounted once by the shell. `screen` is the id of the screen on view (S02, …) or null; the component is reported only on
+ * Mounted once by the shell. `onDocument`: a document's screen is open (`/studio/...`); `screen` is the id of the screen on
+ * view (S02, …) or null; the component is reported only on
  * Design Studio, where the Inspector warns about it.
  */
-export function usePresenceReporting(screen: string | null): void {
-  const projectId = useStudio((s) => (s.projectStatus === 'ready' ? s.project?.projectId ?? null : null));
+export function usePresenceReporting(onDocument: boolean, screen: string | null): void {
+  // Only while a document's own screens are open: the gallery, the library and Activity are not "on" a document, even
+  // though the store still holds the last one opened.
+  const projectId = useStudio((s) => (onDocument && s.projectStatus === 'ready' ? s.project?.projectId ?? null : null));
   const signedIn = useStudio((s) => !!s.session?.user);
   const selected = useStudio((s) => s.ctx.selectedNodeId);
   const dirty = useIsDirty();
