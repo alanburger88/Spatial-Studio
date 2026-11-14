@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useBaseAgain as baseValueAgain, VARIANT_GROUP_LABEL, VARIANT_GROUPS, VARIANT_PURPOSE_LABEL, type Project, type UpdateEntry, type VariantDifference, type VariantGroup } from '@iss/model';
+import { useBaseAgain as baseValueAgain, WORKFLOW_LABEL, VARIANT_GROUP_LABEL, VARIANT_GROUPS, VARIANT_PURPOSE_LABEL, type Project, type UpdateEntry, type VariantDifference, type VariantGroup } from '@iss/model';
 import { ApiFailure, variantApi, type FamilyDto } from '../../api/client';
 import { useCan, useIsDirty, useStudio } from '../../state/store';
 import { Dialog, Loading } from '../../ui/common';
@@ -131,7 +131,7 @@ function UpdateBox({ project, vs }: { project: Project; vs: VariantState }) {
         <div className="vr-group"><h4>Needs a look <span className={`chip count${u.needsLook.length ? ' warning' : ''}`} data-testid="variant-update-look-count">{u.needsLook.length}</span></h4><p className="muted">The base removed or reshaped something you changed or added to.</p><EntryList entries={u.needsLook} testId="variant-update-needs-look" mode="look" /></div>
       </div>
       <div className="row wrap vr-actions">
-        <Link className="btn" to={`/studio/${project.projectId}/before-after?before=working&after=update`} data-testid="variant-update-see">See what customers will see differently</Link>
+        <Link className="btn" to={`/studio/${project.projectId}/compare?before=working&after=update`} data-testid="variant-update-see">See what customers will see differently</Link>
         <button type="button" className="btn primary" onClick={apply} disabled={!canEdit} data-testid="variant-update-apply">Apply the update</button>
         <button type="button" className="btn ghost" onClick={stayBehind} data-testid="variant-update-stay">Stay on version {u.fromVersion} for now</button>
       </div>
@@ -207,7 +207,7 @@ export function FamilyView({ projectId, compact = false }: { projectId: string; 
                 <td><Link to={`/studio/${m.projectId}/overview`}>{m.title}</Link>{m.projectId === projectId && <span className="muted"> (this document)</span>}</td>
                 <td>{m.variant ? `${VARIANT_PURPOSE_LABEL[m.variant.purpose]}: ${m.variant.label}` : <span className="chip">Base</span>}</td>
                 <td>{m.variant ? <>Version {m.variant.follows}{m.variant.baseMissing ? <span className="chip warning"> base not found</span> : m.variant.behind ? <> <span className="chip warning" data-testid="variant-family-behind">Behind</span></> : <span className="muted"> (up to date)</span>}</> : <>Version {m.modelVersion}</>}</td>
-                <td>{m.workflow.replace('_', ' ')}</td>
+                <td>{WORKFLOW_LABEL[m.workflow] ?? m.workflow}</td>
                 <td>{stage(m)}</td>
                 <td>{m.variant ? (m.variant.rulesDiffer === null ? '—' : m.variant.rulesDiffer ? <span className="chip info" title="Its rules differ from the base’s: the base’s tests do not prove it">Its own</span> : 'Same as the base') : '—'}</td>
               </tr>

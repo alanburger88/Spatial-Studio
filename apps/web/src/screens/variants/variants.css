@@ -1,4 +1,6 @@
 /* Variants by brand or region (wave 5). Tokens only: both themes. */
+/* On Overview the panels sit in a column that scrolls: they keep their height. */
+.vr-panel, .vr-family-panel { flex: none; }
 .vr-panel .vr-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .vr-panel .vr-head .right { margin-left: auto; gap: 6px; }
 .vr-body { display: grid; gap: 16px; }
@@ -10,7 +12,8 @@
 .vr-group { background: var(--iss-surface); border: 1px solid var(--iss-border); border-radius: 6px; padding: 8px 10px; min-width: 0; }
 .vr-group h4, .vr-diff-group h4 { font-size: 13px; margin: 0 0 2px; display: flex; align-items: center; gap: 6px; }
 .vr-group > p.muted { font-size: 12px; margin: 0 0 6px; }
-.vr-entries { margin: 0; padding: 0; list-style: none; max-height: 320px; overflow: auto; }
+.vr-entries { margin: 0; padding: 0; list-style: none; }
+.vr-groups .vr-entries { max-height: 320px; overflow: auto; }
 .vr-entry { padding: 6px 0; display: grid; gap: 4px; min-width: 0; }
 .vr-entry-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 13px; }
 .vr-entry-head .right { margin-left: auto; }

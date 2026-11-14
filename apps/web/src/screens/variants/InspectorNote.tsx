@@ -24,7 +24,7 @@ export function VariantNodeNote({ project, node, differs }: { project: Project; 
         </div>
       )}
       {fromBase
-        ? <p className="muted">From the base “{v.baseTitle}”. Its place and size stay the base’s; its wording and settings are this variant’s to change{differs?.length ? ` (it differs from the base: ${differs.slice(0, 3).join('; ')}${differs.length > 3 ? '…' : ''})` : ''}. <Link to={baseLink(project, node.id)} data-testid="variant-node-open-base">Open it in the base</Link></p>
+        ? <p className="muted">From the base “{v.baseTitle}”. Its place and size stay the base’s; its wording and settings are this variant’s to change.{differs?.length ? <span title={differs.join('\n')}> It differs from the base in {differs.length === 1 ? 'one way' : `${differs.length} ways`} (see Overview).</span> : null} <Link to={baseLink(project, node.id)} data-testid="variant-node-open-base">Open it in the base</Link></p>
         : <p className="muted">This variant’s own component: it can be moved, resized and removed freely.</p>}
     </div>
   );

@@ -167,7 +167,8 @@ function valueText(path: VariantPathStep[], v: unknown): string | null {
   if (v === undefined || v === null) return null;
   const root = rootOf(path);
   const last = path[path.length - 1];
-  if (typeof v === 'string') return v.startsWith('data:image/') ? 'an image' : clip(v);
+  // Text in a few words: bold marks (**) are left out so the words read as the customer reads them.
+  if (typeof v === 'string') return v.startsWith('data:image/') ? 'an image' : clip(v.replace(/\*\*/g, ''));
   if (typeof v === 'number' || typeof v === 'boolean') return typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v);
   if (root === 'rules' && isObj(v) && 'when' in v) return ruleText(v as unknown as Rule);
   if (root === 'nodes') {
