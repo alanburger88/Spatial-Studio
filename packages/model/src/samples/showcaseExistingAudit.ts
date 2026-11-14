@@ -99,7 +99,9 @@ export function eobArithmetic(record: SyntheticRecord): ArithmeticFinding[] {
 /** The totals across claims, as the document's calculations and table footer work them out. */
 export function eobTotals(record: SyntheticRecord): { claims: number; billedCents: number; planPaidCents: number; memberCents: number } {
   const claims = (((record as unknown as { claims?: Claim[] }).claims) ?? []) as Claim[];
-  return claims.reduce((t, c) => ({ claims: t.claims + 1, billedCents: t.billedCents + num(c.billedCents), planPaidCents: t.planPaidCents + num(c.planPaidCents), memberCents: t.memberCents + num(c.patientResponsibilityCents) }), { claims: 0, billedCents: 0, planPaidCents: 0, memberCents: 0 });
+  const totals = { claims: 0, billedCents: 0, planPaidCents: 0, memberCents: 0 };
+  for (const c of claims) { totals.claims += 1; totals.billedCents += num(c.billedCents); totals.planPaidCents += num(c.planPaidCents); totals.memberCents += num(c.patientResponsibilityCents); }
+  return totals;
 }
 
 /** The fixture scenarios (fixtures/expected_scenarios.json) whose data is deliberately inconsistent, and why. */

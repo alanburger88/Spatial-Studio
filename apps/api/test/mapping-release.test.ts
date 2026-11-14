@@ -168,10 +168,12 @@ describe('releases through the API', () => {
     const approved = await inj('POST', `/api/v1/projects/${CARD}/workflow`, { action: 'approve' });
     expect(approved.statusCode, approved.body.slice(0, 300)).toBe(200);
     const detail = (await inj('GET', `/api/v1/releases/${CARD}-r1`)).json();
-    expect(detail.mappings.map((m: any) => [m.name, m.complete, m.file])).toEqual([['Mapping for Core', true, 'data/mapping-mapping-for-core.json'], ['Mapping for Print House', false, null]]);
+    // The stored card sample carries its own complete "Mapping for the print house" (D106) before the two added here.
+    expect(detail.mappings.map((m: any) => [m.name, m.complete, m.file])).toEqual([['Mapping for the print house', true, 'data/mapping-mapping-for-the-print-house.json'], ['Mapping for Core', true, 'data/mapping-mapping-for-core.json'], ['Mapping for Print House', false, null]]);
     const zip = (await inj('GET', `/api/v1/releases/${CARD}-r1/package?wait=1`)).rawPayload;
     const files = unzip(zip);
     expect(files.has('data/mapping-mapping-for-core.json')).toBe(true);
+    expect(files.has('data/mapping-mapping-for-the-print-house.json')).toBe(true);
     for (const [p, data] of files) for (const secret of ['Zebulon', 'Quackenbush']) expect(data.toString('utf8').includes(secret), `${secret} in ${p}`).toBe(false);
   });
 });

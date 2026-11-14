@@ -190,21 +190,21 @@ export function enrichCard(project: Project): Project {
   const owing: Predicate = { op: 'gt', path: 'card.minimumDueCents', value: 0 };
   const timing: DocNode = { id: 'payment-timing', type: 'conditional-region', name: 'Payment timing', policy: 'exclusive', variantIds: [], layout: flow(8) };
   p = run(p, insertAt(p, timing, { after: 'payment-guidance' }));
-  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-late-fee', title: 'Payment timing — late fee', when: { op: 'and', args: [owing, { op: 'gt', path: 'calc.lateFee', value: 0 }] }, text: 'Your payment is due in **{{calc.daysUntilDue}} days**, on {{card.dueDate}}. If the minimum payment arrives after that date, a late fee of up to {{calc.lateFee}} may apply.' });
-  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-arrangement', title: 'Payment timing — arrangement', when: { op: 'and', args: [owing, { op: 'eq', path: 'card.arrangementStatus', value: 'approved' }] }, text: 'Your payment is due in **{{calc.daysUntilDue}} days**, on {{card.dueDate}}. While your payment arrangement is in place, no late fee is charged.' });
+  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-late-fee', title: 'When to pay', when: { op: 'and', args: [owing, { op: 'gt', path: 'calc.lateFee', value: 0 }] }, text: 'Your payment is due in **{{calc.daysUntilDue}} days**, on {{card.dueDate}}. If the minimum payment arrives after that date, a late fee of up to {{calc.lateFee}} may apply.' });
+  p = run(p, { type: 'ADD_VARIANT', nodeId: 'payment-timing', variantId: 'timing-arrangement', title: 'When to pay — arrangement in place', when: { op: 'and', args: [owing, { op: 'eq', path: 'card.arrangementStatus', value: 'approved' }] }, text: 'Your payment is due in **{{calc.daysUntilDue}} days**, on {{card.dueDate}}. While your payment arrangement is in place, no late fee is charged.' });
   // A spending summary just before the transactions, shown when at least one transaction is listed.
   p = conditionalSection(p, { before: 'transaction-table' }, { id: 'spending-summary', name: 'Spending summary', spaceBeforePt: 14 }, {
     variantId: 'spending-at-a-glance', title: 'This period at a glance', when: { op: 'gt', path: 'card.transactions.count', value: 0 },
-    text: '**This period at a glance.** The {{card.transactions.count}} transactions listed below total {{calc.listedTotal}}. The largest was {{calc.largestTransaction}}. {{calc.availableCreditPct}}% of your credit limit is available.',
+    text: 'The {{card.transactions.count}} transactions listed below total {{calc.listedTotal}}. The largest was {{calc.largestTransaction}}. {{calc.availableCreditPct}}% of your credit limit is available.',
   });
   // Two dated notices before the disclosures: one in effect until a date, one from a date.
   p = conditionalSection(p, { before: 'sample-disclosure-set' }, { id: 'notice-holiday-posting', name: 'Holiday posting notice', spaceBeforePt: 12 }, {
     variantId: 'holiday-posting', title: 'Holiday payment posting', when: { op: 'gt', path: 'card.newBalanceCents', value: 0 },
-    text: '**Holiday payment posting.** Payments made between 24 December and 1 January may take one extra business day to post. Pay early to be sure your payment arrives by {{card.dueDate}}.',
+    text: 'Payments made between 24 December and 1 January may take one extra business day to post. Pay early to be sure your payment arrives by {{card.dueDate}}.',
   });
   p = conditionalSection(p, { before: 'sample-disclosure-set' }, { id: 'notice-agreement-update', name: 'Cardholder agreement update', spaceBeforePt: 8 }, {
-    variantId: 'agreement-update', title: 'Cardholder agreement update', when: { op: 'gt', path: 'card.creditLimitCents', value: 0 },
-    text: '**Your cardholder agreement is changing.** From 1 December 2026 it includes a section on paying with a digital wallet. You can read it at example.com/aster/agreement.',
+    variantId: 'agreement-update', title: 'Your cardholder agreement is changing', when: { op: 'gt', path: 'card.creditLimitCents', value: 0 },
+    text: 'From 1 December 2026 it includes a section on paying with a digital wallet. You can read it at example.com/aster/agreement.',
   });
   p = run(p, { type: 'SET_SECTION_PERIOD', nodeId: 'notice-holiday-posting', period: CARD_PERIODS.holidayPosting });
   p = run(p, { type: 'SET_SECTION_PERIOD', nodeId: 'notice-agreement-update', period: CARD_PERIODS.agreementUpdate });
@@ -321,8 +321,8 @@ export function enrichEob(project: Project): Project {
   const notConfirmed: Predicate = { op: 'eq', path: 'claim.liabilityConfirmed', value: false };
   const summary: DocNode = { id: 'claim-summary', type: 'conditional-region', name: 'Claim summary', policy: 'exclusive', variantIds: [], layout: flow(8) };
   p = run(p, insertAt(p, summary, { after: 'eob-claim-message' }));
-  p = run(p, { type: 'ADD_VARIANT', nodeId: 'claim-summary', variantId: 'summary-confirmed', title: 'Claim summary — processed', when: confirmed, text: 'Claims in this explanation: {{calc.claimCount}}. Your plan paid {{calc.totalPlanPaid}} in total. Your share is {{calc.memberSharePct}}% of the amount the provider billed.' });
-  p = run(p, { type: 'ADD_VARIANT', nodeId: 'claim-summary', variantId: 'summary-in-review', title: 'Claim summary — in review', when: notConfirmed, text: 'Claims in this explanation: {{calc.claimCount}}. This claim is still being reviewed, so no amount is shown for you yet. Reviews of claims of this size usually take up to {{calc.reviewDays}} days.' });
+  p = run(p, { type: 'ADD_VARIANT', nodeId: 'claim-summary', variantId: 'summary-confirmed', title: 'Claim summary', when: confirmed, text: 'Claims in this explanation: {{calc.claimCount}}. Your plan paid {{calc.totalPlanPaid}} in total. Your share is {{calc.memberSharePct}}% of the amount the provider billed.' });
+  p = run(p, { type: 'ADD_VARIANT', nodeId: 'claim-summary', variantId: 'summary-in-review', title: 'Claim summary — under review', when: notConfirmed, text: 'Claims in this explanation: {{calc.claimCount}}. This claim is still being reviewed, so no amount is shown for you yet. Reviews of claims of this size usually take up to {{calc.reviewDays}} days.' });
   // Keep the four claim amounts together on one page.
   p = run(p, { type: 'SET_LAYOUT', nodeId: 'claim-facts', profile: 'paged', layout: { keepTogether: true } });
   p = run(p, { type: 'SET_PAGE_DESIGN', patch: { pageTemplates: { first: { background: EOB_FIRST_PAGE_TINT } } } });

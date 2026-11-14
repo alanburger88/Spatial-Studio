@@ -178,17 +178,18 @@ describe('the document’s date ("as issued on") through every route that resolv
   });
 
   it('a document that does not use dates gives the same answers with or without a date', async () => {
-    const body = { projectId: 'aster-card-demo', recordId: 'CARD-0001' };
+    // The explanation of benefits does not use dates (the card sample has the statement's issue date since D106).
+    const body = { projectId: 'harborcare-demo', recordId: 'EOB-0001' };
     const a = await json('POST', '/api/v1/resolve', body);
     const b = await json('POST', '/api/v1/resolve', { ...body, issueDate: ON });
     expect(b.runId).toBe(a.runId);
     expect(b.result).toEqual(a.result);
     expect(b.documentDate).toBeUndefined();
-    const l1 = await json('POST', '/api/v1/analysis/landscape', { projectId: 'aster-card-demo' });
-    const l2 = await json('POST', '/api/v1/analysis/landscape', { projectId: 'aster-card-demo', issueDate: ON });
+    const l1 = await json('POST', '/api/v1/analysis/landscape', { projectId: 'harborcare-demo' });
+    const l2 = await json('POST', '/api/v1/analysis/landscape', { projectId: 'harborcare-demo', issueDate: ON });
     expect(l2).toEqual(l1);
-    const c1 = await json('POST', '/api/v1/projects/aster-card-demo/records/check', { record: (await json('GET', '/api/v1/records/CARD-0001')).record });
-    const c2 = await json('POST', '/api/v1/projects/aster-card-demo/records/check', { record: (await json('GET', '/api/v1/records/CARD-0001')).record, issueDate: ON });
+    const c1 = await json('POST', '/api/v1/projects/harborcare-demo/records/check', { record: (await json('GET', '/api/v1/records/EOB-0001')).record });
+    const c2 = await json('POST', '/api/v1/projects/harborcare-demo/records/check', { record: (await json('GET', '/api/v1/records/EOB-0001')).record, issueDate: ON });
     expect(c2).toEqual(c1);
   });
 });
