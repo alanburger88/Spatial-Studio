@@ -1,0 +1,39 @@
+/*
+ * The top bar as a whole (wave 4). From 1,000 px wide, in both sign-in modes and with others on the document, no two
+ * controls overlap and none is cut off (e2e/presence.spec.ts checks it). As the window narrows, room is given up in this
+ * order: the others' initials collapse to a count (presence.css), the document name truncates, the output picker narrows,
+ * the language picker shows a short code (Shell.tsx), and the saved state keeps only its dot. The customer picker keeps
+ * at least 110 px.
+ *
+ * Shell styles load before app.css, so these rules start with `html` to win over the app-wide rules they adjust.
+ */
+
+/* The customer field is never narrower than its picker (before, the picker spilled over the language picker). */
+html .topbar-group > .ctx-field[data-testid='ctx-customer'] { min-width: min-content; }
+/* The controls keep their room; what is left over goes to the document name, which truncates. */
+html .topbar > .topbar-group { flex-shrink: 0; }
+/* The document name is the first to give way: its breadcrumb can shrink below the name's width. */
+html .crumbs, html .crumbs label.field-inline { min-width: 0; }
+html .topbar .crumb-select { min-width: 72px; }
+
+@media (max-width: 1440px) {
+  html .topbar .crumb-select { max-width: 180px; }
+  html .topbar-group > .ctx-field > .rp { max-width: 220px; }
+}
+@media (max-width: 1360px) {
+  html .topbar [data-testid='select-profile'] { min-width: 96px; max-width: 112px; }
+  html .topbar .ctx-language .select { max-width: 124px; }
+}
+@media (max-width: 1240px) {
+  html .topbar .crumb-select, html .topbar:has(.userchip) .crumb-select { min-width: 56px; max-width: 120px; }
+  html .topbar [data-testid='select-profile'] { min-width: 76px; max-width: 88px; }
+  html .topbar .ctx-language .select { max-width: 92px; }
+  html .topbar-group > .ctx-field > .rp, html .topbar:has(.userchip) .ctx-field > .rp { min-width: 110px; }
+}
+@media (max-width: 1100px) {
+  html .topbar .crumb-select, html .topbar:has(.userchip) .crumb-select { max-width: 100px; }
+  html .topbar [data-testid='select-profile'] { min-width: 64px; max-width: 72px; }
+  html .topbar .ctx-language .select { max-width: 92px; }
+  html .topbar .save-state { font-size: 0; gap: 0; }
+  html .topbar .save-state .dot { width: 10px; height: 10px; }
+}

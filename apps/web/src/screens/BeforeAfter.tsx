@@ -10,7 +10,7 @@ import { Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
 import { DocChanges } from './compare/DocChanges';
 import { SideBySide, type SideData } from './compare/SideBySide';
 import { WhoChanges } from './compare/WhoChanges';
-import { WORKING, defaultCustomer, defaultPair, isOutput, otherSideFor, releaseNumberOf, releaseSide, sideLabel, sideShort, validSide, type Output, type SideId } from './compare/model';
+import { WORKING, defaultCustomer, defaultPair, isOutput, otherSideFor, releaseNumberOf, releaseSide, savedNumberOf, sideLabel, sideShort, validSide, type Output, type SideId } from './compare/model';
 import { ShareForReview } from './releases/ReviewLinks'; // review links (wave 4)
 import './BeforeAfter.css';
 
@@ -44,6 +44,28 @@ function useFrozen(release: ReleaseInfo | null): { project: Project | null; erro
   return { project: mine.project, error: mine.error, loading: !mine.project && !mine.error };
 }
 
+/** Wave 4: a saved version from the version history, as one side (Before & after from "a newer version was saved first"). */
+const savedVersions = new Map<string, Project>();
+function useSavedVersion(projectId: string, version: number | null): { project: Project | null; error: string | null; loading: boolean } {
+  const key = version ? `${projectId}@${version}` : null;
+  const [state, setState] = useState<{ key: string | null; project: Project | null; error: string | null }>({ key: null, project: null, error: null });
+  useEffect(() => {
+    if (!key || !version) return;
+    const hit = savedVersions.get(key);
+    if (hit) { setState({ key, project: hit, error: null }); return; }
+    let live = true;
+    setState({ key, project: null, error: null });
+    api.version(projectId, version).then(
+      (r) => { savedVersions.set(key, r.project); if (live) setState({ key, project: r.project, error: null }); },
+      (e) => { if (live) setState({ key, project: null, error: e instanceof ApiFailure ? e.message : 'The saved version could not be loaded.' }); },
+    );
+    return () => { live = false; };
+  }, [key, projectId, version]);
+  if (!key) return { project: null, error: null, loading: false };
+  const mine = state.key === key ? state : { project: savedVersions.get(key) ?? null, error: null };
+  return { project: mine.project, error: mine.error, loading: !mine.project && !mine.error };
+}
+
 export function BeforeAfter() {
   const project = useStudio((s) => s.project)!;
   const records = useStudio((s) => s.records);
@@ -70,16 +92,18 @@ export function BeforeAfter() {
 
   /* ---------------------------------------------------- which two sides (the URL is the source of truth) */
   const asked = { before: params.get('before'), after: params.get('after') };
+  // Wave 4: a saved version can be a side even before the first release.
+  const askedSaved = savedNumberOf(asked.before) !== null || savedNumberOf(asked.after) !== null;
   const sides = useMemo<{ before: SideId; after: SideId; unknown: string[] } | null>(() => {
-    if (!releases.length) return null;
-    const def = defaultPair(releases, project)!;
+    if (!releases.length && !askedSaved) return null;
+    const def = defaultPair(releases, project) ?? { before: WORKING, after: WORKING };
     let before = validSide(asked.before, releases), after = validSide(asked.after, releases);
     const unknown = [asked.before, asked.after].filter((x): x is string => !!x && !validSide(x, releases));
     if (!before && !after) { before = def.before; after = def.after; }
     else if (!before) before = otherSideFor(after!, releases, project);
     else if (!after) after = otherSideFor(before, releases, project);
     return { before: before!, after: after!, unknown };
-  }, [releases, project, asked.before, asked.after]);
+  }, [releases, project, asked.before, asked.after, askedSaved]);
 
   const patchParams = useCallback((patch: Record<string, string | null>) => {
     setParams((p) => { const n = new URLSearchParams(p); for (const [k, v] of Object.entries(patch)) { if (v === null) n.delete(k); else n.set(k, v); } return n; }, { replace: true });
@@ -91,8 +115,12 @@ export function BeforeAfter() {
   }, [sides, asked.before, asked.after, patchParams]);
 
   const releaseOf = (side: SideId) => releases.find((r) => r.number === releaseNumberOf(side)) ?? null;
-  const frozenBefore = useFrozen(sides && sides.before !== WORKING ? releaseOf(sides.before) : null);
-  const frozenAfter = useFrozen(sides && sides.after !== WORKING ? releaseOf(sides.after) : null);
+  const releaseBefore = useFrozen(sides && sides.before !== WORKING ? releaseOf(sides.before) : null);
+  const releaseAfter = useFrozen(sides && sides.after !== WORKING ? releaseOf(sides.after) : null);
+  const savedBefore = useSavedVersion(project.projectId, sides ? savedNumberOf(sides.before) : null);
+  const savedAfter = useSavedVersion(project.projectId, sides ? savedNumberOf(sides.after) : null);
+  const frozenBefore = sides && savedNumberOf(sides.before) !== null ? savedBefore : releaseBefore;
+  const frozenAfter = sides && savedNumberOf(sides.after) !== null ? savedAfter : releaseAfter;
 
   const build = (id: SideId, f: { project: Project | null }): SideData | null => {
     const p = id === WORKING ? project : f.project;
@@ -139,7 +167,7 @@ export function BeforeAfter() {
   if (error && !data) return <section className="screen" data-testid="before-after">{header}<div className="screen-body"><ErrorState title="The releases could not be loaded" message={error} onRetry={() => setRev((r) => r + 1)} /></div></section>;
   if (!data) return <section className="screen" data-testid="before-after">{header}<div className="screen-body"><Loading label="Loading releases…" /></div></section>;
 
-  if (!releases.length) {
+  if (!releases.length && !askedSaved) {
     return (
       <section className="screen" data-testid="before-after">
         {header}
@@ -161,6 +189,8 @@ export function BeforeAfter() {
   const options = [
     { id: WORKING as SideId, label: dirty ? 'Working version (not released, with unsaved changes)' : 'Working version (not released)' },
     ...releases.map((r) => ({ id: releaseSide(r.number), label: sideLabel(releaseSide(r.number), releases) })),
+    // Wave 4: a saved version named in the address stays choosable.
+    ...[...new Set([sides!.before, sides!.after])].filter((s) => savedNumberOf(s) !== null).map((s) => ({ id: s, label: sideLabel(s, releases) })),
   ];
   const picker = (which: 'before' | 'after', title: string) => (
     <label className="field cmp-picker"><span className="label">{title}</span>
@@ -198,7 +228,7 @@ export function BeforeAfter() {
           <Tech>
             <p className="muted cmp-tech" data-testid="cmp-tech">
               {([['Before', sides!.before], ['After', sides!.after]] as const).map(([t, s]) => (
-                <span key={t}>{t}: {s === WORKING ? 'the working project as open in the studio' : <>frozen release <span className="chip code" title={rel(s)?.contentDigest}>{rel(s)?.id}</span> · content {rel(s)?.contentDigest.slice(0, 12)}…</>}{' '}</span>
+                <span key={t}>{t}: {s === WORKING ? 'the working project as open in the studio' : savedNumberOf(s) !== null ? `saved version ${savedNumberOf(s)} from the version history` : <>frozen release <span className="chip code" title={rel(s)?.contentDigest}>{rel(s)?.id}</span> · content {rel(s)?.contentDigest.slice(0, 12)}…</>}{' '}</span>
               ))}
             </p>
           </Tech>

@@ -1,0 +1,11 @@
+/* "This save adds a blocker" and "A newer version was saved first" (wave 4). Tokens only. */
+.sw-lead, .sc-lead { margin: 0 0 10px; line-height: 1.45; }
+.sw-list { margin: 0 0 10px; padding: 0; list-style: none; border-top: 1px solid var(--iss-row-border); }
+.sw-cause { padding: 10px 2px; display: grid; gap: 6px; }
+.sw-head { display: flex; align-items: baseline; gap: 8px; }
+.sw-head .chip { flex: none; }
+.sw-title { line-height: 1.35; }
+.sw-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12.5px; }
+.sw-note, .sc-note { margin: 4px 0 0; font-size: 12.5px; line-height: 1.45; }
+.sc-choices { margin: 0 0 10px; padding-left: 18px; display: grid; gap: 6px; line-height: 1.45; }
+.sc-loss { color: var(--iss-error); font-weight: 600; }

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { create } from 'zustand';
 import { CATALOG_BY_TYPE } from '@iss/model';
 import { useStudio } from '../state/store';
+import { requestSave } from '../state/saveFlow'; // wave 4: warn before saving
 import { useDemo } from '../demo/demo';
 import { ruleTitle } from '../ui/plain';
 import { Icon } from '../ui/icons';
@@ -132,7 +133,7 @@ export function CommandPalette() {
     act('theme', theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme', () => st.setTheme(theme === 'light' ? 'dark' : 'light'), undefined, 'toggle light dark theme appearance');
     act('view-mode', viewMode === 'business' ? 'Switch to Technical view' : 'Switch to Business view', () => st.setViewMode(viewMode === 'business' ? 'technical' : 'business'), undefined, 'business technical detail level');
     if (inStudio) {
-      act('save', 'Save project', () => { void st.save(); }, 'Ctrl+S');
+      act('save', 'Save project', () => { void requestSave('palette'); }, 'Ctrl+S');
       if (past) act('undo', 'Undo', () => st.undo(), 'Ctrl+Z');
       if (future) act('redo', 'Redo', () => st.redo(), 'Ctrl+Y');
       act('history', 'Open version history', () => useDrawers.getState().show('history'), undefined, 'versions compare restore diff changes saved');

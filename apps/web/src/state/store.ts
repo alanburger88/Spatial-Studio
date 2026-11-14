@@ -96,7 +96,14 @@ interface StudioState {
   replaceProject(project: Project): void;
   /** Throw away unsaved edits by reloading the saved model from the server. */
   discardChanges(): Promise<void>;
+
+  /* Wave 4 (who else is editing): the last save refused because a newer version was saved first, with who and when. */
+  saveConflict: SaveConflict | null;
+  clearSaveConflict(): void;
 }
+
+/** A save refused by the version check (409 VERSION_CONFLICT): the newer version, who saved it and when (from the server's version history). */
+export interface SaveConflict { projectId: string; mine: number; theirs: number; savedBy: string | null; savedAt: string | null; at: number }
 
 /** Why the signed-in user may not change the model (null when they may). Auth off → never blocked. */
 export function editBlockedReason(session: SessionInfo | null): string | null {
@@ -191,6 +198,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   lastValidation: null,
   session: null,
   sessionStatus: 'idle',
+  saveConflict: null,
+  clearSaveConflict() { set({ saveConflict: null }); },
 
   async loadSession() {
     if (get().sessionStatus === 'idle') set({ sessionStatus: 'loading' });
@@ -213,7 +222,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   replaceProject(project) {
     const ctx = get().ctx;
     const selectedNodeId = ctx.selectedNodeId && project.nodes.some((n) => n.id === ctx.selectedNodeId) ? ctx.selectedNodeId : defaultCtx(project).selectedNodeId;
-    set({ project, serverVersion: project.modelVersion, savedDigest: projectContentDigest(project), past: [], future: [], ctx: { ...ctx, selectedNodeId } });
+    set({ project, serverVersion: project.modelVersion, savedDigest: projectContentDigest(project), past: [], future: [], ctx: { ...ctx, selectedNodeId }, saveConflict: null });
     get().loadProjects();
   },
 
@@ -306,7 +315,13 @@ export const useStudio = create<StudioState>((set, get) => ({
       return true;
     } catch (e: any) {
       set({ saving: false });
-      get().toast({ kind: 'error', title: e.code === 'VERSION_CONFLICT' ? 'Save conflict' : 'Save failed', message: e.message });
+      if (e instanceof ApiFailure && e.code === 'VERSION_CONFLICT') {
+        // Wave 4: say who saved first and when, and offer the choices (shell/SaveDialogs.tsx), instead of a passing toast.
+        const err = (e.body?.error ?? {}) as { currentVersion?: number; savedBy?: string | null; savedAt?: string | null };
+        set({ saveConflict: { projectId: project.projectId, mine: serverVersion, theirs: Number(err.currentVersion) || serverVersion + 1, savedBy: err.savedBy ?? null, savedAt: err.savedAt ?? null, at: Date.now() } });
+        return false;
+      }
+      get().toast({ kind: 'error', title: 'Save failed', message: e.message });
       return false;
     }
   },
