@@ -13,6 +13,17 @@ import './ProjectGallery.css';
 
 const DOC_LABEL = DOCUMENT_TYPE_LABEL;
 
+/**
+ * The built-in example documents, in the order the gallery shows them, with what each is and one line about it. The
+ * two with their own data come from the server's sample registry; the web page only needs their names and wording.
+ */
+const SAMPLE_ORDER = ['aster-card-demo', 'harborcare-demo', 'northwind-energy-demo', 'meridian-wealth-demo'];
+const SAMPLE_KIND: Record<string, string> = { 'northwind-energy-demo': 'Utility bill', 'meridian-wealth-demo': 'Portfolio statement' };
+const SAMPLE_DESCRIPTION: Record<string, string> = {
+  'northwind-energy-demo': 'Dual-fuel electricity and gas bill with its own data: sections by service, tiered rates, a dated rate change, a usage chart and a tear-off payment slip.',
+  'meridian-wealth-demo': 'Quarterly investment statement with its own data: two-column summary and allocation, holdings over two pages, and messages by risk profile, fall in value and fee change.',
+};
+
 /** The customer a document is drawn with in a gallery card or template thumbnail: a shared sample for the two sample kinds; a document with its own data has only its own customers. */
 const sampleRecordId = (t: DocumentType) => (t === 'eob' ? 'EOB-0001' : 'CARD-0001');
 const sampleRecord = (t: DocumentType) => fetch(`/api/v1/records/${sampleRecordId(t)}`).then((r) => r.json()).then((b) => b.record as SyntheticRecord);
@@ -91,16 +102,16 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
     catch (e) { setErr(e instanceof ApiFailure ? e.message : String((e as Error).message ?? e)); }
     finally { setBusy(false); }
   };
-  const restore = () => run(async () => { await api.resetProject(p.projectId); forgetContext(p.projectId); toast({ kind: 'success', title: 'Approved sample restored', message: `${p.title} reset to the seeded fixture.` }); });
+  const restore = () => run(async () => { await api.resetProject(p.projectId); forgetContext(p.projectId); toast({ kind: 'success', title: 'Approved sample restored', message: `${p.title} is back to its approved model${p.documentType === 'custom' ? ', with its own customers' : ''}.` }); });
   const duplicate = () => run(async () => { const { project } = await api.duplicateProject(p.projectId, title); toast({ kind: 'success', title: 'Project duplicated', message: `“${project.title}” is ready to edit.` }); });
   const rename = () => run(async () => { await api.renameProject(p.projectId, title); forgetContext(p.projectId); toast({ kind: 'success', title: 'Project renamed', message: title }); });
   const remove = () => run(async () => { await api.deleteProject(p.projectId); forgetContext(p.projectId); toast({ kind: 'success', title: 'Project deleted', message: p.title }); });
 
   const description = !p.sample
     ? (p.documentType === 'custom' && !sourceTitle ? 'Your own document: its own data fields, layout, rules and customers.' : `Your copy${sourceTitle ? ` of ${sourceTitle}` : ''}. Edit freely — the approved sample stays untouched.`)
-    : p.documentType === 'eob'
+    : SAMPLE_DESCRIPTION[p.projectId] ?? (p.documentType === 'eob'
       ? 'Explanation of benefits on the same engine: shows THIS IS NOT A BILL and never presents unconfirmed amounts as owed.'
-      : 'Credit-card statement with conditional payment guidance, multi-page transaction tables and journey-driven messages.';
+      : 'Credit-card statement with conditional payment guidance, multi-page transaction tables and journey-driven messages.');
 
   return (
     <article className={`gal-card${hero ? ' hero' : ''}${p.sample ? '' : ' copy'}`} data-testid={`project-card-${p.projectId}`} aria-labelledby={`t-${p.projectId}`}>
@@ -109,7 +120,7 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
       </Link>
       <div className="gal-body">
         <div className="row wrap">
-          <span className="chip accent">{DOC_LABEL[p.documentType]}</span>
+          <span className="chip accent">{p.sample && SAMPLE_KIND[p.projectId] ? SAMPLE_KIND[p.projectId] : DOC_LABEL[p.documentType]}</span>
           {p.sample
             ? p.modified ? <span className="chip warning">Edited sample<Tech> · v{p.modelVersion}</Tech></span> : <span className="chip">Sample<Tech> · v{p.modelVersion}</Tech></span>
             : <span className="chip info">Your project<Tech> · v{p.modelVersion}</Tech></span>}
@@ -413,10 +424,11 @@ export function ProjectGallery() {
     for (const p of projects.filter((x) => x.sample)) { await api.resetProject(p.projectId); try { localStorage.removeItem(`iss.ctx.${p.projectId}`); } catch { /* ignore */ } }
     useStudio.setState({ project: null, projectStatus: 'idle', past: [], future: [] });
     await useStudio.getState().loadProjects();
-    useStudio.getState().toast({ kind: 'success', title: 'Demo reset', message: 'Both sample projects restored to the approved models; issued snapshots cleared.' });
+    useStudio.getState().toast({ kind: 'success', title: 'Demo reset', message: 'All sample projects restored to their approved models; issued snapshots cleared.' });
     setConfirmAll(false);
   };
-  const ordered = useMemo(() => [...projects].sort((a, b) => (a.sample !== b.sample ? (a.sample ? -1 : 1) : a.sample ? (a.projectId === 'aster-card-demo' ? -1 : 1) : b.updatedAt.localeCompare(a.updatedAt))), [projects]);
+  const sampleRank = (id: string) => { const i = SAMPLE_ORDER.indexOf(id); return i < 0 ? SAMPLE_ORDER.length : i; };
+  const ordered = useMemo(() => [...projects].sort((a, b) => (a.sample !== b.sample ? (a.sample ? -1 : 1) : a.sample ? sampleRank(a.projectId) - sampleRank(b.projectId) || a.projectId.localeCompare(b.projectId) : b.updatedAt.localeCompare(a.updatedAt))), [projects]);
   const titleOf = (id?: string) => projects.find((x) => x.projectId === id)?.title;
   const navigate = useNavigate();
   // The studio shell highlights and focuses the customer picker once the project has actually loaded (?show=customer).
@@ -437,7 +449,7 @@ export function ProjectGallery() {
           {status === 'ready' && !projects.length && <Empty title="No projects" message="The local store is empty. Restart the API to re-seed the approved samples." />}
           {ordered.map((p) => <ProjectCard key={p.projectId} p={p} hero={p.projectId === 'aster-card-demo'} sourceTitle={titleOf(p.derivedFrom?.projectId)} />)}
           <div className="gal-foot">
-            <button type="button" className="btn ghost sm" onClick={() => setConfirmAll(true)} data-testid="reset-demo" title="Return both sample projects to their approved models (your own projects are kept)"><Icon.reset /> Restore both samples</button>
+            <button type="button" className="btn ghost sm" onClick={() => setConfirmAll(true)} data-testid="reset-demo" title="Return every sample project to its approved model (your own projects are kept)"><Icon.reset /> Restore all samples</button>
           </div>
         </div>
         <aside className="panel gal-side" data-side="right" data-side-title="Start here">
@@ -448,7 +460,7 @@ export function ProjectGallery() {
               <li><span className="gal-step-n" aria-hidden="true">2</span><div><strong>Switch the customer</strong><span className="muted">Use the customer picker in the top bar and watch the document change.</span> <button type="button" className="gal-link" onClick={tryCustomer} data-testid="start-switch-customer">Show me where</button></div></li>
               <li><span className="gal-step-n" aria-hidden="true">3</span><div><strong>Check and export it</strong><span className="muted">Run the checks, compare outputs, then download a PDF.</span> <Link to="/studio/aster-card-demo/validate" data-testid="start-validate">Go to Validate &amp; Compare</Link></div></li>
             </ol>
-            <p className="muted gal-note" data-testid="synthetic-statement">All sample people, accounts, providers and organisations are fictional ({counts ? `${counts.card} card and ${counts.eob} EOB records` : '…'}, seed SPATIAL-STUDIO-DEMO-2026-11). Nothing here connects to production data.</p>
+            <p className="muted gal-note" data-testid="synthetic-statement">All sample people, accounts, providers and organisations are fictional ({counts ? `${counts.card} card and ${counts.eob} EOB records` : '…'}, seed SPATIAL-STUDIO-DEMO-2026-11, and the example documents’ own customers). Nothing here connects to production data.</p>
             <div className="section-title">Your records</div>
             <p className="muted gal-note">{imported ? <>{counts!.importedCard} card and {counts!.importedEob} EOB record{imported === 1 ? '' : 's'} imported. They appear in the customer picker and in every view.</> : 'Import your own scenario records (CSV or JSON) to test the design against them.'}</p>
             <div className="row wrap">
@@ -477,8 +489,8 @@ export function ProjectGallery() {
         </aside>
       </div>
       {confirmAll && (
-        <Dialog title="Restore both samples?" onClose={() => setConfirmAll(false)} footer={<><button className="btn" onClick={() => setConfirmAll(false)}>Cancel</button><button className="btn danger" onClick={resetAll} data-testid="confirm-reset-demo">Restore both samples</button></>}>
-          <p>Both sample projects return to their approved models, issued snapshots are cleared and saved view context is forgotten. Your own projects and imported records are kept. Use this before a stakeholder run.</p>
+        <Dialog title="Restore all samples?" onClose={() => setConfirmAll(false)} footer={<><button className="btn" onClick={() => setConfirmAll(false)}>Cancel</button><button className="btn danger" onClick={resetAll} data-testid="confirm-reset-demo">Restore all samples</button></>}>
+          <p>Every sample project returns to its approved model, issued snapshots are cleared and saved view context is forgotten. The example documents with their own data also get their own customers back. Your own projects and imported records are kept. Use this before a stakeholder run.</p>
         </Dialog>
       )}
       {creating && <NewProjectDialog onClose={closeCreating} onDescribe={openDescribe} onRebuild={openRebuild} />}

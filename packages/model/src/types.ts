@@ -302,7 +302,11 @@ export interface DocNode {
   filterable?: boolean;
 
   // Chart
-  chart?: { kind: 'bar' | 'donut'; groupBy?: string; valueKey?: string; series?: Array<{ label: string; path: string }>; title?: string; limit?: number; palette?: 'brand' | 'mono' };
+  /**
+   * `order`: bars from a list are biggest first (`value`, the default) or in the order of the list's rows (`data`, for a
+   * series over time such as monthly use). `palette`: `mono` draws every bar and slice in the document's own colour.
+   */
+  chart?: { kind: 'bar' | 'donut'; groupBy?: string; valueKey?: string; series?: Array<{ label: string; path: string }>; title?: string; limit?: number; palette?: 'brand' | 'mono'; order?: 'value' | 'data' };
 
   // Image
   image?: { src: string; alt: string; fit?: 'contain' | 'cover' };

@@ -8,7 +8,8 @@ export const API = `${API_ORIGIN}/api/v1`;
 export const EXPECTED = JSON.parse(readFileSync(path.join(process.cwd(), 'fixtures/expected_scenarios.json'), 'utf8')).cases;
 
 export async function resetAll(request: APIRequestContext) {
-  for (const id of ['aster-card-demo', 'harborcare-demo']) {
+  // Every sample: the two fixture samples and the two example documents with their own data (their customers are restored too).
+  for (const id of ['aster-card-demo', 'harborcare-demo', 'northwind-energy-demo', 'meridian-wealth-demo']) {
     const r = await request.post(`${API}/projects/${id}/reset`, { data: { confirm: true } });
     expect(r.ok()).toBeTruthy();
   }

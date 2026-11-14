@@ -6,6 +6,7 @@ import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
 import { DEMOTE_ON_SAVE, WORKFLOW_LABEL, projectContentDigest, sha256Hex, type DocumentType, type HandoverEntry, type HandoverKind, type Project, type ReleaseActor, type ReleaseEvent, type ReleaseEventKind, type ReleaseInfo, type ReleasePackageCheck, type ReleaseKnownDataProblem, type ReleasePackageSummary, type ReleaseStage, type ReleaseVersions, type Role, type SyntheticRecord, type TemplateInfo, type TemplateVersionInfo, type WorkflowState } from '@iss/model';
 import { seedProjects } from '@iss/model/fixtures';
+import { EXTRA_SAMPLES, EXTRA_SAMPLE_IDS } from '@iss/model/samples/index';
 
 export interface StoredUser { id: string; email: string; name: string; role: Role; disabled: boolean; createdAt: string; updatedAt: string }
 
@@ -37,7 +38,8 @@ export interface StoredReleasePackage { status: 'ready' | 'failed'; file: string
 export class Store {
   db: DatabaseSyncT;
   artifactDir: string;
-  private sampleIds = new Set(seedProjects().map((p) => p.projectId));
+  /** The two fixture samples and the extra example documents (`@iss/model/samples`): listed as samples, restorable, never deleted. */
+  private sampleIds = new Set([...seedProjects().map((p) => p.projectId), ...EXTRA_SAMPLE_IDS]);
   isSample(projectId: string) { return this.sampleIds.has(projectId); }
   constructor(dataDir: string) {
     mkdirSync(dataDir, { recursive: true });
@@ -144,8 +146,8 @@ export class Store {
 
   /* ---------------------------------------------------------- records that belong to one project */
 
-  /** Generated test customers and data supplied for one project. Never visible to other projects. */
-  projectRecords(projectId: string, origin?: 'generated' | 'supplied'): SyntheticRecord[] {
+  /** Generated test customers, data supplied for one project and a built-in example's own customers (`sample`). Never visible to other projects. */
+  projectRecords(projectId: string, origin?: 'generated' | 'supplied' | 'sample'): SyntheticRecord[] {
     const rows = (origin
       ? this.db.prepare('SELECT json FROM project_records WHERE project_id=? AND origin=? ORDER BY record_id').all(projectId, origin)
       : this.db.prepare('SELECT json FROM project_records WHERE project_id=? ORDER BY record_id').all(projectId)) as any[];
@@ -160,7 +162,8 @@ export class Store {
   addProjectRecords(projectId: string, prefix: string, origin: 'generated' | 'supplied', records: Array<Omit<SyntheticRecord, 'recordId'>>): SyntheticRecord[] {
     const now = new Date().toISOString();
     // Ids are never reused, even after a set is replaced or removed: an old run or pinned test must not silently point at a different customer.
-    const inUse = (this.db.prepare('SELECT record_id FROM project_records').all() as any[]).reduce((m, r) => Math.max(m, Number(String(r.record_id).split('-')[1]) || 0), 60000);
+    // The built-in examples' own customers have prefixes of their own (`NWE-`, `MWS-`), so they never take a number from this sequence.
+    const inUse = (this.db.prepare("SELECT record_id FROM project_records WHERE origin<>'sample'").all() as any[]).reduce((m, r) => Math.max(m, Number(String(r.record_id).split('-')[1]) || 0), 60000);
     const max = Math.max(inUse, Number((this.db.prepare("SELECT value FROM counters WHERE name='project_record'").get() as any)?.value ?? 0));
     this.db.prepare("INSERT INTO counters(name,value) VALUES ('project_record',?) ON CONFLICT(name) DO UPDATE SET value=excluded.value").run(max + records.length);
     const st = this.db.prepare('INSERT INTO project_records(record_id,project_id,document_type,origin,json,created_at) VALUES (?,?,?,?,?,?)');
@@ -171,7 +174,7 @@ export class Store {
     });
   }
   /** Where one of a project's own records came from, or undefined when it is not that project's record. */
-  projectRecordOrigin(projectId: string, recordId: string): 'generated' | 'supplied' | undefined {
+  projectRecordOrigin(projectId: string, recordId: string): 'generated' | 'supplied' | 'sample' | undefined {
     return (this.db.prepare('SELECT origin FROM project_records WHERE project_id=? AND record_id=?').get(projectId, recordId) as any)?.origin;
   }
   /** Replaces one of the project's own records (same id). A record a person has edited is theirs from then on (origin `supplied`), so regenerating never overwrites it. */
@@ -180,6 +183,21 @@ export class Store {
   }
   deleteProjectRecord(projectId: string, recordId: string): boolean {
     return Number(this.db.prepare('DELETE FROM project_records WHERE project_id=? AND record_id=?').run(projectId, recordId).changes) > 0;
+  }
+  /**
+   * A built-in example's own customers, with their stable ids, stored with origin `sample` (they count as built-in sample
+   * customers, like the fixture samples). `replace` removes every customer of the document first (restoring the sample);
+   * otherwise only customers that are not there yet are added. A sample customer a person edits becomes `supplied`.
+   */
+  putSampleRecords(projectId: string, records: SyntheticRecord[], mode: 'add-missing' | 'replace'): number {
+    return this.transaction(() => {
+      if (mode === 'replace') this.db.prepare('DELETE FROM project_records WHERE project_id=?').run(projectId);
+      const now = new Date().toISOString();
+      const st = this.db.prepare("INSERT OR IGNORE INTO project_records(record_id,project_id,document_type,origin,json,created_at) VALUES (?,?,?,'sample',?,?)");
+      let n = 0;
+      for (const r of records) n += Number(st.run(r.recordId, projectId, r.documentType, JSON.stringify({ ...r, projectId }), now).changes);
+      return n;
+    });
   }
   clearProjectRecords(projectId: string, origin?: 'generated' | 'supplied'): number {
     return Number((origin ? this.db.prepare('DELETE FROM project_records WHERE project_id=? AND origin=?').run(projectId, origin) : this.db.prepare('DELETE FROM project_records WHERE project_id=?').run(projectId)).changes);
@@ -352,7 +370,7 @@ export class Store {
   }
 
   seedFor(projectId: string): Project | undefined {
-    return seedProjects().find((p) => p.projectId === projectId);
+    return seedProjects().find((p) => p.projectId === projectId) ?? EXTRA_SAMPLES().find((s) => s.project.projectId === projectId)?.project;
   }
 
   listProjects() {

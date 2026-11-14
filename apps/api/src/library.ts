@@ -4,6 +4,7 @@ import {
 } from '@iss/model';
 import { compareVersions, summarizeChanges, type DuplicateDocumentInput, type DuplicateLibraryInput, type DuplicateScan, type VersionComparison } from '@iss/scenarios';
 import type { Store } from './db';
+import { HOUSE } from '@iss/model/samples/index';
 
 /**
  * The shared library on the server: items and their numbered versions.
@@ -121,6 +122,35 @@ export class LibraryStore {
       return n;
     });
   }
+}
+
+/* ------------------------------------------------------------------ the house library seeded with the example documents */
+
+/** Who the seeded library versions are recorded as created and approved by. */
+const HOUSE_ACTOR: LibraryActor = { id: 'studio-samples', name: 'Studio samples' };
+
+/**
+ * Seeds the house library the example documents link to (`@iss/model/samples/houseLibrary.ts`): each item with its
+ * approved versions, only when the library has no item of that id, so an item a person has changed (or removed in a test
+ * reset) is never touched again by a restart. Returns the ids seeded now.
+ */
+export function seedHouseLibrary(store: Store): string[] {
+  const library = new LibraryStore(store);
+  const seeded: string[] = [];
+  for (const item of HOUSE.list) {
+    if (library.item(item.id)) continue;
+    store.transaction(() => {
+      const now = new Date().toISOString();
+      store.db.prepare('INSERT INTO library_items(item_id,kind,title,description,source,created_by_id,created_by_name,created_at) VALUES (?,?,?,?,?,?,?,?)')
+        .run(item.id, item.kind, item.title, item.description, null, HOUSE_ACTOR.id, HOUSE_ACTOR.name, now);
+      item.versions.forEach((v, i) => {
+        store.db.prepare("INSERT INTO library_versions(item_id,number,json,fingerprint,state,note,created_by_id,created_by_name,created_at,updated_at,approved_by_id,approved_by_name,approved_at) VALUES (?,?,?,?,'approved',?,?,?,?,?,?,?,?)")
+          .run(item.id, i + 1, JSON.stringify(v.content), libraryContentFingerprint(v.content), v.note, HOUSE_ACTOR.id, HOUSE_ACTOR.name, now, now, HOUSE_ACTOR.id, HOUSE_ACTOR.name, now);
+      });
+    });
+    seeded.push(item.id);
+  }
+  return seeded;
 }
 
 /* ------------------------------------------------------------------ where used */
