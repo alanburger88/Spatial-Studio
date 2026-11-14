@@ -69,6 +69,8 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
       'Follow the next steps in order. The step marked Next is the first one still to do; each has one button that opens where it is dealt with.',
       'Check the at-a-glance facts: customers that can be issued, languages, outputs and pinned tests.',
       'See the latest saves, reviews and releases under recent activity.',
+      // Wave 4 (who else is editing)
+      'See who else has this document open: their initials, or a count on a narrow window, beside the document name, with the screen each is on. If two people save, the second is told who saved first and chooses what to do.',
     ],
     next: [
       { screen: 'S07', why: 'find coverage gaps or work on rules' },
@@ -90,6 +92,8 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
     read: [
       { what: 'The page', means: 'The document as the customer in the top bar would receive it. Change the customer or the output there to see it change.' },
+      // Wave 4 (who else is editing)
+      { what: '“Dana is also on this component.”', means: 'Someone else, or another window of yours, has the same component selected. It is a warning, not a lock: you can still edit, and if both of you save, the second save is stopped and asked what to do.' },
       { what: 'First, Following and Last', means: 'The page templates. Each has its own flow area, columns, background and fixed items. The canvas shows the first page with its content; the other templates show where content continues. Page Composition Stack shows the composed pages. A component\'s Layout tab sets keep together, a new page or column, spanning the columns and how text splits.' },
       { what: 'The right panel tabs', means: 'Content edits the text and the alternatives of a message. Data & rules shows which customer values a component uses and the rules that decide it, and, when the document uses dates, the period a section is in effect. Layout sets the position, pages and columns. Review gathers what is wrong, what people have said, what a change would affect and how it reads for assistive technology.' },
     ],
@@ -251,6 +255,10 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
       { screen: 'S09', why: 'run the checks and compare outputs' },
       { screen: 'S18', why: 'release the document once nothing is blocked' },
     ],
+    // Wave 4 (blockers phase 6: warn before saving)
+    read: [
+      { what: 'A warning when you save', means: 'If a save would add a blocker the last saved version does not have, a dialog lists it with how many customers it stops and where it is fixed, before anything is saved. Go back, or save anyway: approval is where blockers stop a document. Layout and PDF problems are not part of this check.' },
+    ],
   },
   S09: {
     purpose: 'Check the document for problems before it goes out: rules, data links, pagination, PDF and web agreement, and accessibility, including the PDF itself. The checks run on their own for the current customer and scenario, and, when the document uses dates, as issued on the preview date.',
@@ -305,6 +313,8 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
       'Read who changes: customers grouped by the kind of change, each with its customers.',
       'Choose a customer and an output (PDF pages, web page, email or text message) to see Before and After side by side.',
       'Open what changed in the document, to trace a visible difference to the edit that caused it.',
+      // Wave 4 (a newer version was saved first)
+      'When someone else saved first, compare the version they saved with your unsaved working version, then redo your edits on theirs.',
     ],
     next: [
       { screen: 'S18', why: 'go back to the releases' },

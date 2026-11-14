@@ -224,6 +224,31 @@ bar from overflowing, the document name in the breadcrumb gives way first on win
   database or the Activity log.
 - With sign-in off, two windows are both "Local admin"; they are told apart as "another window".
 
+**As built (2026-11-14).** See `docs/api/PRESENCE.md`. Server: `apps/api/src/presence.ts` and `routes/presence.ts` (in memory
+only; tests `apps/api/test/presence.test.ts`); screens: `shell/presence.ts`, `shell/PresenceBar.tsx`, the Inspector, and
+`shell/SaveDialogs.tsx`; browser tests `e2e/presence.spec.ts`. As designed, with these choices:
+
+- **Who is told apart:** a window is an id its tab makes when the page loads plus the signed-in user, so two tabs of one person
+  are two windows (with sign-in on the other is "You, in another window"); one person cannot remove another's window.
+- **Also reported:** whether the window has unsaved edits ("with unsaved changes" in the list and the Inspector). The selected
+  component is reported only from Design Studio, and only if the saved document has it.
+- **A change is told within about a second** (1.2 s after the screen, the component or the saved state changes), besides the
+  15-second report, so the Inspector warning appears soon after both select the same component.
+- **A hidden tab leaves at once** and stops reporting; it reports again when visible. Leaving a document leaves at once;
+  closing or navigating away sends the leave with `sendBeacon`.
+- **The top bar** shows at most three initials then "+N" beside the document name, and only a count on windows narrower than
+  1,360 px; the button's name and tooltip list everyone with their screen and open a short list. The bar as a whole was also
+  made to fit from 1,000 px in both sign-in modes (it overlapped at 1,000 px before): the document name truncates first, then
+  the output picker narrows, the language picker shows a short code ("Auto · EN"), and the saved state keeps only its dot;
+  the customer picker keeps at least 110 px. `e2e/presence.spec.ts` checks that no two controls overlap at 1,000 and 1,280 px,
+  alone and with another window.
+- **Someone saved first:** the 409 answer now carries `savedBy` and `savedAt` from the version history. The dialog says who
+  (with sign-in off: "Another window") saved which version and when, that nothing was overwritten, and offers **Load their
+  version** (the unsaved edits are lost; it says so) or **Keep editing and compare**. To compare with a version that is not a
+  release, Before & after now accepts a saved version as a side (`?before=v7&after=working`), even before the first release.
+- **Cost:** the reporting adds about 3 kB to the first download (gzip); the dialogs and the save comparison are separate
+  downloads. A 15-second report does not keep the browser tests from going idle (the bell already polls every 30 seconds).
+
 ## 5. Blockers phase 6: warn before saving
 
 - On Save, the studio works out the fast blockers (rules, wording, translations, data) for the version about to be
@@ -233,6 +258,12 @@ bar from overflowing, the document name in the breadcrumb gives way first on win
   document.
 - Layout and PDF blockers are not part of this check (they need pages to be composed); the dialog says so.
 - No dialog when nothing new is added, so ordinary saves are unchanged.
+
+**As built (2026-11-14).** See "As built: phase 6" in `docs/design/BLOCKERS.md`. As designed. In addition: each cause links
+to where it is fixed and to the Blockers screen; Go back has the focus; the comparison covers every day approval checks; a cause
+that only gains customers does not warn (it is not a new cause); a save the person starts (Save, Ctrl/Cmd+S, the command
+palette, version history) is warned, while restoring a version, importing, "add fields and a customer", the guided demo and API
+saves are not. Measured cost on the examples: 18–130 ms in the development build, so the check runs on the click.
 
 ## 6. Blockers phase 5: AI drafts for wording blockers
 
