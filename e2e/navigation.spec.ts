@@ -212,7 +212,7 @@ test('NV09 the collapsed menu still names every entry, navigates and shows the t
   await expect(nav(page).getByRole('link', { name: 'Releases' })).toBeVisible();
   await page.getByTestId('nav-section-releases').click();
   await expect(page).toHaveURL(/\/releases$/);
-  await expect(page.getByRole('navigation', { name: 'Releases screens' }).getByRole('link')).toHaveCount(3);
+  await expect(page.getByRole('navigation', { name: 'Releases screens' }).getByRole('link')).toHaveCount(4);
   await page.getByTestId('nav-section-check').focus();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/blockers$/);

@@ -65,7 +65,7 @@ test('MP01 the data dictionary, a mapping with an imported target list, checks s
   await addMapping(page, 'Core Claims');
   await expect(page).toHaveURL(/\?mapping=map-mapping-for-core-claims/);
   await expect(page.getByTestId('map-complete-map-mapping-for-core-claims')).toHaveText('Not complete');
-  await expect(page.getByTestId('map-checks').getByTestId('map-finding').filter({ hasText: 'is not mapped' }).first()).toBeVisible();
+  await expect(page.getByTestId('map-unmapped').locator('[data-testid="map-finding"][data-kind="unmapped"]').first()).toBeVisible();
   await expect(page.getByTestId('map-checks')).toContainText('“Claim count” is calculated');
 
   // import the target's field list: exact and likely are ticked, a guess is only offered
