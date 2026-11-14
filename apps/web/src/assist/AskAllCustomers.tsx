@@ -142,19 +142,19 @@ export function AskAllCustomers({ inPanel = true }: { inPanel?: boolean }) {
       {gone && <p className="callout warning" role="status" data-testid="ask-gone">The document has changed and no longer has what this question named. Ask again.</p>}
 
       {answer && asked && (
-        <article ref={answerRef} className="ask-answer" data-testid="ask-answer" data-count={answer.count} data-total={answer.total} aria-live="polite">
+        <article ref={answerRef} className="ask-answer" data-testid="ask-answer" data-count={answer.count} data-total={answer.total}>
           <p className="ask-understood" data-testid="ask-understood">
             <span className="ask-label">Understood as</span> {answer.understood}
             <span className={`chip ${asked.source === 'ai' ? 'info' : ''} ask-src`} data-testid="ask-read-by" data-source={asked.source} title={asked.source === 'ai' ? 'An AI model read your sentence into this question; check that it is what you meant.' : 'Read by the studio’s built-in reader; no AI model was used.'}>{asked.source === 'ai' ? 'Read by AI' : 'Read by the built-in reader'}</span>
           </p>
           {answer.why ? (
-            <div className="ask-why" data-testid="ask-why" data-gets={answer.why.gets ? 'yes' : 'no'}>
+            <div className="ask-why" data-testid="ask-why" data-gets={answer.why.gets ? 'yes' : 'no'} role="status">
               <p className="ask-headline">{answer.why.headline}</p>
               {answer.why.steps.length > 0 && <ol className="ask-steps">{answer.why.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>}
             </div>
           ) : (
             <>
-              <p className="ask-count" data-testid="ask-count" data-n={answer.count}><strong>{answer.count} of {answer.total} synthetic customers</strong></p>
+              <p className="ask-count" data-testid="ask-count" data-n={answer.count} role="status"><strong>{answer.count} of {answer.total} synthetic customers</strong></p>
               {/* The headline without its count, which is just above: "get the section “Winter heating help”." */}
               <p className="ask-headline" data-testid="ask-headline" title={answer.headline}>{answer.headline.replace(/^\d+ of \d+ synthetic customers? /, '')}</p>
               {answer.byBlocker ? (answer.byBlocker.length > 0 && (
