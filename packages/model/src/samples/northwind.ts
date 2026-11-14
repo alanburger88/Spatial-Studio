@@ -534,7 +534,7 @@ export function northwindCustomers(): SampleCustomer[] {
 }
 
 /** What is deliberate about this example, for the accuracy check and the people who open it. */
-export const NORTHWIND_NOTES_BASE: Omit<SampleNotes, 'translations'> = {
+export const NORTHWIND_NOTES: SampleNotes = {
   title: 'Northwind Energy',
   kind: 'Utility bill (dual fuel)',
   description: 'A dual-fuel electricity and gas bill: sections by service, meter readings, tiered rates, a usage chart, a dated rate change and a tear-off payment slip.',
@@ -552,6 +552,9 @@ export const NORTHWIND_NOTES_BASE: Omit<SampleNotes, 'translations'> = {
     { recordId: 'NWE-60033', key: 'creditAmount', reason: 'Worked out from the missing total due.' },
     { recordId: 'NWE-60034', key: 'daysUntilDue', reason: 'The known data problem: no due date.' },
   ],
+  // Every text approved in Spanish except four drafts: the credit message and its heading (the demonstration blocker)
+  // and two fixed phrases the sample customers never see.
+  translations: { 'es-US': { approved: 121, draft: 4, missing: 0 } },
   mappings: { 'print-house': 'complete', 'customer-portal': 'incomplete' },
   pages: { 'NWE-60019': 3 },
 };

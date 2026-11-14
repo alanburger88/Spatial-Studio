@@ -243,6 +243,8 @@ export function buildMeridian(): Project {
   });
   b.insert(text('fees-income', 'Income and fees', '## Income and fees\nThis quarter you received {{calc.totalIncome}} in dividends and interest and paid {{calc.totalFees}} in management fees. Your annual management fee is {{calc.feeRatePct}}% of your portfolio’s value, which comes to {{calc.quarterlyFee}} for this quarter.', flow({ spaceBeforePt: 14, keepTogether: true, spanColumns: true })));
 
+  b.insert({ id: 'gains-explained', type: 'expandable-explanation', name: 'Gains explained', explanation: { title: 'What do realized and unrealized gains mean?', summary: 'A realized gain comes from selling; an unrealized gain is on what you still hold.', details: 'When you sell an investment for more than you paid, the difference is a realized gain, and it may be taxed in the year you sell. An unrealized gain is the rise in value of what you still hold: it is not taxed until you sell, and it can go down again.' }, layout: flow({ spaceBeforePt: 10, keepTogether: true, spanColumns: true }) });
+
   /* ---- the fee change: the announcement until the day it changes, the confirmation from that day */
   const affected = { op: 'or' as const, args: [{ op: 'lt' as const, path: 'custom.openingValueCents', value: M(250_000) }, { op: 'gte' as const, path: 'custom.openingValueCents', value: M(1_000_000) }] };
   b.insert(text('fee-waived-note', 'Fee waived note', '**Your management fee was waived this quarter**, because there was no activity in your account.', flow({ spaceBeforePt: 6, spanColumns: true }), { visibleWhen: eq('custom.feeWaived', true) }));
@@ -525,7 +527,7 @@ export function meridianCustomers(): SampleCustomer[] {
   });
 }
 
-export const MERIDIAN_NOTES_BASE: Omit<SampleNotes, 'translations'> = {
+export const MERIDIAN_NOTES: SampleNotes = {
   title: 'Meridian Wealth',
   kind: 'Quarterly portfolio statement',
   description: 'A quarterly investment statement: two-column summary and allocation, holdings over two pages, transactions, income and fees, and messages by risk profile, by a fall in value and by a dated fee change.',
@@ -548,6 +550,9 @@ export const MERIDIAN_NOTES_BASE: Omit<SampleNotes, 'translations'> = {
     { recordId: 'MWS-60018', key: 'largestWeightPct', reason: 'Worked out from the missing closing value.' },
     { recordId: 'MWS-60014', key: 'adviserLine', reason: 'The known data problem: no adviser.' },
   ],
+  // Every text approved in Spanish except four drafts: the aggressive-growth commentary and its heading (the
+  // demonstration blockers) and two fixed phrases the sample customers never see.
+  translations: { 'es-US': { approved: 118, draft: 4, missing: 0 } },
   mappings: { 'print-house': 'complete', 'client-portal': 'incomplete' },
   pages: { 'MWS-60011': 3 },
 };

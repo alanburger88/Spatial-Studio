@@ -1,7 +1,6 @@
 import type { Project } from '../types';
-import { NORTHWIND_ID, NORTHWIND_NOTES_BASE, buildNorthwind, northwindCustomers } from './northwind';
-import { MERIDIAN_ID, MERIDIAN_NOTES_BASE, buildMeridian, meridianCustomers } from './meridian';
-import { translationCounts } from './counts';
+import { NORTHWIND_ID, NORTHWIND_NOTES, buildNorthwind, northwindCustomers } from './northwind';
+import { MERIDIAN_ID, MERIDIAN_NOTES, buildMeridian, meridianCustomers } from './meridian';
 import type { SampleCustomer } from './kit';
 import type { SampleNotes } from './notes';
 
@@ -29,8 +28,8 @@ export function EXTRA_SAMPLES(): ExtraSample[] {
   const northwind = buildNorthwind('working');
   const meridian = buildMeridian();
   cache = [
-    { project: northwind, customers: northwindCustomers(), notes: { ...NORTHWIND_NOTES_BASE, translations: translationCounts(northwind) }, release: { project: buildNorthwind('release1'), label: 'Release 1 (approved, in Production)' } },
-    { project: meridian, customers: meridianCustomers(), notes: { ...MERIDIAN_NOTES_BASE, translations: translationCounts(meridian) } },
+    { project: northwind, customers: northwindCustomers(), notes: NORTHWIND_NOTES, release: { project: buildNorthwind('release1'), label: 'Release 1 (approved, in Production)' } },
+    { project: meridian, customers: meridianCustomers(), notes: MERIDIAN_NOTES },
   ];
   return cache;
 }
