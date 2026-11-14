@@ -6,6 +6,7 @@ import { Dialog, ErrorState, Loading, ScreenHeader } from '../ui/common';
 import { Icon } from '../ui/icons';
 import { fmtAbs, When } from '../ui/time';
 import { DraftEditor } from './library/DraftEditor';
+import { Duplicates } from './library/Duplicates';
 import { errorText, useLibrary, useLibraryCan } from './library/libraryData';
 import { ContentPreview } from './library/Preview';
 import './Library.css';
@@ -29,12 +30,20 @@ export function Library() {
   const shown = useMemo(() => items.filter((i) => (!kind || i.kind === kind) && (!q.trim() || `${i.title} ${i.description}`.toLowerCase().includes(q.trim().toLowerCase()))), [items, kind, q]);
   const selectedId = params.get('item') ?? shown[0]?.id ?? null;
   const selected = items.find((i) => i.id === selectedId) ?? null;
-  const choose = (id: string) => { const next = new URLSearchParams(params); next.set('item', id); next.delete('document'); setParams(next, { replace: true }); };
+  const choose = (id: string) => { const next = new URLSearchParams(params); next.set('item', id); next.delete('document'); next.delete('view'); setParams(next, { replace: true }); };
+  const view = params.get('view') === 'duplicates' ? 'duplicates' : 'items';
+  const showView = (v: 'items' | 'duplicates') => { const next = new URLSearchParams(params); if (v === 'duplicates') next.set('view', 'duplicates'); else next.delete('view'); next.delete('document'); setParams(next); };
 
   return (
     <section className="screen lib-screen" data-testid="library-screen">
       <ScreenHeader id="S25" title="Library" subtitle="Brands, building blocks, wording, glossaries, wording rules and lookup tables that many documents share. Each item has numbered versions; an approved version is frozen. Documents link to an approved version and take a newer one only by a reviewed update."
         actions={can.create ? <button className="btn primary sm" onClick={() => setCreating(true)} data-testid="lib-new-item"><Icon.plus width={14} height={14} /> New item</button> : undefined} />
+      {/* Two views of the library: its items, and duplicate wording across documents (`?view=duplicates`). */}
+      <div className="tabs lib-views" role="tablist" aria-label="Library views">
+        <button type="button" role="tab" aria-selected={view === 'items'} onClick={() => showView('items')} data-testid="lib-view-items">Items</button>
+        <button type="button" role="tab" aria-selected={view === 'duplicates'} onClick={() => showView('duplicates')} data-testid="lib-view-duplicates">Duplicate wording</button>
+      </div>
+      {view === 'duplicates' ? <Duplicates /> : <>
       {documentId && <DocumentLinks projectId={documentId} items={items} onClose={() => { const n = new URLSearchParams(params); n.delete('document'); setParams(n, { replace: true }); }} />}
       {status === 'error' ? <ErrorState title="The library could not be loaded" message={error ?? ''} onRetry={() => useLibrary.getState().load(true)} />
         : status !== 'ready' && !items.length ? <Loading label="Reading the library…" />
@@ -86,6 +95,7 @@ export function Library() {
             <div className="lib-detail-wrap">{selected ? <ItemDetail key={selected.id} item={selected} /> : <div className="empty"><strong>Choose an item</strong></div>}</div>
           </div>
         )}
+      </>}
       {creating && <DraftEditor item={null} start={null} onClose={() => setCreating(false)} onSaved={choose} />}
     </section>
   );

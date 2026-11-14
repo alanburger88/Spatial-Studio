@@ -1,8 +1,8 @@
 import {
-  LIBRARY_KIND_LABEL, applyCommand, libraryContentFingerprint, linkFor,
-  type LibraryActor, type LibraryContent, type LibraryItemInfo, type LibraryKind, type LibrarySource, type LibraryUsage, type LibraryVersionInfo, type Project, type SyntheticRecord,
+  LIBRARY_KIND_LABEL, applyCommand, digestOf, libraryContentFingerprint, linkFor,
+  type LibraryActor, type LibraryContent, type LibraryWordingContent, type LibraryItemInfo, type LibraryKind, type LibrarySource, type LibraryUsage, type LibraryVersionInfo, type Project, type SyntheticRecord,
 } from '@iss/model';
-import { compareVersions, summarizeChanges, type VersionComparison } from '@iss/scenarios';
+import { compareVersions, summarizeChanges, type DuplicateDocumentInput, type DuplicateLibraryInput, type DuplicateScan, type VersionComparison } from '@iss/scenarios';
 import type { Store } from './db';
 
 /**
@@ -176,3 +176,83 @@ export function libraryUpdateImpact(project: Project, linkId: string, to: { vers
 
 /** “Building block “Contact panel”” for audit labels and messages. */
 export const itemWords = (kind: LibraryKind, title: string): string => `${LIBRARY_KIND_LABEL[kind].toLowerCase()} “${title}”`;
+
+/* ------------------------------------------------------------------ duplicate wording (wave 3, section 2) */
+
+/** The saved documents and the library's wording items a duplicate scan reads, and a key that changes whenever any of them does. */
+export function duplicateSources(store: Store, library: LibraryStore): { key: string; summaries: ReturnType<Store['listProjects']>; documents(): DuplicateDocumentInput[]; items(): DuplicateLibraryInput[] } {
+  const summaries = store.listProjects();
+  const wording = library.list().filter((i) => i.kind === 'wording');
+  const key = digestOf({
+    d: summaries.map((s) => [s.projectId, s.modelVersion, s.contentDigest, s.title]),
+    l: wording.map((i) => [i.id, i.title, i.versions.map((v) => [v.version, v.state, v.fingerprint])]),
+  });
+  return {
+    key, summaries,
+    documents: () => summaries.flatMap((s) => { const p = store.getProject(s.projectId); return p ? [{ projectId: p.projectId, title: p.title, project: p }] : []; }),
+    items: () => wording.flatMap((i) => {
+      const n = i.latest ?? i.draft;
+      const got = n === null ? undefined : library.content(i.id, n);
+      return got ? [{ itemId: i.id, title: i.title, version: got.version.version, state: got.version.state, content: got.content as LibraryWordingContent }] : [];
+    }),
+  };
+}
+
+/** The last few scans, by what they read and how they were asked; a second call with nothing changed is served from here. */
+export class DuplicateScanCache {
+  private entries = new Map<string, { scan: DuplicateScan; tookMs: number }>();
+  constructor(private max = 8) {}
+  get(key: string) { const e = this.entries.get(key); if (e) { this.entries.delete(key); this.entries.set(key, e); } return e; }
+  set(key: string, v: { scan: DuplicateScan; tookMs: number }) {
+    this.entries.set(key, v);
+    while (this.entries.size > this.max) this.entries.delete(this.entries.keys().next().value!);
+  }
+}
+
+export interface LibraryLinkImpact {
+  partId: string;
+  /** Nothing any synthetic customer reads changes, and the message, its translations and its heading are the library's exactly. */
+  identical: boolean;
+  /** Why it is not identical, in plain words (null when it is). */
+  difference: string | null;
+  before: { title: string; type: 'text' | 'disclosure'; approvedLocales: Record<string, string> };
+  after: { title: string; type: 'text' | 'disclosure'; approvedLocales: Record<string, string> };
+  project: Project;
+  comparison: VersionComparison;
+  changes: Array<{ title: string; items: string[] }>;
+}
+
+const nonEmpty = (m: Partial<Record<string, string>>): Record<string, string> => Object.fromEntries(Object.entries(m).filter(([, t]) => typeof t === 'string' && t.trim())) as Record<string, string>;
+
+/** Why a document's message is not exactly the library's wording (null: the same text, translations, heading and kind). */
+export function wordingDifference(project: Project, partId: string, content: LibraryWordingContent): string | null {
+  const part = project.contentParts.find((c) => c.id === partId);
+  if (!part) return 'The document no longer has this message.';
+  const mine = nonEmpty(part.approvedLocales), theirs = nonEmpty(content.part.approvedLocales);
+  if (digestOf(mine) !== digestOf(theirs)) return Object.keys(mine).sort().join() !== Object.keys(theirs).sort().join() ? 'Its translations are not the same as the library’s.' : 'Its wording is not exactly the library’s.';
+  if (part.title !== content.part.title || digestOf(nonEmpty(project.strings?.[`@title/${partId}`]?.approved ?? {})) !== digestOf(nonEmpty(content.titleTranslations ?? {}))) return 'Its heading is not the library’s.';
+  if (part.type !== content.part.type) return content.part.type === 'disclosure' ? 'The library keeps it as a disclosure; the document has it as a message.' : 'The library keeps it as a message; the document has it as a disclosure.';
+  return null;
+}
+
+/**
+ * Pure: the document after linking one of its messages to a library wording item (`LINK_LIBRARY_ITEM` with `{ partId }`),
+ * the wording before and after, and which synthetic customers would read something different (the Before & after engine).
+ * Throws a plain Error when the link cannot be made.
+ */
+export function libraryLinkImpact(project: Project, item: { id: string; title: string }, version: number, content: LibraryWordingContent, partId: string, records: SyntheticRecord[]): LibraryLinkImpact {
+  const part = project.contentParts.find((c) => c.id === partId);
+  if (!part) throw new Error('The document no longer has this message.');
+  const r = applyCommand(project, { type: 'LINK_LIBRARY_ITEM', item: { id: item.id, kind: 'wording', title: item.title }, version, content, placement: { partId } });
+  if (!r.ok) throw new Error(r.message);
+  const mine = records.filter((x) => x.documentType === project.documentType);
+  const comparison = compareVersions(project, r.project, mine);
+  const after = r.project.contentParts.find((c) => c.id === partId)!;
+  const words = (p: typeof part) => ({ title: p.title, type: p.type, approvedLocales: nonEmpty(p.approvedLocales) });
+  const difference = wordingDifference(project, partId, content) ?? (comparison.customers.some((c) => c.outcome !== 'same')
+    ? (part.type === 'disclosure' ? 'Linking gives the disclosure a new version number, which its readers see.' : 'Some customers would read something different.') : null);
+  return {
+    partId, before: words(part), after: words(after), project: r.project, comparison, identical: difference === null, difference,
+    changes: summarizeChanges(project, r.project, mine).sections.map((s) => ({ title: s.title, items: s.items })),
+  };
+}

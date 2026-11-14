@@ -49,13 +49,13 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     ],
   },
   S25: {
-    purpose: 'The things many documents share: a brand, building blocks such as a header or a contact panel, wording with its translations, glossaries, the house wording rules and lookup tables. Each item has numbered versions; an approved version is frozen, and a document takes a newer one only through a reviewed update.',
+    purpose: 'The things many documents share: a brand, building blocks such as a header or a contact panel, wording with its translations, glossaries, the house wording rules and lookup tables. Each item has numbered versions; an approved version is frozen, and a document takes a newer one only through a reviewed update. The Duplicate wording view finds messages and notices that are the same or nearly the same in many documents (it compares words, not meaning), so the wording can be kept here once and linked in each document after a review.',
     actions: [
       'Choose an item to see its versions, a preview of each and every document that uses it, with those that are behind.',
       'Start a new version as a draft, or edit the draft, by typing it or taking it from a document (authors).',
       'Approve a draft to freeze it, or discard it (approvers and admins).',
       'Keep the house wording rules as an item: add, change, reorder and remove rules, and try a sentence to see which rules it breaks. Only an admin decides whether a rule is a “must” (a blocker) or a “should” (a warning).',
-      'Add the first item with “Add to library” in a document, or with New item here.',
+      'Add an item with “Add to library” in a document, with New item here, or by keeping wording that Duplicate wording found in several documents.',
     ],
     next: [
       { screen: 'S02', why: 'use a building block from the library, or add a component to it' },

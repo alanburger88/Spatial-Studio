@@ -142,6 +142,12 @@ const ROUTES: Record<string, Need> = {
   // A dry run: it computes the impact of an update and stores nothing.
   'POST /api/v1/library/:itemId/impact': 'any',
   'POST /api/v1/library/reset': 'manage_users',
+  // Duplicate wording (wave 3): the scan reads only; keeping a wording makes a library draft (authors); "Link here" is a dry
+  // run; linking exact duplicates in draft documents saves those documents, so it needs edit rights.
+  'GET /api/v1/library/duplicates': 'any',
+  'POST /api/v1/library/duplicates/keep': 'edit',
+  'POST /api/v1/library/:itemId/link-preview': 'any',
+  'POST /api/v1/library/:itemId/link-drafts': 'edit',
 };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Routes not listed above: reads need a session; anything that writes needs edit rights (safe default for new modules). */
@@ -158,6 +164,7 @@ function isReadLike(method: string, route: string | undefined): boolean {
 
 function forbiddenMessage(role: Role, need: Permission, route?: string): string {
   if (route?.startsWith('/api/v1/library')) {
+    if (need === 'edit' && route.endsWith('/link-drafts')) return `${ROLE_LABEL[role]}s cannot change documents; ask an author.`;
     if (need === 'edit') return `${ROLE_LABEL[role]}s cannot add to the library or draft a new version; ask an author.`;
     if (need === 'approve') return 'Only approvers and admins can approve a library version.';
   }
