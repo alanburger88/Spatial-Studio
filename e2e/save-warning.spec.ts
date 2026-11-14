@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { API, demoTool, open, state } from './helpers';
 
 /**
@@ -36,6 +37,10 @@ test('SW01 a save that adds a blocker warns first: Go back keeps the edits unsav
   await expect(cause).toHaveAttribute('data-kind', 'rules');
   await expect(cause.getByTestId('save-warning-customers')).toHaveText(/^stops \d+ of 70 synthetic customers$/);
   await expect(dialog.getByTestId('save-warning-scope')).toContainText('Layout and PDF problems are not part of it');
+  // The dialog's own content. Left out, as they belong to shared parts reported to the integrator: the studio-wide primary
+  // button colour (white on the primary green, 3.45:1 at 13px) and the shared Dialog's header/footer landmarks.
+  const axe = await new AxeBuilder({ page }).include('.dialog').exclude('.dialog .btn.primary').disableRules(['landmark-no-duplicate-banner', 'landmark-no-duplicate-contentinfo']).analyze();
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => `${n.target.join(' ')} ${n.failureSummary}`).join(' | ')}`)).toEqual([]);
   // Go back is the default
   await expect(page.getByTestId('save-warning-back')).toBeFocused();
   await page.keyboard.press('Enter');

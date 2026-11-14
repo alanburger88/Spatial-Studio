@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { API, open } from './helpers';
 
 /**
@@ -75,6 +76,8 @@ test.describe('sign-in off: two windows of the local admin', () => {
       await a.getByTestId('presence-open').click();
       await expect(a.getByTestId('presence-row')).toContainText('Another window');
       await expect(a.getByTestId('presence-row')).toContainText('On Design Studio');
+      const axe = await new AxeBuilder({ page: a }).include('[data-testid="presence"]').include('[data-testid="inspector-also-here"]').analyze();
+      expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => `${n.target.join(' ')} ${n.failureSummary}`).join(' | ')}`)).toEqual([]);
       await a.keyboard.press('Escape');
       // b moves to another component: the warning goes, the top bar stays
       await select(b, 'billing-summary');
@@ -110,6 +113,9 @@ test.describe('sign-in off: two windows of the local admin', () => {
       await expect(b.getByTestId('save-conflict-who')).toContainText(`Another window saved version ${theirs}`);
       await expect(b.getByTestId('save-conflict-who')).toContainText('just now');
       await expect(dialog).toContainText('Your unsaved edits here are lost.');
+      // (the shared Dialog's header and footer landmarks are left out: reported to the integrator)
+      const axe = await new AxeBuilder({ page: b }).include('.dialog').disableRules(['landmark-no-duplicate-banner', 'landmark-no-duplicate-contentinfo']).analyze();
+      expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => `${n.target.join(' ')} ${n.failureSummary}`).join(' | ')}`)).toEqual([]);
       // keep editing and compare: Before & after opens on their saved version and this working version
       await b.getByTestId('save-conflict-compare').click();
       await expect(b).toHaveURL(new RegExp(`/studio/${pid}/compare\\?before=v${theirs}&after=working`));
