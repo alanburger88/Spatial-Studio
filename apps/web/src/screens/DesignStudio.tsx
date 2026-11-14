@@ -61,7 +61,14 @@ export function DesignStudio() {
   // "Open it in the base" (from a variant) lands here with ?node=<id>: select that component once.
   const [search] = useSearchParams();
   const askedNode = search.get('node');
-  useEffect(() => { if (askedNode && project.nodes.some((n) => n.id === askedNode)) useStudio.getState().select(askedNode); }, [askedNode, project.projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Selected once per address (and again if the studio's own selection lands first); after that the person's choice wins.
+  const nodeApplied = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${project.projectId}|${askedNode}`;
+    if (!askedNode || nodeApplied.current === key || !project.nodes.some((n) => n.id === askedNode)) return;
+    if (ctx.selectedNodeId === askedNode) { nodeApplied.current = key; return; }
+    useStudio.getState().select(askedNode);
+  }, [askedNode, project.projectId, ctx.selectedNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [paletteQuery, setPaletteQuery] = useState('');
   const [mark, setMark] = useState<Mark | null>(null);
   const [reject, setReject] = useState<{ nodeId: string; reason: string } | null>(null);
