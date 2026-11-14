@@ -117,7 +117,10 @@ test('RL01 make a link, review through it without a session, comment, answer, re
   await thread.getByTestId('review-link-reply').click();
   await thread.getByTestId('review-link-reply-text').fill('Thank you. We changed it to “Call us on the number below”.');
   await thread.getByTestId('review-link-reply-send').click();
-  await expect(thread.getByTestId('review-link-reply')).toHaveCount(0);
+  // The answer is listed under the comment and the form closes. (The answer and the "Answer" button once shared a test id,
+  // so this step used to pass only in the moment the form was still open.)
+  await expect(thread.getByTestId('review-link-answer')).toHaveCount(1);
+  await expect(thread.getByTestId('review-link-reply-text')).toHaveCount(0);
   await expect(fromLinks).toContainText('We changed it');
   await fromLinks.getByTestId('review-link-thread').filter({ hasText: 'plainer words' }).getByTestId('review-link-resolve').click();
   await expect(fromLinks).toContainText('Every comment from a review link is resolved');

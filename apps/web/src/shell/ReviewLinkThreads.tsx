@@ -49,7 +49,7 @@ export function ReviewLinkThreads({ pid, onNavigate }: { pid: string; onNavigate
       </div>
       {replies.length > 0 && (
         <ul className="rl-thread-replies">
-          {replies.map((r) => <li key={r.id} className="rev-snippet" data-testid="review-link-reply"><span className="who">{r.authorName}</span> <span className="when"><When iso={r.createdAt} /></span><div className="rl-thread-body">{r.body}</div></li>)}
+          {replies.map((r) => <li key={r.id} className="rev-snippet" data-testid="review-link-answer"><span className="who">{r.authorName}</span> <span className="when"><When iso={r.createdAt} /></span><div className="rl-thread-body">{r.body}</div></li>)}
         </ul>
       )}
       {mayComment && <ThreadActions pid={pid} c={c} onChanged={changed} />}
