@@ -38,6 +38,7 @@ export function ReleaseDetail({ detail, releases, role, onChanged }: DetailProps
       <StageStates r={r} />
       {r.documentRemoved && <div className="callout warning" role="status">The document this release came from was deleted{r.documentRemovedAt ? ` on ${fmtAbs(r.documentRemovedAt)}` : ''}. The release is kept as it was.</div>}
       <Facts r={r} />
+      <ReleaseVariant r={r} />
       <ReleaseLibrarySection releaseId={r.id} />
       <ReleaseMappings detail={detail} />
       <StageHistory history={detail.history} />
@@ -290,6 +291,23 @@ function ReleaseMappings({ detail }: { detail: ReleaseDetailDto }) {
         ))}
       </ul>
       <p className="muted"><Link to={`/studio/${r.documentId}/mapping`} data-testid="rel-mappings-open">Open Mapping</Link> to see or change the working version’s mappings. A change goes into the next release.</p>
+    </section>
+  );
+}
+
+/** Variants (wave 5): a release of a variant records the base, the base version it followed and its differences. */
+function ReleaseVariant({ r }: { r: ReleaseInfo }) {
+  const v = r.variant;
+  if (!v) return null;
+  return (
+    <section className="rel-sec" aria-label="Variant" data-testid="rel-variant">
+      <h3 className="section-title">A variant of “{v.baseTitle}”</h3>
+      <p className="muted">For {v.purpose === 'brand' ? 'a brand' : v.purpose === 'region' ? 'a region' : 'other'}: {v.label}. It followed version {v.baseVersion} of the base{v.baseFound ? <>, with {v.differences.length} {v.differences.length === 1 ? 'difference' : 'differences'}</> : ' (the base was not in the studio, so its differences were not listed)'}. The package records the same and does not need the base.</p>
+      {v.differences.length > 0 && (
+        <details><summary>The differences</summary>
+          <ul className="rel-variant-list">{v.differences.map((d) => <li key={d.id}>{d.label}{d.kind === 'added' ? ' (its own)' : d.kind === 'removed' ? ' (hidden or removed)' : ''}</li>)}</ul>
+        </details>
+      )}
     </section>
   );
 }

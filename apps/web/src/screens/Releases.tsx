@@ -7,6 +7,7 @@ import { Empty, ErrorState, Loading, ScreenHeader } from '../ui/common';
 import { useWorkflow } from '../shell/workflow';
 import { LiveCards } from './releases/LiveCards';
 import { ReleaseList } from './releases/ReleaseList';
+import { FamilyView } from './variants/VariantPanels'; // variants (wave 5): the family of this document
 import { ReleaseDetail } from './releases/ReleaseDetail';
 import { ReviewLinksPanel } from './releases/ReviewLinks'; // review links (wave 4)
 import './Releases.css';
@@ -100,6 +101,7 @@ export function Releases() {
                   ? <p className="muted" data-testid="rel-create-why">{data.create.reason ?? 'This document is approved but has no release.'}</p>
                   : <p className="muted" data-testid="rel-state-now">{state ? `This document is ${(wf?.label ?? state).toLowerCase()} now.` : 'This document is not approved.'}</p>)}
               </Empty>
+              <div className="panel"><div className="panel-body"><FamilyView projectId={project.projectId} /></div></div>
             </div>
           ) : (
             <>
@@ -115,6 +117,7 @@ export function Releases() {
                   <div className="panel-body flush"><ReleaseList releases={releases} selected={selected?.number ?? null} onSelect={select} /></div>
                 </div>
                 <ReviewLinksPanel projectId={project.projectId} />
+                <div className="panel rel-family"><div className="panel-body"><FamilyView projectId={project.projectId} /></div></div>
               </div>
               <aside className="panel rel-detail" aria-label="Release details" data-side="right" data-side-title="Release details">
                 <div className="panel-body">

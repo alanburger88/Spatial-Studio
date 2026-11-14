@@ -15,6 +15,7 @@ import { auditSentence, customerNamesOf } from './Activity';
 import './Overview.css';
 import { LibraryUpdatesLine } from './library/OverviewLine';
 import { ReviewLinksGlance } from './releases/ReviewLinks'; // review links (wave 4)
+import { VariantOverview } from './variants/VariantPanels'; // variants by brand or region (wave 5)
 
 /**
  * Overview (S19): the document's home. Where it stands, what to do next, and a few facts at a glance.
@@ -267,6 +268,7 @@ export function Overview() {
           </div>
         </div>
         <LibraryUpdatesLine project={project} />
+        <VariantOverview project={project} />
 
         <div className="ov-grid">
           {/* ---------------------------------------------------------------- next steps */}

@@ -36,12 +36,12 @@ export interface ScreenHelp {
 
 export const SCREEN_HELP: Record<string, ScreenHelp> = {
   S01: {
-    purpose: 'The home page of the studio: every document you can work on, the four samples that come with the studio (a card statement, an explanation of benefits, a utility bill and a portfolio statement), and the place to start a new one. Pick a document here and you land on its Overview.',
+    purpose: 'The home page of the studio: every document you can work on, the four samples that come with the studio (a card statement, an explanation of benefits, a utility bill and a portfolio statement) and a variant of the utility bill for one region, and the place to start a new one. A variant sits under the document it follows. Pick a document here and you land on its Overview.',
     actions: [
       'Open a sample, or a document you made, to see where it stands.',
       'Start a new project from a starter template, from a description of your document, by rebuilding a PDF or Word file you already send, or from an empty page.',
       'Import a studio project file as a new draft, or import customer records.',
-      'Make a copy of any project, rename or delete your own, or save one as a template, from its menu.',
+      'Make a copy of any project, make a variant of it for a brand or a region, rename or delete your own, or save one as a template, from its menu.',
       'Restore the samples to how they shipped.',
     ],
     next: [
@@ -67,8 +67,9 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     actions: [
       'Read the status strip: review state, version, whether changes are saved, and what is in Test and Production.',
       'Follow the next steps in order. The step marked Next is the first one still to do; each has one button that opens where it is dealt with.',
-      'Check the at-a-glance facts: customers that can be issued, languages, outputs and pinned tests.',
-      'See the latest saves, reviews and releases under recent activity.',
+      'Check the at-a-glance facts (customers that can be issued, languages, outputs and pinned tests) and the latest saves, reviews and releases under recent activity.',
+      // Variants (wave 5)
+      'On a variant, see what differs from the document it follows and use the base’s value again; when the base has a newer version, see what comes in, what stays yours and what needs a look, then apply the update or stay behind. On any other document, see its variants or make one.',
       // Wave 4 (who else is editing)
       'See who else has this document open: their initials, or a count on a narrow window, beside the document name, with the screen each is on. If two people save, the second is told who saved first and chooses what to do.',
     ],
@@ -297,8 +298,9 @@ export const SCREEN_HELP: Record<string, ScreenHelp> = {
     purpose: 'The approved, frozen versions of this document, their stage (Test or Production) and the package to hand over to the team that produces the documents.',
     actions: [
       'Open a release to see how it was made, who approved it and its stage history.',
-      'Download its package and see what is inside.',
-      'Move a release to Production, if you are an administrator, or withdraw it.',
+      'Download its package and see what is inside; move a release to Production, if you are an administrator, or withdraw it.',
+      // Variants (wave 5)
+      'See the family: the document a variant follows and each of its variants, the version each follows, whether it is behind, and its latest release. A release of a variant records the base and how it differs.',
       'Compare a release with the working version or another release.',
       'Share a release for review: someone without an account can look at it for chosen test customers and comment. Revoke the link under Review links when you are done.',
     ],
@@ -456,6 +458,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   { term: 'Proof record', screen: 'S21', means: 'A record of what was produced for one customer, which release it came from and which alternative each part showed and why. It keeps fingerprints and decisions, not the customer\'s data.' },
   { term: 'Pinned test', screen: 'S07', means: 'A customer and the outcome you expect for them, saved with the document ("Pin as a test" in Rules). The studio runs it again after every change, so a fix that later breaks shows up straight away.' },
   { term: 'Synthetic customer', screen: 'S16', means: 'A made-up customer the document is tested with. Every customer, account and claim in the studio is fictional, and counts of customers say "synthetic" so you do not read them as real people.' },
+  { term: 'Variant of a document', screen: 'S19', means: 'A complete document that follows another one (its base) at a saved version, for a brand or a region. It can have its own brand, wording, sections, lookup-table values and rules; the data fields, calculations, page design and the place of the base’s components stay the base’s. A newer version of the base is offered as an update that a person applies. Each variant is reviewed and released on its own.' },
   { term: 'Alternative (variant)', screen: 'S03', means: 'One of the named versions a section or message can show, for example a standard reminder or a payment support message. Rules choose which alternative a customer gets.' },
   { term: 'The document\'s date', screen: 'S24', means: 'The day a document is issued on, as far as its rules are concerned: a date in the customer\'s data or a date given for each run, never today\'s date. Rules, alternatives and sections can be in effect from or until a day; "As issued on" previews the studio on a day you pick.' },
   { term: 'Coverage', screen: 'S07', means: 'Whether every rule, message version and section is reached by at least one customer. A gap is one that no customer reaches, so nobody has checked it. "Find coverage gaps" in Rules lists them and can generate customers who reach them.' },

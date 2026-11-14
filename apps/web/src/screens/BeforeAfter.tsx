@@ -10,8 +10,9 @@ import { Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
 import { DocChanges } from './compare/DocChanges';
 import { SideBySide, type SideData } from './compare/SideBySide';
 import { WhoChanges } from './compare/WhoChanges';
-import { WORKING, defaultCustomer, defaultPair, isOutput, otherSideFor, releaseNumberOf, releaseSide, savedNumberOf, sideLabel, sideShort, validSide, type Output, type SideId } from './compare/model';
+import { UPDATE, WORKING, defaultCustomer, defaultPair, isOutput, otherSideFor, releaseNumberOf, releaseSide, savedNumberOf, sideLabel, sideShort, validSide, type Output, type SideId } from './compare/model';
 import { ShareForReview } from './releases/ReviewLinks'; // review links (wave 4)
+import { useVariant } from './variants/useVariant'; // variants (wave 5): the update side
 import './BeforeAfter.css';
 
 /**
@@ -93,7 +94,10 @@ export function BeforeAfter() {
   /* ---------------------------------------------------- which two sides (the URL is the source of truth) */
   const asked = { before: params.get('before'), after: params.get('after') };
   // Wave 4: a saved version can be a side even before the first release.
-  const askedSaved = savedNumberOf(asked.before) !== null || savedNumberOf(asked.after) !== null;
+  const askedSaved = savedNumberOf(asked.before) !== null || savedNumberOf(asked.after) !== null || asked.before === UPDATE || asked.after === UPDATE;
+  // Variants (wave 5): "with the update from the base" is the working variant with the update applied, worked out here.
+  const variant = useVariant(project.variantOf ? project : null);
+  const updated = variant.update?.project ?? null;
   const sides = useMemo<{ before: SideId; after: SideId; unknown: string[] } | null>(() => {
     if (!releases.length && !askedSaved) return null;
     const def = defaultPair(releases, project) ?? { before: WORKING, after: WORKING };
@@ -123,9 +127,10 @@ export function BeforeAfter() {
   const frozenAfter = sides && savedNumberOf(sides.after) !== null ? savedAfter : releaseAfter;
 
   const build = (id: SideId, f: { project: Project | null }): SideData | null => {
-    const p = id === WORKING ? project : f.project;
-    return p ? { id, label: sideLabel(id, releases, dirty), short: sideShort(id), project: p, working: id === WORKING, issueDate: chosenDay } : null;
+    const p = id === WORKING ? project : id === UPDATE ? updated : f.project;
+    return p ? { id, label: sideLabel(id, releases, dirty), short: sideShort(id), project: p, working: id === WORKING || id === UPDATE, issueDate: chosenDay } : null;
   };
+  const noUpdate = !!sides && (sides.before === UPDATE || sides.after === UPDATE) && (!project.variantOf || (variant.status !== 'loading' && !updated));
   const before = sides ? build(sides.before, frozenBefore) : null;
   const after = sides ? build(sides.after, frozenAfter) : null;
   const sideError = frozenBefore.error ?? frozenAfter.error;
@@ -191,6 +196,7 @@ export function BeforeAfter() {
     ...releases.map((r) => ({ id: releaseSide(r.number), label: sideLabel(releaseSide(r.number), releases) })),
     // Wave 4: a saved version named in the address stays choosable.
     ...[...new Set([sides!.before, sides!.after])].filter((s) => savedNumberOf(s) !== null).map((s) => ({ id: s, label: sideLabel(s, releases) })),
+    ...(updated || sides!.before === UPDATE || sides!.after === UPDATE ? [{ id: UPDATE, label: sideLabel(UPDATE, releases) }] : []),
   ];
   const picker = (which: 'before' | 'after', title: string) => (
     <label className="field cmp-picker"><span className="label">{title}</span>
@@ -228,7 +234,7 @@ export function BeforeAfter() {
           <Tech>
             <p className="muted cmp-tech" data-testid="cmp-tech">
               {([['Before', sides!.before], ['After', sides!.after]] as const).map(([t, s]) => (
-                <span key={t}>{t}: {s === WORKING ? 'the working project as open in the studio' : savedNumberOf(s) !== null ? `saved version ${savedNumberOf(s)} from the version history` : <>frozen release <span className="chip code" title={rel(s)?.contentDigest}>{rel(s)?.id}</span> · content {rel(s)?.contentDigest.slice(0, 12)}…</>}{' '}</span>
+                <span key={t}>{t}: {s === WORKING ? 'the working project as open in the studio' : s === UPDATE ? 'the working project with the update from the base applied (mergeVariantUpdate), not saved' : savedNumberOf(s) !== null ? `saved version ${savedNumberOf(s)} from the version history` : <>frozen release <span className="chip code" title={rel(s)?.contentDigest}>{rel(s)?.id}</span> · content {rel(s)?.contentDigest.slice(0, 12)}…</>}{' '}</span>
               ))}
             </p>
           </Tech>
@@ -236,7 +242,8 @@ export function BeforeAfter() {
           {sides!.unknown.length > 0 && <div className="callout warning" role="note" data-testid="cmp-unknown-side">{sides!.unknown.join(', ')} is not a release of this document, so the usual pair is shown instead.</div>}
           {sides!.before === sides!.after && <div className="callout accent" role="note" data-testid="cmp-same-side">Both sides are the same version, so nothing can differ. Choose a different Before or After.</div>}
 
-          {sideError ? <ErrorState title="A release could not be loaded" message={sideError} onRetry={() => setRev((r) => r + 1)} />
+          {noUpdate && <div className="callout accent" role="note" data-testid="cmp-no-update">{project.variantOf ? `This variant follows the latest saved version of “${project.variantOf.baseTitle}”, so there is no update to compare.` : 'This document is not a variant, so there is no update from a base to compare.'}</div>}
+          {noUpdate ? null : sideError ? <ErrorState title="A release could not be loaded" message={sideError} onRetry={() => setRev((r) => r + 1)} />
             : !before || !after ? <Loading label="Loading the release…" />
             : !comparison ? (cmp && 'error' in cmp ? <ErrorState title="The comparison could not be worked out" message={cmp.error} /> : <Loading label="Working out who changes…" />)
             : comparison.evaluated === 0 ? <Empty title="No test customers" message="This document has no test customers, so there is nothing to compare. Add some in the Data Explorer, or generate test customers." />

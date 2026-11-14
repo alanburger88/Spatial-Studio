@@ -10,12 +10,15 @@ export const dialogLoaders = {
   rebuild: () => import('./RebuildDialog'),
   importRecords: () => import('./ImportRecords'),
   templates: () => import('./TemplateDialogs'),
+  // Variants (wave 5)
+  newVariant: () => import('../variants/NewVariantDialog'),
 };
 const SetupDialogImpl = lazy(() => dialogLoaders.setup().then((m) => ({ default: m.SetupDialog })));
 const RebuildDialogImpl = lazy(() => dialogLoaders.rebuild().then((m) => ({ default: m.RebuildDialog })));
 const ImportDialogImpl = lazy(() => dialogLoaders.importRecords().then((m) => ({ default: m.ImportDialog })));
 const SaveTemplateDialogImpl = lazy(() => dialogLoaders.templates().then((m) => ({ default: m.SaveTemplateDialog })));
 const ImportProjectDialogImpl = lazy(() => dialogLoaders.templates().then((m) => ({ default: m.ImportProjectDialog })));
+const NewVariantDialogImpl = lazy(() => dialogLoaders.newVariant().then((m) => ({ default: m.NewVariantDialog })));
 
 const fallback = <div className="dialog-backdrop"><div className="dialog" role="status" aria-busy="true" style={{ padding: 24 }}><Loading label="Loading…" /></div></div>;
 
@@ -24,6 +27,7 @@ export function RebuildDialog(props: ComponentProps<typeof RebuildDialogImpl>) {
 export function ImportDialog(props: ComponentProps<typeof ImportDialogImpl>) { return <Suspense fallback={fallback}><ImportDialogImpl {...props} /></Suspense>; }
 export function SaveTemplateDialog(props: ComponentProps<typeof SaveTemplateDialogImpl>) { return <Suspense fallback={fallback}><SaveTemplateDialogImpl {...props} /></Suspense>; }
 export function ImportProjectDialog(props: ComponentProps<typeof ImportProjectDialogImpl>) { return <Suspense fallback={fallback}><ImportProjectDialogImpl {...props} /></Suspense>; }
+export function NewVariantDialog(props: ComponentProps<typeof NewVariantDialogImpl>) { return <Suspense fallback={fallback}><NewVariantDialogImpl {...props} /></Suspense>; }
 
 export function prefetchGalleryDialogs() {
   for (const load of Object.values(dialogLoaders)) void load().catch(() => undefined);
