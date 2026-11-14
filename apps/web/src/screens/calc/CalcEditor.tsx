@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  checkFormula, evaluateSteps, exprScopeOf, formulaInWords, printFormula, projectFieldIndex, wordsScopeOf,
+  checkFormula, evaluateSteps, exprScopeOf, itemContexts, scopeFieldIndex, formulaInWords, printFormula, projectFieldIndex, wordsScopeOf,
   type CalcType, type CalculatedField, type Expr, type FormulaError, type Missing,
 } from '@iss/model';
 import { useStudio } from '../../state/store';
@@ -26,7 +26,8 @@ export function CalcEditor({ calc, ctx, customer, locale, canEdit, onDuplicate, 
   onDuplicate: () => void; onRemove: () => void;
 }) {
   const project = ctx.project;
-  const fieldIndex = useMemo(() => projectFieldIndex(project), [project]);
+  // A calculation that belongs to a list (wave 5) reads the fields of one item: its words, formula and check use them.
+  const fieldIndex = useMemo(() => (calc.list ? scopeFieldIndex(project, calc.list) : projectFieldIndex(project)), [project, calc.list]);
   const tech = useStudio((s) => s.viewMode) === 'technical';
   const savedJson = JSON.stringify(draftOf(calc));
   const [draft, setDraft] = useState<Draft>(() => draftOf(calc));
@@ -44,10 +45,10 @@ export function CalcEditor({ calc, ctx, customer, locale, canEdit, onDuplicate, 
   }, [savedJson]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const scope = useMemo(() => {
-    const s = exprScopeOf(project);
+    const s = exprScopeOf(project, calc.list);
     s.calcTypes = new Map(s.calcTypes).set(calc.key, draft.type);
     return s;
-  }, [project, calc.key, draft.type]);
+  }, [project, calc.key, calc.list, draft.type]);
   const check = useMemo(() => problemsBySlot(draft.expr, scope), [draft.expr, scope]);
   const problems = useMemo(() => {
     const m = new Map(check.byAt);
@@ -61,7 +62,10 @@ export function CalcEditor({ calc, ctx, customer, locale, canEdit, onDuplicate, 
     if (!customer) return null;
     // Work out on a copy so the customer's data is never touched.
     const copy = JSON.parse(JSON.stringify(customer.ctx)) as Record<string, unknown>;
-    return evaluateSteps(project, draft.expr, copy, customer.issue, customer.missing);
+    // Per item (wave 5): worked out step by step for the customer's first item of the list.
+    const at = calc.list ? itemContexts(copy, calc.list)[0] : copy;
+    if (!at) return null;
+    return evaluateSteps(project, draft.expr, at, customer.issue, customer.missing);
   }, [project, draft.expr, customer]);
 
   const dirty = JSON.stringify(draft) !== savedJson;
@@ -82,7 +86,7 @@ export function CalcEditor({ calc, ctx, customer, locale, canEdit, onDuplicate, 
   };
   const save = () => {
     setSaveError(null);
-    const field: CalculatedField = { key: calc.key, label: draft.label.trim(), type: draft.type, ...(draft.description.trim() ? { description: draft.description.trim() } : {}), expr: draft.expr };
+    const field: CalculatedField = { key: calc.key, label: draft.label.trim(), type: draft.type, ...(draft.description.trim() ? { description: draft.description.trim() } : {}), expr: draft.expr, ...(calc.list ? { list: calc.list } : {}) };
     const res = useStudio.getState().dispatch({ type: 'UPSERT_CALCULATED_FIELD', field });
     if (res.ok) useStudio.getState().toast({ kind: 'success', title: 'Calculation saved', message: `“${field.label}”. Undo with Ctrl+Z; Save in the top bar keeps it.` });
     else setSaveError(res.message);
