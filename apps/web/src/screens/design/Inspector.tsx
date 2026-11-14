@@ -19,6 +19,7 @@ import { ComponentBlockers } from '../blockers/ComponentBlockers';
 import { GuardedSuggestion, WritingHelp, recordAssist, useReadOnlyReason } from '../../assist/WritingHelp';
 import { NotInEffectChip, PeriodChip, PeriodEditor } from '../dates/period';
 import { NodeLibrary, ReadOnlyWhenLinked, useLinkedNode } from '../library/NodeLibrary';
+import { LockedLayout, VariantNodeNote } from '../variants/InspectorNote'; // variants (wave 5)
 import { LibraryChip } from '../library/LinkUI';
 import { WordingFindings } from '../wording/WordingFindings';
 // Wave 4 (who else is editing): a warning when another window has the same component selected.
@@ -139,7 +140,7 @@ function AlsoOnComponent({ nodeId }: { nodeId: string }) {
   );
 }
 
-export function Inspector({ project, res, nodeId, onEditText }: { project: Project; res: Resolution; nodeId: string | null; onEditText: (id: string) => void }) {
+export function Inspector({ project, res, nodeId, onEditText, variantMarks }: { project: Project; res: Resolution; nodeId: string | null; onEditText: (id: string) => void; /** Variants (wave 5): what differs from the base, by component. */ variantMarks?: Map<string, string[]> }) {
   const [tab, setTabState] = useState<Tab>(lastTab);
   const setTab = (t: Tab) => { lastTab = t; setTabState(t); };
   const node = nodeId ? nodeMap(project).get(nodeId) : undefined;
@@ -163,9 +164,11 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
               {rnode.required && <span className="chip">Required</span>}
               {node.locked && <span className="chip warning"><Icon.lock width={12} height={12} /> Locked</span>}
               {lib.link && <LibraryChip link={lib.link} />}
+              {variantMarks?.has(node.id) && <span className="chip variant" data-testid="inspector-differs">Differs from the base</span>}
               {node.layout?.paged?.mode === 'fixed' ? <span className="chip info">Fixed anchor</span> : <span className="chip">Flow</span>}
             </div>
             <AlsoOnComponent nodeId={node.id} />
+            <VariantNodeNote project={project} node={node} differs={variantMarks?.get(node.id)} />
             {!rnode.visible && <div className="callout warning" style={{ marginTop: 8 }} data-testid="not-rendered"><strong>Not rendered in this scenario.</strong> {rnode.hiddenReason}</div>}
           </div>
           <div className="tabs insp-tabs" role="tablist" aria-label="Inspector sections">
@@ -183,7 +186,7 @@ export function Inspector({ project, res, nodeId, onEditText }: { project: Proje
                 <section className="insp-sec"><h3 className="insp-h">Rules</h3><RulesTab node={node} project={project} res={res} /></section>
               </>
             )}
-            {tab === 'layout' && <ReadOnlyWhenLinked link={lib.isRoot ? undefined : lib.link}><LayoutTab node={node} project={project} /></ReadOnlyWhenLinked>}
+            {tab === 'layout' && <LockedLayout project={project} node={node}><ReadOnlyWhenLinked link={lib.isRoot ? undefined : lib.link}><LayoutTab node={node} project={project} /></ReadOnlyWhenLinked></LockedLayout>}
             {tab === 'review' && (
               <>
                 <section className="insp-sec" data-testid="insp-blockers-section"><h3 className="insp-h">Blockers</h3><ComponentBlockers nodeId={node.id} /></section>

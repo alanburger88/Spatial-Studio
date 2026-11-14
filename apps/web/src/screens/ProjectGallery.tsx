@@ -4,7 +4,7 @@ import { DOCUMENT_TYPE_LABEL, NEUTRAL_ACCENT, BLANK_PROJECT_TEMPLATE_ID, ISSUER_
 import { resolve, type Resolution } from '@iss/resolver';
 import { api, ApiFailure, type ImportResult, type ProjectSummary, type TemplateInfoDto } from '../api/client';
 import { editBlockedReason, useCan, useStudio } from '../state/store';
-import { ImportDialog, ImportProjectDialog, RebuildDialog, SaveTemplateDialog, SetupDialog } from './gallery/lazyDialogs';
+import { ImportDialog, ImportProjectDialog, NewVariantDialog, RebuildDialog, SaveTemplateDialog, SetupDialog } from './gallery/lazyDialogs';
 import { CountsList, SAVE_TEMPLATE_DENIED } from './gallery/templateBits';
 import { Biz, Dialog, Empty, ErrorState, Loading, ScreenHeader, Tech } from '../ui/common';
 import { Icon } from '../ui/icons';
@@ -17,10 +17,11 @@ const DOC_LABEL = DOCUMENT_TYPE_LABEL;
  * The built-in example documents, in the order the gallery shows them, with what each is and one line about it. The
  * two with their own data come from the server's sample registry; the web page only needs their names and wording.
  */
-const SAMPLE_ORDER = ['aster-card-demo', 'harborcare-demo', 'northwind-energy-demo', 'meridian-wealth-demo'];
-const SAMPLE_KIND: Record<string, string> = { 'northwind-energy-demo': 'Utility bill', 'meridian-wealth-demo': 'Portfolio statement' };
+const SAMPLE_ORDER = ['aster-card-demo', 'harborcare-demo', 'northwind-energy-demo', 'northwind-energy-lakeshore', 'meridian-wealth-demo'];
+const SAMPLE_KIND: Record<string, string> = { 'northwind-energy-demo': 'Utility bill', 'northwind-energy-lakeshore': 'Utility bill', 'meridian-wealth-demo': 'Portfolio statement' };
 const SAMPLE_DESCRIPTION: Record<string, string> = {
   'northwind-energy-demo': 'Dual-fuel electricity and gas bill with its own data: sections by service, tiered rates, a dated rate change, a usage chart and a tear-off payment slip.',
+  'northwind-energy-lakeshore': 'The Northwind bill for the Lakeshore region: its own accent colour, payment and text-message wording, late fees, higher-use rule and outage-line notice. It follows release 1 of Northwind, so an update is available.',
   'meridian-wealth-demo': 'Quarterly investment statement with its own data: two-column summary and allocation, holdings over two pages, and messages by risk profile, fall in value and fee change.',
 };
 
@@ -84,7 +85,7 @@ function OverflowMenu({ id, label, children }: { id: string; label: string; chil
 
 type CardDialog = 'restore' | 'duplicate' | 'rename' | 'delete' | 'template' | null;
 
-function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolean; sourceTitle?: string }) {
+function ProjectCard({ p, hero, sourceTitle, baseVersion }: { p: ProjectSummary; hero: boolean; sourceTitle?: string; /** Variants (wave 5): the base's latest saved version, when this card is a variant. */ baseVersion?: number }) {
   const mini = useMiniPreview(p);
   const [dialog, setDialog] = useState<CardDialog>(null);
   const [title, setTitle] = useState('');
@@ -95,6 +96,8 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
   const canSaveTemplate = useCan('approve');
   const closeTemplate = useCallback(() => setDialog(null), []);
 
+  const [variantOpen, setVariantOpen] = useState(false); // variants (wave 5)
+  const behind = !!p.variantOf && baseVersion !== undefined && baseVersion > p.variantOf.modelVersion;
   const openDialog = (d: CardDialog) => { setErr(null); setTitle(d === 'duplicate' ? `${p.title} (copy)` : d === 'rename' ? p.title : ''); setDialog(d); };
   const run = async (fn: () => Promise<void>) => {
     setBusy(true); setErr(null);
@@ -114,7 +117,7 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
       : 'Credit-card statement with conditional payment guidance, multi-page transaction tables and journey-driven messages.');
 
   return (
-    <article className={`gal-card${hero ? ' hero' : ''}${p.sample ? '' : ' copy'}`} data-testid={`project-card-${p.projectId}`} aria-labelledby={`t-${p.projectId}`}>
+    <article className={`gal-card${hero ? ' hero' : ''}${p.sample && !p.variantOf ? '' : ' copy'}${p.variantOf ? ' variant' : ''}`} data-testid={`project-card-${p.projectId}`} aria-labelledby={`t-${p.projectId}`}>
       <Link className="gal-preview" to={`/studio/${p.projectId}/overview`} tabIndex={-1} aria-hidden="true">
         {mini ? <div className="gal-paper"><PagePreview res={mini.res} project={mini.project} scale={hero ? 0.34 : 0.28} showGuides={false} ia={{ selectedId: null }} /></div> : <div className="gal-paper-skel"><span className="spinner" /></div>}
       </Link>
@@ -124,8 +127,10 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
           {p.sample
             ? p.modified ? <span className="chip warning">Edited sample<Tech> · v{p.modelVersion}</Tech></span> : <span className="chip">Sample<Tech> · v{p.modelVersion}</Tech></span>
             : <span className="chip info">Your project<Tech> · v{p.modelVersion}</Tech></span>}
+          {p.variantOf && <span className="chip variant" data-testid={`variant-chip-${p.projectId}`}>Variant of {p.variantOf.baseTitle}</span>}
+          {behind && <span className="chip warning" data-testid={`variant-update-${p.projectId}`}>Update available</span>}
         </div>
-        <h2 id={`t-${p.projectId}`}>{p.sample ? p.issuer?.name ?? p.title : p.title}</h2>
+        <h2 id={`t-${p.projectId}`}>{p.sample && !p.variantOf ? p.issuer?.name ?? p.title : p.title}</h2>
         <p className="muted">{description}</p>
         {p.fromTemplate && <p className="gal-origin" data-testid={`origin-${p.projectId}`}>Started from the template “{p.fromTemplate.title}”, version {p.fromTemplate.version}</p>}
         {p.importedFrom && <p className="gal-origin" data-testid={`origin-${p.projectId}`}>Imported from the file “{p.importedFrom.title}”<Tech> (version {p.importedFrom.modelVersion})</Tech></p>}
@@ -140,6 +145,7 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
           <OverflowMenu id={p.projectId} label={`More actions for ${p.sample ? p.issuer?.name ?? p.title : p.title}`}>
             {(close) => <>
               <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); openDialog('duplicate'); }} data-testid={`duplicate-${p.projectId}`}><Icon.copy /> Duplicate</button>
+              {!p.variantOf && <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); setVariantOpen(true); }} data-testid={`new-variant-${p.projectId}`}><Icon.plus /> New variant…</button>}
               {!p.sample && <button role="menuitem" type="button" className="gal-item" onClick={() => { close(); openDialog('rename'); }} data-testid={`rename-${p.projectId}`}>Rename</button>}
               <a role="menuitem" className="gal-item" href={`/api/v1/projects/${p.projectId}/export`} download onClick={close} data-testid={`export-${p.projectId}`}><Icon.download /> Export project file</a>
               <button role="menuitem" type="button" className="gal-item gal-item-stack" aria-disabled={!canSaveTemplate} onClick={() => { if (!canSaveTemplate) return; close(); openDialog('template'); }} data-testid={`save-template-${p.projectId}`}>
@@ -173,6 +179,7 @@ function ProjectCard({ p, hero, sourceTitle }: { p: ProjectSummary; hero: boolea
         </Dialog>
       )}
       {dialog === 'template' && <SaveTemplateDialog p={p} onClose={closeTemplate} />}
+      {variantOpen && <NewVariantDialog base={{ projectId: p.projectId, title: p.title }} onClose={() => setVariantOpen(false)} />}
       {dialog === 'delete' && (
         <Dialog title="Delete project?" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn danger" onClick={remove} disabled={busy} data-testid="confirm-delete">Delete project</button></>}>
           <p><strong>{p.title}</strong> and its issued journey snapshots will be removed from this computer. Exported files you downloaded are not affected. This cannot be undone.</p>
@@ -428,7 +435,13 @@ export function ProjectGallery() {
     setConfirmAll(false);
   };
   const sampleRank = (id: string) => { const i = SAMPLE_ORDER.indexOf(id); return i < 0 ? SAMPLE_ORDER.length : i; };
-  const ordered = useMemo(() => [...projects].sort((a, b) => (a.sample !== b.sample ? (a.sample ? -1 : 1) : a.sample ? sampleRank(a.projectId) - sampleRank(b.projectId) || a.projectId.localeCompare(b.projectId) : b.updatedAt.localeCompare(a.updatedAt))), [projects]);
+  const ordered = useMemo(() => {
+    const sorted = [...projects].sort((a, b) => (a.sample !== b.sample ? (a.sample ? -1 : 1) : a.sample ? sampleRank(a.projectId) - sampleRank(b.projectId) || a.projectId.localeCompare(b.projectId) : b.updatedAt.localeCompare(a.updatedAt)));
+    // Variants (wave 5): each variant sits right under its base (a variant whose base is not here keeps its place).
+    const present = new Set(sorted.map((x) => x.projectId));
+    const under = (id: string) => sorted.filter((x) => x.variantOf?.projectId === id).sort((a, b) => a.title.localeCompare(b.title));
+    return sorted.filter((x) => !x.variantOf || !present.has(x.variantOf.projectId)).flatMap((x) => [x, ...under(x.projectId)]);
+  }, [projects]);
   const titleOf = (id?: string) => projects.find((x) => x.projectId === id)?.title;
   const navigate = useNavigate();
   // The studio shell highlights and focuses the customer picker once the project has actually loaded (?show=customer).
@@ -447,7 +460,7 @@ export function ProjectGallery() {
           {status === 'loading' && !projects.length && <Loading label="Loading projects…" />}
           {status === 'error' && <ErrorState title="Projects could not be loaded" message={error ?? ''} onRetry={() => useStudio.getState().loadProjects()} />}
           {status === 'ready' && !projects.length && <Empty title="No projects" message="The local store is empty. Restart the API to re-seed the approved samples." />}
-          {ordered.map((p) => <ProjectCard key={p.projectId} p={p} hero={p.projectId === 'aster-card-demo'} sourceTitle={titleOf(p.derivedFrom?.projectId)} />)}
+          {ordered.map((p) => <ProjectCard key={p.projectId} p={p} hero={p.projectId === 'aster-card-demo'} sourceTitle={titleOf(p.derivedFrom?.projectId)} baseVersion={p.variantOf ? projects.find((x) => x.projectId === p.variantOf!.projectId)?.modelVersion : undefined} />)}
           <div className="gal-foot">
             <button type="button" className="btn ghost sm" onClick={() => setConfirmAll(true)} data-testid="reset-demo" title="Return every sample project to its approved model (your own projects are kept)"><Icon.reset /> Restore all samples</button>
           </div>

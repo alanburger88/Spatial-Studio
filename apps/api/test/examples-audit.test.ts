@@ -9,7 +9,7 @@ import { CHECKS, EXAMPLES, MISSING_DASH, failuresOf, fixtureFindings, registerEx
 describe('examples audit', () => {
   it('registers the example documents, each with notes for the check to read', () => {
     const ids = EXAMPLES.map((e) => e.id);
-    expect([...ids].sort()).toEqual(['aster-card-demo', 'harborcare-demo', 'meridian-wealth-demo', 'northwind-energy-demo']);
+    expect([...ids].sort()).toEqual(['aster-card-demo', 'harborcare-demo', 'meridian-wealth-demo', 'northwind-energy-demo', 'northwind-energy-lakeshore']);
     for (const e of EXAMPLES) {
       expect(Object.keys(e.notes.translations), e.id).toEqual(['es-US']);
       expect(e.domain, e.id).toBeTypeOf('function');
@@ -17,7 +17,8 @@ describe('examples audit', () => {
       if (e.project.documentType !== 'custom') continue;
       expect(e.customers.length, e.id).toBeGreaterThanOrEqual(30);
       expect(e.customers.length, e.id).toBeLessThanOrEqual(40);
-      expect(e.notes.intendedBlockers.length, e.id).toBeGreaterThanOrEqual(1);
+      // The Lakeshore variant (wave 5) follows Northwind's release 1, which was approvable: it has no demonstration blocker.
+      if (e.id !== 'northwind-energy-lakeshore') expect(e.notes.intendedBlockers.length, e.id).toBeGreaterThanOrEqual(1);
     }
     // The two original examples: the enriched documents the studio stores, with every fixture customer of their kind.
     const card = EXAMPLES.find((e) => e.id === 'aster-card-demo')!;
@@ -77,7 +78,7 @@ describe('examples audit', () => {
 
   it('settings: release and package without customer data, the runnable package verifies, a proof verifies as the same', async () => {
     const results = await settingsChecks();
-    expect(results.map((r) => r.example).sort()).toEqual(['aster-card-demo', 'harborcare-demo', 'meridian-wealth-demo', 'northwind-energy-demo']);
+    expect(results.map((r) => r.example).sort()).toEqual(['aster-card-demo', 'harborcare-demo', 'meridian-wealth-demo', 'northwind-energy-demo', 'northwind-energy-lakeshore']);
     expect(results.flatMap((r) => r.checks.filter((c) => c.outcome.status === 'failed').map((c) => `${r.example}: ${c.title}: ${c.outcome.failures.join('; ')}`))).toEqual([]);
   }, 600_000);
 

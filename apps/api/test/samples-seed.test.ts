@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { projectContentDigest, type Project } from '@iss/model';
-import { EXTRA_SAMPLES, HOUSE, MERIDIAN_ID, NORTHWIND_ID } from '@iss/model/samples/index';
+import { EXTRA_SAMPLES, HOUSE, LAKESHORE_ID, MERIDIAN_ID, NORTHWIND_ID } from '@iss/model/samples/index';
 import { buildApp } from '../src/app';
 import { pinnedCustomerRefs } from '../src/releases';
 
@@ -26,11 +26,13 @@ describe('example documents: seeding, listing and restoring', () => {
   const northwind = EXTRA_SAMPLES().find((s) => s.project.projectId === NORTHWIND_ID)!;
   const meridian = EXTRA_SAMPLES().find((s) => s.project.projectId === MERIDIAN_ID)!;
 
-  it('lists the four examples as samples; the new two cannot be deleted', async () => {
+  it('lists the four examples and the Lakeshore variant of Northwind as samples; the new ones cannot be deleted', async () => {
     const list = (await json('GET', '/api/v1/projects')).projects as any[];
     const samples = list.filter((p) => p.sample).map((p) => p.projectId).sort();
-    expect(samples).toEqual(['aster-card-demo', 'harborcare-demo', MERIDIAN_ID, NORTHWIND_ID].sort());
-    for (const id of [NORTHWIND_ID, MERIDIAN_ID]) {
+    // Wave 5: the Lakeshore variant of Northwind is seeded as a sample too, following Northwind's version 1.
+    expect(samples).toEqual(['aster-card-demo', 'harborcare-demo', MERIDIAN_ID, NORTHWIND_ID, LAKESHORE_ID].sort());
+    expect(list.find((p) => p.projectId === LAKESHORE_ID).variantOf).toMatchObject({ projectId: NORTHWIND_ID, modelVersion: 1, purpose: 'region' });
+    for (const id of [NORTHWIND_ID, MERIDIAN_ID, LAKESHORE_ID]) {
       const row = list.find((p) => p.projectId === id);
       expect(row).toMatchObject({ documentType: 'custom', modified: false });
       expect((await inj('DELETE', `/api/v1/projects/${id}`)).json().error.code).toBe('SAMPLE_PROJECT');
@@ -92,15 +94,19 @@ describe('example documents: seeding, listing and restoring', () => {
     }
     const rights = items.find((i) => i.id === 'customer-rights-notice');
     expect(rights.latest).toBe(2);
-    expect(rights.usage.behind).toBe(1);
-    // Northwind and Meridian share the panel; all four examples (with Aster Card and HarborCare, D106) follow the house
-    // wording rules; all but the card (which keeps a glossary of its own) the glossary; each original example has its
-    // own table in the library.
+    // Northwind and its Lakeshore variant (wave 5) both hold the rights notice at version 1, so both are behind.
+    expect(rights.usage.behind).toBe(2);
+    // Northwind, its Lakeshore variant and Meridian share the panel; all four examples and the variant (with Aster Card
+    // and HarborCare, D106) follow the house wording rules; all but the card (which keeps a glossary of its own) the
+    // glossary; each original example has its own table in the library, and the variant keeps Northwind's rate bands
+    // and the rights notice linked (it has its own brand, so the Northwind brand stays with Northwind alone).
     const usedBy = (n: number) => items.filter((i) => HOUSE.items[i.id as keyof typeof HOUSE.items] && i.usage.documents === n).map((i) => i.id).sort();
-    expect(usedBy(2)).toEqual(['accessible-formats-panel']);
-    expect(usedBy(3)).toEqual(['glossary-es']);
-    expect(usedBy(4)).toEqual(['house-wording-rules']);
-    for (const id of ['card-late-fees', 'claim-review-times', 'energy-rate-bands']) expect(items.find((i) => i.id === id).usage, id).toEqual({ documents: 1, links: 1, behind: 0 });
+    expect(usedBy(2)).toEqual(['customer-rights-notice', 'energy-rate-bands']);
+    expect(usedBy(3)).toEqual(['accessible-formats-panel']);
+    expect(usedBy(4)).toEqual(['glossary-es']);
+    expect(usedBy(5)).toEqual(['house-wording-rules']);
+    for (const id of ['card-late-fees', 'claim-review-times']) expect(items.find((i) => i.id === id).usage, id).toEqual({ documents: 1, links: 1, behind: 0 });
+    expect(items.find((i) => i.id === 'energy-rate-bands').usage).toEqual({ documents: 2, links: 2, behind: 0 });
   });
 
   it('pinned tests on the examples’ own customers count as built-in sample customers; an edited one does not', async () => {

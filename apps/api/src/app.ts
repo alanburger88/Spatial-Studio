@@ -32,6 +32,10 @@ import { registerProofRoutes } from './routes/proofs';
 import { registerPdfAccessibilityRoutes } from './routes/pdfAccessibility';
 import { checkDocumentPdf, type PdfAccessibilityResult } from './pdfAccessibility';
 import { registerLibraryRoutes } from './routes/library';
+// Variants by brand or region (wave 5, section 1)
+import { registerVariantRoutes } from './routes/variants';
+import { variantSaveProblem, variantsOf } from './variants';
+import { variantOfProblems } from '@iss/model';
 // Review links (wave 4)
 import { registerReviewLinkRoutes, reviewLinkCommentInfo } from './routes/reviewLinks';
 // Wave 4 (blocker owners, status and notes; notifications and My work): begin
@@ -100,6 +104,11 @@ function checkDraftProject(p: any, projectId: string): Project {
   // Mappings to a production system (wave 3): checked like the rest (absent = nothing to check).
   if (p.mappings !== undefined) {
     const problems = projectMappingProblems(p);
+    if (problems.length) throw new ApiError(422, 'INVALID_PROJECT', problems.slice(0, 3).join(' '));
+  }
+  // Variants (wave 5): what a variant follows is read like the rest (absent = an ordinary document).
+  if (p.variantOf !== undefined) {
+    const problems = variantOfProblems(p);
     if (problems.length) throw new ApiError(422, 'INVALID_PROJECT', problems.slice(0, 3).join(' '));
   }
   return p as Project;
@@ -214,12 +223,18 @@ export async function buildApp(opts: AppOptions = {}) {
     const incoming = checkDraftProject((req.body as any)?.project ?? req.body, req.params.projectId);
     // The kind decides which customers a document has (a document with its own data has only its own), so it is fixed at creation.
     if ((incoming.documentType === 'custom') !== (current.documentType === 'custom')) throw new ApiError(400, 'DOCUMENT_TYPE_FIXED', 'The kind of document cannot be changed after it is created. Start a new project instead.');
+    // Variants (wave 5): the base's locked parts stay the base's, checked here too because the browser is not the only client.
+    const variantProblem = variantSaveProblem(store, current, incoming);
+    if (variantProblem) throw new ApiError(422, variantProblem.code, variantProblem.message, variantProblem.nodeId ? { nodeId: variantProblem.nodeId } : {});
     if (incoming.modelVersion <= current.modelVersion && projectContentDigest(incoming) !== projectContentDigest(current)) incoming.modelVersion = current.modelVersion + 1;
     const wasState = store.getWorkflow(current.projectId).state;
     const saved = store.putProject(incoming, undefined, { by: by(req) });
     const changes = diffProjects(current, saved).summary.counts;
     const workflow = store.getWorkflow(saved.projectId);
     audit(store, req, 'project.save', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { fromVersion: current.modelVersion, toVersion: saved.modelVersion, contentDigest: projectContentDigest(saved), changes, ...(workflow.state !== wasState ? { workflow: { from: wasState, to: workflow.state } } : {}) } });
+    // Variants (wave 5): detaching, and taking an update from the base, are recorded as such (ids and version numbers only).
+    if (current.variantOf && !saved.variantOf) audit(store, req, 'project.variant.detach', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { baseId: current.variantOf.projectId, baseVersion: current.variantOf.modelVersion } });
+    else if (current.variantOf && saved.variantOf && saved.variantOf.modelVersion !== current.variantOf.modelVersion) audit(store, req, 'project.variant.update', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { baseId: saved.variantOf.projectId, fromVersion: current.variantOf.modelVersion, toVersion: saved.variantOf.modelVersion } });
     reply.header('ETag', `"${saved.modelVersion}"`);
     return { project: saved, saved: true, contentDigest: projectContentDigest(saved), workflow: { state: workflow.state, previous: wasState } };
   });
@@ -252,7 +267,8 @@ export async function buildApp(opts: AppOptions = {}) {
     const title = cleanTitle((req.body as any)?.title ?? `${src.title} (copy)`);
     let id = slug(title); if (id.length < 3) id = `${id}-copy`;
     for (let i = 2; store.getProject(id) || store.hasReleases(id); i++) id = `${slug(title).slice(0, 36)}-${i}`;
-    const { lastSavedAt: _l, ...rest } = src as Project & { lastSavedAt?: string };
+    // A copy is an ordinary document, even a copy of a variant (variants: wave 5): "New variant" on the base makes another variant.
+    const { lastSavedAt: _l, variantOf: _variantOf, ...rest } = src as Project & { lastSavedAt?: string };
     const copy = { ...rest, projectId: id, title, modelVersion: 1, derivedFrom: { projectId: src.projectId, modelVersion: src.modelVersion } } as Project;
     const saved = store.putProject(copy, projectContentDigest(copy), { by: by(req), label: `Duplicated from “${src.title}” v${src.modelVersion}` });
     // A copy of a document with its own data starts with customers of its own (the original's customers stay with the original).
@@ -272,6 +288,9 @@ export async function buildApp(opts: AppOptions = {}) {
     projectOr404(req.params.projectId);
     if (store.isSample(req.params.projectId)) throw new ApiError(400, 'SAMPLE_PROJECT', 'Approved sample projects cannot be deleted; use Restore approved sample instead.');
     const gone = projectOr404(req.params.projectId);
+    // Variants (wave 5): a base with variants stays until they are detached or deleted.
+    const followers = variantsOf(store, gone.projectId);
+    if (followers.length) throw new ApiError(409, 'HAS_VARIANTS', `“${gone.title}” is the base of ${followers.length === 1 ? 'a variant' : `${followers.length} variants`} (${followers.map((v) => `“${v.title}”`).join(', ')}). Detach or delete ${followers.length === 1 ? 'it' : 'them'} first.`, { variants: followers.map((v) => v.projectId) });
     // Releases outlive their document: they are kept and marked "document removed".
     const releasesKept = store.releases(gone.projectId).length;
     store.deleteProject(req.params.projectId, by(req));
@@ -296,6 +315,8 @@ export async function buildApp(opts: AppOptions = {}) {
   registerProofRoutes(app, deps, { composer: opts.releasePackage?.composer ?? chromiumPackageComposer(composer) });
   registerPdfAccessibilityRoutes(app, deps);
   registerLibraryRoutes(app, deps);
+  // Variants by brand or region (wave 5, section 1)
+  registerVariantRoutes(app, deps);
   // Review links (wave 4): the studio routes and the five public routes under /api/v1/review/:token/.
   registerReviewLinkRoutes(app, deps, { composer: opts.releasePackage?.composer ?? chromiumPackageComposer(composer) });
   // Wave 4 (blocker owners, status and notes; notifications and My work)
@@ -337,6 +358,9 @@ export async function buildApp(opts: AppOptions = {}) {
     if (v.n === current.modelVersion) throw new ApiError(400, 'ALREADY_CURRENT', `Version ${v.n} is already the current version.`);
     const { lastSavedAt: _l, ...content } = v.project as Project & { lastSavedAt?: string };
     const restored = checkDraftProject({ ...content, projectId: current.projectId, modelVersion: current.modelVersion + 1 }, current.projectId);
+    // Variants (wave 5): an earlier version of a variant is checked against the base version it followed.
+    const restoreProblem = restored.variantOf && current.variantOf ? variantSaveProblem(store, current, restored) : restored.variantOf ? { code: 'VARIANT_FROM_SAVE', message: 'This version was a variant, and the document has been detached since. Make a new variant on the base instead.' } : null;
+    if (restoreProblem) throw new ApiError(422, restoreProblem.code, restoreProblem.message);
     const saved = store.putProject(restored, undefined, { by: by(req), label: `Restored v${v.n}` });
     audit(store, req, 'project.restore', { projectId: saved.projectId, modelVersion: saved.modelVersion, detail: { restoredVersion: v.n, fromVersion: current.modelVersion, contentDigest: projectContentDigest(saved) } });
     return { project: saved, restored: true, restoredVersion: v.n, contentDigest: projectContentDigest(saved), workflow: { state: store.getWorkflow(saved.projectId).state } };

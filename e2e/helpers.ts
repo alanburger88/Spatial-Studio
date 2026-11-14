@@ -9,7 +9,8 @@ export const EXPECTED = JSON.parse(readFileSync(path.join(process.cwd(), 'fixtur
 
 export async function resetAll(request: APIRequestContext) {
   // Every sample: the two fixture samples and the two example documents with their own data (their customers are restored too).
-  for (const id of ['aster-card-demo', 'harborcare-demo', 'northwind-energy-demo', 'meridian-wealth-demo']) {
+  // …and (wave 5) the Lakeshore variant of Northwind.
+  for (const id of ['aster-card-demo', 'harborcare-demo', 'northwind-energy-demo', 'meridian-wealth-demo', 'northwind-energy-lakeshore']) {
     const r = await request.post(`${API}/projects/${id}/reset`, { data: { confirm: true } });
     expect(r.ok()).toBeTruthy();
   }

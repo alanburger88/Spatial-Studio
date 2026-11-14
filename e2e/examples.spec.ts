@@ -31,7 +31,8 @@ test('EX01 the gallery lists the four samples with their kinds; Restore all samp
   await expect(page.getByTestId(`project-card-${MW}`)).toContainText('Portfolio statement');
   await expect(page.getByTestId(`project-card-${MW}`)).toContainText('Meridian Wealth');
   const ids = await cards.evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
-  expect(ids.slice(0, 4)).toEqual(['project-card-aster-card-demo', 'project-card-harborcare-demo', `project-card-${NW}`, `project-card-${MW}`]);
+  // Wave 5: the Lakeshore variant of Northwind sits right under its base.
+  expect(ids.slice(0, 5)).toEqual(['project-card-aster-card-demo', 'project-card-harborcare-demo', `project-card-${NW}`, 'project-card-northwind-energy-lakeshore', `project-card-${MW}`]);
   await expect(page.getByTestId('reset-demo')).toHaveText(/Restore all samples/);
   await page.getByTestId('reset-demo').click();
   await page.getByTestId('confirm-reset-demo').click();
@@ -119,7 +120,8 @@ test('EX02 Northwind Energy: overview, page design, rules and data, explore, che
   await page.goto('/library');
   await expect(page.getByTestId('library-screen')).toContainText('Customer rights notice (utilities)');
   await expect(page.getByTestId('library-screen')).toContainText('Electricity delivery rate bands');
-  await expect(page.getByTestId('library-screen').getByTestId('lib-usage').filter({ hasText: '1 behind' })).toHaveCount(1);
+  // Wave 5: Northwind and its Lakeshore variant both hold the rights notice at version 1.
+  await expect(page.getByTestId('library-screen').getByTestId('lib-usage').filter({ hasText: '2 behind' })).toHaveCount(1);
   await screenOk(page);
   expect(errors).toEqual([]);
 });

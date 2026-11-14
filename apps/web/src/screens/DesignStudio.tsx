@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent as RKeyboardEvent } from 'react';
 import { LibraryBlockButton } from './library/InsertBlock';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { COMPONENT_CATALOG, CATALOG_BY_TYPE, defaultNode, dropRejection, effectivePageDesign, newNodeId, nodeMap, PAPER_SIZES, pagedProfileOf, parentOf, type ComponentType, type DocNode, type PageTemplateId, type Project } from '@iss/model';
 import { renderInteractiveHtml } from '@iss/renderers';
 import type { RNode, Resolution } from '@iss/resolver';
@@ -14,6 +14,7 @@ import { PagePanel, PageZones, TemplateSwitch } from './design/PageDesign';
 import { RichTextEditor } from './design/RichTextEditor';
 import { StylesBrandDialog } from './design/StylesBrand';
 import './DesignStudio.css';
+import { useVariantMarks } from './variants/useVariant'; // variants (wave 5)
 
 const SCROLL_PAD_X = 20, SCROLL_PAD_Y = 16;
 type Drag = { kind: 'component'; type: ComponentType } | { kind: 'node'; id: string };
@@ -55,6 +56,19 @@ export function DesignStudio() {
   const res = useResolution();
   const { dispatch, select, toast } = useStudio.getState();
   const [leftTab, setLeftTab] = useState<'palette' | 'layers'>('palette');
+  // Variants (wave 5): components that differ from the base carry a mark; the inspector says what stays the base's.
+  const variantMarks = useVariantMarks(project);
+  // "Open it in the base" (from a variant) lands here with ?node=<id>: select that component once.
+  const [search] = useSearchParams();
+  const askedNode = search.get('node');
+  // Selected once per address (and again if the studio's own selection lands first); after that the person's choice wins.
+  const nodeApplied = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${project.projectId}|${askedNode}`;
+    if (!askedNode || nodeApplied.current === key || !project.nodes.some((n) => n.id === askedNode)) return;
+    if (ctx.selectedNodeId === askedNode) { nodeApplied.current = key; return; }
+    useStudio.getState().select(askedNode);
+  }, [askedNode, project.projectId, ctx.selectedNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [paletteQuery, setPaletteQuery] = useState('');
   const [mark, setMark] = useState<Mark | null>(null);
   const [reject, setReject] = useState<{ nodeId: string; reason: string } | null>(null);
@@ -318,7 +332,7 @@ export function DesignStudio() {
               <LibraryBlockButton project={project} selectedId={selected} />
             </div>
           ) : (
-            <div className="panel-body flush" data-testid="layers-tree"><LayersTree project={project} res={res} selected={selected} onSelect={(id) => select(id)} /></div>
+            <div className="panel-body flush" data-testid="layers-tree"><LayersTree project={project} res={res} selected={selected} onSelect={(id) => select(id)} marks={variantMarks} /></div>
           )}
         </aside>
         )}
@@ -370,14 +384,14 @@ export function DesignStudio() {
         {stylesOpen && <StylesBrandDialog onClose={() => setStylesOpen(false)} />}
         {pagePanel && !isHtml
           ? <PagePanel project={project} template={pageTemplate} onTemplate={setPageTemplate} onSelectNode={(id) => { setPagePanel(false); select(id); }} onClose={() => setPagePanel(false)} />
-          : <Inspector project={project} res={res} nodeId={inspectNodeId} onEditText={(id) => { select(id); setEditingId(id); }} />}
+          : <Inspector project={project} res={res} nodeId={inspectNodeId} onEditText={(id) => { select(id); setEditingId(id); }} variantMarks={variantMarks} />}
       </div>
     </section>
   );
 }
 
 
-function LayersTree({ project, res, selected, onSelect }: { project: Project; res: Resolution; selected: string | null; onSelect: (id: string) => void }) {
+function LayersTree({ project, res, selected, onSelect, marks }: { project: Project; res: Resolution; selected: string | null; onSelect: (id: string) => void; marks?: Map<string, string[]> }) {
   const map = nodeMap(project);
   const visible = useMemo(() => { const m = new Map<string, boolean>(); const walk = (n: RNode) => { m.set(n.id, n.visible); n.children.forEach(walk); }; walk(res.root); return m; }, [res]);
   const render = (id: string, depth: number): JSX.Element | null => {
@@ -393,6 +407,7 @@ function LayersTree({ project, res, selected, onSelect }: { project: Project; re
           {n.layout?.paged?.mode === 'fixed' && <span className="chip">fixed</span>}
           {(n.type === 'variant-set' || n.type === 'conditional-region') && <span className="chip count">{n.variantIds?.length ?? 0}</span>}
           {visible.get(id) === false && <span className="chip" title="Hidden for this customer: no rule or condition shows it">hidden</span>}
+          {marks?.has(id) && <span className="chip variant vr-mark" title={`Differs from the base: ${marks.get(id)!.join('; ')}`} data-testid={`layer-differs-${id}`}>differs</span>}
         </button>
         {n.children?.length ? <ul role="group">{n.children.map((c) => render(c, depth + 1))}</ul> : null}
       </li>

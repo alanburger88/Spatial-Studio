@@ -28,6 +28,8 @@ export interface ProjectSummary {
   issuer: Project['issuer']; contentDigest: string; modified: boolean; updatedAt: string; nodeCount: number; ruleCount: number;
   /** Approved seeded sample (restorable, not deletable) vs a user copy. */
   sample: boolean; derivedFrom: { projectId: string; modelVersion: number } | null; fromTemplate: { templateId: string; version: number; title: string } | null; importedFrom: { title: string; modelVersion: number } | null;
+  /** Variants (wave 5): set on a variant only — the base it follows and the base version followed. */
+  variantOf?: { projectId: string; modelVersion: number; purpose: 'brand' | 'region' | 'other'; label: string; baseTitle: string };
 }
 
 export interface TemplateVersionDto { version: number; savedAt: string; savedBy: { id: string; name: string } | null; note: string; from: { projectId: string; title: string; modelVersion: number }; counts: { components: number; rules: number; messages: number; languages: number; tests: number } }
@@ -484,3 +486,24 @@ export const reviewLinksApi = {
 /* ------------------------------------------------------------------ end review links */
 /* Wave 4 (blocker owners, status and notes; notifications and My work): the shared request helper, for api/work.ts. */
 export { json as requestJson };
+
+/* ------------------------------------------------------------ variants by brand or region (wave 5, section 1) */
+
+/** One document of a family (`GET /projects/:id/family`): ids, versions and states, no content. */
+export interface FamilyMemberDto {
+  projectId: string; title: string; modelVersion: number; workflow: WorkflowState;
+  latestRelease: { number: number; stage: 'production' | 'test' | null } | null;
+  variant?: { purpose: 'brand' | 'region' | 'other'; label: string; follows: number; behind: boolean; baseMissing: boolean; rulesDiffer: boolean | null; differences: number | null };
+}
+export interface FamilyDto { baseId: string; base: FamilyMemberDto | null; variants: FamilyMemberDto[] }
+/** `GET /projects/:id/variant`: where a variant stands against its base (the saved variant). */
+export type VariantInfoDto =
+  | { projectId: string; variant: false; variants: string[] }
+  | { projectId: string; variant: true; variantOf: NonNullable<Project['variantOf']>; base: { found: false; reason: 'document' | 'version' | 'changed'; message: string } }
+  | { projectId: string; variant: true; variantOf: NonNullable<Project['variantOf']>; base: { found: true; projectId: string; title: string; latestVersion: number; follows: number; behind: boolean }; customers: Record<string, string>; differences: unknown[]; counts: Record<string, number> };
+
+export const variantApi = {
+  create: (projectId: string, body: { title: string; purpose: 'brand' | 'region' | 'other'; label: string }) => json<{ project: Project; customers: number }>(`/api/v1/projects/${projectId}/variants`, { method: 'POST', body: JSON.stringify(body) }),
+  family: (projectId: string) => json<FamilyDto>(`/api/v1/projects/${projectId}/family`),
+  info: (projectId: string) => json<VariantInfoDto>(`/api/v1/projects/${projectId}/variant`),
+};

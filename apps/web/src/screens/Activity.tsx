@@ -112,6 +112,10 @@ export function auditSentence(e: AuditEventDto, project: Project | null, names: 
     case 'library.discard': return `Discarded the draft version ${d.version} of the library ${libKind(d.kind)} “${d.title}”${d.itemRemoved ? ' (the item had no approved version, so it was removed)' : ''}`;
     case 'library.reset': return `Removed ${plural(Number(d.removed ?? 0), 'library item')} (test reset)`;
     case 'template.reset': return `Removed ${plural(Number(d.removed ?? 0), 'saved template')}`;
+    // Variants (wave 5): ids and version numbers only.
+    case 'project.variant.create': return `Made this variant of ${d.baseId} (following its version ${d.baseVersion}, for ${d.purpose === 'brand' ? 'a brand' : d.purpose === 'region' ? 'a region' : 'other'})${Number(d.customers ?? 0) ? ` with copies of ${plural(Number(d.customers), 'customer')}` : ''}`;
+    case 'project.variant.update': return `Took the update from the base ${d.baseId} (version ${d.fromVersion} to ${d.toVersion}) and saved ${v}`;
+    case 'project.variant.detach': return `Detached from the base ${d.baseId} (it followed version ${d.baseVersion}) and saved ${v}`;
     case 'project.duplicate': return `Created “${d.title ?? e.projectId}” as a copy of ${d.from} v${d.fromVersion}`;
     case 'project.rename': return `Renamed “${d.from}” to “${d.to}”`;
     case 'project.delete': return `Deleted project “${d.title}”`;

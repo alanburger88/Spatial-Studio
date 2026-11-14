@@ -1,6 +1,8 @@
 import type { Project } from '../types';
 import { NORTHWIND_ID, NORTHWIND_NOTES, buildNorthwind, northwindCustomers } from './northwind';
 import { MERIDIAN_ID, MERIDIAN_NOTES, buildMeridian, meridianCustomers } from './meridian';
+// Variants by brand or region (wave 5, section 1): a variant of Northwind for one region.
+import { LAKESHORE_ID, LAKESHORE_NOTES, buildLakeshore, lakeshoreCustomers } from './lakeshore';
 import type { SampleCustomer } from './kit';
 import type { SampleNotes } from './notes';
 
@@ -30,19 +32,22 @@ export function EXTRA_SAMPLES(): ExtraSample[] {
   cache = [
     { project: northwind, customers: northwindCustomers(), notes: NORTHWIND_NOTES, release: { project: buildNorthwind('release1'), label: 'Release 1 (approved, in Production)' } },
     { project: meridian, customers: meridianCustomers(), notes: MERIDIAN_NOTES },
+    // Seeded after Northwind: it follows Northwind's version 1, which must be in the history first.
+    { project: buildLakeshore(), customers: lakeshoreCustomers(), notes: LAKESHORE_NOTES },
   ];
   return cache;
 }
 
-export const EXTRA_SAMPLE_IDS: readonly string[] = [NORTHWIND_ID, MERIDIAN_ID];
+export const EXTRA_SAMPLE_IDS: readonly string[] = [NORTHWIND_ID, MERIDIAN_ID, LAKESHORE_ID];
 
 /** One sample's customer ids carry its own prefix (`NWE-6xxxx`, `MWS-6xxxx`), so they never collide with the studio's `REC-6xxxx`. */
-export const SAMPLE_RECORD_PREFIXES: Record<string, string> = { [NORTHWIND_ID]: 'NWE', [MERIDIAN_ID]: 'MWS' };
+export const SAMPLE_RECORD_PREFIXES: Record<string, string> = { [NORTHWIND_ID]: 'NWE', [MERIDIAN_ID]: 'MWS', [LAKESHORE_ID]: 'NWL' };
 
 export { HOUSE, houseContent, HOUSE_WORDING_RULES, RATE_BANDS } from './houseLibrary';
 export type { HouseItem, HouseItemId, HouseLinkPlan } from './houseLibrary';
 export type { SampleNotes } from './notes';
 export type { SampleCustomer } from './kit';
-export { NORTHWIND_ID, MERIDIAN_ID };
+export { NORTHWIND_ID, MERIDIAN_ID, LAKESHORE_ID };
+export { LAKESHORE_CUSTOMER_MAP, LAKESHORE_LATE_FEES } from './lakeshore';
 // Richer data shapes (wave 5): the household statement is for tests only, NOT one of the seeded samples above.
 export { HOUSEHOLD_ID, buildHousehold, householdCustomers, ANY_OVERDRAWN, EVERY_ACTIVE } from './household';

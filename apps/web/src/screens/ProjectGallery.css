@@ -128,3 +128,7 @@
 .np-describe-text p { margin: 0; font-size: 13px; }
 .np-describe .btn { flex: 0 0 auto; }
 @media (max-width: 700px) { .np-describe { flex-direction: column; align-items: stretch; } }
+
+/* Variants (wave 5): a variant sits under its base, a little indented. */
+.gal-card.variant { margin-left: 32px; }
+@media (max-width: 1100px) { .gal-card.variant { margin-left: 14px; } }

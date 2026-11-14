@@ -119,6 +119,11 @@ export interface ReleaseInfo {
   handover: { received: boolean; live: boolean; entries: number };
   /** The known data problems in force when the release was made. Absent on releases made before they were recorded. */
   knownDataProblems?: ReleaseKnownDataProblem[];
+  /**
+   * Variants (wave 5): for a release of a variant, the base document, the base version it followed and its differences
+   * from that version (ids and labels). `baseFound` is false when the base was not in the studio. Absent otherwise.
+   */
+  variant?: { baseId: string; baseTitle: string; baseVersion: number; baseDigest: string; purpose: 'brand' | 'region' | 'other'; label: string; differences: Array<{ id: string; group: string; label: string; kind: string }>; baseFound: boolean };
 }
 
 /**

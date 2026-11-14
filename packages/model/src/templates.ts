@@ -7,6 +7,7 @@ import { periodProblem } from './effective';
 import { LOOKUP_TABLES_MAX, validateLookupTable } from './lookup';
 import { libraryLinkProblems } from './library';
 import { projectMappingProblems } from './mapping';
+import { variantOfProblems } from './variantLock'; // variants (wave 5)
 import { SCHEMA_VERSION, isDocumentType } from './types';
 import type { DocNode, DocumentType, PresentationProfile, Project } from './types';
 
@@ -174,7 +175,8 @@ export function projectFromTemplate(templateId: string, opts: TemplateOptions, e
 /* ------------------------------------------------------------------ saved templates */
 
 /** The identity and bookkeeping a project carries that a template (or a project file being imported) must not. */
-const IDENTITY_KEYS = ['lastSavedAt', 'derivedFrom', 'fromTemplate', 'importedFrom'] as const;
+// `variantOf` (wave 5): a template, a new document from one and a package's template.json are never variants.
+const IDENTITY_KEYS = ['lastSavedAt', 'derivedFrom', 'fromTemplate', 'importedFrom', 'variantOf'] as const;
 
 export function templateCounts(p: Project): TemplateCounts {
   return { components: p.nodes.length, rules: p.rules.length, messages: p.contentParts.length, languages: (p.languages ?? ['es-US']).length, tests: (p.testCases ?? []).length };
@@ -249,6 +251,8 @@ export function projectFileProblems(raw: unknown): ProjectFileProblem[] {
     ids.add(n.id);
   }
   if (typeof p.rootNodeId !== 'string' || !ids.has(p.rootNodeId)) bad('ROOT', 'The file does not name a top-level component that exists.');
+  // Variants (wave 5): what a variant follows is read like the rest (a base that is not here is said so on the screen).
+  for (const m of variantOfProblems(p)) bad('VARIANT', m);
   const called = (n: any) => (typeof n?.name === 'string' && n.name.trim() ? n.name.trim().slice(0, 60) : String(n?.id));
   for (const n of p.nodes as any[]) {
     if (!n || typeof n !== 'object') continue;

@@ -1,6 +1,6 @@
 # Wave 5: reach and depth
 
-Status: **design for roadmap wave 5 (`docs/ROADMAP.md`). Not built yet.** Written on 2026-11-14 after the check-in
+Status: **design for roadmap wave 5 (`docs/ROADMAP.md`). Section 1 (variants) is built (see its "As built" note); sections 2 and 3 are not built yet.** Written on 2026-11-14 after the check-in
 (decision D118).
 
 ## Check-in decisions (D118)
@@ -82,6 +82,35 @@ other.
 
 A variant made from a built-in example keeps using that example's synthetic customers, as a duplicate does today.
 A variant of a document with its own data starts with a copy of the base's customers (as *Duplicate* does).
+
+### As built (wave 5)
+
+Built as designed; API and details in `docs/api/VARIANTS.md`. Where it differs from the text above, and why:
+
+- **The stored fact carries two more items** than "which base, which version": the base's title (for messages) and the
+  list of the base's components at that version (`baseNodeIds`). The list is derived from the base version; it is stored
+  so the lock can be kept by `applyCommand`, which is pure and never fetches the base. The server checks it on every save.
+- **The lock is checked by result** (the locked parts before and after each command), as the library's read-only rule is,
+  rather than by a list of command types, so a command added later cannot slip past it. An exhaustive test classifies
+  every command type.
+- **Hiding a base section** is done by removing it from the variant (the Delete it already has); it is listed as "hidden in
+  this variant", and "Use the base's again" puts it back where the base has it. The engine has no other way to hide a
+  section that is not a condition, and the resolver was not to learn about variants.
+- **Calculations are locked entirely** (adding one, its formula, its order), not only their formulas; the document's date
+  source is locked with the data fields. Lookup-table values, rules and everything in rule 2 are free.
+- **Customers.** "As Duplicate does" was read as the design's own sentence says: a variant of a document with its own
+  data starts with *copies* of the base's customers (Duplicate generates new ones); its pinned tests use the copies, and
+  a test that comes in with an update uses the copy too. The copies count as supplied customers, so a release package
+  leaves their pinned tests out (the seeded example's copies are built-in sample customers and are kept).
+- **A copy of a variant** made with Duplicate is an ordinary document; "New variant" on the base makes another variant.
+- **Duplicate wording** (Library) does not scan variants: they share their base's wording on purpose.
+- **"See what customers will see differently"** opens Before & after with a new side, "Working version with the update
+  from the base applied", worked out in the browser and never saved.
+- **Stay behind** is remembered for the browser session; the variant keeps following its version until a person applies
+  an update or detaches it.
+- **The seeded example**, Northwind Energy — Lakeshore, follows Northwind's version 1 (release 1). Northwind's own version
+  2 re-links two library items under new link ids, so its update also lists those links and the accessible-formats panel
+  as coming in; that is what the base did.
 
 ---
 
