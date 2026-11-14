@@ -498,6 +498,24 @@ export const CHECKS: AuditCheck[] = [
       return outcome(f, intended, `${ex.customers.length} customers; longest subject ${longest} characters; SMS at most ${segments} part${segments === 1 ? '' : 's'}`);
     },
   },
+  {
+    id: 'released-version', group: 'Settings', title: 'The seeded release was approvable: no blocker but the known data problem, its pinned tests pass',
+    run(ex) {
+      if (!ex.release) return outcome([], [], 'Seeded without a release (it starts as a Draft): nothing to check.');
+      const f: string[] = [];
+      const known = new Set(ex.notes.knownDataProblems.map((k) => key(k.recordId, k.code)));
+      const intended: string[] = [];
+      for (const r of ex.customers) for (const fd of resolve({ project: ex.release, record: r }).findings.filter((x) => x.severity === 'blocking')) {
+        if (known.has(key(r.recordId, fd.code))) intended.push(`${nameOf(r)}: ${fd.code} — set aside as a known data problem when release 1 was approved`);
+        else f.push(`${nameOf(r)}: ${fd.code}: ${fd.message}`);
+      }
+      for (const x of [...staticRuleAnalysis(ex.release, ex.customers), ...bindingAnalysis(ex.release)]) if (x.severity === 'blocking') f.push(`${x.code}: ${x.message}`);
+      for (const w of checkWording(ex.release).findings) if (w.severity === 'must') f.push(`must ${w.ruleId}: ${w.message}`);
+      const tests = runTestCases(ex.release, ex.customers);
+      for (const t of tests.filter((x) => !x.pass)) f.push(`pinned test ${t.testId} fails: ${t.diffs.map((d) => d.message).join('; ')}`);
+      return outcome(f, intended, `${ex.customers.length} customers and ${tests.length} pinned tests against the released version`);
+    },
+  },
   /* ---------------------------------------------------------------- Outputs (real composition) */
   {
     id: 'outputs', group: 'Outputs', needs: 'outputs', title: 'Composed PDF and web page: no overflow, pages as declared, parity, nothing unformatted',
