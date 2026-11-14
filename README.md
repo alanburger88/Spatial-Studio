@@ -42,6 +42,8 @@ Open **http://127.0.0.1:5173/projects**. The API runs on **http://127.0.0.1:3001
 
 Data lives in `.data/` (SQLite + composed artefacts). Use **Reset demo** in the Project Gallery to restore the approved samples at any time.
 
+**The four example documents** (all fictional, US market, English and Spanish): **Aster Card** (a credit-card statement), **HarborCare Health** (an explanation of benefits), **Northwind Energy** (a dual-fuel electricity and gas bill with tiered rates, a dated rate change, a usage chart and a tear-off payment slip; seeded with release 1 in Production) and **Meridian Wealth** (a quarterly portfolio statement with a two-column first page, holdings over two pages and messages by risk profile). The last two are documents with their own data and their own 34 customers each, and they link to a seeded house library. What each shows, feature by feature: `docs/design/EXAMPLES.md`; their accuracy check: `npx tsx scripts/audit-examples.ts` (report in `reports/EXAMPLES_AUDIT.md`).
+
 ## Using the studio
 
 - **Business / Technical** (top bar → settings menu): Business view speaks in plain language — rules read as sentences, and run IDs, hashes and raw expressions sit behind *Proof* disclosures. Technical view shows every engine detail inline.
