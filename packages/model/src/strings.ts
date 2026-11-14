@@ -62,7 +62,7 @@ export function richToMarkup(doc: RichDoc | undefined): string {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-const TOKEN_RE = /\{\{\s*[\w.]+\s*\}\}|\{\w+\}/g;
+const TOKEN_RE = /\{\{\s*[\w.[\]]+\s*\}\}|\{\w+\}/g;
 /** Worth translating: has at least one letter outside data tokens and link targets. */
 const hasWords = (s: string | undefined): s is string => !!s && /\p{L}/u.test(s.replace(TOKEN_RE, '').replace(/\]\([^)]*\)/g, ']'));
 

@@ -3,7 +3,7 @@ import {
   type DocNode, type FieldDef, type Predicate, type Project, type Rule, type Scalar, type SyntheticRecord, type TestCase,
 } from '@iss/model';
 // Richer data shapes (wave 5): conditions about the items of a list.
-import { allFieldIndex, isItemPath, itemPrefix, itemsLead, scopeCtx, setPath, type ItemsCondition } from '@iss/model';
+import { allFieldIndex, isItemPath, itemPrefix, itemsLead, repeatListAt, scopeCtx, setPath, type ItemsCondition } from '@iss/model';
 import { evaluatePredicate } from '@iss/resolver';
 import { formatCents, formatDate, resolve, type Finding, type RNode, type Resolution } from '@iss/resolver';
 import { captureExpectation, nextTestId } from '../testCases';
@@ -115,6 +115,12 @@ function valuesFor(field: FieldDef, lits: Lit[], current: unknown): unknown[] {
 }
 
 /* ------------------------------------------------------------------ conditions about the items of a list (wave 5) */
+
+/** Whether a component inside a repeating section is shown for at least one item (its own id or `<id>~<n>`). */
+function shownForAnItem(res: Resolution, nodeId: string): boolean {
+  for (const n of treeOf(res).values()) if ((n.instanceOf ?? n.id) === nodeId && n.visible) return true;
+  return false;
+}
 
 /** Whether an items condition holds (or, negated, does not hold) for a customer. */
 function itemsHold(l: Lit, ctx: unknown): boolean {
@@ -584,10 +590,13 @@ function targetsOf(project: Project, covered: { matched: Set<string>; selected: 
         if (any.length) own = or(any); else { own = null; never = 'This section has no condition, no rule and no fallback message, so it is never shown.'; }
       }
     }
-    const pred = own ? and([own, ...(n.visibleWhen ? [n.visibleWhen] : []), ...ancestorsVisible(n.id)]) : null;
+    const whole = own ? and([own, ...(n.visibleWhen ? [n.visibleWhen] : []), ...ancestorsVisible(n.id)]) : null;
+    // Inside a repeating section (wave 5) the component is shown when it is shown for at least one item.
+    const inList = project.nodes.some((x) => x.repeat) ? repeatListAt(project, n.id) : null;
+    const pred: Predicate | null = whole && inList ? { op: 'items', path: inList, match: 'any', where: whole } : whole;
     sectionTargets.push({
       kind: 'section', targetId: n.id, id: `section:${n.id}`, title: nodeTitle(n.id), testName: `Shows ${q(nodeTitle(n.id))}`,
-      alts: pred ? [pred] : [], reached: (res) => !!treeOf(res).get(n.id)?.visible, weak: [], touched: () => false, core: pred,
+      alts: pred ? [pred] : [], reached: (res) => (inList ? shownForAnItem(res, n.id) : !!treeOf(res).get(n.id)?.visible), weak: [], touched: () => false, core: pred,
       ...(never ? { never } : {}),
     });
   }

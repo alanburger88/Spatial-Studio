@@ -372,7 +372,7 @@ function applyOne(project: Project, cmd: Command): CommandResult {
       if (!/^[a-z0-9][a-z0-9-]{1,63}$/.test(cmd.variantId)) return reject('INVALID_ID', `Invalid variant id ${cmd.variantId}.`);
       if (node.variantIds?.includes(cmd.variantId)) return reject('DUPLICATE_ID', `Variant ${cmd.variantId} already exists in ${node.id}.`);
       if (/<\s*\/?\s*[a-z]/i.test(cmd.text)) return reject('UNSAFE_CONTENT', 'Raw HTML is not allowed in content.');
-      if (cmd.when) { const e = validatePredicate(cmd.when, projectFieldIndex(project)); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
+      if (cmd.when) { const e = validatePredicate(cmd.when, scopeFieldIndex(project, repeatListAt(project, cmd.nodeId))); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
       const partExists = project.contentParts.some((c) => c.id === cmd.variantId);
       return { ok: true, label: `Add variant ${cmd.title}`, project: bump(project, (d) => {
         const t = d.nodes.find((n) => n.id === cmd.nodeId)!;
@@ -395,7 +395,7 @@ function applyOne(project: Project, cmd: Command): CommandResult {
     case 'SET_VARIANT_CONDITION': {
       const node = map.get(cmd.nodeId);
       if (!node?.variantIds?.includes(cmd.variantId)) return reject('NOT_FOUND', `Variant ${cmd.variantId} not in ${cmd.nodeId}.`);
-      if (cmd.when) { const e = validatePredicate(cmd.when, projectFieldIndex(project)); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
+      if (cmd.when) { const e = validatePredicate(cmd.when, scopeFieldIndex(project, repeatListAt(project, cmd.nodeId))); if (e.length) return reject('INVALID_RULE', e.join(' ')); }
       return { ok: true, label: `Condition for ${cmd.variantId}`, project: bump(project, (d) => {
         const t = d.nodes.find((n) => n.id === cmd.nodeId)!;
         const conds = { ...(t.variantConditions ?? {}) };
@@ -598,7 +598,7 @@ function applyOne(project: Project, cmd: Command): CommandResult {
       if (!field || typeof field !== 'object') return reject('INVALID_CALCULATION', 'The calculated field cannot be read.');
       const existing = list.findIndex((c) => c.key === field.key);
       if (existing < 0 && list.length >= CALC_MAX) return reject('TOO_MANY', `A document can have at most ${CALC_MAX} calculated fields.`);
-      const clean: CalculatedField = { key: field.key, label: typeof field.label === 'string' ? field.label.trim() : field.label, type: field.type, ...(typeof field.description === 'string' && field.description.trim() ? { description: field.description.trim() } : {}), expr: field.expr };
+      const clean: CalculatedField = { key: field.key, label: typeof field.label === 'string' ? field.label.trim() : field.label, type: field.type, ...(typeof field.description === 'string' && field.description.trim() ? { description: field.description.trim() } : {}), expr: field.expr, ...(field.list !== undefined ? { list: field.list } : {}) };
       let next = existing >= 0 ? list.map((c, i) => (i === existing ? clean : c)) : [...list, clean];
       if (existing < 0 && cmd.index !== undefined) { next = [...list]; next.splice(Math.max(0, Math.min(cmd.index, list.length)), 0, clean); }
       const errors = validateCalculatedFields(project, next);
@@ -1267,8 +1267,11 @@ function referenceProblems(candidate: Project): string | null {
   const fields = projectFieldIndex(candidate);
   for (const r of candidate.rules) { const e = validatePredicate(r.when, fields); if (e.length) return `rule ${r.id} (${e[0]})`; }
   for (const n of candidate.nodes) {
-    for (const p of [n.visibleWhen, ...Object.values(n.variantConditions ?? {})]) if (p) { const e = validatePredicate(p, fields); if (e.length) return `${n.name ?? n.id} (${e[0]})`; }
-    if (n.totalFrom && fields.get(n.totalFrom)?.type !== 'cents') return `the footer total of ${n.name ?? n.id} (it must be an amount)`;
+    // Inside a repeating section (wave 5) a component also reads the fields of the section's items.
+    const inSection = candidate.nodes.some((x) => x.repeat) ? repeatListAt(candidate, n.id) : null;
+    const nf = inSection ? scopeFieldIndex(candidate, inSection) : fields;
+    for (const p of [n.visibleWhen, ...Object.values(n.variantConditions ?? {})]) if (p) { const e = validatePredicate(p, nf); if (e.length) return `${n.name ?? n.id} (${e[0]})`; }
+    if (n.totalFrom && nf.get(n.totalFrom)?.type !== 'cents') return `the footer total of ${n.name ?? n.id} (it must be an amount)`;
   }
   return null;
 }

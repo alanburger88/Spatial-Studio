@@ -65,7 +65,7 @@ export const SOURCE_LOCALE: Locale = 'en-US';
 export const TARGET_LOCALES: Locale[] = ['es-US'];
 
 /** Data tokens `{{path}}` and, in fixed wording, placeholders `{name}`. Both must survive translation unchanged. */
-const TOKEN_RE = /\{\{\s*([\w.]+)\s*\}\}|\{(\w+)\}/g;
+const TOKEN_RE = /\{\{\s*([\w.[\]]+)\s*\}\}|\{(\w+)\}/g;
 export const tokensOfText = (t: string): string[] => [...(t ?? '').matchAll(TOKEN_RE)].map((m) => m[1] ?? `{${m[2]}}`).sort();
 
 export function checkTokens(source: string, target: string): TokenCheck {
