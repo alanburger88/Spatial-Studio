@@ -1,6 +1,6 @@
 # The example documents
 
-Four example documents come with the studio (D106). Every person, company, account, fund, number and address in them is
+Four example documents come with the studio (D106), and one variant of Northwind Energy for a region (wave 5). Every person, company, account, fund, number and address in them is
 invented; each names its issuer as fictional where the document says who it is from, and carries the synthetic-data
 notice. They exist so that a new user who opens any screen finds something real to look at, and so that every feature
 of the studio is shown working on a document that looks like one a real company would send.
@@ -13,6 +13,7 @@ approved check compares and which test expectations changed is in [`EXAMPLES_EXI
 | **Aster Card** | `aster-card-demo` | Credit-card statement (built-in kind) | The hero path of the approved POC: payment guidance chosen by rules, journeys over 60 days, a long transaction list, the guided demo. |
 | **HarborCare Health** | `harborcare-demo` | Explanation of benefits (built-in kind) | Engine reuse on a second domain: THIS IS NOT A BILL, unconfirmed member liability never shown as owed, claims. |
 | **Northwind Energy** | `northwind-energy-demo` | Utility bill — a document with its own data | A dual-fuel electricity and gas bill: sections appear and disappear by service, meter readings (actual and estimated), tiered rates from a lookup table, a dated rate change, a usage chart, payment-plan and overdue messages, a tear-off payment slip on the last page. Seeded with release 1 in Production and a working version that differs. |
+| **Northwind Energy — Lakeshore** | `northwind-energy-lakeshore` | A variant of Northwind Energy for one region (wave 5) | Shows variants by brand or region: it follows Northwind's version 1 (release 1), one version behind, so Overview shows a real update (the credit message, its rule and its test come in; the payment wording, which both changed, is kept as Lakeshore's). Its own accent colour, greeting, payment and text-message wording (with approved Spanish), late fees, higher-use rule (a fifth instead of a quarter), the dual-fuel note hidden and an outage-line notice of its own. Its 34 customers are copies of Northwind's (`NWL-6…`). |
 | **Meridian Wealth** | `meridian-wealth-demo` | Quarterly portfolio statement — a document with its own data | A two-column first page (summary beside allocation) over a tint, holdings from one fund to forty across two pages, transactions, income and fees, performance against last quarter, messages by risk profile, a fall in value, concentration, a dated fee change and fourth-quarter tax documents. |
 
 ## How the two original examples are kept
@@ -25,6 +26,22 @@ approved check compares and which test expectations changed is in [`EXAMPLES_EXI
   these would change what the oracle compares. Approved Spanish is never written by code. See `EXAMPLES_EXISTING.md`.
 - **Their customers** are the approved fixture customers: 70 card and 30 benefits customers. They are checked by the
   same accuracy check as the new examples (below), with notes in `packages/model/src/samples/showcaseExistingAudit.ts`.
+
+## The variant example (wave 5)
+
+- **Built by code** in `packages/model/src/samples/lakeshore.ts`: `makeVariant` of `buildNorthwind('release1')`, then ordinary
+  commands (unlink the library brand and set its own accent, `UPDATE_NODE`, `UPSERT_CONTENT_PART`, `SET_CHANNELS`,
+  `DELETE_NODE` to hide a section, `INSERT_NODE`, `UPSERT_LOOKUP_TABLE`, `UPSERT_RULE`, approved Spanish drafted and approved).
+  Each passes the lock. Seeded after Northwind (it follows Northwind's version 1, which must be in the history first), with
+  its own customers and known data problem; *Restore sample* puts it back.
+- **Registered in the accuracy check** like the others, with Northwind's arithmetic and its own late fees. It has no
+  demonstration blocker: it follows release 1, which was approvable (the credit rule that stops `NWE-60033` and
+  `NWE-60017` in Northwind's working version comes with the update). Its translations: 121 approved, 2 fixed phrases as
+  drafts. Its text message is shorter than Northwind's so the Spanish one fits in two parts.
+- **What changed elsewhere because it is seeded** (deliberately): the projects list and the gallery have five samples, the
+  Lakeshore card under Northwind; the house library's "where used" counts (the variant keeps Northwind's links except the
+  brand: rights notice and rate bands 2 documents, the panel 3, the glossary 4, the house rules 5; 2 documents behind on
+  the rights notice); the accuracy check registers five examples.
 
 ## How the two new examples are built and kept accurate
 
@@ -135,6 +152,8 @@ reason is given when the feature was left out on purpose.
 | Guided demo (S11) | Yes | Yes | — | — |
 | Edge-case generator presets | Yes | Yes | — (built-in kinds only) | — (built-in kinds only) |
 | Accuracy check (`scripts/audit-examples.ts`) | Registered (70 fixture customers) | Registered (30 fixture customers) | Registered | Registered |
+| Variant by brand or region (wave 5) | — | — | Base of “Northwind Energy — Lakeshore” (a region): the family on Overview and Releases, the variant under it in the gallery | — |
+| A variant's differences and its update | — | — | In the variant: brand, wording, sections (one hidden, one its own), a lookup table and a rule differ; “Update available” (version 1 → 2) with entries that come in and entries kept as Lakeshore's; Before & after with the update applied | — |
 
 ### What neither new example shows, and why
 
