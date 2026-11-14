@@ -5,6 +5,9 @@ Decision D106 (2026-11-14): enrich "Aster Card" (`aster-card-demo`, credit-card 
 customer is kept exactly as the fixtures build it; the approved pack's files (`fixtures/**`, `contracts/**`, `tests/**`,
 `oracle/**`, `scripts/verify_pack.py`, `scripts/verify_app.py`, `ASSET_MANIFEST.json`) are not touched.
 
+This is the detailed record. What each of the four examples shows, side by side, is in
+[`EXAMPLES.md`](EXAMPLES.md) (the feature matrix).
+
 Code: `packages/model/src/samples/showcaseExisting.ts` (`enrichCard`, `enrichEob`, `enrichSamples`: pure, every addition
 made through `applyCommand`, deterministic, the sample keeps its version number) and
 `packages/model/src/samples/showcaseExistingAudit.ts` (the description of each example for the examples' accuracy check,
@@ -46,7 +49,8 @@ calculated fields, wording, periods, layout and project settings.
 ## Aster Card (credit-card statement)
 
 - **The document's date**: the statement issue date (`card.issuedAt`), which all 70 customers have (1 Nov 2026).
-- **Lookup table** "Late fee by account tier" (exact text key: standard $29.00, premium $25.00; also a returned-payment fee).
+- **Lookup table** "Late fee by account tier" (exact text key: standard $29.00, premium $25.00; also a returned-payment fee),
+  linked from the house library item "Card late fees by account tier" (read-only in the card).
 - **Calculations**: days until the payment is due (`DAYS(ISSUE_DATE(), card.dueDate)` = 24), total of the listed
   transactions (`SUM`), largest transaction (`IF(count > 0, LARGEST(…), $0.00)`), available credit as a percentage of the
   limit (`ROUND(available ÷ limit × 100, 0)`, guarded by `IF` against a zero limit), late fee if the payment is late
@@ -74,7 +78,8 @@ calculated fields, wording, periods, layout and project settings.
 
 ## HarborCare (explanation of benefits)
 
-- **Lookup table** "Review time by billed amount" (number range in money: under $500 → 30 days, $500 and over → 45).
+- **Lookup table** "Review time by billed amount" (number range in money: under $500 → 30 days, $500 and over → 45),
+  linked from the house library item "Claim review time by billed amount".
 - **Calculations**: member's share of the billed amount (%, `IF` guarded against a zero bill), total plan paid across
   claims (`SUM(claims.planPaidCents)`), number of claims (`COUNT(claims)`), days a review usually takes (`LOOKUP`).
 - **New wording**: "Claim summary" after the claim details table: processed claims "Your plan paid … Your share is
@@ -107,7 +112,9 @@ calculated fields, wording, periods, layout and project settings.
 - **A table footer on the claims table**: its footer sums the billed column; a calculated total there would put another
   amount under the "Billed" heading.
 - **SMS wording**: the sample SMS is sized to one 160-character message and has sample Spanish drafts for its text.
-- **Library links**: not in this pass (see below).
+- **The library glossary on the card**: the card keeps a glossary of its own (empty). `e2e/assist-writing.spec.ts`
+  shows a document's own glossary being edited on the card sample (the only place with bundled Spanish drafts for
+  every text), and a linked glossary is read-only. HarborCare links the library glossary instead.
 
 ## Visible changes
 
@@ -116,14 +123,43 @@ calculated fields, wording, periods, layout and project settings.
 - EOB: a light tint on page 1; the claim summary under the claim table. Claims under review (11 customers) now run to
   two pages ("Questions" and "Claim totals" move to page 2), as processed claims already did.
 
-## Should link to the house library later
+## Links to the house library
 
-- Card: the Aster brand (colours, logo `asset:aster-mark`), the page footer and document header, the "Demonstration
-  disclosures" disclosure, the "Paying by mail over the holidays" notice, the "Late fee by account tier" table, the
-  wording rules ("not a legal statement", "kindly", sentence length), the Spanish glossary.
-- EOB: the HarborCare brand, the page footer and the "THIS IS NOT A BILL" banner, the "Terms explained" glossary
-  explanation, the "Claim totals" disclosure, the "Review time by billed amount" table, the wording rules ("this is not a
-  bill", "insurance company").
+Made in the enrichment (`linkHouse` in `showcaseExisting.ts`, `LINK_LIBRARY_ITEM` with exactly the library's content,
+as Northwind and Meridian do). Two items are new in `houseLibrary.ts`, taken from the examples' own tables.
+
+| Example | Linked | Not linked, and why |
+|---|---|---|
+| Aster Card | House wording rules (v1); "Card late fees by account tier" (v1, new) | The Spanish glossary (see above). The brand, footer, header and disclosures: a brand link would replace the card's brand kit, and a block or wording link would change component ids or raise a disclosure's version number, which the oracle and the browser tests read. |
+| HarborCare | House wording rules (v1); Spanish glossary (v1); "Claim review time by billed amount" (v1, new) | As for the card: brand, banner, "Terms explained" and the "Claim totals" disclosure. |
+
+Evidence (`packages/model/test/showcase-existing.test.ts`, "links to the house library"):
+
+- **The same document for every customer.** All 100 fixture customers and all twelve oracle scenarios resolve exactly
+  as they do with the links removed (findings, selected parts, the tree, calculations, the semantic manifest, email and
+  SMS texts, the content digest). Only the run id differs, because it is a hash of the document, which now holds the links.
+  The paged and web renderings were compared too (before and after the change): identical apart from the run id.
+- **No new finding.** The approved fixture wording meets every house "must" rule (no "click here", no "guaranteed",
+  and each names its issuer as "(fictional)"), and no house "should" rule finds anything: the only wording finding of
+  each example is still its own deliberate "should". The blocked card customers are still exactly the six.
+- **Unchanged pages and results.** The twelve goldens and the before/after comparison of all 100 customers pass; the
+  250-row case is 8 pages, as on the fixtures' card, and page 1 of CARD-0001, CARD-0002 and the 250-row case has the
+  same components and the same text as on the fixtures' card, apart from the run id
+  (`apps/api/test/showcase-existing-pdf.test.ts`; the accuracy check's outputs also compose the 250-row case). Pixels
+  were not compared in this pass.
+- **An emptied library.** With `LIBRARY_RESET=allow` and the library reset, both examples open on every screen
+  without errors; a linked table says "Not in this library" and can only be unlinked (the same as Northwind).
+
+## The accuracy check
+
+Both examples are registered in `scripts/audit-examples.ts` with the fixture customers of their kind, and every check
+runs on them (`reports/EXAMPLES_AUDIT.md`). The notes are `CARD_NOTES` and `EOB_NOTES` in `showcaseExistingAudit.ts`;
+the domain check is `cardArithmetic` / `eobArithmetic` (also over the oracle scenarios with overrides, where
+`DELIBERATE_SCENARIO_FINDINGS` lists what is meant); the calculations are recomputed independently in the script.
+Generalised for the built-in kinds: the languages are the document's languages (English and Spanish when it lists
+none); a "—" between two words is punctuation, not a missing value; "as issued on" does not apply to a document with no
+date; the released-version check does not apply to a document seeded without a release; and the card's PDFs are
+checked as if an accessible PDF were required, with the continued table's missing header row stated as a known limitation.
 
 ## Arithmetic of the fixture customers (`showcaseExistingAudit.ts`)
 
@@ -157,6 +193,13 @@ calculated fields, wording, periods, layout and project settings.
 | `e2e/channels-editor.spec.ts` unknown token | channels stay `null` | channels stay as they were | the card sample has its own email wording |
 | `e2e/blockers-resolve.spec.ts` BR01, BR04 | no pinned tests before; one after | the sample's own tests before; exactly one new "Stays fixed" test after | the samples have pinned tests |
 | `e2e/pdf-accessibility.spec.ts` PA03 | box unchecked, check, undo | box checked, uncheck, undo | accessible PDF is required for the EOB |
+| `apps/api/test/examples-audit.test.ts` | two examples, 30–40 customers, at least one blocker each; outputs and accessibility pass for all | four examples (the original two with 70 and 30 customers, six and no blockers); the card's accessibility is an intended exception (known limitation) | the original examples are checked too |
+| `apps/api/test/library.test.ts` (where used, impact, link shapes, templates and files) | the card's first link is the one the test made; the release lists only the brand | links found by item; the EOB's release also lists its three sample links, "not in the library" in that studio | the samples link house items; that test studio has no house library |
+| `apps/api/test/library-duplicates.test.ts` | a copy of the card has no links | it has the card's two sample links, then the new one | as above |
+| `apps/api/test/wording-rules.test.ts` (release record, prompt) | no house rules on the EOB; the prompt lists the card's own rules | the release records the house rules (6, v1); the prompt lists the six house rules first | the samples follow the house wording rules |
+| `apps/api/test/samples-seed.test.ts` | glossary and house rules used by two documents | house rules by four, glossary by three; each new table by one | the original examples link them |
+| `e2e/library.spec.ts` LB02, LB03 | a copy of the card holds only the block and wording links | the card's two sample links come first; the test's own links are checked apart | as above |
+| `e2e/library-duplicates.spec.ts` DU02 | the copy's only link is the new wording | the card's two sample links, then the new wording | as above |
 
 ## Defect found and fixed
 
